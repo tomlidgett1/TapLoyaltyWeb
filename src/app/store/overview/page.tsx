@@ -55,7 +55,6 @@ import { BannerPreview, BannerStyle, BannerVisibility } from "@/components/banne
 import { BannerScheduler } from "@/components/banner-scheduler"
 import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
 import { CreateManualProgramDialog } from "@/components/create-manual-program-dialog"
-import { MessageDetailsDialog } from "@/components/message-details-dialog"
 import { cn } from "@/lib/utils"
 import { updateDoc, deleteDoc } from "firebase/firestore"
 
@@ -6262,8 +6261,8 @@ const BannersTabContent = () => {
                           Edit
                         </Button>
                         <Button 
-                          variant="outline"
-                          size="sm"
+                          variant="outline" 
+                          size="sm" 
                           className="flex-1"
                           onClick={() => handleScheduleBanner(banner.id)}
                         >
@@ -7091,7 +7090,6 @@ export default function StoreOverviewPage() {
   const [banners, setBanners] = useState<Banner[]>([])
   const [pointsRules, setPointsRules] = useState<PointsRule[]>([])
   const [messages, setMessages] = useState<Message[]>([])
-  const [notifications, setNotifications] = useState<Notification[]>([])
   const [inventorySync, setInventorySync] = useState<InventorySync | null>(null)
   
   // Add state for inventory data
@@ -7107,9 +7105,15 @@ export default function StoreOverviewPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [editingProgram, setEditingProgram] = useState<CustomProgram | null>(null)
   
-  // Message details popup state
-  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null)
-  const [showMessageDetails, setShowMessageDetails] = useState(false)
+  // State for message details popup
+  const [selectedMessage, setSelectedMessage] = useState<ReturnType<typeof getAllMessages>[number] | null>(null)
+  const [messageDetailOpen, setMessageDetailOpen] = useState(false)
+
+  // Handle message click
+  const handleMessageClick = (message: ReturnType<typeof getAllMessages>[number]) => {
+    setSelectedMessage(message)
+    setMessageDetailOpen(true)
+  }
   
   // Fetch data on component mount
   useEffect(() => {
@@ -7119,7 +7123,6 @@ export default function StoreOverviewPage() {
         fetchBanners(),
         fetchPointsRules(),
         fetchMessages(),
-        fetchNotifications(),
         fetchInventoryStatus(),
         fetchInventoryItems()
       ]).finally(() => {
@@ -7311,35 +7314,7 @@ export default function StoreOverviewPage() {
       console.error("Error fetching broadcasts:", error)
     }
   }
-  
-  const fetchNotifications = async () => {
-    if (!user?.uid) return
-    
-    try {
-      // For now, keep this as a separate collection for push notifications
-      // or we can merge this into broadcasts later if needed
-      const notificationsRef = collection(db, 'merchants', user.uid, 'notifications')
-      const notificationsQuery = query(notificationsRef, orderBy('createdAt', 'desc'), limit(5))
-      const notificationsSnapshot = await getDocs(notificationsQuery)
-      
-      const fetchedNotifications = notificationsSnapshot.docs.map(doc => {
-        const data = doc.data()
-        return {
-          id: doc.id,
-          title: data.title || 'Unnamed Notification',
-          body: data.body || '',
-          sent: data.sent || false,
-          sentAt: data.sentAt,
-          recipients: data.recipients || 0,
-          clickRate: data.clickRate || 0
-        }
-      })
-      
-      setNotifications(fetchedNotifications)
-    } catch (error) {
-      console.error("Error fetching notifications:", error)
-    }
-  }
+
   
   const fetchInventoryStatus = async () => {
     if (!user?.uid) return
@@ -7648,154 +7623,28 @@ export default function StoreOverviewPage() {
     uniqueReads?: number;
     uniqueClicks?: number;
     totalRecipients?: number;
-    notificationAction?: string;
+    lastClickAt?: any;
+    lastReadAt?: any;
   }> => {
-    // Add sample data for demonstration
-    const sampleMessages = [
-      {
-        id: 'msg-1',
-        title: 'Welcome to Our Store!',
-        content: 'Thank you for joining our loyalty program. Here\'s a special 10% discount code: WELCOME10',
-        sent: true,
-        sentAt: { toDate: () => new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) },
-        recipients: 245,
-        openRate: 68.5,
-        type: 'email' as const,
-        status: 'sent' as const,
-        engagement: 68.5,
-        uniqueReads: 168,
-        uniqueClicks: 45,
-        totalRecipients: 245,
-        notificationAction: 'showAnnouncement'
-      },
-      {
-        id: 'msg-2',
-        title: 'Weekend Sale - 30% Off',
-        content: 'Don\'t miss our weekend flash sale! 30% off all items. Valid until Sunday midnight.',
-        sent: true,
-        sentAt: { toDate: () => new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) },
-        recipients: 892,
-        openRate: 45.2,
-        type: 'email' as const,
-        status: 'sent' as const,
-        engagement: 45.2,
-        uniqueReads: 403,
-        uniqueClicks: 89,
-        totalRecipients: 892,
-        notificationAction: 'storeRedirect'
-      },
-      {
-        id: 'msg-3',
-        title: 'Monthly Newsletter Draft',
-        content: 'Our monthly newsletter featuring new products, customer stories, and upcoming events.',
-        sent: false,
-        sentAt: null,
-        recipients: 1200,
-        openRate: 0,
-        type: 'email' as const,
-        status: 'draft' as const,
-        engagement: 0,
-        uniqueReads: 0,
-        uniqueClicks: 0,
-        totalRecipients: 1200,
-        notificationAction: 'showAnnouncement'
-      }
-    ]
-
-    const sampleNotifications = [
-      {
-        id: 'notif-1',
-        title: 'Flash Sale Alert!',
-        body: 'Your favourite items are now 25% off! Limited time only.',
-        sent: true,
-        sentAt: { toDate: () => new Date(Date.now() - 1 * 24 * 60 * 60 * 1000) },
-        recipients: 567,
-        clickRate: 12.8,
-        type: 'push' as const,
-        content: 'Your favourite items are now 25% off! Limited time only.',
-        status: 'sent' as const,
-        engagement: 12.8,
-        uniqueReads: 0,
-        uniqueClicks: 73,
-        totalRecipients: 567,
-        notificationAction: 'storeRedirect'
-      },
-      {
-        id: 'notif-2',
-        title: 'New Loyalty Points Earned',
-        body: 'You\'ve earned 150 new loyalty points! Check out your rewards.',
-        sent: true,
-        sentAt: { toDate: () => new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
-        recipients: 1034,
-        clickRate: 8.9,
-        type: 'push' as const,
-        content: 'You\'ve earned 150 new loyalty points! Check out your rewards.',
-        status: 'sent' as const,
-        engagement: 8.9,
-        uniqueReads: 0,
-        uniqueClicks: 92,
-        totalRecipients: 1034,
-        notificationAction: 'storeRedirect'
-      },
-      {
-        id: 'notif-3',
-        title: 'Order Ready for Pickup',
-        body: 'Your order #12345 is ready for pickup at our Collins Street location.',
-        sent: false,
-        sentAt: null,
-        recipients: 1,
-        clickRate: 0,
-        type: 'push' as const,
-        content: 'Your order #12345 is ready for pickup at our Collins Street location.',
-        status: 'draft' as const,
-        engagement: 0,
-        uniqueReads: 0,
-        uniqueClicks: 0,
-        totalRecipients: 1,
-        notificationAction: 'storeRedirect'
-      }
-    ]
-
-    // Combine actual data with sample data
-    const allMessages = [
-      ...messages.map(msg => ({
-        id: msg.id,
-        title: msg.title,
-        content: msg.content || msg.message || '',
-        sent: msg.sent,
-        sentAt: msg.sentAt,
-        recipients: msg.recipients,
-        openRate: msg.openRate,
-        type: 'email' as const,
-        status: msg.sent ? 'sent' as const : 'draft' as const,
-        engagement: msg.openRate || 0,
-        clickRate: msg.clickRate,
-        uniqueReads: msg.uniqueReads || 0,
-        uniqueClicks: msg.uniqueClicks || 0,
-        totalRecipients: msg.totalRecipients || msg.recipients,
-        notificationAction: msg.notificationAction || 'storeRedirect'
-      })),
-      ...notifications.map(notif => ({
-        id: notif.id,
-        title: notif.title,
-        content: notif.body || '',
-        sent: notif.sent,
-        sentAt: notif.sentAt,
-        recipients: notif.recipients,
-        openRate: notif.clickRate,
-        type: 'push' as const,
-        status: notif.sent ? 'sent' as const : 'draft' as const,
-        engagement: notif.clickRate || 0,
-        body: notif.body,
-        clickRate: notif.clickRate,
-        uniqueReads: 0, // Notifications don't have read tracking
-        uniqueClicks: 0, // Notifications don't have unique click tracking
-        totalRecipients: notif.recipients,
-        notificationAction: 'storeRedirect' // Default for notifications
-      })),
-      ...sampleMessages,
-      ...sampleNotifications
-    ].sort((a, b) => {
+    // Return only messages from merchants/{merchantId}/broadcasts collection
+    const allMessages = messages.map(msg => ({
+      id: msg.id,
+      title: msg.title,
+      content: msg.content || msg.message || '',
+      sent: msg.sent,
+      sentAt: msg.sentAt,
+      recipients: msg.recipients,
+      openRate: msg.openRate,
+      type: 'email' as const,
+      status: msg.sent ? 'sent' as const : 'draft' as const,
+      engagement: msg.openRate || 0,
+      clickRate: msg.clickRate,
+      uniqueReads: msg.uniqueReads || 0,
+      uniqueClicks: msg.uniqueClicks || 0,
+      totalRecipients: msg.totalRecipients || msg.recipients,
+      lastClickAt: msg.lastClickAt,
+      lastReadAt: msg.lastReadAt
+    })).sort((a, b) => {
       const aTime = a.sentAt ? (a.sentAt.toDate ? a.sentAt.toDate().getTime() : new Date(a.sentAt).getTime()) : 0
       const bTime = b.sentAt ? (b.sentAt.toDate ? b.sentAt.toDate().getTime() : new Date(b.sentAt).getTime()) : 0
       return bTime - aTime
@@ -7934,23 +7783,6 @@ export default function StoreOverviewPage() {
             </div>
           </div>
         )
-      },
-    },
-    {
-      accessorKey: 'notificationAction',
-      header: ({ column }) => (
-        <TableColumnHeader column={column} title="Action" />
-      ),
-      cell: ({ row }) => {
-        const action = row.original.notificationAction || 'storeRedirect';
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-            <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
-              action === 'showAnnouncement' ? 'bg-blue-500' : 'bg-green-500'
-            }`}></div>
-            {action === 'showAnnouncement' ? 'Show Announcement' : 'Go to Store'}
-          </span>
-        );
       },
     },
     {
@@ -8100,108 +7932,45 @@ export default function StoreOverviewPage() {
           </TabsContent>
           
           <TabsContent value="messages">
-                  {loading ? (
-                    <div className="flex items-center justify-center h-48">
-                      <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
-                    </div>
+            {loading ? (
+              <div className="flex items-center justify-center h-48">
+                <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
             ) : getAllMessages().length === 0 ? (
               <div className="border border-gray-200 rounded-md bg-white p-8">
                 <div className="flex flex-col items-center justify-center text-center">
-                      <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                  <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
                     <Mail className="h-6 w-6 text-muted-foreground" />
-                      </div>
-                      <h3 className="mt-4 text-lg font-medium">No messages found</h3>
-                      <p className="text-sm text-muted-foreground mt-1">
+                  </div>
+                  <h3 className="mt-4 text-lg font-medium">No messages found</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
                     Create your first message or notification to get started
-                      </p>
-                    </div>
-                                </div>
+                  </p>
+                </div>
+              </div>
             ) : (
               <div className="border border-gray-200 rounded-md bg-white">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Message</TableHead>
-                      <TableHead>Cohorts</TableHead>
-                      <TableHead>Recipients</TableHead>
-                      <TableHead>Open Rate</TableHead>
-                      <TableHead>Click Rate</TableHead>
-                      <TableHead>Action</TableHead>
-                      <TableHead>Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {getAllMessages().map((message) => (
-                      <TableRow 
-                        key={message.id}
-                        className="cursor-pointer hover:bg-gray-50"
-                        onClick={() => {
-                          const messageData = messages.find(m => m.id === message.id);
-                          if (messageData) {
-                            setSelectedMessage(messageData);
-                            setShowMessageDetails(true);
-                          }
-                        }}
+                <TableProvider columns={messageColumns} data={getAllMessages()}>
+                  <KiboTableHeader>
+                    {({ headerGroup }) => (
+                      <TableHeaderGroup key={headerGroup.id} headerGroup={headerGroup}>
+                        {({ header }) => <KiboTableHead key={header.id} header={header} />}
+                      </TableHeaderGroup>
+                    )}
+                  </KiboTableHeader>
+                  <KiboTableBody>
+                    {({ row }) => (
+                      <KiboTableRow 
+                        key={row.id} 
+                        row={row}
+                        className="cursor-pointer hover:bg-gray-100/50 transition-colors"
+                        onClick={() => handleMessageClick(getAllMessages()[row.index])}
                       >
-                        <TableCell className="font-medium">
-                          <div className="max-w-[200px]">
-                            <div className="truncate">{message.title}</div>
-                            <div className="text-xs text-muted-foreground truncate">{message.content}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {(messages.find(m => m.id === message.id)?.selectedCohorts || []).map((cohort) => (
-                              <Badge key={cohort} variant="outline" className="text-xs">
-                                {cohort.charAt(0).toUpperCase() + cohort.slice(1)}
-                              </Badge>
-                            ))}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">{message.totalRecipients || message.recipients}</TableCell>
-                        <TableCell className="text-center">
-                          {message.totalRecipients && message.uniqueReads 
-                            ? `${((message.uniqueReads / message.totalRecipients) * 100).toFixed(1)}%`
-                            : message.openRate 
-                              ? `${message.openRate.toFixed(1)}%` 
-                              : '0%'
-                          }
-                          <div className="text-xs text-muted-foreground">
-                            {message.uniqueReads || 0}/{message.totalRecipients || message.recipients}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {message.totalRecipients && message.uniqueClicks 
-                            ? `${((message.uniqueClicks / message.totalRecipients) * 100).toFixed(1)}%`
-                            : message.clickRate 
-                              ? `${message.clickRate.toFixed(1)}%` 
-                              : '0%'
-                          }
-                          <div className="text-xs text-muted-foreground">
-                            {message.uniqueClicks || 0}/{message.totalRecipients || message.recipients}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                            <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
-                              message.notificationAction === 'storeRedirect' ? 'bg-blue-500' :
-                              message.notificationAction === 'rewardRedirect' ? 'bg-purple-500' :
-                              message.notificationAction === 'customRedirect' ? 'bg-green-500' :
-                              'bg-gray-500'
-                            }`}></div>
-                            {message.notificationAction === 'storeRedirect' ? 'Store' :
-                             message.notificationAction === 'rewardRedirect' ? 'Reward' :
-                             message.notificationAction === 'customRedirect' ? 'Custom' :
-                             'None'}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {message.sentAt ? formatDate(message.sentAt) : 'Draft'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        {({ cell }) => <KiboTableCell key={cell.id} cell={cell} />}
+                      </KiboTableRow>
+                    )}
+                  </KiboTableBody>
+                </TableProvider>
               </div>
             )}
           </TabsContent>
@@ -8548,12 +8317,139 @@ export default function StoreOverviewPage() {
       />
 
       {/* Message Details Dialog */}
-      <MessageDetailsDialog
-        open={showMessageDetails}
-        onOpenChange={setShowMessageDetails}
-        message={selectedMessage}
-      />
+      <Dialog open={messageDetailOpen} onOpenChange={setMessageDetailOpen}>
+        <DialogContent className="max-w-md animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]">
+          <DialogHeader>
+            <DialogTitle>Message Details</DialogTitle>
+            <DialogDescription>
+              Details about this broadcast message
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedMessage && (
+            <div className="py-4 space-y-4">
+              {/* Message Info */}
+              <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
+                <div className="h-10 w-10 flex-shrink-0">
+                  <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-medium border border-gray-200 ${
+                    selectedMessage.type === 'email' ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'
+                  }`}>
+                    {selectedMessage.type === 'email' ? (
+                      <Mail className="h-5 w-5" />
+                    ) : (
+                      <BellRing className="h-5 w-5" />
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900">{selectedMessage.title}</p>
+                  <p className="text-sm text-gray-500">
+                    {selectedMessage.type === 'email' ? 'Email Message' : 'Push Notification'}
+                  </p>
+                </div>
+              </div>
 
+              {/* Message Details */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-start">
+                  <span className="text-sm font-medium text-gray-700">Content</span>
+                  <span className="text-sm text-gray-900 max-w-xs text-right">
+                    {selectedMessage.content}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-gray-700">Status</span>
+                  <span className={`text-sm px-2 py-1 rounded-full text-xs font-medium ${
+                    selectedMessage.status === 'sent' 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {selectedMessage.status === 'sent' ? 'Sent' : 'Draft'}
+                  </span>
+                </div>
+
+                {selectedMessage.sentAt && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-gray-700">Sent Date</span>
+                    <span className="text-sm text-gray-900">
+                      {format(selectedMessage.sentAt.toDate ? selectedMessage.sentAt.toDate() : new Date(selectedMessage.sentAt), 'MMM d, yyyy h:mm a')}
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-gray-700">Recipients</span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {selectedMessage.recipients.toLocaleString()}
+                  </span>
+                </div>
+
+                {selectedMessage.status === 'sent' && (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-700">Open Rate</span>
+                      <span className="text-sm text-gray-900">
+                        {selectedMessage.openRate?.toFixed(1) || '0.0'}%
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-700">Unique Opens</span>
+                      <span className="text-sm text-gray-900">
+                        {selectedMessage.uniqueReads || 0}
+                      </span>
+                    </div>
+
+                    {selectedMessage.clickRate && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-700">Click Rate</span>
+                        <span className="text-sm text-gray-900">
+                          {selectedMessage.clickRate.toFixed(1)}%
+                        </span>
+                      </div>
+                    )}
+
+                    {selectedMessage.uniqueClicks && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-700">Unique Clicks</span>
+                        <span className="text-sm text-gray-900">
+                          {selectedMessage.uniqueClicks}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Last Read Date */}
+                    {selectedMessage.lastReadAt && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-700">Last Read</span>
+                        <span className="text-sm text-gray-900">
+                          {format(selectedMessage.lastReadAt.toDate ? selectedMessage.lastReadAt.toDate() : new Date(selectedMessage.lastReadAt), 'MMM d, yyyy h:mm a')}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Last Click Date */}
+                    {selectedMessage.lastClickAt && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-700">Last Click</span>
+                        <span className="text-sm text-gray-900">
+                          {format(selectedMessage.lastClickAt.toDate ? selectedMessage.lastClickAt.toDate() : new Date(selectedMessage.lastClickAt), 'MMM d, yyyy h:mm a')}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-gray-700">Message ID</span>
+                  <span className="text-sm text-gray-500 font-mono">{selectedMessage.id}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </PageTransition>
   )
 }

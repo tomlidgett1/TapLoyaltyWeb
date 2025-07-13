@@ -55,6 +55,7 @@ import { BannerPreview, BannerStyle, BannerVisibility } from "@/components/banne
 import { BannerScheduler } from "@/components/banner-scheduler"
 import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
 import { CreateManualProgramDialog } from "@/components/create-manual-program-dialog"
+import { MessageDetailsDialog } from "@/components/message-details-dialog"
 import { cn } from "@/lib/utils"
 import { updateDoc, deleteDoc } from "firebase/firestore"
 
@@ -282,11 +283,32 @@ interface CustomProgram {
 interface Message {
   id: string;
   title: string;
-  content: string;
+  message: string;
+  content?: string; // Keep for backward compatibility
+  status: string;
+  createdAt: any;
+  selectedCohorts: string[];
+  notificationAction: string;
+  merchantId: string;
+  // New engagement fields
+  clicks?: number;
+  reads?: number;
+  uniqueClicks?: number;
+  uniqueReads?: number;
+  clickedCustomers?: string[];
+  readCustomers?: string[];
+  lastClickAt?: any;
+  lastReadAt?: any;
+  totalRecipients?: number;
+  cohortBreakdown?: Record<string, number>;
+  // Computed fields
   sent: boolean;
   sentAt?: any;
   recipients: number;
   openRate?: number;
+  clickRate?: number;
+  uniqueOpenRate?: number;
+  uniqueClickRate?: number;
 }
 
 interface Notification {
@@ -1654,42 +1676,38 @@ const ProgramsTabContent = () => {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-md font-medium">Built-in Programs</h3>
-                <Button 
-                  onClick={handleCreateManualProgram}
-                  className="rounded-md"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Manual Program
-                </Button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {activePrograms.map((program, index) => {
                   const rewardCount = programRewardCounts[program.type] || 0
                   return (
-                    <div key={index} className="bg-gray-50 border border-gray-200 rounded-md p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm capitalize">
-                            {program.type === 'coffee' ? 'Coffee Program' : 
-                             program.type === 'voucher' ? 'Recurring Voucher' : 
-                             'Transaction Program'}
-                          </span>
-                        </div>
+                    <div key={index} className={`group relative bg-gray-50 border rounded-lg p-4 transition-all hover:shadow-sm ${
+                      program.active 
+                        ? 'border-blue-200 hover:border-blue-300' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}>
+                      <div className="flex items-start justify-between mb-3">
+                        <h4 className="text-sm font-medium text-gray-900">
+                          {program.type === 'coffee' ? 'Coffee Program' : 
+                           program.type === 'voucher' ? 'Recurring Voucher' : 
+                           'Transaction Program'}
+                        </h4>
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleEditProgram(program.type)}
-                            className="p-1 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+                            className="opacity-40 hover:opacity-70 transition-opacity"
                           >
-                            <Settings className="h-4 w-4" />
+                            <Settings className="h-3 w-3 text-gray-600" />
                           </button>
-                          <Switch
-                            checked={program.active}
-                            onCheckedChange={() => toggleProgramActive(program.originalIndex, program.type)}
-                          />
+                          <div className={`h-2 w-2 rounded-full ${
+                            program.active 
+                              ? 'bg-blue-500' 
+                              : 'bg-gray-300 opacity-60'
+                          }`}></div>
                         </div>
                       </div>
-                      <p className="text-xs text-gray-600 mb-2">{program.name || 'Unnamed Program'}</p>
-                      <div className="flex items-center justify-between">
+                      <p className="text-xs text-gray-500 mb-4 line-clamp-2">{program.name || 'Unnamed Program'}</p>
+                      <div className="flex items-center justify-between mb-4">
                         <div className={`text-xs font-medium ${program.active ? 'text-green-600' : 'text-gray-500'}`}>
                           {program.active ? 'Active' : 'Inactive'}
                         </div>
@@ -1709,6 +1727,16 @@ const ProgramsTabContent = () => {
                           </TooltipProvider>
                         )}
                       </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={program.active}
+                          onCheckedChange={() => toggleProgramActive(program.originalIndex, program.type)}
+                          className="flex-shrink-0"
+                        />
+                        <span className="text-xs text-gray-600 flex-1">
+                          {program.active ? 'Program is active' : 'Program is inactive'}
+                        </span>
+                      </div>
                     </div>
                   )
                 })}
@@ -1724,75 +1752,86 @@ const ProgramsTabContent = () => {
               ) : (
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-md font-medium">Custom Manual Programs</h3>
-                  <Button 
-                    onClick={handleCreateManualProgram}
-                    className="rounded-md"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Manual Program
-                  </Button>
                 </div>
               )}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {customPrograms.map((program) => (
                   <div 
                     key={program.id} 
-                    className="bg-white border border-gray-200 rounded-md p-4 shadow-sm cursor-pointer hover:border-blue-300 hover:shadow-md transition-all duration-200"
+                    className={`group relative bg-gray-50 border rounded-lg p-4 transition-all hover:shadow-sm cursor-pointer ${
+                      program.isActive 
+                        ? 'border-blue-200 hover:border-blue-300' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
                     onClick={() => handleEditCustomProgram(program)}
                   >
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-start justify-between mb-3">
+                      <h4 className="text-sm font-medium text-gray-900">{program.name}</h4>
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm">{program.name}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={program.isActive}
-                          onCheckedChange={(checked) => {
-                            toggleCustomProgramActive(program.id)
+                        <button
+                          className="opacity-40 hover:opacity-70 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleEditCustomProgram(program)
                           }}
-                          onClick={(e) => e.stopPropagation()}
-                        />
+                        >
+                          <Settings className="h-3 w-3 text-gray-600" />
+                        </button>
+                        <div className={`h-2 w-2 rounded-full ${
+                          program.isActive 
+                            ? 'bg-blue-500' 
+                            : 'bg-gray-300 opacity-60'
+                        }`}></div>
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      {program.description && (
-                        <div>
-                          <p className="text-xs text-gray-600">{program.description}</p>
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between">
-                        <div className={`text-xs font-medium ${program.isActive ? 'text-green-600' : 'text-gray-500'}`}>
-                          {program.isActive ? 'Active' : 'Inactive'}
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="flex items-center gap-1 text-gray-500 cursor-help">
-                                  <Award className="h-3 w-3" />
-                                  <span className="text-xs font-medium">{program.totalRewards}</span>
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent side="top">
-                                <p className="text-xs">Total rewards in program</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="flex items-center gap-1 text-gray-500 cursor-help">
-                                  <CreditCard className="h-3 w-3" />
-                                  <span className="text-xs font-medium">{program.pin}</span>
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent side="top">
-                                <p className="text-xs">Program PIN</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </div>
+                    <p className="text-xs text-gray-500 mb-4 line-clamp-2">
+                      {program.description || 'Custom manual program for targeted customer engagement'}
+                    </p>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className={`text-xs font-medium ${program.isActive ? 'text-green-600' : 'text-gray-500'}`}>
+                        {program.isActive ? 'Active' : 'Inactive'}
                       </div>
+                      <div className="flex items-center gap-3">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center gap-1 text-gray-500 cursor-help">
+                                <Award className="h-3 w-3" />
+                                <span className="text-xs font-medium">{program.totalRewards}</span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              <p className="text-xs">Total rewards in program</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center gap-1 text-gray-500 cursor-help">
+                                <CreditCard className="h-3 w-3" />
+                                <span className="text-xs font-medium">{program.pin}</span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              <p className="text-xs">Program PIN</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={program.isActive}
+                        onCheckedChange={(checked) => {
+                          toggleCustomProgramActive(program.id)
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex-shrink-0"
+                      />
+                      <span className="text-xs text-gray-600 flex-1">
+                        {program.isActive ? 'Program is active' : 'Program is inactive'}
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -7064,6 +7103,14 @@ export default function StoreOverviewPage() {
   const [refreshingInventory, setRefreshingInventory] = useState(false)
   const [loadingInventory, setLoadingInventory] = useState(true)
   
+  // State for Create Manual Program dialog
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [editingProgram, setEditingProgram] = useState<CustomProgram | null>(null)
+  
+  // Message details popup state
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null)
+  const [showMessageDetails, setShowMessageDetails] = useState(false)
+  
   // Fetch data on component mount
   useEffect(() => {
     if (user?.uid) {
@@ -7208,26 +7255,60 @@ export default function StoreOverviewPage() {
     if (!user?.uid) return
     
     try {
-      const messagesRef = collection(db, 'merchants', user.uid, 'messages')
-      const messagesQuery = query(messagesRef, orderBy('createdAt', 'desc'), limit(5))
-      const messagesSnapshot = await getDocs(messagesQuery)
+      const broadcastsRef = collection(db, 'merchants', user.uid, 'broadcasts')
+      const broadcastsQuery = query(broadcastsRef, orderBy('createdAt', 'desc'), limit(10))
+      const broadcastsSnapshot = await getDocs(broadcastsQuery)
       
-      const fetchedMessages = messagesSnapshot.docs.map(doc => {
+      const fetchedMessages = broadcastsSnapshot.docs.map(doc => {
         const data = doc.data()
+        const isActive = data.status === 'active'
+        const clicks = data.clicks || 0
+        const reads = data.reads || 0
+        const uniqueClicks = data.uniqueClicks || 0
+        const uniqueReads = data.uniqueReads || 0
+        const totalRecipients = data.totalRecipients || 0
+        const clickedCustomers = data.clickedCustomers || []
+        const readCustomers = data.readCustomers || []
+        
+        // Calculate engagement rates based on actual recipient count
+        const openRate = totalRecipients > 0 ? (uniqueReads / totalRecipients) * 100 : 0
+        const clickRate = totalRecipients > 0 ? (uniqueClicks / totalRecipients) * 100 : 0
+        
         return {
           id: doc.id,
-          title: data.title || 'Unnamed Message',
-          content: data.content || '',
-          sent: data.sent || false,
-          sentAt: data.sentAt,
-          recipients: data.recipients || 0,
-          openRate: data.openRate || 0
+          title: data.title || 'Unnamed Broadcast',
+          message: data.message || '',
+          content: data.message || '', // For backward compatibility
+          status: data.status || 'draft',
+          createdAt: data.createdAt,
+          selectedCohorts: data.selectedCohorts || [],
+          notificationAction: data.notificationAction || 'storeRedirect',
+          merchantId: data.merchantId || user.uid,
+          // Engagement data
+          clicks,
+          reads,
+          uniqueClicks,
+          uniqueReads,
+          clickedCustomers,
+          readCustomers,
+          lastClickAt: data.lastClickAt,
+          lastReadAt: data.lastReadAt,
+          totalRecipients,
+          cohortBreakdown: data.cohortBreakdown || {},
+          // Computed fields
+          sent: isActive,
+          sentAt: isActive ? data.createdAt : null,
+          recipients: totalRecipients,
+          openRate,
+          clickRate,
+          uniqueOpenRate: openRate, // Same as openRate since we're using unique reads
+          uniqueClickRate: clickRate // Same as clickRate since we're using unique clicks
         }
       })
       
       setMessages(fetchedMessages)
     } catch (error) {
-      console.error("Error fetching messages:", error)
+      console.error("Error fetching broadcasts:", error)
     }
   }
   
@@ -7235,6 +7316,8 @@ export default function StoreOverviewPage() {
     if (!user?.uid) return
     
     try {
+      // For now, keep this as a separate collection for push notifications
+      // or we can merge this into broadcasts later if needed
       const notificationsRef = collection(db, 'merchants', user.uid, 'notifications')
       const notificationsQuery = query(notificationsRef, orderBy('createdAt', 'desc'), limit(5))
       const notificationsSnapshot = await getDocs(notificationsQuery)
@@ -7562,6 +7645,10 @@ export default function StoreOverviewPage() {
     engagement: number;
     body?: string;
     clickRate?: number;
+    uniqueReads?: number;
+    uniqueClicks?: number;
+    totalRecipients?: number;
+    notificationAction?: string;
   }> => {
     // Add sample data for demonstration
     const sampleMessages = [
@@ -7575,7 +7662,11 @@ export default function StoreOverviewPage() {
         openRate: 68.5,
         type: 'email' as const,
         status: 'sent' as const,
-        engagement: 68.5
+        engagement: 68.5,
+        uniqueReads: 168,
+        uniqueClicks: 45,
+        totalRecipients: 245,
+        notificationAction: 'showAnnouncement'
       },
       {
         id: 'msg-2',
@@ -7587,7 +7678,11 @@ export default function StoreOverviewPage() {
         openRate: 45.2,
         type: 'email' as const,
         status: 'sent' as const,
-        engagement: 45.2
+        engagement: 45.2,
+        uniqueReads: 403,
+        uniqueClicks: 89,
+        totalRecipients: 892,
+        notificationAction: 'storeRedirect'
       },
       {
         id: 'msg-3',
@@ -7599,7 +7694,11 @@ export default function StoreOverviewPage() {
         openRate: 0,
         type: 'email' as const,
         status: 'draft' as const,
-        engagement: 0
+        engagement: 0,
+        uniqueReads: 0,
+        uniqueClicks: 0,
+        totalRecipients: 1200,
+        notificationAction: 'showAnnouncement'
       }
     ]
 
@@ -7615,7 +7714,11 @@ export default function StoreOverviewPage() {
         type: 'push' as const,
         content: 'Your favourite items are now 25% off! Limited time only.',
         status: 'sent' as const,
-        engagement: 12.8
+        engagement: 12.8,
+        uniqueReads: 0,
+        uniqueClicks: 73,
+        totalRecipients: 567,
+        notificationAction: 'storeRedirect'
       },
       {
         id: 'notif-2',
@@ -7628,7 +7731,11 @@ export default function StoreOverviewPage() {
         type: 'push' as const,
         content: 'You\'ve earned 150 new loyalty points! Check out your rewards.',
         status: 'sent' as const,
-        engagement: 8.9
+        engagement: 8.9,
+        uniqueReads: 0,
+        uniqueClicks: 92,
+        totalRecipients: 1034,
+        notificationAction: 'storeRedirect'
       },
       {
         id: 'notif-3',
@@ -7641,27 +7748,50 @@ export default function StoreOverviewPage() {
         type: 'push' as const,
         content: 'Your order #12345 is ready for pickup at our Collins Street location.',
         status: 'draft' as const,
-        engagement: 0
+        engagement: 0,
+        uniqueReads: 0,
+        uniqueClicks: 0,
+        totalRecipients: 1,
+        notificationAction: 'storeRedirect'
       }
     ]
 
     // Combine actual data with sample data
     const allMessages = [
       ...messages.map(msg => ({
-        ...msg,
+        id: msg.id,
+        title: msg.title,
+        content: msg.content || msg.message || '',
+        sent: msg.sent,
+        sentAt: msg.sentAt,
+        recipients: msg.recipients,
+        openRate: msg.openRate,
         type: 'email' as const,
-        content: msg.content,
         status: msg.sent ? 'sent' as const : 'draft' as const,
-        engagement: msg.openRate || 0
+        engagement: msg.openRate || 0,
+        clickRate: msg.clickRate,
+        uniqueReads: msg.uniqueReads || 0,
+        uniqueClicks: msg.uniqueClicks || 0,
+        totalRecipients: msg.totalRecipients || msg.recipients,
+        notificationAction: msg.notificationAction || 'storeRedirect'
       })),
       ...notifications.map(notif => ({
-        ...notif,
-        type: 'push' as const,
-        content: notif.body,
+        id: notif.id,
         title: notif.title,
+        content: notif.body || '',
+        sent: notif.sent,
+        sentAt: notif.sentAt,
+        recipients: notif.recipients,
+        openRate: notif.clickRate,
+        type: 'push' as const,
         status: notif.sent ? 'sent' as const : 'draft' as const,
         engagement: notif.clickRate || 0,
-        openRate: notif.clickRate
+        body: notif.body,
+        clickRate: notif.clickRate,
+        uniqueReads: 0, // Notifications don't have read tracking
+        uniqueClicks: 0, // Notifications don't have unique click tracking
+        totalRecipients: notif.recipients,
+        notificationAction: 'storeRedirect' // Default for notifications
       })),
       ...sampleMessages,
       ...sampleNotifications
@@ -7779,25 +7909,74 @@ export default function StoreOverviewPage() {
       },
     },
     {
-      accessorKey: 'engagement',
+      accessorKey: 'openRate',
       header: ({ column }) => (
-        <TableColumnHeader column={column} title="Engagement" />
+        <TableColumnHeader column={column} title="Open Rate" />
       ),
       cell: ({ row }) => {
         if (row.original.status !== 'sent') {
           return <span className="text-sm text-muted-foreground">-</span>
         }
         
-        const rate = row.original.engagement || 0
+        const message = row.original
+        const uniqueReads = message.uniqueReads || 0
+        const totalRecipients = message.recipients || message.totalRecipients || 0
+        const openRate = totalRecipients > 0 ? (uniqueReads / totalRecipients) * 100 : 0
+        
         return (
-          <div className="flex items-center gap-2">
+          <div className="space-y-1">
             <div className="flex items-center gap-1">
-              <BarChart className="h-3 w-3 text-muted-foreground" />
-              <span className="text-sm font-medium">{rate.toFixed(1)}%</span>
+              <BarChart className="h-3 w-3 text-blue-500" />
+              <span className="text-sm font-medium">{openRate.toFixed(1)}%</span>
             </div>
-            <span className="text-xs text-muted-foreground">
-              {row.original.type === 'email' ? 'open' : 'click'} rate
-            </span>
+            <div className="text-xs text-muted-foreground">
+              {uniqueReads}/{totalRecipients} opened
+            </div>
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: 'notificationAction',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Action" />
+      ),
+      cell: ({ row }) => {
+        const action = row.original.notificationAction || 'storeRedirect';
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+            <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+              action === 'showAnnouncement' ? 'bg-blue-500' : 'bg-green-500'
+            }`}></div>
+            {action === 'showAnnouncement' ? 'Show Announcement' : 'Go to Store'}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: 'clickRate',
+      header: ({ column }) => (
+        <TableColumnHeader column={column} title="Click Rate" />
+      ),
+      cell: ({ row }) => {
+        if (row.original.status !== 'sent') {
+          return <span className="text-sm text-muted-foreground">-</span>
+        }
+        
+        const message = row.original
+        const uniqueClicks = message.uniqueClicks || 0
+        const totalRecipients = message.recipients || message.totalRecipients || 0
+        const clickRate = totalRecipients > 0 ? (uniqueClicks / totalRecipients) * 100 : 0
+        
+        return (
+          <div className="space-y-1">
+            <div className="flex items-center gap-1">
+              <BarChart className="h-3 w-3 text-green-500" />
+              <span className="text-sm font-medium">{clickRate.toFixed(1)}%</span>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {uniqueClicks}/{totalRecipients} clicked
+            </div>
           </div>
         )
       },
@@ -7883,6 +8062,25 @@ export default function StoreOverviewPage() {
               Activity
             </button>
           </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2">
+            {activeTab === "programs" && (
+              <Button 
+                onClick={() => {
+                  // We'll need to lift the handleCreateManualProgram function up to this level
+                  // For now, create a simple dialog trigger
+                  setShowCreateDialog(true)
+                  setEditingProgram(null)
+                }}
+                className="rounded-md h-9"
+                size="sm"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create Manual Program
+              </Button>
+            )}
+          </div>
         </div>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-3">
@@ -7920,23 +8118,91 @@ export default function StoreOverviewPage() {
                                 </div>
             ) : (
               <div className="border border-gray-200 rounded-md bg-white">
-                <TableProvider columns={messageColumns} data={getAllMessages()}>
-                  <KiboTableHeader>
-                    {({ headerGroup }) => (
-                      <TableHeaderGroup key={headerGroup.id} headerGroup={headerGroup}>
-                        {({ header }) => <KiboTableHead key={header.id} header={header} />}
-                      </TableHeaderGroup>
-                    )}
-                  </KiboTableHeader>
-                  <KiboTableBody>
-                    {({ row }) => (
-                      <KiboTableRow key={row.id} row={row}>
-                        {({ cell }) => <KiboTableCell key={cell.id} cell={cell} />}
-                      </KiboTableRow>
-                    )}
-                  </KiboTableBody>
-                </TableProvider>
-                                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Message</TableHead>
+                      <TableHead>Cohorts</TableHead>
+                      <TableHead>Recipients</TableHead>
+                      <TableHead>Open Rate</TableHead>
+                      <TableHead>Click Rate</TableHead>
+                      <TableHead>Action</TableHead>
+                      <TableHead>Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {getAllMessages().map((message) => (
+                      <TableRow 
+                        key={message.id}
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() => {
+                          const messageData = messages.find(m => m.id === message.id);
+                          if (messageData) {
+                            setSelectedMessage(messageData);
+                            setShowMessageDetails(true);
+                          }
+                        }}
+                      >
+                        <TableCell className="font-medium">
+                          <div className="max-w-[200px]">
+                            <div className="truncate">{message.title}</div>
+                            <div className="text-xs text-muted-foreground truncate">{message.content}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {(messages.find(m => m.id === message.id)?.selectedCohorts || []).map((cohort) => (
+                              <Badge key={cohort} variant="outline" className="text-xs">
+                                {cohort.charAt(0).toUpperCase() + cohort.slice(1)}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">{message.totalRecipients || message.recipients}</TableCell>
+                        <TableCell className="text-center">
+                          {message.totalRecipients && message.uniqueReads 
+                            ? `${((message.uniqueReads / message.totalRecipients) * 100).toFixed(1)}%`
+                            : message.openRate 
+                              ? `${message.openRate.toFixed(1)}%` 
+                              : '0%'
+                          }
+                          <div className="text-xs text-muted-foreground">
+                            {message.uniqueReads || 0}/{message.totalRecipients || message.recipients}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {message.totalRecipients && message.uniqueClicks 
+                            ? `${((message.uniqueClicks / message.totalRecipients) * 100).toFixed(1)}%`
+                            : message.clickRate 
+                              ? `${message.clickRate.toFixed(1)}%` 
+                              : '0%'
+                          }
+                          <div className="text-xs text-muted-foreground">
+                            {message.uniqueClicks || 0}/{message.totalRecipients || message.recipients}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                            <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+                              message.notificationAction === 'storeRedirect' ? 'bg-blue-500' :
+                              message.notificationAction === 'rewardRedirect' ? 'bg-purple-500' :
+                              message.notificationAction === 'customRedirect' ? 'bg-green-500' :
+                              'bg-gray-500'
+                            }`}></div>
+                            {message.notificationAction === 'storeRedirect' ? 'Store' :
+                             message.notificationAction === 'rewardRedirect' ? 'Reward' :
+                             message.notificationAction === 'customRedirect' ? 'Custom' :
+                             'None'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {message.sentAt ? formatDate(message.sentAt) : 'Draft'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </TabsContent>
           
@@ -8268,6 +8534,26 @@ export default function StoreOverviewPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Create/Edit Manual Program Dialog */}
+      <CreateManualProgramDialog 
+        open={showCreateDialog}
+        editingProgram={editingProgram}
+        onOpenChange={(open) => {
+          setShowCreateDialog(open)
+          if (!open) {
+            setEditingProgram(null)
+          }
+        }} 
+      />
+
+      {/* Message Details Dialog */}
+      <MessageDetailsDialog
+        open={showMessageDetails}
+        onOpenChange={setShowMessageDetails}
+        message={selectedMessage}
+      />
+
     </PageTransition>
   )
-} 
+}

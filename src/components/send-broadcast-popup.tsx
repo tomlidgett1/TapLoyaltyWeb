@@ -22,7 +22,6 @@ interface SendBroadcastPopupProps {
 
 // Define customer cohorts
 const CUSTOMER_COHORTS = {
-  ALL: 'all',
   ACTIVE: 'active',
   NEW: 'new',
   RESURRECTED: 'resurrected',
@@ -43,7 +42,7 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
   const { toast } = useToast()
   const [title, setTitle] = useState("")
   const [message, setMessage] = useState("")
-  const [audience, setAudience] = useState(CUSTOMER_COHORTS.ALL)
+  const [selectedCohorts, setSelectedCohorts] = useState<string[]>([CUSTOMER_COHORTS.ACTIVE])
   const [loading, setLoading] = useState(false)
   const [notificationAction, setNotificationAction] = useState("showAnnouncement")
   const [showAnnouncementDesigner, setShowAnnouncementDesigner] = useState(false)
@@ -69,7 +68,6 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
     
     try {
       const counts: Record<string, number> = {
-        [CUSTOMER_COHORTS.ALL]: 0,
         [CUSTOMER_COHORTS.ACTIVE]: 0,
         [CUSTOMER_COHORTS.NEW]: 0,
         [CUSTOMER_COHORTS.RESURRECTED]: 0,
@@ -80,18 +78,12 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
       // Customer collection path
       const customersCollectionPath = collection(db, 'merchants', user.uid, 'customers');
       
-      // Get total count
-      const totalSnapshot = await getDocs(query(customersCollectionPath));
-      counts[CUSTOMER_COHORTS.ALL] = totalSnapshot.size;
-      
       // Get count for each cohort
       for (const cohort of Object.values(CUSTOMER_COHORTS)) {
-        if (cohort === CUSTOMER_COHORTS.ALL) continue;
-        
-        // Use lowercase cohort name for the query
+        // Query the currentCohort.name field directly
         const cohortQuery = query(
           customersCollectionPath,
-          where(`currentCohort.name.${cohort.toLowerCase()}`, '==', true)
+          where('currentCohort.name', '==', cohort.toLowerCase())
         );
         
         const cohortSnapshot = await getDocs(cohortQuery);
@@ -112,7 +104,6 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
     
     try {
       const cohortHistory: Record<string, { available: boolean, lastSent?: Date }> = {
-        [CUSTOMER_COHORTS.ALL]: { available: true },
         [CUSTOMER_COHORTS.ACTIVE]: { available: true },
         [CUSTOMER_COHORTS.NEW]: { available: true },
         [CUSTOMER_COHORTS.RESURRECTED]: { available: true },
@@ -221,12 +212,32 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
     
     return null;
   };
+
+  // Handle cohort selection toggle
+  const toggleCohortSelection = (cohort: string) => {
+    setSelectedCohorts(prev => {
+      if (prev.includes(cohort)) {
+        return prev.filter(c => c !== cohort);
+      } else {
+        return [...prev, cohort];
+      }
+    });
+  };
   
   const handleSend = async () => {
     if (!title || !message) {
       toast({
         title: "Missing information",
         description: "Please provide both a title and message for your broadcast.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (selectedCohorts.length === 0) {
+      toast({
+        title: "No cohorts selected",
+        description: "Please select at least one customer cohort to send the broadcast to.",
         variant: "destructive"
       })
       return
@@ -256,12 +267,13 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
       return
     }
     
-    // Check if selected cohort is available
-    if (!cohortAvailability[audience]?.available) {
-      const availableAgain = getAvailableAgainDate(cohortAvailability[audience]?.lastSent);
+    // Check if selected cohorts are available
+    const unavailableCohorts = selectedCohorts.filter(cohort => !cohortAvailability[cohort]?.available);
+    if (unavailableCohorts.length > 0) {
+      const cohortNames = unavailableCohorts.map(getCohortDisplayName).join(', ');
       toast({
-        title: "Cohort unavailable",
-        description: `You've already messaged this cohort in the last 30 days. You can message them again after ${availableAgain}.`,
+        title: "Cohorts unavailable",
+        description: `You've already messaged these cohorts in the last 30 days: ${cohortNames}`,
         variant: "destructive"
       })
       return;
@@ -280,15 +292,46 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
       const merchantData = merchantDoc.data()
       const merchantName = merchantData.merchantName || merchantData.tradingName || merchantData.legalName || "Unknown Merchant"
       
+      // Get customers based on the selected cohorts
+      const customersCollectionPath = collection(db, 'merchants', user.uid, 'customers')
+      
+      // Get detailed breakdown for each cohort
+      const cohortBreakdown: Record<string, number> = {};
+      let totalRecipients = 0;
+      
+      // Query each cohort separately to get accurate counts
+      for (const cohort of selectedCohorts) {
+        const cohortQuery = query(
+          customersCollectionPath,
+          where('currentCohort.name', '==', cohort.toLowerCase())
+        );
+        
+        const cohortSnapshot = await getDocs(cohortQuery);
+        const cohortCount = cohortSnapshot.size;
+        cohortBreakdown[cohort] = cohortCount;
+        totalRecipients += cohortCount;
+      }
+      
+      // Log the broadcast details
+      console.log('📤 Broadcast Details:');
+      console.log(`   Total Recipients: ${totalRecipients}`);
+      console.log('   Cohort Breakdown:');
+      selectedCohorts.forEach(cohort => {
+        console.log(`     ${getCohortDisplayName(cohort)}: ${cohortBreakdown[cohort]} customers`);
+      });
+      
       // Create the broadcast document
       const broadcastData = {
         title,
         message,
-        audience,
+        selectedCohorts,
         notificationAction,
         merchantId: user.uid,
         createdAt: Timestamp.now(),
         status: "active",
+        // Add recipient tracking
+        totalRecipients,
+        cohortBreakdown,
         // Include announcement data if available and action is showAnnouncement
         ...(notificationAction === "showAnnouncement" && announcement 
           ? { announcementData: announcement } 
@@ -299,51 +342,22 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
       const broadcastsRef = collection(db, 'merchants', user.uid, 'broadcasts')
       const docRef = await addDoc(broadcastsRef, broadcastData)
       
-      // Record the cohort message in history
+      // Record the cohort message in history for each selected cohort
       const cohortHistoryRef = collection(db, 'merchants', user.uid, 'cohortMessageHistory');
-      await addDoc(cohortHistoryRef, {
-        cohort: audience,
-        broadcastId: docRef.id,
-        sentAt: Timestamp.now()
-      });
+      const historyPromises = selectedCohorts.map(cohort => 
+        addDoc(cohortHistoryRef, {
+          cohort,
+          broadcastId: docRef.id,
+          sentAt: Timestamp.now()
+        })
+      );
+      await Promise.all(historyPromises);
       
-      // Get customers based on the selected audience
-      let customersQuery;
-      
-      // Customer collection path
-      const customersCollectionPath = collection(db, 'merchants', user.uid, 'customers')
-      
-      // Create query based on audience selection
-      if (audience === CUSTOMER_COHORTS.ALL) {
-        // For "All customers", we need to exclude customers from cohorts that have been messaged recently
-        const unavailableCohorts = Object.entries(cohortAvailability)
-          .filter(([cohort, status]) => cohort !== CUSTOMER_COHORTS.ALL && !status.available)
-          .map(([cohort]) => cohort);
-        
-        if (unavailableCohorts.length > 0) {
-          // Create a compound query to exclude customers in unavailable cohorts
-          let baseQuery = query(customersCollectionPath);
-          
-          // For each unavailable cohort, add a where clause to exclude it
-          for (const cohort of unavailableCohorts) {
-            baseQuery = query(
-              baseQuery,
-              where(`currentCohort.name.${cohort}`, '!=', true)
-            );
-          }
-          
-          customersQuery = baseQuery;
-        } else {
-          // If all cohorts are available, get all customers
-          customersQuery = query(customersCollectionPath);
-        }
-      } else {
-        // Query based on currentCohort.name field
-        customersQuery = query(
-          customersCollectionPath, 
-          where(`currentCohort.name.${audience}`, '==', true)
-        );
-      }
+      // Query customers that belong to any of the selected cohorts for batch processing
+      const customersQuery = query(
+        customersCollectionPath, 
+        where('currentCohort.name', 'in', selectedCohorts.map(cohort => cohort.toLowerCase()))
+      );
       
       const customersSnapshot = await getDocs(customersQuery)
       
@@ -402,21 +416,28 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
       
       // Update cohort availability after successful send
       const updatedAvailability = {...cohortAvailability};
-      updatedAvailability[audience] = { 
-        available: false, 
-        lastSent: new Date() 
-      };
+      selectedCohorts.forEach(cohort => {
+        updatedAvailability[cohort] = { 
+          available: false, 
+          lastSent: new Date() 
+        };
+      });
       setCohortAvailability(updatedAvailability);
       
+      // Create detailed success message
+      const cohortDetails = selectedCohorts.map(cohort => 
+        `${getCohortDisplayName(cohort)}: ${cohortBreakdown[cohort]}`
+      ).join(', ');
+      
       toast({
-        title: "Broadcast sent",
-        description: `Your message has been delivered to ${customersSnapshot.size} customers.`,
+        title: "Broadcast sent successfully",
+        description: `Delivered to ${totalRecipients} customers (${cohortDetails})`,
       })
       
       // Reset form and close dialog
       setTitle("")
       setMessage("")
-      setAudience(CUSTOMER_COHORTS.ALL)
+      setSelectedCohorts([CUSTOMER_COHORTS.ACTIVE])
       setNotificationAction("showAnnouncement")
       setAnnouncement(null)
       setShowConfirmation(false)
@@ -436,7 +457,6 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
   // Get the display name for a cohort
   const getCohortDisplayName = (cohort: string) => {
     switch(cohort) {
-      case CUSTOMER_COHORTS.ALL: return "All customers";
       case CUSTOMER_COHORTS.ACTIVE: return "Active customers";
       case CUSTOMER_COHORTS.NEW: return "New customers";
       case CUSTOMER_COHORTS.RESURRECTED: return "Resurrected customers";
@@ -446,24 +466,30 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
     }
   };
   
-  // Get description text for a cohort
-  const getCohortDescription = (cohort: string) => {
-    switch(cohort) {
-      case CUSTOMER_COHORTS.ALL: 
-        return "This message will be sent to all of your customers.";
-      case CUSTOMER_COHORTS.ACTIVE: 
-        return "This message will be sent to customers with an 'active' status.";
-      case CUSTOMER_COHORTS.NEW: 
-        return "This message will be sent to customers who recently joined.";
-      case CUSTOMER_COHORTS.RESURRECTED: 
-        return "This message will be sent to customers who have returned after being inactive.";
-      case CUSTOMER_COHORTS.CHURNED: 
-        return "This message will be sent to customers who have stopped engaging with your business.";
-      case CUSTOMER_COHORTS.DORMANT: 
-        return "This message will be sent to customers who haven't engaged in a while.";
-      default: 
-        return "This message will be sent to selected customers.";
+  // Get description text for selected cohorts
+  const getSelectedCohortsDescription = () => {
+    if (selectedCohorts.length === 0) {
+      return "No cohorts selected.";
     }
+    if (selectedCohorts.length === 1) {
+      const cohort = selectedCohorts[0];
+      switch(cohort) {
+        case CUSTOMER_COHORTS.ACTIVE: 
+          return "This message will be sent to customers with an 'active' status.";
+        case CUSTOMER_COHORTS.NEW: 
+          return "This message will be sent to customers who recently joined.";
+        case CUSTOMER_COHORTS.RESURRECTED: 
+          return "This message will be sent to customers who have returned after being inactive.";
+        case CUSTOMER_COHORTS.CHURNED: 
+          return "This message will be sent to customers who have stopped engaging with your business.";
+        case CUSTOMER_COHORTS.DORMANT: 
+          return "This message will be sent to customers who haven't engaged in a while.";
+        default: 
+          return "This message will be sent to selected customers.";
+      }
+    }
+    const cohortNames = selectedCohorts.map(getCohortDisplayName).join(', ');
+    return `This message will be sent to: ${cohortNames}.`;
   };
 
   return (
@@ -474,7 +500,7 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
           // Reset form when closing
           setTitle("")
           setMessage("")
-          setAudience(CUSTOMER_COHORTS.ALL)
+          setSelectedCohorts([CUSTOMER_COHORTS.ACTIVE])
           setNotificationAction("showAnnouncement")
           setAnnouncement(null)
           setShowConfirmation(false)
@@ -557,12 +583,12 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
                 <div className="space-y-1.5">
                   <Label>Action When Tapped</Label>
                   <div className="space-y-4">
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex gap-2">
                       <Button
                         type="button"
                         variant={notificationAction === 'showAnnouncement' ? 'default' : 'outline'}
                         onClick={() => setNotificationAction('showAnnouncement')}
-                        className="flex-grow flex items-center gap-1"
+                        className="flex items-center gap-1"
                       >
                         <MessageSquare className="h-3.5 w-3.5" />
                         <span>Show Announcement</span>
@@ -571,7 +597,7 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
                         type="button"
                         variant={notificationAction === 'storeRedirect' ? 'default' : 'outline'}
                         onClick={() => setNotificationAction('storeRedirect')}
-                        className="flex-grow flex items-center gap-1"
+                        className="flex items-center gap-1"
                       >
                         <Store className="h-3.5 w-3.5" />
                         <span>Go to Store</span>
@@ -594,7 +620,7 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
                             <Button 
                               variant="outline" 
                               size="sm" 
-                              className="w-full h-8 text-xs"
+                              className="h-8 text-xs"
                               onClick={() => setShowAnnouncementDesigner(true)}
                             >
                               Edit Announcement
@@ -603,7 +629,7 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
                         ) : (
                           <Button 
                             variant="outline" 
-                            className="w-full h-8 text-xs"
+                            className="h-8 text-xs"
                             onClick={() => setShowAnnouncementDesigner(true)}
                           >
                             Create Announcement
@@ -623,7 +649,7 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
                 </div>
                 
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Send To</Label>
+                  <Label className="text-sm font-medium">Send To (Select Multiple Cohorts)</Label>
                   
                   <div className="grid grid-cols-2 gap-2">
                     {loadingCohorts ? (
@@ -639,40 +665,23 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
                         const isAvailable = cohortAvailability[cohort]?.available;
                         const lastSent = cohortAvailability[cohort]?.lastSent;
                         const count = cohortCounts[cohort] || 0;
-                        
-                        // For "All" cohort, we need to recalculate the available count
-                        // by excluding customers in unavailable cohorts
-                        let displayCount = count;
-                        if (cohort === CUSTOMER_COHORTS.ALL) {
-                          const unavailableCohorts = Object.entries(cohortAvailability)
-                            .filter(([c, status]) => c !== CUSTOMER_COHORTS.ALL && !status.available)
-                            .map(([c]) => c);
-                          
-                          // Subtract counts of unavailable cohorts
-                          displayCount = count;
-                          for (const unavailableCohort of unavailableCohorts) {
-                            displayCount -= cohortCounts[unavailableCohort] || 0;
-                          }
-                          
-                          // Ensure we don't show negative numbers
-                          displayCount = Math.max(0, displayCount);
-                        }
+                        const isSelected = selectedCohorts.includes(cohort);
                         
                         return (
                           <div 
                             key={cohort}
                             className={`relative flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-all 
-                              ${!isAvailable ? 'opacity-60 bg-gray-50' : audience === cohort ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200 hover:border-gray-300'}`}
-                            onClick={() => isAvailable && setAudience(cohort)}
+                              ${!isAvailable ? 'opacity-60 bg-gray-50' : isSelected ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200 hover:border-gray-300'}`}
+                            onClick={() => isAvailable && toggleCohortSelection(cohort)}
                           >
-                            <div className={`h-4 w-4 rounded-full flex items-center justify-center ${audience === cohort && isAvailable ? 'bg-blue-500' : 'border border-gray-300'}`}>
-                              {audience === cohort && isAvailable && <div className="h-2 w-2 rounded-full bg-white" />}
+                            <div className={`h-4 w-4 rounded-full flex items-center justify-center ${isSelected && isAvailable ? 'bg-blue-500' : 'border border-gray-300'}`}>
+                              {isSelected && isAvailable && <div className="h-2 w-2 rounded-full bg-white" />}
                             </div>
                             <div className="flex-1">
                               <div className="flex justify-between items-center">
                                 <span className="text-sm">{getCohortDisplayName(cohort)}</span>
                                 <span className="text-xs bg-gray-100 px-1.5 py-0.5 rounded-full text-gray-600">
-                                  {displayCount}
+                                  {count}
                                 </span>
                               </div>
                             </div>
@@ -691,15 +700,15 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
                     )}
                   </div>
                   
-                  <div className="bg-blue-50 border border-blue-100 rounded-md p-2.5 text-xs text-blue-800 mt-2">
-                    <p className="flex items-center gap-1.5">
+                  <div className="bg-gray-50 border border-gray-200 rounded-md p-2.5 text-xs mt-2">
+                    <p className="flex items-center gap-1.5 text-gray-700">
                       <Users className="h-3.5 w-3.5 flex-shrink-0" />
                       <span>
-                        {getCohortDescription(audience)}
+                        {getSelectedCohortsDescription()}
                       </span>
                     </p>
                     
-                    <p className="flex items-center gap-1.5 mt-1.5 text-amber-700">
+                    <p className="flex items-center gap-1.5 mt-1.5 text-gray-600">
                       <Clock className="h-3.5 w-3.5 flex-shrink-0" />
                       <span>
                         You can only send one message to each cohort every 30 days.
@@ -718,7 +727,7 @@ export function SendBroadcastPopup({ open, onOpenChange }: SendBroadcastPopupPro
                 </Button>
                 <Button 
                   onClick={handleSend}
-                  disabled={loading || !title || !message || (notificationAction === "showAnnouncement" && !announcement) || !cohortAvailability[audience]?.available}
+                  disabled={loading || !title || !message || selectedCohorts.length === 0 || (notificationAction === "showAnnouncement" && !announcement) || selectedCohorts.some(cohort => !cohortAvailability[cohort]?.available)}
                   className="flex items-center gap-1 bg-[#007AFF] hover:bg-[#0071E3] text-white"
                 >
                   <Send className="h-3.5 w-3.5" />

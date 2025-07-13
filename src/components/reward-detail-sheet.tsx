@@ -470,12 +470,15 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
               ) : (
                 <>
                   <h2 className="text-lg font-semibold">{reward.rewardName}</h2>
-                  <Badge variant="outline" className={cn(
-                    "ml-2 rounded-sm",
-                    reward.status === 'active' ? "bg-green-50 text-green-600 border-green-200" : "bg-gray-100 text-gray-600"
+                  <span className={cn(
+                    "inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit ml-2",
                   )}>
+                    <div className={cn(
+                      "h-1.5 w-1.5 rounded-full flex-shrink-0",
+                      reward.status === 'active' ? "bg-green-500" : "bg-gray-500"
+                    )}></div>
                     {capitalize(reward.status)}
-                  </Badge>
+                  </span>
                 </>
               )}
             </div>
@@ -821,15 +824,13 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                       <div>
                         <div className="text-xs text-gray-500">Status</div>
                         <div>
-                          <Badge 
-                            variant="outline" 
-                            className={`rounded-sm ${
-                              reward.status === 'active' ? 'bg-green-50 text-green-700 border-green-200' :
-                              'bg-gray-100 text-gray-700 border-gray-200'
-                            }`}
-                          >
+                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                            <div className={cn(
+                              "h-1.5 w-1.5 rounded-full flex-shrink-0",
+                              reward.status === 'active' ? "bg-green-500" : "bg-gray-500"
+                            )}></div>
                             {capitalize(reward.status)}
-                          </Badge>
+                          </span>
                         </div>
                       </div>
 
@@ -946,9 +947,10 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                       <h3 className="text-sm font-medium">Reward Type</h3>
                     </div>
                     <div className="flex gap-2 items-center">
-                      <Badge className="capitalize bg-blue-50 text-blue-700 border-blue-200 rounded-sm">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                        <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
                         {reward.rewardType || reward.category || 'Discount'}
-                      </Badge>
+                      </span>
                       <span className="text-xs text-gray-500">
                         {reward.rewardType === 'discount' ? 'Gives customers a discount on purchases' : 
                          reward.rewardType === 'freeItem' ? 'Offers a free item with purchase' :
@@ -971,9 +973,10 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                     <div className="space-y-3 text-xs">
                       <div className="flex items-center justify-between">
                         <span className="text-gray-700">Visibility</span>
-                        <Badge variant="outline" className="rounded-sm bg-gray-50 text-gray-700">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                          <div className="h-1.5 w-1.5 bg-purple-500 rounded-full flex-shrink-0"></div>
                           {reward.customers && reward.customers.length > 0 ? 'Selected Customers' : 'All Customers'}
-                        </Badge>
+                        </span>
                       </div>
                       
                       {reward.pin && (
@@ -1006,9 +1009,10 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                           <Gift className="h-4 w-4 text-gray-600" />
                           <h3 className="text-sm font-medium">Redemption History</h3>
                         </div>
-                        <Badge className="bg-blue-50 text-blue-700 border-blue-200 rounded-sm">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                          <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
                           {reward.redemptionCount || 0} total
-                        </Badge>
+                        </span>
                       </div>
                     </div>
                     <div>
@@ -1098,19 +1102,17 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-xs py-2">
-                                  <Badge 
-                                    variant="outline" 
-                                    className={cn(
-                                      "rounded-sm text-xs",
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                    <div className={cn(
+                                      "h-1.5 w-1.5 rounded-full flex-shrink-0",
                                       redemption.status === 'successful' || redemption.status === 'completed'
-                                        ? "bg-green-50 text-green-700 border-green-200" 
+                                        ? "bg-green-500" 
                                         : redemption.status === 'pending'
-                                        ? "bg-blue-50 text-blue-600 border-blue-200"
-                                        : "bg-gray-50 text-gray-500 border-gray-100"
-                                    )}
-                                  >
+                                        ? "bg-blue-500"
+                                        : "bg-gray-500"
+                                    )}></div>
                                     {capitalize(redemption.status || 'unknown')}
-                                  </Badge>
+                                  </span>
                                 </TableCell>
                               </TableRow>
                             ))
@@ -1168,9 +1170,10 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                           <Eye className="h-4 w-4 text-gray-600" />
                           <h3 className="text-sm font-medium">Customer Visibility</h3>
                         </div>
-                        <Badge className="bg-blue-50 text-blue-700 border-blue-200 rounded-sm">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                          <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
                           {customerVisibility.length} customers
-                        </Badge>
+                        </span>
                       </div>
                     </div>
                     <div>
@@ -1235,30 +1238,22 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                                   </span>
                                 </TableCell>
                                 <TableCell className="text-xs py-2">
-                                  <Badge 
-                                    variant="outline" 
-                                    className={cn(
-                                      "rounded-sm text-xs",
-                                      customer.redeemable
-                                        ? "bg-green-50 text-green-700 border-green-200" 
-                                        : "bg-red-50 text-red-700 border-red-200"
-                                    )}
-                                  >
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                    <div className={cn(
+                                      "h-1.5 w-1.5 rounded-full flex-shrink-0",
+                                      customer.redeemable ? "bg-green-500" : "bg-red-500"
+                                    )}></div>
                                     {customer.redeemable ? 'true' : 'false'}
-                                  </Badge>
+                                  </span>
                                 </TableCell>
                                 <TableCell className="text-xs py-2">
-                                  <Badge 
-                                    variant="outline" 
-                                    className={cn(
-                                      "rounded-sm text-xs",
-                                      customer.visible
-                                        ? "bg-green-50 text-green-700 border-green-200" 
-                                        : "bg-red-50 text-red-700 border-red-200"
-                                    )}
-                                  >
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                    <div className={cn(
+                                      "h-1.5 w-1.5 rounded-full flex-shrink-0",
+                                      customer.visible ? "bg-green-500" : "bg-red-500"
+                                    )}></div>
                                     {customer.visible ? 'true' : 'false'}
-                                  </Badge>
+                                  </span>
                                 </TableCell>
                                 <TableCell className="text-xs py-2">
                                   <span className="text-gray-600 truncate max-w-[120px]">
@@ -1317,531 +1312,10 @@ export function RewardDetailSheet({ open, onOpenChange, rewardId }: RewardDetail
                       <div className="flex items-center gap-2">
                         <Tag className="h-4 w-4 text-gray-600" />
                         <h3 className="text-sm font-medium">Debug Information</h3>
-                        <Badge className="bg-orange-50 text-orange-700 border-orange-200 rounded-sm">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                          <div className="h-1.5 w-1.5 bg-orange-500 rounded-full flex-shrink-0"></div>
                           Raw Data
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Complete reward document structure for debugging purposes
-                      </p>
-                    </div>
-                    <div className="p-4">
-                      <div className="bg-gray-50 rounded-md border p-4 font-mono text-xs overflow-auto max-h-96">
-                        <pre className="whitespace-pre-wrap text-gray-800">
-                          {JSON.stringify(reward, null, 2)}
-                        </pre>
-                      </div>
-                      
-                      {/* Additional Debug Info */}
-                      <div className="mt-4 pt-4 border-t">
-                        <h4 className="text-sm font-medium text-gray-700 mb-3">Quick Debug Stats</h4>
-                        <div className="grid grid-cols-2 gap-4 text-xs">
-                          <div>
-                            <span className="text-gray-500">Document ID:</span>
-                            <div className="font-mono bg-gray-100 px-2 py-1 rounded mt-1">{reward?.id || 'N/A'}</div>
-                          </div>
-                          <div>
-                            <span className="text-gray-500">Collection Path:</span>
-                            <div className="font-mono bg-gray-100 px-2 py-1 rounded mt-1">
-                              merchants/{user?.uid}/rewards/{reward?.id}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-gray-500">Object Keys Count:</span>
-                            <div className="font-mono bg-gray-100 px-2 py-1 rounded mt-1">
-                              {reward ? Object.keys(reward).length : 0}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-gray-500">Data Size (approx):</span>
-                            <div className="font-mono bg-gray-100 px-2 py-1 rounded mt-1">
-                              {reward ? `${JSON.stringify(reward).length} chars` : 'N/A'}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Copy to Clipboard Button */}
-                      <div className="mt-4 pt-4 border-t flex gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="gap-2 rounded-md text-xs"
-                          onClick={() => {
-                            if (reward) {
-                              navigator.clipboard.writeText(JSON.stringify(reward, null, 2));
-                              showToast({
-                                title: "Copied!",
-                                description: "Reward JSON copied to clipboard",
-                              });
-                            }
-                          }}
-                        >
-                          <Copy className="h-3 w-3" />
-                          Copy JSON
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="gap-2 rounded-md text-xs"
-                          onClick={() => {
-                            if (reward) {
-                              const debugInfo = {
-                                documentId: reward.id,
-                                collectionPath: `merchants/${user?.uid}/rewards/${reward.id}`,
-                                keyCount: Object.keys(reward).length,
-                                dataSize: JSON.stringify(reward).length,
-                                timestamp: new Date().toISOString(),
-                                reward: reward
-                              };
-                              navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2));
-                              showToast({
-                                title: "Debug Info Copied!",
-                                description: "Complete debug information copied to clipboard",
-                              });
-                            }
-                          }}
-                        >
-                          <Tag className="h-3 w-3" />
-                          Copy Debug Info
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="details" className="mt-0 space-y-6">
-                {/* Requirements */}
-                <Card className="rounded-md shadow-sm">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <CheckCircle className="h-4 w-4 text-gray-600" />
-                      <h3 className="text-sm font-medium">Requirements</h3>
-                    </div>
-                    <div className="space-y-2">
-                      {Array.isArray(reward.conditions) && reward.conditions.map((condition, index) => (
-                        <div 
-                          key={index}
-                          className="flex items-center gap-2 text-xs p-2 rounded-md bg-gray-50 border border-gray-100"
-                        >
-                          <div className="h-1.5 w-1.5 rounded-full bg-gray-400" />
-                          <span className="text-gray-700">{formatCondition(condition)}</span>
-                        </div>
-                      ))}
-                      {(!reward.conditions || !Array.isArray(reward.conditions) || reward.conditions.length === 0) && (
-                        <div className="text-xs text-gray-500 italic">No special requirements</div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Limitations */}
-                <Card className="rounded-md shadow-sm">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <AlertCircle className="h-4 w-4 text-gray-600" />
-                      <h3 className="text-sm font-medium">Limitations</h3>
-                    </div>
-                    <div className="space-y-2">
-                      {Array.isArray(reward.limitations) && reward.limitations.map((limitation, index) => (
-                        <div 
-                          key={index}
-                          className="flex items-center gap-2 text-xs p-2 rounded-md bg-gray-50 border border-gray-100"
-                        >
-                          <div className="h-1.5 w-1.5 rounded-full bg-gray-400" />
-                          <span className="text-gray-700">{formatLimitation(limitation)}</span>
-                        </div>
-                      ))}
-                      {(!reward.limitations || !Array.isArray(reward.limitations) || reward.limitations.length === 0) && (
-                        <div className="text-xs text-gray-500 italic">No limitations set</div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Reward Type Details */}
-                <Card className="rounded-md shadow-sm">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Tag className="h-4 w-4 text-gray-600" />
-                      <h3 className="text-sm font-medium">Reward Type</h3>
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <Badge className="capitalize bg-blue-50 text-blue-700 border-blue-200 rounded-sm">
-                        {reward.rewardType || reward.category || 'Discount'}
-                      </Badge>
-                      <span className="text-xs text-gray-500">
-                        {reward.rewardType === 'discount' ? 'Gives customers a discount on purchases' : 
-                         reward.rewardType === 'freeItem' ? 'Offers a free item with purchase' :
-                         reward.rewardType === 'bundle' ? 'Bundle offer (buy X get Y)' :
-                         reward.rewardType === 'mystery' ? 'Mystery reward revealed at checkout' :
-                         reward.rewardType === 'custom' ? 'Custom reward with special terms' :
-                         'General loyalty reward'}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Advanced Options */}
-                <Card className="rounded-md shadow-sm">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Award className="h-4 w-4 text-gray-600" />
-                      <h3 className="text-sm font-medium">Advanced Options</h3>
-                    </div>
-                    <div className="space-y-3 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-700">Visibility</span>
-                        <Badge variant="outline" className="rounded-sm bg-gray-50 text-gray-700">
-                          {reward.customers && reward.customers.length > 0 ? 'Selected Customers' : 'All Customers'}
-                        </Badge>
-                      </div>
-                      
-                      {reward.pin && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-700">Redemption PIN</span>
-                          <div className="font-mono bg-gray-50 px-2 py-0.5 rounded border text-gray-700">{reward.pin}</div>
-                        </div>
-                      )}
-                      
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-700">Created</span>
-                        <span className="text-gray-600">{formatTimestamp(reward.createdAt)}</span>
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-700">Last Updated</span>
-                        <span className="text-gray-600">{formatTimestamp(reward.updatedAt)}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="redemptions" className="mt-0 space-y-6">
-                <Card className="rounded-md shadow-sm">
-                  <CardContent className="p-0">
-                    <div className="p-4 border-b">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Gift className="h-4 w-4 text-gray-600" />
-                          <h3 className="text-sm font-medium">Redemption History</h3>
-                        </div>
-                        <Badge className="bg-blue-50 text-blue-700 border-blue-200 rounded-sm">
-                          {reward.redemptionCount || 0} total
-                        </Badge>
-                      </div>
-                    </div>
-                    <div>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-xs">Date & Time</TableHead>
-                            <TableHead className="text-xs">Customer</TableHead>
-                            <TableHead className="text-xs">Points</TableHead>
-                            <TableHead className="text-xs">Status</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {redemptionsLoading ? (
-                            <TableRow>
-                              <TableCell colSpan={4} className="h-24 text-center">
-                                <div className="flex justify-center">
-                                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ) : redemptions.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={4} className="h-24 text-center">
-                                <div className="flex flex-col items-center justify-center py-6">
-                                  <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
-                                    <Gift className="h-5 w-5 text-gray-400" />
-                                  </div>
-                                  <h3 className="mt-3 text-sm font-medium">No redemptions yet</h3>
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    This reward hasn't been redeemed by any customers
-                                  </p>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            redemptions.map((redemption) => (
-                              <TableRow 
-                                key={redemption.id}
-                                className="hover:bg-gray-50"
-                              >
-                                <TableCell className="text-xs py-2">
-                                  <div className="flex flex-col">
-                                    <span className="font-medium">
-                                      {redemption.redemptionDate 
-                                        ? new Date(
-                                            typeof redemption.redemptionDate === 'string' 
-                                              ? redemption.redemptionDate 
-                                              : redemption.redemptionDate.seconds * 1000
-                                          ).toLocaleDateString()
-                                        : 'Unknown date'
-                                      }
-                                    </span>
-                                    <span className="text-xs text-gray-500">
-                                      {redemption.redemptionDate
-                                        ? new Date(
-                                            typeof redemption.redemptionDate === 'string' 
-                                              ? redemption.redemptionDate 
-                                              : redemption.redemptionDate.seconds * 1000
-                                          ).toLocaleTimeString()
-                                        : 'Unknown time'
-                                      }
-                                    </span>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-xs py-2">
-                                  <div className="flex items-center gap-2">
-                                    {redemption.profilePictureUrl ? (
-                                      <img 
-                                        src={redemption.profilePictureUrl} 
-                                        alt={redemption.customerName || 'Customer'} 
-                                        className="h-6 w-6 rounded-full object-cover"
-                                      />
-                                    ) : (
-                                      <div className="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center">
-                                        <Users className="h-3 w-3 text-gray-400" />
-                                      </div>
-                                    )}
-                                    <span className="truncate max-w-[100px]">{redemption.customerName || 'Unknown'}</span>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-xs py-2">
-                                  <div className="inline-block px-2 py-1 rounded-md border border-slate-200 shadow-sm bg-white">
-                                    <span className="text-indigo-600 font-medium text-xs">
-                                      {(redemption.pointsUsed ?? reward.pointsCost ?? 0).toLocaleString()}
-                                    </span>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-xs py-2">
-                                  <Badge 
-                                    variant="outline" 
-                                    className={cn(
-                                      "rounded-sm text-xs",
-                                      redemption.status === 'successful' || redemption.status === 'completed'
-                                        ? "bg-green-50 text-green-700 border-green-200" 
-                                        : redemption.status === 'pending'
-                                        ? "bg-blue-50 text-blue-600 border-blue-200"
-                                        : "bg-gray-50 text-gray-500 border-gray-100"
-                                    )}
-                                  >
-                                    {capitalize(redemption.status || 'unknown')}
-                                  </Badge>
-                                </TableCell>
-                              </TableRow>
-                            ))
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                {/* Additional Stats and Information */}
-                <div className="grid grid-cols-2 gap-3">
-                  <Card className="rounded-md shadow-sm">
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-md bg-blue-50 flex items-center justify-center">
-                          <BarChart className="h-4 w-4 text-blue-600" />
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-500">Conversion Rate</div>
-                          <div className="font-medium">
-                            {reward.impressions && reward.impressions > 0 
-                              ? `${((reward.redemptionCount || 0) / reward.impressions * 100).toFixed(1)}%` 
-                              : '0%'}
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="rounded-md shadow-sm">
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-md bg-blue-50 flex items-center justify-center">
-                          <Clock className="h-4 w-4 text-blue-600" />
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-500">Last Redeemed</div>
-                          <div className="font-medium text-xs">
-                            {formatTimestamp(reward.lastRedeemedAt) || 'Never'}
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="visibility" className="mt-0 space-y-6">
-                <Card className="rounded-md shadow-sm">
-                  <CardContent className="p-0">
-                    <div className="p-4 border-b">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Eye className="h-4 w-4 text-gray-600" />
-                          <h3 className="text-sm font-medium">Customer Visibility</h3>
-                        </div>
-                        <Badge className="bg-blue-50 text-blue-700 border-blue-200 rounded-sm">
-                          {customerVisibility.length} customers
-                        </Badge>
-                      </div>
-                    </div>
-                    <div>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-xs">Customer</TableHead>
-                            <TableHead className="text-xs">Email</TableHead>
-                            <TableHead className="text-xs">Redeemable</TableHead>
-                            <TableHead className="text-xs">Visible</TableHead>
-                            <TableHead className="text-xs">Reason</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {visibilityLoading ? (
-                            <TableRow>
-                              <TableCell colSpan={5} className="h-24 text-center">
-                                <div className="flex justify-center">
-                                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" />
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ) : customerVisibility.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={5} className="h-24 text-center">
-                                <div className="flex flex-col items-center justify-center py-6">
-                                  <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
-                                    <Users className="h-5 w-5 text-gray-400" />
-                                  </div>
-                                  <h3 className="mt-3 text-sm font-medium">No customers found</h3>
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    No customers are registered for this merchant
-                                  </p>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            customerVisibility.map((customer) => (
-                              <TableRow 
-                                key={customer.id}
-                                className="hover:bg-gray-50"
-                              >
-                                <TableCell className="text-xs py-2">
-                                  <div className="flex items-center gap-2">
-                                    {customer.profilePictureUrl ? (
-                                      <img 
-                                        src={customer.profilePictureUrl} 
-                                        alt={customer.name} 
-                                        className="h-6 w-6 rounded-full object-cover"
-                                      />
-                                    ) : (
-                                      <div className="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center">
-                                        <Users className="h-3 w-3 text-gray-400" />
-                                      </div>
-                                    )}
-                                    <span className="truncate max-w-[120px] font-medium">{customer.name}</span>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-xs py-2">
-                                  <span className="text-gray-600 truncate max-w-[150px]">
-                                    {customer.email || 'No email'}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="text-xs py-2">
-                                  <Badge 
-                                    variant="outline" 
-                                    className={cn(
-                                      "rounded-sm text-xs",
-                                      customer.redeemable
-                                        ? "bg-green-50 text-green-700 border-green-200" 
-                                        : "bg-red-50 text-red-700 border-red-200"
-                                    )}
-                                  >
-                                    {customer.redeemable ? 'true' : 'false'}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-xs py-2">
-                                  <Badge 
-                                    variant="outline" 
-                                    className={cn(
-                                      "rounded-sm text-xs",
-                                      customer.visible
-                                        ? "bg-green-50 text-green-700 border-green-200" 
-                                        : "bg-red-50 text-red-700 border-red-200"
-                                    )}
-                                  >
-                                    {customer.visible ? 'true' : 'false'}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-xs py-2">
-                                  <span className="text-gray-600 truncate max-w-[120px]">
-                                    {customer.visibilityReason || 'No reason'}
-                                  </span>
-                                </TableCell>
-                              </TableRow>
-                            ))
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                {/* Visibility Summary */}
-                <div className="grid grid-cols-2 gap-3">
-                  <Card className="rounded-md shadow-sm">
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-md bg-blue-50 flex items-center justify-center">
-                          <Eye className="h-4 w-4 text-blue-600" />
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-500">Can See</div>
-                          <div className="font-medium">
-                            {customerVisibility.filter(c => c.visible).length} customers
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="rounded-md shadow-sm">
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-md bg-green-50 flex items-center justify-center">
-                          <CheckCircle className="h-4 w-4 text-green-600" />
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-500">Can Redeem</div>
-                          <div className="font-medium">
-                            {customerVisibility.filter(c => c.visible && c.redeemable).length} customers
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="debug" className="mt-0 space-y-6">
-                <Card className="rounded-md shadow-sm">
-                  <CardContent className="p-0">
-                    <div className="p-4 border-b">
-                      <div className="flex items-center gap-2">
-                        <Tag className="h-4 w-4 text-gray-600" />
-                        <h3 className="text-sm font-medium">Debug Information</h3>
-                        <Badge className="bg-orange-50 text-orange-700 border-orange-200 rounded-sm">
-                          Raw Data
-                        </Badge>
+                        </span>
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
                         Complete reward document structure for debugging purposes

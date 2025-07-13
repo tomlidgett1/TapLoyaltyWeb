@@ -52,7 +52,8 @@ import {
   BarChart3,
   Megaphone,
   Info,
-  Repeat
+  Repeat,
+  Loader2
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -503,10 +504,23 @@ export default function DashboardPage() {
   const [quickRewardStep, setQuickRewardStep] = useState<'selection' | 'configuration'>('selection')
   const [rewardConfig, setRewardConfig] = useState({
     amount: '',
-    rewardName: '',
-    description: '',
+    rewardName: 'We Miss You!',
+    description: 'A special reward just for you!',
     pin: ''
   })
+  const [isCreatingQuickReward, setIsCreatingQuickReward] = useState(false)
+  const [quickRewardPopupClosing, setQuickRewardPopupClosing] = useState(false)
+
+  // Handle quick reward popup close with animation
+  const handleQuickRewardPopupClose = () => {
+    setQuickRewardPopupClosing(true)
+    setTimeout(() => {
+      setQuickRewardPopupOpen(false)
+      setQuickRewardPopupClosing(false)
+      setQuickRewardStep('selection')
+      setSelectedRewardType(null)
+    }, 200) // Match the fade-out duration
+  }
 
   // Handle customer sorting
   const handleCustomerSort = (field: typeof customerSortField) => {
@@ -2711,14 +2725,26 @@ export default function DashboardPage() {
       return
     }
 
-    if (!rewardConfig.amount || !rewardConfig.rewardName) {
+    if (!rewardConfig.amount || !rewardConfig.rewardName || !rewardConfig.pin) {
       toast({
         title: "Error", 
-        description: "Please fill in all required fields.",
+        description: "Please fill in all required fields including PIN.",
         variant: "destructive"
       })
       return
     }
+
+    // Validate PIN is exactly 4 digits
+    if (!/^\d{4}$/.test(rewardConfig.pin)) {
+      toast({
+        title: "Error",
+        description: "PIN must be exactly 4 digits.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setIsCreatingQuickReward(true)
 
     try {
       const timestamp = new Date()
@@ -2823,21 +2849,22 @@ export default function DashboardPage() {
         rewardWithId
       );
       
+      // Add a minimum delay for better UX (1.5 seconds)
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
       toast({
         title: "Quick Reward Created Successfully",
         description: `${rewardConfig.rewardName} has been created for ${selectedCustomerForReward.name}`,
         variant: "default"
       });
       
-      // Close the popup and reset state
-      setQuickRewardPopupOpen(false);
-      setQuickRewardStep('selection');
+      // Close the popup and reset state with animation
+      handleQuickRewardPopupClose();
       setSelectedCustomerForReward(null);
-      setSelectedRewardType(null);
       setRewardConfig({
         amount: '',
-        rewardName: '',
-        description: '',
+        rewardName: 'We Miss You!',
+        description: 'A special reward just for you!',
         pin: ''
       });
       
@@ -2848,6 +2875,8 @@ export default function DashboardPage() {
         description: "Failed to create quick reward. Please try again.",
         variant: "destructive"
       });
+    } finally {
+      setIsCreatingQuickReward(false);
     }
   }
 
@@ -6570,15 +6599,19 @@ export default function DashboardPage() {
             {/* Quick Reward Popup */}
       {quickRewardPopupOpen && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] animate-in fade-in duration-200"
-          onClick={() => {
-            setQuickRewardPopupOpen(false)
-            setQuickRewardStep('selection')
-            setSelectedRewardType(null)
-          }}
+          className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] ${
+            quickRewardPopupClosing 
+              ? 'animate-out fade-out duration-200' 
+              : 'animate-in fade-in duration-200'
+          }`}
+          onClick={handleQuickRewardPopupClose}
         >
           <div 
-            className="bg-white rounded-lg w-[480px] h-[480px] mx-4 shadow-lg border border-gray-200 overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out flex flex-col"
+            className={`bg-white rounded-lg w-[480px] h-[480px] mx-4 shadow-lg border border-gray-200 overflow-hidden flex flex-col ${
+              quickRewardPopupClosing 
+                ? 'animate-out slide-out-to-bottom-4 zoom-out-95 duration-300 ease-in' 
+                : 'animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out'
+            }`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -6619,8 +6652,8 @@ export default function DashboardPage() {
                       setSelectedRewardType('percentage')
                       setRewardConfig({
                         amount: '',
-                        rewardName: `${selectedCustomerForReward?.name} - Percentage Discount`,
-                        description: 'Give a percentage discount on their next purchase',
+                        rewardName: 'We Miss You!',
+                        description: 'Enjoy a special percentage discount on your next purchase!',
                         pin: ''
                       })
                       setQuickRewardStep('configuration')
@@ -6642,8 +6675,8 @@ export default function DashboardPage() {
                       setSelectedRewardType('dollar')
                       setRewardConfig({
                         amount: '',
-                        rewardName: `${selectedCustomerForReward?.name} - Dollar Discount`,
-                        description: 'Give a fixed dollar amount off their purchase',
+                        rewardName: 'We Miss You!',
+                        description: 'Save money with a fixed dollar amount off your purchase!',
                         pin: ''
                       })
                       setQuickRewardStep('configuration')
@@ -6665,8 +6698,8 @@ export default function DashboardPage() {
                       setSelectedRewardType('free_item')
                       setRewardConfig({
                         amount: '',
-                        rewardName: `${selectedCustomerForReward?.name} - Free Item`,
-                        description: 'Give them a free product or service',
+                        rewardName: 'We Miss You!',
+                        description: 'Enjoy a complimentary item on us!',
                         pin: ''
                       })
                       setQuickRewardStep('configuration')
@@ -6744,7 +6777,7 @@ export default function DashboardPage() {
                   {/* PIN */}
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">
-                      PIN (Optional)
+                      PIN (Required)
                     </label>
                     <input
                       type="text"
@@ -6769,11 +6802,7 @@ export default function DashboardPage() {
                       Quick rewards help re-engage customers
                     </p>
                     <button
-                      onClick={() => {
-                        setQuickRewardPopupOpen(false)
-                        setQuickRewardStep('selection')
-                        setSelectedRewardType(null)
-                      }}
+                      onClick={handleQuickRewardPopupClose}
                       className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
                     >
                       Cancel
@@ -6789,9 +6818,17 @@ export default function DashboardPage() {
                     </button>
                     <button
                       onClick={saveQuickReward}
-                      className="px-3 py-1.5 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded-md transition-colors"
+                      disabled={isCreatingQuickReward}
+                      className={`px-3 py-1.5 text-xs bg-[#007AFF] hover:bg-[#0060D6] disabled:bg-[#007AFF] disabled:opacity-70 text-white rounded-md transition-colors flex items-center gap-1.5 ${isCreatingQuickReward ? 'cursor-not-allowed' : ''}`}
                     >
-                      Create Reward
+                      {isCreatingQuickReward ? (
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        'Create Reward'
+                      )}
                     </button>
                   </div>
                 )}

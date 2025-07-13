@@ -94,10 +94,10 @@ export function SendBroadcastSheet({ open, onOpenChange }: SendBroadcastSheetPro
       for (const cohort of Object.values(CUSTOMER_COHORTS)) {
         if (cohort === CUSTOMER_COHORTS.ALL) continue;
         
-        // Use lowercase cohort name for the query
+        // Query the currentCohort.name field directly
         const cohortQuery = query(
           customersCollectionPath,
-          where(`currentCohort.name.${cohort.toLowerCase()}`, '==', true)
+          where('currentCohort.name', '==', cohort.toLowerCase())
         );
         
         const cohortSnapshot = await getDocs(cohortQuery);
@@ -345,7 +345,7 @@ export function SendBroadcastSheet({ open, onOpenChange }: SendBroadcastSheetPro
           for (const cohort of unavailableCohorts) {
             baseQuery = query(
               baseQuery,
-              where(`currentCohort.name.${cohort}`, '!=', true)
+              where('currentCohort.name', '!=', cohort.toLowerCase())
             );
           }
           
@@ -358,7 +358,7 @@ export function SendBroadcastSheet({ open, onOpenChange }: SendBroadcastSheetPro
         // Query based on currentCohort.name field
         customersQuery = query(
           customersCollectionPath, 
-          where(`currentCohort.name.${audience}`, '==', true)
+          where('currentCohort.name', '==', audience.toLowerCase())
         );
       }
       

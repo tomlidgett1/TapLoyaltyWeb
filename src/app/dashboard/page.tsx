@@ -210,7 +210,7 @@ const customAnimationStyles = `
   }
 `;
 
-type TimeframeType = "today" | "yesterday" | "7days" | "30days"
+type TimeframeType = "today" | "yesterday" | "thisweek" | "thismonth"
 
 // Add a gradient text component for Tap Agent branding
 const GradientText = ({ children }: { children: React.ReactNode }) => {
@@ -226,26 +226,10 @@ export default function DashboardPage() {
   const searchParams = useSearchParams()
   const { user } = useAuth()
   const [timeframe, setTimeframe] = useState<TimeframeType>("today")
-  const [isTimeframeOpen, setIsTimeframeOpen] = useState(false)
   const [isAdvancedActivity, setIsAdvancedActivity] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (isTimeframeOpen) {
-        setIsTimeframeOpen(false)
-      }
-    }
-    
-    if (isTimeframeOpen) {
-      document.addEventListener('click', handleClickOutside)
-    }
-    
-    return () => {
-      document.removeEventListener('click', handleClickOutside)
-    }
-  }, [isTimeframeOpen])
+
   const [metricsLoading, setMetricsLoading] = useState(false)
   const [activityLoading, setActivityLoading] = useState(false)
   const [rewardsLoading, setRewardsLoading] = useState(false)
@@ -401,26 +385,43 @@ export default function DashboardPage() {
   }
 
   const handleRemoveMetric = async (metricId: string) => {
-    const newEnabledMetrics = enabledMetrics.filter(id => id !== metricId)
-    setEnabledMetrics(newEnabledMetrics)
+    // Start fade animation
+    setRemovingMetrics(prev => [...prev, metricId])
     
-    // Save to Firestore
-    if (user?.uid) {
-      try {
-        await setDoc(doc(db, 'merchants', user.uid), {
-          enabledMetrics: newEnabledMetrics
-        }, { merge: true })
-      } catch (error) {
-        console.error('Error saving metric preferences:', error)
+    // Wait for animation to complete, then actually remove
+    setTimeout(async () => {
+      const newEnabledMetrics = enabledMetrics.filter(id => id !== metricId)
+      setEnabledMetrics(newEnabledMetrics)
+      
+      // Save to Firestore
+      if (user?.uid) {
+        try {
+          await setDoc(doc(db, 'merchants', user.uid), {
+            enabledMetrics: newEnabledMetrics
+          }, { merge: true })
+        } catch (error) {
+          console.error('Error saving metric preferences:', error)
+        }
       }
-    }
+      
+      // Clean up removing state
+      setRemovingMetrics(prev => prev.filter(id => id !== metricId))
+    }, 300) // 300ms animation duration
+  }
+
+  const closeAddMetricsPopup = () => {
+    setAddMetricsPopupClosing(true)
+    setTimeout(() => {
+      setAddMetricsPopupOpen(false)
+      setAddMetricsPopupClosing(false)
+    }, 200) // Match the fade-out duration
   }
 
   const handleAddMetric = async (metricId: string) => {
     if (!enabledMetrics.includes(metricId)) {
       const newEnabledMetrics = [...enabledMetrics, metricId]
       setEnabledMetrics(newEnabledMetrics)
-      setAddMetricsPopupOpen(false)
+      closeAddMetricsPopup()
       
       // Save to Firestore
       if (user?.uid) {
@@ -591,11 +592,14 @@ export default function DashboardPage() {
     if (!metric) return null
 
     const IconComponent = metric.icon
+    const isRemoving = removingMetrics.includes(metricId)
 
     return (
       <div 
         key={metricId}
-        className="group relative bg-white border border-gray-200 rounded-lg p-3 transition-all hover:border-gray-300 hover:shadow-sm"
+        className={`group relative bg-white border border-gray-200 rounded-lg p-3 transition-all duration-300 ease-out hover:border-gray-300 hover:shadow-sm ${
+          isRemoving ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'
+        }`}
       >
         <div className="flex items-start justify-between mb-2">
           <div className="flex items-center gap-2">
@@ -750,12 +754,14 @@ export default function DashboardPage() {
   const [createRecurringRewardOpen, setCreateRecurringRewardOpen] = useState(false)
   const [createBannerDialogOpen, setCreateBannerDialogOpen] = useState(false)
   const [addMetricsPopupOpen, setAddMetricsPopupOpen] = useState(false)
+  const [addMetricsPopupClosing, setAddMetricsPopupClosing] = useState(false)
   
   // Metrics state management
   const [enabledMetrics, setEnabledMetrics] = useState<string[]>([
     'totalCustomers', 'activePrograms', 'totalRewards', 'revenueImpact',
     'redemptionRate', 'pointsEarned', 'avgOrderValue'
   ])
+  const [removingMetrics, setRemovingMetrics] = useState<string[]>([])
 
 
   
@@ -1130,15 +1136,18 @@ export default function DashboardPage() {
         
         return { start: yesterdayStart, end: yesterdayEnd }
         
-      case "7days":
+      case "thisweek":
         const weekStart = new Date(now)
-        weekStart.setDate(weekStart.getDate() - 7)
+        // Get start of current week (Monday)
+        const dayOfWeek = weekStart.getDay()
+        const diff = weekStart.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1)
+        weekStart.setDate(diff)
         weekStart.setHours(0, 0, 0, 0)
         return { start: weekStart, end }
         
-      case "30days":
+      case "thismonth":
         const monthStart = new Date(now)
-        monthStart.setDate(monthStart.getDate() - 30)
+        monthStart.setDate(1)
         monthStart.setHours(0, 0, 0, 0)
         return { start: monthStart, end }
         
@@ -4189,8 +4198,53 @@ export default function DashboardPage() {
                 </button>
               </div>
             </div>
-              </div>
+            
+            {/* Date Filter Dropdown - Far Right */}
+            <div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Calendar className="h-4 w-4" strokeWidth={2.75} />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem 
+                    className="cursor-pointer" 
+                    onClick={() => setTimeframe('today')}
+                  >
+                    <span className={timeframe === 'today' ? 'font-medium' : ''}>
+                      Today
+                    </span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    className="cursor-pointer" 
+                    onClick={() => setTimeframe('yesterday')}
+                  >
+                    <span className={timeframe === 'yesterday' ? 'font-medium' : ''}>
+                      Yesterday
+                    </span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    className="cursor-pointer" 
+                    onClick={() => setTimeframe('thisweek')}
+                  >
+                    <span className={timeframe === 'thisweek' ? 'font-medium' : ''}>
+                      This week
+                    </span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    className="cursor-pointer" 
+                    onClick={() => setTimeframe('thismonth')}
+                  >
+                    <span className={timeframe === 'thismonth' ? 'font-medium' : ''}>
+                      This month
+                    </span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
+          </div>
+        </div>
             
         <div className="px-6 pt-2 pb-14 flex-1 overflow-y-auto bg-white scrollbar-hide">
           {/* Content based on selected tab */}
@@ -4629,57 +4683,7 @@ export default function DashboardPage() {
                           <Gift className="h-3 w-3" strokeWidth={2.75} />
                           Loyalty
                         </button>
-                        <div className="h-3 w-px bg-gray-300"></div>
-                        <div className="relative">
-                          <button
-                            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-md border border-gray-200 hover:bg-gray-150 transition-colors"
-                            onClick={() => setIsTimeframeOpen(!isTimeframeOpen)}
-                          >
-                            {timeframe === 'today' ? 'Today' : 
-                             timeframe === 'yesterday' ? 'Yesterday' :
-                             timeframe === '7days' ? '7 days' : '30 days'}
-                          </button>
-                          {isTimeframeOpen && (
-                            <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[80px]">
-                              <button
-                                className="block w-full px-3 py-2 text-xs text-left text-gray-700 hover:bg-gray-50 first:rounded-t-md"
-                                onClick={() => {
-                                  setTimeframe('today')
-                                  setIsTimeframeOpen(false)
-                                }}
-                              >
-                                Today
-                              </button>
-                              <button
-                                className="block w-full px-3 py-2 text-xs text-left text-gray-700 hover:bg-gray-50"
-                                onClick={() => {
-                                  setTimeframe('yesterday')
-                                  setIsTimeframeOpen(false)
-                                }}
-                              >
-                                Yesterday
-                              </button>
-                              <button
-                                className="block w-full px-3 py-2 text-xs text-left text-gray-700 hover:bg-gray-50"
-                                onClick={() => {
-                                  setTimeframe('7days')
-                                  setIsTimeframeOpen(false)
-                                }}
-                              >
-                                7 days
-                              </button>
-                              <button
-                                className="block w-full px-3 py-2 text-xs text-left text-gray-700 hover:bg-gray-50 last:rounded-b-md"
-                                onClick={() => {
-                                  setTimeframe('30days')
-                                  setIsTimeframeOpen(false)
-                                }}
-                              >
-                                30 days
-                        </button>
-                  </div>
-                          )}
-                    </div>
+
                   </div>
                     </div>
                   </div>
@@ -7203,14 +7207,22 @@ export default function DashboardPage() {
       
       {/* Add Metrics Popup */}
       {addMetricsPopupOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200">
-          <div className="fixed inset-0 bg-black/40" onClick={() => setAddMetricsPopupOpen(false)} />
-          <div className="relative bg-white rounded-lg shadow-lg w-full max-w-2xl mx-4 animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out">
+        <div className={`fixed inset-0 z-50 flex items-center justify-center ${
+          addMetricsPopupClosing 
+            ? 'animate-out fade-out duration-200' 
+            : 'animate-in fade-in duration-200'
+        }`}>
+          <div className="fixed inset-0 bg-black/40" onClick={closeAddMetricsPopup} />
+          <div className={`relative bg-white rounded-lg shadow-lg w-full max-w-2xl mx-4 ${
+            addMetricsPopupClosing
+              ? 'animate-out slide-out-to-bottom-4 zoom-out-95 duration-200 ease-in'
+              : 'animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out'
+          }`}>
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-gray-900">Add Metrics</h2>
                 <button
-                  onClick={() => setAddMetricsPopupOpen(false)}
+                  onClick={closeAddMetricsPopup}
                   className="p-2 hover:bg-gray-100 rounded-md transition-colors"
                 >
                   <X className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
@@ -7249,7 +7261,7 @@ export default function DashboardPage() {
               <div className="mt-6 flex justify-end gap-3">
                 <Button
                   variant="outline"
-                  onClick={() => setAddMetricsPopupOpen(false)}
+                  onClick={closeAddMetricsPopup}
                   className="text-sm"
                 >
                   Cancel

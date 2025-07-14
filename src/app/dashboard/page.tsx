@@ -54,7 +54,8 @@ import {
   Info,
   Repeat,
   Loader2,
-  Heart
+  Heart,
+  MoreVertical
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -399,20 +400,9 @@ export default function DashboardPage() {
     }
   }
 
-  const handleMetricRightClick = (e: React.MouseEvent, metricId: string) => {
-    e.preventDefault()
-    setContextMenu({
-      isOpen: true,
-      x: e.clientX,
-      y: e.clientY,
-      metricId: metricId
-    })
-  }
-
   const handleRemoveMetric = async (metricId: string) => {
     const newEnabledMetrics = enabledMetrics.filter(id => id !== metricId)
     setEnabledMetrics(newEnabledMetrics)
-    setContextMenu({ isOpen: false, x: 0, y: 0, metricId: '' })
     
     // Save to Firestore
     if (user?.uid) {
@@ -464,10 +454,7 @@ export default function DashboardPage() {
         setShowIntegrations(false);
       }
       
-      // Close context menu when clicking outside
-      if (contextMenu.isOpen) {
-        setContextMenu({ isOpen: false, x: 0, y: 0, metricId: '' })
-      }
+
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -609,14 +596,30 @@ export default function DashboardPage() {
       <div 
         key={metricId}
         className="group relative bg-white border border-gray-200 rounded-lg p-3 transition-all hover:border-gray-300 hover:shadow-sm"
-        onContextMenu={(e) => handleMetricRightClick(e, metricId)}
       >
         <div className="flex items-start justify-between mb-2">
           <div className="flex items-center gap-2">
             <IconComponent className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
             <h4 className="text-sm font-medium text-gray-900">{metric.title}</h4>
           </div>
-          <div className={`h-2 w-2 ${getColorClasses(metric.color)} rounded-full`}></div>
+          <div className="flex items-center gap-2">
+            <div className={`h-2 w-2 ${getColorClasses(metric.color)} rounded-full`}></div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <MoreVertical className="h-4 w-4" strokeWidth={2.75} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem 
+                  onClick={() => handleRemoveMetric(metricId)}
+                  className="text-red-600 focus:bg-red-50 focus:text-red-600"
+                >
+                  Remove metric
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
         
         {metricId === 'avgOrderValue' ? (
@@ -753,12 +756,8 @@ export default function DashboardPage() {
     'totalCustomers', 'activePrograms', 'totalRewards', 'revenueImpact',
     'redemptionRate', 'pointsEarned', 'avgOrderValue'
   ])
-  const [contextMenu, setContextMenu] = useState<{
-    isOpen: boolean;
-    x: number;
-    y: number;
-    metricId: string;
-  }>({ isOpen: false, x: 0, y: 0, metricId: '' })
+
+
   
   const [recurringPrograms, setRecurringPrograms] = useState({
     hasAny: false,
@@ -7330,23 +7329,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Context Menu for Right-Click */}
-      {contextMenu.isOpen && (
-        <div
-          className="fixed z-50 bg-white border border-gray-200 rounded-md shadow-lg py-1 min-w-[120px]"
-          style={{
-            left: contextMenu.x,
-            top: contextMenu.y,
-          }}
-        >
-          <button
-            onClick={() => handleRemoveMetric(contextMenu.metricId)}
-            className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-          >
-            Remove metric
-          </button>
-        </div>
-      )}
+
     </>
   );
 }

@@ -5679,7 +5679,7 @@ export default function DashboardPage() {
                                     <DropdownMenuTrigger asChild>
                                       <Button
                                         size="sm"
-                                        className="h-7 px-3 text-xs font-medium bg-gray-600 hover:bg-gray-700 text-white rounded-md flex items-center gap-1"
+                                        className="h-7 px-3 text-xs font-medium bg-[#007AFF] hover:bg-[#0051D5] text-white rounded-md flex items-center gap-1"
                                       >
                                         Create Reward
                                         <ChevronDown className="h-3 w-3" strokeWidth={2.75} />

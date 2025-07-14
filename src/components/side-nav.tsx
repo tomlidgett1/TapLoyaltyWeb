@@ -611,7 +611,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
             className="h-5 w-5 p-0 hover:bg-gray-200 rounded-sm flex-shrink-0 absolute right-3 bottom-3"
             title="Collapse sidebar"
           >
-            <PanelRight className="h-4 w-4 text-gray-600" />
+            <PanelRight className="h-4 w-4 text-gray-600" strokeWidth={2.75} />
           </Button>
         )}
       </div>
@@ -622,46 +622,46 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
           <DropdownMenu open={createDropdownOpen} onOpenChange={setCreateDropdownOpen}>
             <DropdownMenuTrigger asChild>
               <button
-                className="group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 w-full h-9"
+                className="group flex items-center gap-3 rounded-md px-2 py-1.5 text-sm font-[450] transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 w-full h-9"
                 title="Create"
               >
                 <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                  <PlusCircle className="h-4 w-4 text-gray-500 group-hover:text-[#007AFF]" />
+                  <PlusCircle className="h-4 w-4 text-gray-500 group-hover:text-[#007AFF]" strokeWidth={2.75} />
                 </div>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" side="right" className="w-48">
-              <DropdownMenuItem onClick={() => setCreateRewardPopupOpen(true)}>
-                <Gift className="h-4 w-4 mr-2" />
+              <DropdownMenuItem onClick={() => setCreateRewardPopupOpen(true)} className="text-sm font-[450] text-gray-800">
+                <Gift className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                 Create Reward New
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setNetworkRewardOpen(true)}>
-                <ZapIcon className="h-4 w-4 mr-2" />
+              <DropdownMenuItem onClick={() => setNetworkRewardOpen(true)} className="text-sm font-[450] text-gray-800">
+                <ZapIcon className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                 Network Reward
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setProgramTypeSelectorOpen(true)}>
-                <Coffee className="h-4 w-4 mr-2" />
+              <DropdownMenuItem onClick={() => setProgramTypeSelectorOpen(true)} className="text-sm font-[450] text-gray-800">
+                <Coffee className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                 Create Program
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCreateBannerOpen(true)}>
-                <Image className="h-4 w-4 mr-2" />
+              <DropdownMenuItem onClick={() => setCreateBannerOpen(true)} className="text-sm font-[450] text-gray-800">
+                <Image className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                 New Banner
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setBroadcastDialogOpen(true)}>
-                <MessageSquare className="h-4 w-4 mr-2" />
+              <DropdownMenuItem onClick={() => setBroadcastDialogOpen(true)} className="text-sm font-[450] text-gray-800">
+                <MessageSquare className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                 New Message
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCreateRuleOpen(true)}>
-                <Zap className="h-4 w-4 mr-2" />
+              <DropdownMenuItem onClick={() => setCreateRuleOpen(true)} className="text-sm font-[450] text-gray-800">
+                <Zap className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                 New Points Rule
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setIntroRewardOpen(true)}>
-                <Sparkles className="w-4 h-4 mr-2" />
+              <DropdownMenuItem onClick={() => setIntroRewardOpen(true)} className="text-sm font-[450] text-gray-800">
+                <Sparkles className="w-4 h-4 mr-2 text-gray-500" strokeWidth={2.75} />
                 Intro Reward
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setSetupPopupOpen(true)} className="text-purple-600">
-                <Settings className="w-4 h-4 mr-2" />
+              <DropdownMenuItem onClick={() => setSetupPopupOpen(true)} className="text-sm font-[450] text-purple-600">
+                <Settings className="w-4 h-4 mr-2 text-gray-500" strokeWidth={2.75} />
                 Setup Popup (Dev)
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -670,11 +670,11 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
           <DropdownMenu open={createDropdownOpen} onOpenChange={setCreateDropdownOpen}>
             <DropdownMenuTrigger asChild>
               <button
-                className="group flex items-center justify-between w-full gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 h-9"
+                className="group flex items-center justify-between w-full gap-3 rounded-md px-2 py-1.5 text-sm font-[450] transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 h-9"
               >
                 <div className="flex items-center gap-3 h-full">
                   <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                    <PlusCircle className="h-4 w-4 text-gray-500 group-hover:text-[#007AFF]" />
+                    <PlusCircle className="h-4 w-4 text-gray-500 group-hover:text-[#007AFF]" strokeWidth={2.75} />
                   </div>
                   <div className="h-full flex items-center overflow-hidden">
                     <span className={cn(
@@ -689,42 +689,42 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                   <ChevronDown className={cn(
                     "h-4 w-4 transition-all duration-300 ease-in-out text-gray-500 group-hover:text-[#007AFF]",
                     isCollapsed ? "w-0 opacity-0 delay-0" : "w-auto opacity-100 delay-75"
-                  )} />
+                  )} strokeWidth={2.75} />
                 </div>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuItem onClick={() => setCreateRewardPopupOpen(true)}>
-                <Gift className="h-4 w-4 mr-2" />
+              <DropdownMenuItem onClick={() => setCreateRewardPopupOpen(true)} className="text-sm font-[450] text-gray-800">
+                <Gift className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                 Create Reward New
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setNetworkRewardPopupOpen(true)}>
-                <ZapIcon className="h-4 w-4 mr-2" />
+              <DropdownMenuItem onClick={() => setNetworkRewardPopupOpen(true)} className="text-sm font-[450] text-gray-800">
+                <ZapIcon className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                 Network Reward
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setProgramTypeSelectorOpen(true)}>
-                <Coffee className="h-4 w-4 mr-2" />
+              <DropdownMenuItem onClick={() => setProgramTypeSelectorOpen(true)} className="text-sm font-[450] text-gray-800">
+                <Coffee className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                 Create Program
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCreateBannerOpen(true)}>
-                <Image className="h-4 w-4 mr-2" />
+              <DropdownMenuItem onClick={() => setCreateBannerOpen(true)} className="text-sm font-[450] text-gray-800">
+                <Image className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                 New Banner
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSendBroadcastPopupOpen(true)}>
-                <MessageSquare className="h-4 w-4 mr-2" />
+              <DropdownMenuItem onClick={() => setSendBroadcastPopupOpen(true)} className="text-sm font-[450] text-gray-800">
+                <MessageSquare className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                 New Message
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCreatePointsRulePopupOpen(true)}>
-                <Zap className="h-4 w-4 mr-2" />
+              <DropdownMenuItem onClick={() => setCreatePointsRulePopupOpen(true)} className="text-sm font-[450] text-gray-800">
+                <Zap className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                 New Points Rule
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setIntroductoryRewardPopupOpen(true)}>
-                <Sparkles className="w-4 h-4 mr-2" />
+              <DropdownMenuItem onClick={() => setIntroductoryRewardPopupOpen(true)} className="text-sm font-[450] text-gray-800">
+                <Sparkles className="w-4 h-4 mr-2 text-gray-500" strokeWidth={2.75} />
                 Intro Reward
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setSetupPopupOpen(true)} className="text-purple-600">
-                <Settings className="w-4 h-4 mr-2" />
+              <DropdownMenuItem onClick={() => setSetupPopupOpen(true)} className="text-sm font-[450] text-purple-600">
+                <Settings className="w-4 h-4 mr-2 text-gray-500" strokeWidth={2.75} />
                 Setup Popup (Dev)
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -739,7 +739,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
       
       <nav 
         className={cn(
-          "px-3 py-2 flex-1",
+          "px-2 py-1.5 flex-1",
           isCollapsed ? "" : "overflow-y-auto custom-scrollbar"
         )}
         style={isCollapsed ? {
@@ -763,7 +763,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                     <CollapsibleTrigger asChild>
                       <button
                         className={cn(
-                          "group flex items-center justify-between w-full gap-3 rounded-md px-3 text-sm font-medium transition-all duration-200 ease-in-out h-9",
+                          "group flex items-center justify-between w-full gap-3 rounded-md px-2 py-1.5 text-sm font-[450] transition-all duration-200 ease-in-out h-9",
                           isActive 
                             ? "bg-[#007AFF]/10 text-[#007AFF]" 
                             : "text-gray-800 hover:bg-[#007AFF]/5"
@@ -777,7 +777,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                               isActive 
                                 ? "text-[#007AFF]" 
                                 : "text-gray-500 group-hover:text-[#007AFF]"
-                            )} />
+                            )} strokeWidth={2.75} />
                           </div>
                           <div className="h-full flex items-center overflow-hidden">
                             <span className={cn(
@@ -795,7 +795,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                             openSections[item.title] !== false ? "rotate-180" : "",
                             isCollapsed ? "w-0 opacity-0 delay-0" : "w-auto opacity-100 delay-75",
                             isActive ? "text-[#007AFF]" : "text-gray-500"
-                          )} />
+                          )} strokeWidth={2.75} />
                         </div>
                       </button>
                     </CollapsibleTrigger>
@@ -811,7 +811,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                                 <Link
                                   href={subItem.href}
                                   className={cn(
-                                    "group flex items-center gap-3 rounded-md px-3 py-1 text-sm font-medium transition-colors h-8",
+                                    "group flex items-center gap-3 rounded-md px-3 py-1 text-sm font-[450] transition-colors h-8",
                                     isSubActive 
                                       ? "bg-[#007AFF]/10 text-[#007AFF]" 
                                       : "text-gray-700 hover:bg-[#007AFF]/5"
@@ -822,7 +822,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                                       isSubActive 
                                         ? "text-[#007AFF]" 
                                         : "text-gray-400 group-hover:text-[#007AFF]"
-                                    )} />
+                                    )} strokeWidth={2.75} />
                                   </div>
                                   <div className="h-full flex items-center overflow-hidden">
                                     <span className={cn(
@@ -845,7 +845,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                   <Link
                     href={item.href}
                     className={cn(
-                      "group flex items-center gap-3 rounded-md px-3 text-sm font-medium transition-all duration-200 ease-in-out whitespace-nowrap relative h-9",
+                      "group flex items-center gap-3 rounded-md px-2 py-1.5 text-sm font-[450] transition-all duration-200 ease-in-out whitespace-nowrap relative h-9",
                       isActive 
                         ? "bg-[#007AFF]/10 text-[#007AFF]" 
                         : "text-gray-800 hover:bg-[#007AFF]/5"
@@ -857,7 +857,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                         isActive 
                           ? "text-[#007AFF]" 
                           : "text-gray-500 group-hover:text-[#007AFF]"
-                      )} />
+                      )} strokeWidth={2.75} />
                     </div>
                     <div className="h-full flex items-center overflow-hidden flex-1">
                       <span className={cn(
@@ -895,7 +895,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
               className="w-full h-8 p-0 hover:bg-gray-200 rounded-md flex items-center justify-center"
               title="Expand sidebar"
             >
-              <PanelLeft className="h-4 w-4 text-gray-600" />
+              <PanelLeft className="h-4 w-4 text-gray-600" strokeWidth={2.75} />
             </Button>
           </div>
         )}
@@ -934,45 +934,45 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                     {/* Status indicator for collapsed view */}
                     <div className="absolute -bottom-0.5 -right-0.5">
                       {merchantStatus === 'active' ? (
-                        <CheckCircle className="h-3 w-3 text-green-500 bg-white rounded-full" />
+                        <CheckCircle className="h-3 w-3 text-green-500 bg-white rounded-full" strokeWidth={2.75} />
                       ) : (
-                        <Circle className="h-3 w-3 text-gray-400 bg-white rounded-full" />
+                                                  <Circle className="h-3 w-3 text-gray-400 bg-white rounded-full" strokeWidth={2.75} />
                       )}
                     </div>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
                   <DropdownMenuItem asChild>
-                    <Link href="/merchant/profile" className="cursor-pointer flex items-center">
-                      <User className="h-4 w-4 mr-2" />
+                    <Link href="/merchant/profile" className="cursor-pointer flex items-center text-sm font-[450] text-gray-800">
+                      <User className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                       <span>Profile</span>
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/dashboard/settings" className="cursor-pointer flex items-center">
-                      <Settings className="h-4 w-4 mr-2" />
+                    <Link href="/dashboard/settings" className="cursor-pointer flex items-center text-sm font-[450] text-gray-800">
+                      <Settings className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                       <span>Settings</span>
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/dashboard/integrations" className="cursor-pointer flex items-center">
-                      <Layers className="h-4 w-4 mr-2" />
+                    <Link href="/dashboard/integrations" className="cursor-pointer flex items-center text-sm font-[450] text-gray-800">
+                      <Layers className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                       <span>Integrations</span>
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/docs" className="cursor-pointer flex items-center">
-                      <FileText className="h-4 w-4 mr-2" />
+                    <Link href="/docs" className="cursor-pointer flex items-center text-sm font-[450] text-gray-800">
+                      <FileText className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                       <span>Help Guide</span>
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSupportBoxOpen(true)} className="cursor-pointer">
-                    <Headphones className="h-4 w-4 mr-2" />
+                  <DropdownMenuItem onClick={() => setSupportBoxOpen(true)} className="cursor-pointer text-sm font-[450] text-gray-800">
+                    <Headphones className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                     <span>Customer Support</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600">
-                    <LogOut className="h-4 w-4 mr-2" />
+                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-sm font-[450] text-red-600">
+                    <LogOut className="h-4 w-4 mr-2 text-red-600" strokeWidth={2.75} />
                     <span>Log out</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -1007,7 +1007,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                     )}
                   </div>
                   <div className="overflow-hidden">
-                    <p className="text-sm font-medium truncate">{merchantName}</p>
+                    <p className="text-sm font-[450] truncate">{merchantName}</p>
                     <p className="text-xs text-muted-foreground truncate">{merchantEmail}</p>
                   </div>
                 </div>
@@ -1015,41 +1015,41 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild className="flex-shrink-0 ml-1">
                     <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
-                      <MoreVertical className="h-4 w-4" />
+                      <MoreVertical className="h-4 w-4" strokeWidth={2.75} />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem asChild>
-                      <Link href="/merchant/profile" className="cursor-pointer flex items-center">
-                        <User className="h-4 w-4 mr-2" />
+                      <Link href="/merchant/profile" className="cursor-pointer flex items-center text-sm font-[450] text-gray-800">
+                        <User className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                         <span>Profile</span>
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
-                      <Link href="/dashboard/settings" className="cursor-pointer flex items-center">
-                        <Settings className="h-4 w-4 mr-2" />
+                      <Link href="/dashboard/settings" className="cursor-pointer flex items-center text-sm font-[450] text-gray-800">
+                        <Settings className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                         <span>Settings</span>
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
-                      <Link href="/dashboard/integrations" className="cursor-pointer flex items-center">
-                        <Layers className="h-4 w-4 mr-2" />
+                      <Link href="/dashboard/integrations" className="cursor-pointer flex items-center text-sm font-[450] text-gray-800">
+                        <Layers className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                         <span>Integrations</span>
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
-                      <Link href="/docs" className="cursor-pointer flex items-center">
-                        <FileText className="h-4 w-4 mr-2" />
+                      <Link href="/docs" className="cursor-pointer flex items-center text-sm font-[450] text-gray-800">
+                        <FileText className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                         <span>Help Guide</span>
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setSupportBoxOpen(true)} className="cursor-pointer">
-                      <Headphones className="h-4 w-4 mr-2" />
+                    <DropdownMenuItem onClick={() => setSupportBoxOpen(true)} className="cursor-pointer text-sm font-[450] text-gray-800">
+                      <Headphones className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
                       <span>Customer Support</span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600">
-                      <LogOut className="h-4 w-4 mr-2" />
+                    <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-sm font-[450] text-red-600">
+                      <LogOut className="h-4 w-4 mr-2 text-red-600" strokeWidth={2.75} />
                       <span>Log out</span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -1108,9 +1108,9 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                     {/* Default plan display */}
                     <div className="flex items-center gap-1.5 group-hover:opacity-0 transition-opacity duration-500 ease-out">
                       {merchantData?.isNetworkStore ? (
-                        <Globe className="h-3 w-3 text-blue-500" />
+                        <Globe className="h-3 w-3 text-blue-500" strokeWidth={2.75} />
                       ) : (
-                        <Circle className="h-3 w-3 text-gray-500" />
+                                                  <Circle className="h-3 w-3 text-gray-500" strokeWidth={2.75} />
                       )}
                       <span className={cn(
                         "text-xs font-medium",
@@ -1247,14 +1247,14 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
               <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Headphones className="h-4 w-4 text-blue-600" />
+                    <Headphones className="h-4 w-4 text-blue-600" strokeWidth={2.75} />
                     <h3 className="text-sm font-semibold text-gray-900">Support</h3>
                   </div>
                   <button
                     onClick={() => setSupportBoxOpen(false)}
                     className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-4 w-4" strokeWidth={2.75} />
                   </button>
                 </div>
               </div>
@@ -1302,7 +1302,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                         </>
                       ) : (
                         <>
-                          <Send className="h-3 w-3" />
+                          <Send className="h-3 w-3" strokeWidth={2.75} />
                           Send
                         </>
                       )}

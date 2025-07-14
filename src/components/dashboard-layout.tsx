@@ -2379,7 +2379,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       <Button variant="ghost" size="icon" className="relative">
                         <Bell className="h-5 w-5" />
                         {unreadCount > 0 && (
-                          <span className="absolute -top-0.5 -right-0.5 h-3 w-3 bg-red-500 rounded-full text-white font-bold flex items-center justify-center min-w-3 text-[8px]">
+                          <span className="absolute -top-0.5 -right-0.5 h-3 w-3 bg-red-500 rounded-full text-white font-medium flex items-center justify-center min-w-3 text-[7px]">
                             {unreadCount > 9 ? '9+' : unreadCount}
                           </span>
                         )}
@@ -2440,7 +2440,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                                     </AvatarFallback>
                                   </Avatar>
                                 ) : (
-                                  <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center flex-shrink-0">
+                                  <div className="flex-shrink-0 pt-1">
                                     {getNotificationIcon(notification.type)}
                                   </div>
                                 )}

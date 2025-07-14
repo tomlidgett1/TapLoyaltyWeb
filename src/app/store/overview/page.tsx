@@ -58,6 +58,22 @@ import { CreateManualProgramDialog } from "@/components/create-manual-program-di
 import { cn } from "@/lib/utils"
 import { updateDoc, deleteDoc } from "firebase/firestore"
 
+// Hero Icons
+import { 
+  CurrencyDollarIcon,
+  TicketIcon,
+  ShoppingBagIcon as ShoppingBagHeroIcon,
+  CreditCardIcon as CreditCardHeroIcon,
+  CubeIcon
+} from '@heroicons/react/24/solid'
+
+import { 
+  SparklesIcon
+} from '@heroicons/react/24/solid'
+
+// React Icons
+import { BiSolidCoffeeTogo } from "react-icons/bi";
+
 // Icons
 import { 
   BarChart, 
@@ -88,7 +104,6 @@ import {
   Loader2,
   Tag,
   Download,
-  Coffee,
   Ticket,
   Award,
   Star,
@@ -152,28 +167,25 @@ const formatCreatedDate = (createdAt: any) => {
       date = new Date(createdAt);
     }
 
-    // Convert to Melbourne time (UTC+10)
-    // Note: This is a simple UTC+10 offset, doesn't account for daylight saving
-    const melbourneTime = new Date(date.getTime() + (10 * 60 * 60 * 1000));
+    // Use local timezone instead of hardcoded Melbourne time
     const today = new Date();
-    const todayMelbourne = new Date(today.getTime() + (10 * 60 * 60 * 1000));
     
     // Reset time to start of day for comparison
-    const dateMelbourne = new Date(melbourneTime);
-    dateMelbourne.setHours(0, 0, 0, 0);
+    const dateStart = new Date(date);
+    dateStart.setHours(0, 0, 0, 0);
     
-    const todayStart = new Date(todayMelbourne);
+    const todayStart = new Date(today);
     todayStart.setHours(0, 0, 0, 0);
     
     const yesterdayStart = new Date(todayStart);
     yesterdayStart.setDate(yesterdayStart.getDate() - 1);
 
-    if (dateMelbourne.getTime() === todayStart.getTime()) {
+    if (dateStart.getTime() === todayStart.getTime()) {
       return "Today";
-    } else if (dateMelbourne.getTime() === yesterdayStart.getTime()) {
+    } else if (dateStart.getTime() === yesterdayStart.getTime()) {
       return "Yesterday";
     } else {
-      return format(melbourneTime, 'MMM d, yyyy');
+      return format(date, 'MMM d, yyyy');
     }
   } catch (error) {
     console.error('Error formatting created date:', error);
@@ -1184,13 +1196,13 @@ const ProgramsTabContent = () => {
   const getProgramTypeIcon = (programType: string) => {
     switch (programType) {
       case 'coffee':
-        return <Coffee className="h-4 w-4 text-amber-600" />
+        return <BiSolidCoffeeTogo className="h-4 w-4 text-gray-600" />
       case 'voucher':
-        return <Percent className="h-4 w-4 text-green-600" />
+        return <TicketIcon className="h-4 w-4 text-gray-600" />
       case 'transaction':
-        return <ShoppingBag className="h-4 w-4 text-blue-600" />
+        return <ShoppingBagHeroIcon className="h-4 w-4 text-gray-600" />
       default:
-        return <Award className="h-4 w-4 text-gray-600" />
+        return <CreditCardHeroIcon className="h-4 w-4 text-gray-600" />
     }
   }
 
@@ -1687,11 +1699,18 @@ const ProgramsTabContent = () => {
                         : 'border-gray-200 hover:border-gray-300'
                     }`}>
                       <div className="flex items-start justify-between mb-3">
-                        <h4 className="text-sm font-medium text-gray-900">
-                          {program.type === 'coffee' ? 'Coffee Program' : 
-                           program.type === 'voucher' ? 'Recurring Voucher' : 
-                           'Transaction Program'}
-                        </h4>
+                        <div className="flex items-center gap-2">
+                                              {program.type === 'coffee' ?
+                      <BiSolidCoffeeTogo className="h-4 w-4 text-gray-600" /> : 
+                           program.type === 'voucher' ? 
+                            <TicketIcon className="h-4 w-4 text-gray-600" /> : 
+                            <ShoppingBagHeroIcon className="h-4 w-4 text-gray-600" />}
+                          <h4 className="text-sm font-medium text-gray-900">
+                            {program.type === 'coffee' ? 'Coffee Program' : 
+                             program.type === 'voucher' ? 'Recurring Voucher' : 
+                             'Transaction Program'}
+                          </h4>
+                        </div>
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleEditProgram(program.type)}
@@ -2030,7 +2049,7 @@ const RewardPreviewCard = ({ reward }: { reward: Reward }) => {
         >
           {reward.programType === 'coffeeprogramnew' ? (
             <>
-              <Coffee className="w-3 h-3 mr-1 fill-white" />
+              <BiSolidCoffeeTogo className="w-3 h-3 mr-1 text-white" />
               <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
                 Free Coffee
               </span>
@@ -2259,12 +2278,13 @@ const RewardsTabContent = () => {
             
             let createdAt, updatedAt, lastRedeemed;
             try {
-              createdAt = data.createdAt?.toDate() || new Date();
-              updatedAt = data.updatedAt?.toDate() || data.createdAt?.toDate() || new Date();
+              // Keep the original data.createdAt value instead of converting to new Date()
+              createdAt = data.createdAt || null;
+              updatedAt = data.updatedAt || data.createdAt || null;
               lastRedeemed = data.lastRedeemed ? data.lastRedeemed.toDate() : null;
             } catch (dateError) {
-              createdAt = new Date();
-              updatedAt = new Date();
+              createdAt = data.createdAt || null;
+              updatedAt = data.updatedAt || data.createdAt || null;
               lastRedeemed = null;
             }
             
@@ -2311,7 +2331,7 @@ const RewardsTabContent = () => {
   const getRewardTypeIcon = (type: string) => {
     switch (type?.toLowerCase()) {
       case 'coffee':
-        return <Coffee className="h-5 w-5 text-blue-600" />;
+        return <BiSolidCoffeeTogo className="h-5 w-5 text-blue-600" />;
       case 'ticket':
         return <Ticket className="h-5 w-5 text-blue-600" />;
       case 'discount':
@@ -2407,13 +2427,13 @@ const RewardsTabContent = () => {
           comparison = (a.impressions || 0) - (b.impressions || 0);
           break;
         case "createdAt":
-          const aTime = a.createdAt ? a.createdAt.getTime() : 0;
-          const bTime = b.createdAt ? b.createdAt.getTime() : 0;
+          const aTime = a.createdAt ? (a.createdAt.toDate && typeof a.createdAt.toDate === 'function' ? a.createdAt.toDate().getTime() : new Date(a.createdAt).getTime()) : 0;
+          const bTime = b.createdAt ? (b.createdAt.toDate && typeof b.createdAt.toDate === 'function' ? b.createdAt.toDate().getTime() : new Date(b.createdAt).getTime()) : 0;
           comparison = aTime - bTime;
           break;
         case "lastRedeemed":
-          const aRedeemed = a.lastRedeemed ? a.lastRedeemed.getTime() : 0;
-          const bRedeemed = b.lastRedeemed ? b.lastRedeemed.getTime() : 0;
+          const aRedeemed = a.lastRedeemed ? (a.lastRedeemed.toDate && typeof a.lastRedeemed.toDate === 'function' ? a.lastRedeemed.toDate().getTime() : new Date(a.lastRedeemed).getTime()) : 0;
+          const bRedeemed = b.lastRedeemed ? (b.lastRedeemed.toDate && typeof b.lastRedeemed.toDate === 'function' ? b.lastRedeemed.toDate().getTime() : new Date(b.lastRedeemed).getTime()) : 0;
           comparison = aRedeemed - bRedeemed;
           break;
         case "isActive":
@@ -6773,17 +6793,17 @@ const ProgramRewardsTable = () => {
     }
   }
 
-  // Get program type icon (blue only)
+  // Get program type icon (gray only)
   const getProgramTypeIcon = (programType: string) => {
     switch (programType) {
       case 'coffeeprogramnew':
-        return <DollarSign className="h-4 w-4 text-blue-600" />
+        return <BiSolidCoffeeTogo className="h-4 w-4 text-gray-600" />
       case 'voucherprogramnew':
-        return <Percent className="h-4 w-4 text-blue-600" />
+        return <TicketIcon className="h-4 w-4 text-gray-600" />
       case 'transactionrewardsnew':
-        return <ShoppingBag className="h-4 w-4 text-blue-600" />
+        return <ShoppingBagHeroIcon className="h-4 w-4 text-gray-600" />
       default:
-        return <Award className="h-4 w-4 text-blue-600" />
+        return <CreditCardHeroIcon className="h-4 w-4 text-gray-600" />
     }
   }
 
@@ -6791,13 +6811,13 @@ const ProgramRewardsTable = () => {
   const getActiveeProgramIcon = (type: string) => {
     switch (type) {
       case 'coffee':
-        return <Coffee className="h-4 w-4 text-blue-600" />
+        return <BiSolidCoffeeTogo className="h-4 w-4 text-gray-600" />
       case 'voucher':
-        return <DollarSign className="h-4 w-4 text-blue-600" />
+        return <TicketIcon className="h-4 w-4 text-gray-600" />
       case 'transaction':
-        return <ShoppingBag className="h-4 w-4 text-blue-600" />
+        return <ShoppingBagHeroIcon className="h-4 w-4 text-gray-600" />
       default:
-        return <Award className="h-4 w-4 text-blue-600" />
+        return <CreditCardHeroIcon className="h-4 w-4 text-gray-600" />
     }
   }
 
@@ -7484,8 +7504,10 @@ export default function StoreOverviewPage() {
           await fetchInventoryCounts(variationIds)
         }
       } else {
-        // Log the response structure to help debug
-        console.error("Failed to fetch inventory items or no objects returned:", data)
+        // Handle empty response gracefully (no catalog items)
+        console.log("No inventory items found or empty catalog response:", data)
+        setInventoryItems([])
+        setCategories({})
       }
     } catch (error) {
       console.error("Error fetching inventory:", error)
@@ -8429,25 +8451,10 @@ export default function StoreOverviewPage() {
           {selectedMessage && (
             <div className="py-4 space-y-4">
               {/* Message Info */}
-              <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
-                <div className="h-10 w-10 flex-shrink-0">
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-medium border border-gray-200 ${
-                    selectedMessage.notificationAction === 'sendEmail' ? 'bg-blue-100 text-blue-600' : 
-                    selectedMessage.notificationAction === 'sendPushNotification' ? 'bg-orange-100 text-orange-600' : 
-                    'bg-green-100 text-green-600'
-                  }`}>
-                    {selectedMessage.notificationAction === 'sendEmail' ? (
-                      <Mail className="h-5 w-5" />
-                    ) : selectedMessage.notificationAction === 'sendPushNotification' ? (
-                      <BellRing className="h-5 w-5" />
-                    ) : (
-                      <Megaphone className="h-5 w-5" />
-                    )}
-                  </div>
-                </div>
+              <div className="pb-3 border-b border-gray-100">
                 <div>
-                  <p className="font-medium text-gray-900">{selectedMessage.title}</p>
-                  <p className="text-sm text-gray-500">
+                  <p className="font-medium text-gray-900 pb-1 w-fit relative after:content-[''] after:absolute after:bottom-0 after:left-0 after:w-1/2 after:h-0.5 after:bg-gradient-to-r after:from-blue-400 after:to-blue-600 after:rounded-full">{selectedMessage.title}</p>
+                  <p className="text-sm text-gray-500 mt-2">
                     {selectedMessage.notificationAction === 'sendEmail' ? 'Email Message' : 
                      selectedMessage.notificationAction === 'sendPushNotification' ? 'Push Notification' : 
                      'Announcement'}
@@ -8466,11 +8473,10 @@ export default function StoreOverviewPage() {
 
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium text-gray-700">Status</span>
-                  <span className={`text-sm px-2 py-1 rounded-full text-xs font-medium ${
-                    selectedMessage.status === 'sent' 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-yellow-100 text-yellow-800'
-                  }`}>
+                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                    <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+                      selectedMessage.status === 'sent' ? 'bg-green-500' : 'bg-yellow-500'
+                    }`}></div>
                     {selectedMessage.status === 'sent' ? 'Sent' : 'Draft'}
                   </span>
                 </div>

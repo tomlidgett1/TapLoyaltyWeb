@@ -53,7 +53,8 @@ import {
   Megaphone,
   Info,
   Repeat,
-  Loader2
+  Loader2,
+  Heart
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -373,6 +374,84 @@ export default function DashboardPage() {
   const [showDailySummaryPopup, setShowDailySummaryPopup] = useState(false)
   const [isPopupExpanded, setIsPopupExpanded] = useState(false)
   
+  // Metrics functions
+  const saveMetricPreferences = async () => {
+    if (!user?.uid) return
+    try {
+      await setDoc(doc(db, 'merchants', user.uid), {
+        enabledMetrics: enabledMetrics
+      }, { merge: true })
+    } catch (error) {
+      console.error('Error saving metric preferences:', error)
+    }
+  }
+
+  const loadMetricPreferences = async () => {
+    if (!user?.uid) return
+    try {
+      const docRef = doc(db, 'merchants', user.uid)
+      const docSnap = await getDoc(docRef)
+      if (docSnap.exists() && docSnap.data().enabledMetrics) {
+        setEnabledMetrics(docSnap.data().enabledMetrics)
+      }
+    } catch (error) {
+      console.error('Error loading metric preferences:', error)
+    }
+  }
+
+  const handleMetricRightClick = (e: React.MouseEvent, metricId: string) => {
+    e.preventDefault()
+    setContextMenu({
+      isOpen: true,
+      x: e.clientX,
+      y: e.clientY,
+      metricId: metricId
+    })
+  }
+
+  const handleRemoveMetric = async (metricId: string) => {
+    const newEnabledMetrics = enabledMetrics.filter(id => id !== metricId)
+    setEnabledMetrics(newEnabledMetrics)
+    setContextMenu({ isOpen: false, x: 0, y: 0, metricId: '' })
+    
+    // Save to Firestore
+    if (user?.uid) {
+      try {
+        await setDoc(doc(db, 'merchants', user.uid), {
+          enabledMetrics: newEnabledMetrics
+        }, { merge: true })
+      } catch (error) {
+        console.error('Error saving metric preferences:', error)
+      }
+    }
+  }
+
+  const handleAddMetric = async (metricId: string) => {
+    if (!enabledMetrics.includes(metricId)) {
+      const newEnabledMetrics = [...enabledMetrics, metricId]
+      setEnabledMetrics(newEnabledMetrics)
+      setAddMetricsPopupOpen(false)
+      
+      // Save to Firestore
+      if (user?.uid) {
+        try {
+          await setDoc(doc(db, 'merchants', user.uid), {
+            enabledMetrics: newEnabledMetrics
+          }, { merge: true })
+        } catch (error) {
+          console.error('Error saving metric preferences:', error)
+        }
+      }
+    }
+  }
+
+  // Load metric preferences when user is available
+  useEffect(() => {
+    if (user?.uid) {
+      loadMetricPreferences()
+    }
+  }, [user?.uid])
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -384,6 +463,11 @@ export default function DashboardPage() {
       ) {
         setShowIntegrations(false);
       }
+      
+      // Close context menu when clicking outside
+      if (contextMenu.isOpen) {
+        setContextMenu({ isOpen: false, x: 0, y: 0, metricId: '' })
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -392,6 +476,224 @@ export default function DashboardPage() {
     };
   }, [setShowIntegrations]);
   
+  // Metric definitions
+  const metricsConfig = {
+    totalCustomers: {
+      title: "Total Customers",
+      icon: Users,
+      value: "1,234",
+      trend: "+12% this month",
+      color: "blue"
+    },
+    activePrograms: {
+      title: "Active Programs", 
+      icon: Zap,
+      value: "8",
+      trend: "2 Coffee, 3 Voucher, 3 Transaction",
+      color: "green"
+    },
+    totalRewards: {
+      title: "Total Rewards",
+      icon: Gift,
+      value: "56", 
+      trend: "+4 added this week",
+      color: "purple"
+    },
+    revenueImpact: {
+      title: "Revenue Impact",
+      icon: DollarSign,
+      value: "$12,450",
+      trend: "+18% this month", 
+      color: "green"
+    },
+    redemptionRate: {
+      title: "Redemption Rate",
+      icon: Percent,
+      value: "67.8%",
+      trend: "+2.4% vs last month",
+      color: "orange"
+    },
+    pointsEarned: {
+      title: "Points Earned",
+      icon: Star,
+      value: "89,240",
+      trend: "+15% this month",
+      color: "yellow"
+    },
+    avgOrderValue: {
+      title: "Avg Order Value",
+      icon: ShoppingCart,
+      value: "$28.50", 
+      trend: "+$3.20 vs last month",
+      color: "indigo"
+    },
+    customerRetention: {
+      title: "Customer Retention",
+      icon: TrendingUp,
+      value: "84.2%",
+      trend: "+3.1% this quarter",
+      color: "red"
+    },
+    growthRate: {
+      title: "Growth Rate", 
+      icon: LineChart,
+      value: "23.5%",
+      trend: "+5.2% vs last month",
+      color: "blue"
+    },
+    avgVisitDuration: {
+      title: "Avg Visit Duration",
+      icon: Clock,
+      value: "4m 32s",
+      trend: "+45s this week",
+      color: "green"
+    },
+    visitFrequency: {
+      title: "Visit Frequency",
+      icon: Calendar,
+      value: "2.8x",
+      trend: "per month average",
+      color: "purple"
+    },
+    transactionVolume: {
+      title: "Transaction Volume",
+      icon: Receipt,
+      value: "1,847",
+      trend: "+156 this week",
+      color: "orange"
+    },
+    customerSatisfaction: {
+      title: "Customer Satisfaction",
+      icon: Heart,
+      value: "4.7/5",
+      trend: "+0.2 this month",
+      color: "pink"
+    },
+    conversionRate: {
+      title: "Conversion Rate",
+      icon: ArrowUp,
+      value: "3.4%",
+      trend: "+0.8% this week",
+      color: "indigo"
+    },
+    engagementScore: {
+      title: "Engagement Score",
+      icon: Sparkles,
+      value: "78.3",
+      trend: "+6.1 points",
+      color: "yellow"
+    }
+  }
+
+  const getColorClasses = (color: string) => {
+    const colorMap = {
+      blue: "bg-blue-500",
+      green: "bg-green-500", 
+      purple: "bg-purple-500",
+      orange: "bg-orange-500",
+      yellow: "bg-yellow-500",
+      indigo: "bg-indigo-500",
+      red: "bg-red-500",
+      pink: "bg-pink-500"
+    }
+    return colorMap[color as keyof typeof colorMap] || "bg-gray-500"
+  }
+
+  const renderMetricBox = (metricId: string) => {
+    const metric = metricsConfig[metricId as keyof typeof metricsConfig]
+    if (!metric) return null
+
+    const IconComponent = metric.icon
+
+    return (
+      <div 
+        key={metricId}
+        className="group relative bg-white border border-gray-200 rounded-lg p-3 transition-all hover:border-gray-300 hover:shadow-sm"
+        onContextMenu={(e) => handleMetricRightClick(e, metricId)}
+      >
+        <div className="flex items-start justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <IconComponent className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
+            <h4 className="text-sm font-medium text-gray-900">{metric.title}</h4>
+          </div>
+          <div className={`h-2 w-2 ${getColorClasses(metric.color)} rounded-full`}></div>
+        </div>
+        
+        {metricId === 'avgOrderValue' ? (
+          <div className="flex items-end justify-between">
+            <div className="flex-1">
+              <div className="text-lg font-semibold text-gray-900 mb-1">{metric.value}</div>
+              <p className="text-xs text-gray-500">{metric.trend}</p>
+            </div>
+            <div className="flex-shrink-0 ml-3">
+              {/* Mini Line Graph */}
+              <div className="relative group">
+                <svg width="80" height="40" className="overflow-visible">
+                  <defs>
+                    <linearGradient id="aovGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="#007AFF" stopOpacity="0.3"/>
+                      <stop offset="100%" stopColor="#007AFF" stopOpacity="0"/>
+                    </linearGradient>
+                  </defs>
+                  {/* Grid lines */}
+                  <g opacity="0.1">
+                    <line x1="0" y1="10" x2="80" y2="10" stroke="#6b7280" strokeWidth="0.5"/>
+                    <line x1="0" y1="20" x2="80" y2="20" stroke="#6b7280" strokeWidth="0.5"/>
+                    <line x1="0" y1="30" x2="80" y2="30" stroke="#6b7280" strokeWidth="0.5"/>
+                  </g>
+                  {/* Data area */}
+                  <path
+                    d="M 0 28 L 20 25 L 40 20 L 60 16 L 80 10 L 80 40 L 0 40 Z"
+                    fill="url(#aovGradient)"
+                  />
+                  {/* Data line */}
+                  <path
+                    d="M 0 28 L 20 25 L 40 20 L 60 16 L 80 10"
+                    fill="none"
+                    stroke="#007AFF"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  {/* Data points with hover areas */}
+                  <g>
+                    <circle cx="0" cy="28" r="2" fill="#007AFF"/>
+                    <circle cx="0" cy="28" r="6" fill="transparent" className="cursor-pointer hover:fill-blue-100/20" data-value="$24.50" data-week="5 weeks ago"/>
+                  </g>
+                  <g>
+                    <circle cx="20" cy="25" r="2" fill="#007AFF"/>
+                    <circle cx="20" cy="25" r="6" fill="transparent" className="cursor-pointer hover:fill-blue-100/20" data-value="$25.30" data-week="4 weeks ago"/>
+                  </g>
+                  <g>
+                    <circle cx="40" cy="20" r="2" fill="#007AFF"/>
+                    <circle cx="40" cy="20" r="6" fill="transparent" className="cursor-pointer hover:fill-blue-100/20" data-value="$26.80" data-week="3 weeks ago"/>
+                  </g>
+                  <g>
+                    <circle cx="60" cy="16" r="2" fill="#007AFF"/>
+                    <circle cx="60" cy="16" r="6" fill="transparent" className="cursor-pointer hover:fill-blue-100/20" data-value="$28.10" data-week="2 weeks ago"/>
+                  </g>
+                  <g>
+                    <circle cx="80" cy="10" r="2" fill="#007AFF"/>
+                    <circle cx="80" cy="10" r="6" fill="transparent" className="cursor-pointer hover:fill-blue-100/20" data-value="$28.50" data-week="This week"/>
+                  </g>
+                </svg>
+                {/* Tooltip */}
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                  5-week trend: $24.50 → $28.50
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="text-lg font-semibold text-gray-900 mb-1">{metric.value}</div>
+            <p className="text-xs text-gray-500">{metric.trend}</p>
+          </>
+        )}
+      </div>
+    )
+  }
+
   // Add a new state for processing status
   const [processingIntegrations, setProcessingIntegrations] = useState<Record<string, boolean>>({})
   const [isSummarizeInboxSheetOpen, setIsSummarizeInboxSheetOpen] = useState(false)
@@ -444,6 +746,19 @@ export default function DashboardPage() {
   const [createManualProgramOpen, setCreateManualProgramOpen] = useState(false)
   const [createRecurringRewardOpen, setCreateRecurringRewardOpen] = useState(false)
   const [createBannerDialogOpen, setCreateBannerDialogOpen] = useState(false)
+  const [addMetricsPopupOpen, setAddMetricsPopupOpen] = useState(false)
+  
+  // Metrics state management
+  const [enabledMetrics, setEnabledMetrics] = useState<string[]>([
+    'totalCustomers', 'activePrograms', 'totalRewards', 'revenueImpact',
+    'redemptionRate', 'pointsEarned', 'avgOrderValue'
+  ])
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean;
+    x: number;
+    y: number;
+    metricId: string;
+  }>({ isOpen: false, x: 0, y: 0, metricId: '' })
   
   const [recurringPrograms, setRecurringPrograms] = useState({
     hasAny: false,
@@ -4050,9 +4365,31 @@ export default function DashboardPage() {
                     </Button>
                   </div>
                 </div>
-          </div>
+              </div>
 
-
+              {/* Metrics Overview Section */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-medium">Metrics Overview</h2>
+                </div>
+                
+                {/* Dynamic Metrics Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {enabledMetrics.map(metricId => renderMetricBox(metricId))}
+                  
+                  {/* Add Metrics Button */}
+                  <button
+                    onClick={() => setAddMetricsPopupOpen(true)}
+                    className="group relative bg-gray-50 border border-gray-200 rounded-lg p-3 transition-all hover:border-gray-300 hover:shadow-sm w-full text-center flex flex-col items-center justify-center"
+                  >
+                    <PlusCircle className="h-4 w-4 text-gray-500 mb-2" strokeWidth={2.75} />
+                    <h4 className="text-sm font-medium text-gray-900 mb-1">Add Metrics</h4>
+                    <p className="text-xs text-gray-500">
+                      Click to add more metrics
+                    </p>
+                  </button>
+                </div>
+              </div>
 
               {/* Activity and Analytics Section for Loyalty */}
           <div className={cn(
@@ -6864,6 +7201,65 @@ export default function DashboardPage() {
       <CreateManualProgramDialog open={createManualProgramOpen} onOpenChange={setCreateManualProgramOpen} />
       <CreateBannerDialog open={createBannerDialogOpen} onOpenChange={setCreateBannerDialogOpen} />
       <CreateRecurringRewardDialog open={createRecurringRewardOpen} onOpenChange={setCreateRecurringRewardOpen} />
+      
+      {/* Add Metrics Popup */}
+      {addMetricsPopupOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200">
+          <div className="fixed inset-0 bg-black/40" onClick={() => setAddMetricsPopupOpen(false)} />
+          <div className="relative bg-white rounded-lg shadow-lg w-full max-w-2xl mx-4 animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Add Metrics</h2>
+                <button
+                  onClick={() => setAddMetricsPopupOpen(false)}
+                  className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+                >
+                  <X className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
+                </button>
+              </div>
+              
+              <p className="text-sm text-gray-600 mb-6">Choose additional metrics to display on your dashboard</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Available Metrics */}
+                {Object.entries(metricsConfig)
+                  .filter(([metricId]) => !enabledMetrics.includes(metricId))
+                  .map(([metricId, metric]) => (
+                  <button
+                    key={metricId}
+                    className="group relative bg-gray-50 border border-gray-200 rounded-lg p-3 transition-all hover:border-gray-300 hover:shadow-sm text-left w-full"
+                    onClick={() => handleAddMetric(metricId)}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <metric.icon className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
+                        <h4 className="text-sm font-medium text-gray-900">{metric.title}</h4>
+                      </div>
+                      <div className={`h-2 w-2 ${getColorClasses(metric.color)} rounded-full`}></div>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-2">
+                      {metric.trend}
+                    </p>
+                    <div className="text-xs text-blue-600 group-hover:text-blue-800 transition-colors">
+                      Click to add
+                    </div>
+                  </button>
+                ))}
+              </div>
+              
+              <div className="mt-6 flex justify-end gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setAddMetricsPopupOpen(false)}
+                  className="text-sm"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
             {/* Program Type Selector Popup */}
       {programTypeSelectorOpen && (
@@ -6931,6 +7327,24 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Context Menu for Right-Click */}
+      {contextMenu.isOpen && (
+        <div
+          className="fixed z-50 bg-white border border-gray-200 rounded-md shadow-lg py-1 min-w-[120px]"
+          style={{
+            left: contextMenu.x,
+            top: contextMenu.y,
+          }}
+        >
+          <button
+            onClick={() => handleRemoveMetric(contextMenu.metricId)}
+            className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+          >
+            Remove metric
+          </button>
         </div>
       )}
     </>

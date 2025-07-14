@@ -226,6 +226,7 @@ export default function DashboardPage() {
   const searchParams = useSearchParams()
   const { user } = useAuth()
   const [timeframe, setTimeframe] = useState<TimeframeType>("today")
+  const [isTimeframePanelOpen, setIsTimeframePanelOpen] = useState(false)
   const [isAdvancedActivity, setIsAdvancedActivity] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
 
@@ -4199,50 +4200,7 @@ export default function DashboardPage() {
               </div>
             </div>
             
-            {/* Date Filter Dropdown - Far Right */}
-            <div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <Calendar className="h-4 w-4" strokeWidth={2.75} />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem 
-                    className="cursor-pointer" 
-                    onClick={() => setTimeframe('today')}
-                  >
-                    <span className={timeframe === 'today' ? 'font-medium' : ''}>
-                      Today
-                    </span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    className="cursor-pointer" 
-                    onClick={() => setTimeframe('yesterday')}
-                  >
-                    <span className={timeframe === 'yesterday' ? 'font-medium' : ''}>
-                      Yesterday
-                    </span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    className="cursor-pointer" 
-                    onClick={() => setTimeframe('thisweek')}
-                  >
-                    <span className={timeframe === 'thisweek' ? 'font-medium' : ''}>
-                      This week
-                    </span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    className="cursor-pointer" 
-                    onClick={() => setTimeframe('thismonth')}
-                  >
-                    <span className={timeframe === 'thismonth' ? 'font-medium' : ''}>
-                      This month
-                    </span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+
           </div>
         </div>
             
@@ -4424,6 +4382,70 @@ export default function DashboardPage() {
               <div className="mb-8">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-medium">Metrics Overview</h2>
+                  
+                  {/* Date Filter Slide-out */}
+                  <div 
+                    className="flex items-center gap-2"
+                    onMouseEnter={() => setIsTimeframePanelOpen(true)}
+                    onMouseLeave={() => setIsTimeframePanelOpen(false)}
+                  >
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <Calendar className="h-4 w-4" strokeWidth={2.75} />
+                    </Button>
+                    
+                    {/* Slide-out Options - Horizontal inline */}
+                    <div className={cn(
+                      "flex items-center gap-2 transition-all duration-300 ease-out",
+                      isTimeframePanelOpen 
+                        ? "opacity-100 translate-x-0 max-w-[400px]" 
+                        : "opacity-0 translate-x-8 max-w-0 overflow-hidden"
+                    )}>
+                      <button
+                        className={cn(
+                          "px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap",
+                          timeframe === 'today' 
+                            ? 'bg-blue-100 text-blue-700' 
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        )}
+                        onClick={() => setTimeframe('today')}
+                      >
+                        Today
+                      </button>
+                      <button
+                        className={cn(
+                          "px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap",
+                          timeframe === 'yesterday' 
+                            ? 'bg-blue-100 text-blue-700' 
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        )}
+                        onClick={() => setTimeframe('yesterday')}
+                      >
+                        Yesterday
+                      </button>
+                      <button
+                        className={cn(
+                          "px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap",
+                          timeframe === 'thisweek' 
+                            ? 'bg-blue-100 text-blue-700' 
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        )}
+                        onClick={() => setTimeframe('thisweek')}
+                      >
+                        This week
+                      </button>
+                      <button
+                        className={cn(
+                          "px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap",
+                          timeframe === 'thismonth' 
+                            ? 'bg-blue-100 text-blue-700' 
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        )}
+                        onClick={() => setTimeframe('thismonth')}
+                      >
+                        This month
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 
                 {/* Dynamic Metrics Grid */}

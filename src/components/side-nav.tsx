@@ -146,11 +146,6 @@ const navItems: NavItem[] = [
     icon: Store
   },
   {
-    title: "Plan",
-    href: "/plan",
-    icon: Layers
-  },
-  {
     title: "Agents",
     href: "/dashboard/agents",
     icon: Bot,
@@ -159,11 +154,6 @@ const navItems: NavItem[] = [
     title: "Inbox",
     href: "/dashboard/agent-inbox",
     icon: Inbox,
-  },
-  {
-    title: "Insights",
-    href: "/insights",
-    icon: BarChart
   },
   {
     title: "Documents",
@@ -622,7 +612,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
           <DropdownMenu open={createDropdownOpen} onOpenChange={setCreateDropdownOpen}>
             <DropdownMenuTrigger asChild>
               <button
-                className="group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-[450] transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 w-full h-9"
+                className="group flex items-center gap-3 rounded-md px-3 py-1 text-sm font-[450] transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 w-full h-8 cursor-pointer"
                 title="Create"
               >
                 <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
@@ -670,7 +660,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
           <DropdownMenu open={createDropdownOpen} onOpenChange={setCreateDropdownOpen}>
             <DropdownMenuTrigger asChild>
               <button
-                className="group flex items-center justify-between w-full gap-3 rounded-md px-3 py-1.5 text-sm font-[450] transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 h-9"
+                className="group flex items-center justify-between w-full gap-3 rounded-md px-3 py-1 text-sm font-[450] transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 h-8 cursor-pointer"
               >
                 <div className="flex items-center gap-3 h-full">
                   <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
@@ -763,7 +753,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                     <CollapsibleTrigger asChild>
                       <button
                         className={cn(
-                          "group flex items-center justify-between w-full gap-3 rounded-md px-3 py-1.5 text-sm font-[450] transition-all duration-200 ease-in-out h-9",
+                          "group flex items-center justify-between w-full gap-3 rounded-md px-3 py-1 text-sm font-[450] transition-all duration-200 ease-in-out h-8",
                           isActive 
                             ? "bg-[#007AFF]/10 text-[#007AFF]" 
                             : "text-gray-800 hover:bg-[#007AFF]/5"
@@ -811,7 +801,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                                 <Link
                                   href={subItem.href}
                                   className={cn(
-                                    "group flex items-center gap-3 rounded-md px-3 py-1 text-sm font-[450] transition-colors h-8",
+                                    "group flex items-center gap-3 rounded-md px-3 py-0.5 text-sm font-[450] transition-colors h-7",
                                     isSubActive 
                                       ? "bg-[#007AFF]/10 text-[#007AFF]" 
                                       : "text-gray-700 hover:bg-[#007AFF]/5"
@@ -845,7 +835,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                   <Link
                     href={item.href}
                     className={cn(
-                      "group flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-[450] transition-all duration-200 ease-in-out whitespace-nowrap relative h-9",
+                      "group flex items-center gap-3 rounded-md px-3 py-1 text-sm font-[450] transition-all duration-200 ease-in-out whitespace-nowrap relative h-8",
                       isActive 
                         ? "bg-[#007AFF]/10 text-[#007AFF]" 
                         : "text-gray-800 hover:bg-[#007AFF]/5"
@@ -892,7 +882,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                 setIsInternalChange(true)
                 setIsCollapsed(false)
               }}
-              className="w-full h-8 p-0 hover:bg-gray-200 rounded-md flex items-center justify-center"
+              className="w-full h-7 p-0 hover:bg-gray-200 rounded-md flex items-center justify-center"
               title="Expand sidebar"
             >
               <PanelLeft className="h-4 w-4 text-gray-600" strokeWidth={2.75} />

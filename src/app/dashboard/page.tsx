@@ -102,6 +102,7 @@ import { CreateRewardPopup } from "@/components/create-reward-popup"
 import { IntroductoryRewardPopup } from "@/components/introductory-reward-popup"
 import { CreateManualProgramDialog } from "@/components/create-manual-program-dialog"
 import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
+import { CreateBannerDialog } from "@/components/create-banner-dialog"
 import { 
   Command,
   CommandDialog,
@@ -163,7 +164,7 @@ const customAnimationStyles = `
   }
   
   .tab-content-transition {
-    transition: opacity 0.3s ease-in-out;
+    transition: opacity 0.15s ease-in-out;
   }
   
   .tab-content-fade-out {
@@ -263,8 +264,11 @@ export default function DashboardPage() {
     // After fade out, change content and fade in
     setTimeout(() => {
       setMetricsType(newType)
-      setIsTransitioning(false)
-    }, 150) // Half of the total transition duration
+      // Add a small delay before starting fade-in to ensure content is fully rendered
+      setTimeout(() => {
+        setIsTransitioning(false)
+      }, 25)
+    }, 100) // Faster transition for snappier feel
   }
 
   // Handle live programs tab transition with fade effect
@@ -439,6 +443,7 @@ export default function DashboardPage() {
   const [programTypeSelectorOpen, setProgramTypeSelectorOpen] = useState(false)
   const [createManualProgramOpen, setCreateManualProgramOpen] = useState(false)
   const [createRecurringRewardOpen, setCreateRecurringRewardOpen] = useState(false)
+  const [createBannerDialogOpen, setCreateBannerDialogOpen] = useState(false)
   
   const [recurringPrograms, setRecurringPrograms] = useState({
     hasAny: false,
@@ -742,7 +747,7 @@ export default function DashboardPage() {
       id: 'customer-service',
       name: 'Customer Service Agent',
       description: 'Handle customer inquiries and support requests automatically',
-      icon: <Headphones className="h-8 w-8 text-blue-500" />,
+              icon: <Headphones className="h-8 w-8 text-blue-500" strokeWidth={2.75} />,
       status: 'active',
       color: 'blue',
       features: ['24/7 Support', 'Auto-responses', 'Ticket routing']
@@ -751,7 +756,7 @@ export default function DashboardPage() {
       id: 'email-summary',
       name: 'Email Summary Agent',
       description: 'Summarise and analyse your email communications',
-      icon: <Inbox className="h-8 w-8 text-purple-500" />,
+              icon: <Inbox className="h-8 w-8 text-purple-500" strokeWidth={2.75} />,
       status: 'active',
       color: 'purple',
       features: ['Daily summaries', 'Priority detection', 'Action items']
@@ -760,7 +765,7 @@ export default function DashboardPage() {
       id: 'insights',
       name: 'Insights Agent',
       description: 'Generate business insights from your data to help grow sales and repeat business',
-      icon: <Brain className="h-8 w-8 text-green-500" />,
+              icon: <Brain className="h-8 w-8 text-green-500" strokeWidth={2.75} />,
       status: 'active',
       color: 'green',
       features: ['Data analysis', 'Trend detection', 'Recommendations']
@@ -769,7 +774,7 @@ export default function DashboardPage() {
       id: 'sales-analysis',
       name: 'Sales Analysis Agent',
       description: 'Analyse sales performance with customisable reporting',
-      icon: <BarChart3 className="h-8 w-8 text-orange-500" />,
+              icon: <BarChart3 className="h-8 w-8 text-orange-500" strokeWidth={2.75} />,
       status: 'active',
       color: 'orange',
       features: ['Daily reports', 'Weekly summaries', 'Monthly analysis'],
@@ -780,7 +785,7 @@ export default function DashboardPage() {
       id: 'invoice-xero',
       name: 'Invoice Agent with Xero',
       description: 'Automate invoice processing and Xero integration',
-      icon: <Receipt className="h-8 w-8 text-indigo-500" />,
+              icon: <Receipt className="h-8 w-8 text-indigo-500" strokeWidth={2.75} />,
       status: 'coming-soon',
       color: 'indigo',
       features: ['Auto-invoicing', 'Xero sync', 'Payment tracking']
@@ -2652,9 +2657,9 @@ export default function DashboardPage() {
 
   // Available integrations for the command box
   const availableIntegrations = [
-    { id: "mailchimp", name: "MailChimp", icon: <Mail className="h-4 w-4 text-red-500" /> },
+    { id: "mailchimp", name: "MailChimp", icon: <Mail className="h-4 w-4 text-red-500" strokeWidth={2.75} /> },
     { id: "instagram", name: "Instagram", icon: <Image src="/insta.webp" width={16} height={16} alt="Instagram" className="h-4 w-4 object-contain" /> },
-    { id: "google", name: "Google", icon: <Globe className="h-4 w-4 text-blue-500" /> },
+    { id: "google", name: "Google", icon: <Globe className="h-4 w-4 text-blue-500" strokeWidth={2.75} /> },
     { id: "gmail", name: "Gmail", icon: <Image src="/gmail.png" width={16} height={16} alt="Gmail" className="h-4 w-4 object-contain" /> },
     { id: "lightspeed", name: "Lightspeed", icon: <Image src="/lslogo.png" width={16} height={16} alt="Lightspeed" className="h-4 w-4 object-contain" /> },
     { id: "tap", name: "Tap Loyalty", icon: <Image src="/taplogo.png" width={16} height={16} alt="Tap Loyalty" className="h-4 w-4 object-contain" /> },
@@ -3903,7 +3908,7 @@ export default function DashboardPage() {
                           onClick={() => setInfoPopupOpen('recurringProgram')}
                           className="opacity-40 hover:opacity-70 transition-opacity"
                         >
-                          <Info className="h-3 w-3 text-gray-600" />
+                          <Info className="h-3 w-3 text-gray-600" strokeWidth={2.75} />
                         </button>
                         <div className={`h-2 w-2 rounded-full ${
                           recurringPrograms.hasAny 
@@ -3937,7 +3942,7 @@ export default function DashboardPage() {
                     >
                       {recurringPrograms.hasAny ? (
                         <div className="flex items-center gap-2">
-                          <CheckIcon className="h-4 w-4" />
+                          <CheckIcon className="h-4 w-4" strokeWidth={2.75} />
                           Configured
                         </div>
                       ) : (
@@ -3957,7 +3962,7 @@ export default function DashboardPage() {
                           onClick={() => setInfoPopupOpen('individualReward')}
                           className="opacity-40 hover:opacity-70 transition-opacity"
                         >
-                          <Info className="h-3 w-3 text-gray-600" />
+                          <Info className="h-3 w-3 text-gray-600" strokeWidth={2.75} />
                         </button>
                         <div className="h-2 w-2 bg-gray-300 rounded-full opacity-60"></div>
                       </div>
@@ -3984,7 +3989,7 @@ export default function DashboardPage() {
                           onClick={() => setInfoPopupOpen('banner')}
                           className="opacity-40 hover:opacity-70 transition-opacity"
                         >
-                          <Info className="h-3 w-3 text-gray-600" />
+                          <Info className="h-3 w-3 text-gray-600" strokeWidth={2.75} />
                         </button>
                         <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
                     </div>
@@ -3992,13 +3997,10 @@ export default function DashboardPage() {
                     <p className="text-xs text-gray-500 mb-4 line-clamp-2">Create eye-catching promotional banners to highlight offers, rewards and featured products</p>
                     <Button 
                       size="sm" 
-                      className="w-full rounded-md text-xs h-8 font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-all"
-                      asChild
+                      className="w-full rounded-md text-xs h-8 font-medium bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all"
+                      onClick={() => setCreateBannerDialogOpen(true)}
                     >
-                      <Link href="/dashboard/banners" className="flex items-center gap-2">
-                        <CheckIcon className="h-4 w-4" />
-                        Configured
-                      </Link>
+                      Configure
                     </Button>
                   </div>
                 
@@ -4010,7 +4012,7 @@ export default function DashboardPage() {
                   }`}>
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
-                                                    <Sparkles className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
+                                                    <Star className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
                         <h4 className="text-sm font-medium text-gray-900">Intro Reward</h4>
                       </div>
                       <div className="flex items-center gap-2">
@@ -4018,7 +4020,7 @@ export default function DashboardPage() {
                           onClick={() => setInfoPopupOpen('introReward')}
                           className="opacity-40 hover:opacity-70 transition-opacity"
                         >
-                          <Info className="h-3 w-3 text-gray-600" />
+                          <Info className="h-3 w-3 text-gray-600" strokeWidth={2.75} />
                         </button>
                         <div className={`h-2 w-2 rounded-full ${
                           hasIntroductoryReward 
@@ -4039,7 +4041,7 @@ export default function DashboardPage() {
                     >
                       {hasIntroductoryReward ? (
                         <div className="flex items-center gap-2">
-                          <CheckIcon className="h-4 w-4" />
+                          <CheckIcon className="h-4 w-4" strokeWidth={2.75} />
                           Configured
                         </div>
                       ) : (
@@ -4076,7 +4078,7 @@ export default function DashboardPage() {
                         </button>
                         <Link href="/store/activity" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors">
                       View all
-                      <ChevronRight className="h-3 w-3" />
+                      <ChevronRight className="h-3 w-3" strokeWidth={2.75} />
                     </Link>
                 </div>
               </div>
@@ -4089,7 +4091,7 @@ export default function DashboardPage() {
                 ) : recentActivity.length === 0 ? (
                   <div className="py-8 text-center">
                     <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
-                      <Clock className="h-6 w-6 text-gray-400" />
+                      <Clock className="h-6 w-6 text-gray-400" strokeWidth={2.75} />
                     </div>
                     <p className="text-sm font-medium text-gray-700">No recent activity</p>
                     <p className="text-xs text-gray-500 mt-1">Transactions will appear here</p>
@@ -4160,7 +4162,7 @@ export default function DashboardPage() {
                                           Redemption
                                         </span>
                                         {activity.isNetworkReward && (
-                                          <Globe className="h-3 w-3 text-blue-500 flex-shrink-0" />
+                                          <Globe className="h-3 w-3 text-blue-500 flex-shrink-0" strokeWidth={2.75} />
                                         )}
                                       </div>
                                     </>
@@ -4174,7 +4176,7 @@ export default function DashboardPage() {
                                       <div className="flex items-center gap-2">
                                         <p className="text-sm font-medium text-gray-800 truncate">{activity.rewardName}</p>
                                         {activity.isNetworkReward && (
-                                          <Globe className="h-3 w-3 text-blue-500 flex-shrink-0" />
+                                          <Globe className="h-3 w-3 text-blue-500 flex-shrink-0" strokeWidth={2.75} />
                                         )}
                                       </div>
                                     ) : (
@@ -4207,7 +4209,7 @@ export default function DashboardPage() {
                       <h3 className="text-sm font-semibold text-gray-900">Popular Rewards</h3>
                   <Link href="/store/rewards" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors">
                       View all
-                      <ChevronRight className="h-3 w-3" />
+                      <ChevronRight className="h-3 w-3" strokeWidth={2.75} />
                     </Link>
                 </div>
               </div>
@@ -4219,7 +4221,7 @@ export default function DashboardPage() {
                 ) : popularRewards.length === 0 ? (
                   <div className="py-8 text-center">
                     <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
-                      <Gift className="h-6 w-6 text-gray-400" />
+                      <Gift className="h-6 w-6 text-gray-400" strokeWidth={2.75} />
                     </div>
                     <p className="text-sm font-medium text-gray-700">No rewards yet</p>
                     <p className="text-xs text-gray-500 mt-1">Create rewards to see analytics</p>
@@ -4276,7 +4278,7 @@ export default function DashboardPage() {
                           )}
                           onClick={() => handleMetricsTabChange('platform')}
                         >
-                          <BarChart3 className="h-3 w-3" />
+                          <BarChart3 className="h-3 w-3" strokeWidth={2.75} />
                           Platform
                         </button>
                         <button
@@ -4288,7 +4290,7 @@ export default function DashboardPage() {
                           )}
                           onClick={() => handleMetricsTabChange('loyalty')}
                         >
-                          <Gift className="h-3 w-3" />
+                          <Gift className="h-3 w-3" strokeWidth={2.75} />
                           Loyalty
                         </button>
                         <div className="h-3 w-px bg-gray-300"></div>
@@ -4355,7 +4357,7 @@ export default function DashboardPage() {
                             <tr className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
-                                  <Eye className="h-4 w-4 text-blue-500" />
+                                  <Eye className="h-4 w-4 text-blue-500" strokeWidth={2.75} />
                                   <span className="text-sm font-medium text-gray-800">Store Views</span>
                                 </div>
                               </td>
@@ -4366,7 +4368,7 @@ export default function DashboardPage() {
                             <tr className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
-                                  <Gift className="h-4 w-4 text-blue-500" />
+                                  <Gift className="h-4 w-4 text-blue-500" strokeWidth={2.75} />
                                   <span className="text-sm font-medium text-gray-800">Reward Views</span>
                                 </div>
                               </td>
@@ -4377,7 +4379,7 @@ export default function DashboardPage() {
                             <tr className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
-                                  <ShoppingCart className="h-4 w-4 text-blue-500" />
+                                  <ShoppingCart className="h-4 w-4 text-blue-500" strokeWidth={2.75} />
                                   <span className="text-sm font-medium text-gray-800">Transactions</span>
                                 </div>
                               </td>
@@ -4392,7 +4394,7 @@ export default function DashboardPage() {
                             <tr className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
-                                  <Users className="h-4 w-4 text-blue-500" />
+                                  <Users className="h-4 w-4 text-blue-500" strokeWidth={2.75} />
                                   <span className="text-sm font-medium text-gray-800">Total Customers</span>
                                 </div>
                               </td>
@@ -4403,7 +4405,7 @@ export default function DashboardPage() {
                             <tr className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
-                                  <Users className="h-4 w-4 text-blue-500" />
+                                  <Users className="h-4 w-4 text-blue-500" strokeWidth={2.75} />
                                   <span className="text-sm font-medium text-gray-800">Active Customers</span>
                                 </div>
                               </td>
@@ -4414,7 +4416,7 @@ export default function DashboardPage() {
                             <tr className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
-                                  <Star className="h-4 w-4 text-blue-500" />
+                                  <Star className="h-4 w-4 text-blue-500" strokeWidth={2.75} />
                                   <span className="text-sm font-medium text-gray-800">Points Issued</span>
                                 </div>
                               </td>
@@ -4425,7 +4427,7 @@ export default function DashboardPage() {
                             <tr className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
-                                  <Gift className="h-4 w-4 text-blue-500" />
+                                  <Gift className="h-4 w-4 text-blue-500" strokeWidth={2.75} />
                                   <span className="text-sm font-medium text-gray-800">Total Redemptions</span>
                                 </div>
                               </td>
@@ -4436,7 +4438,7 @@ export default function DashboardPage() {
                             <tr className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
-                                  <Percent className="h-4 w-4 text-blue-500" />
+                                  <Percent className="h-4 w-4 text-blue-500" strokeWidth={2.75} />
                                   <span className="text-sm font-medium text-gray-800">Redemption Rate</span>
                                 </div>
                               </td>
@@ -4447,7 +4449,7 @@ export default function DashboardPage() {
                             <tr className="hover:bg-gray-100/50 transition-colors">
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-3">
-                                  <Zap className="h-4 w-4 text-blue-500" />
+                                  <Zap className="h-4 w-4 text-blue-500" strokeWidth={2.75} />
                                   <span className="text-sm font-medium text-gray-800">Active Rewards</span>
                                 </div>
                               </td>
@@ -4484,7 +4486,7 @@ export default function DashboardPage() {
                               )}
                               onClick={() => handleLiveProgramsTabChange('coffee')}
                             >
-                              <Coffee className="h-3 w-3" />
+                              <Coffee className="h-3 w-3" strokeWidth={2.75} />
                               Coffee
                             </button>
                           )}
@@ -4498,7 +4500,7 @@ export default function DashboardPage() {
                               )}
                               onClick={() => handleLiveProgramsTabChange('voucher')}
                             >
-                              <Ticket className="h-3 w-3" />
+                              <Ticket className="h-3 w-3" strokeWidth={2.75} />
                               Voucher
                             </button>
                           )}
@@ -4512,7 +4514,7 @@ export default function DashboardPage() {
                               )}
                               onClick={() => handleLiveProgramsTabChange('transaction')}
                             >
-                              <Receipt className="h-3 w-3" />
+                              <Receipt className="h-3 w-3" strokeWidth={2.75} />
                               Transaction
                             </button>
                           )}
@@ -4526,7 +4528,7 @@ export default function DashboardPage() {
                               )}
                               onClick={() => handleLiveProgramsTabChange('cashback')}
                             >
-                              <DollarSign className="h-3 w-3" />
+                              <DollarSign className="h-3 w-3" strokeWidth={2.75} />
                               <span className="text-blue-500 font-bold">Tap</span> Cash
                             </button>
                           )}
@@ -5042,7 +5044,7 @@ export default function DashboardPage() {
                                <tr>
                                  <td colSpan={3} className="px-3 py-6 text-center">
                                    <div className="bg-gray-100 rounded-full h-10 w-10 flex items-center justify-center mx-auto mb-2">
-                                     <Users className="h-5 w-5 text-gray-400" />
+                                     <Users className="h-5 w-5 text-gray-400" strokeWidth={2.75} />
                                    </div>
                                    <p className="text-xs font-medium text-gray-700">No participating customers</p>
                                    <p className="text-xs text-gray-500 mt-0.5">Customers will appear here once they start participating</p>
@@ -5072,7 +5074,7 @@ export default function DashboardPage() {
                           )}
                                                      onClick={() => handleLiveRewardsTabChange('individual')}
                         >
-                          <Gift className="h-3 w-3" />
+                          <Gift className="h-3 w-3" strokeWidth={2.75} />
                           Individual
                         </button>
                         <button
@@ -5084,7 +5086,7 @@ export default function DashboardPage() {
                           )}
                                                      onClick={() => handleLiveRewardsTabChange('customer-specific')}
                         >
-                          <Users className="h-3 w-3" />
+                          <Users className="h-3 w-3" strokeWidth={2.75} />
                           Customer Specific
                         </button>
                       </div>
@@ -5116,7 +5118,7 @@ export default function DashboardPage() {
                           )}
                                                      onClick={() => handleRewardsTypeFilterChange('free')}
                         >
-                          <Gift className="h-3 w-3" />
+                          <Gift className="h-3 w-3" strokeWidth={2.75} />
                           Free
                         </button>
                         <button
@@ -5128,7 +5130,7 @@ export default function DashboardPage() {
                           )}
                                                      onClick={() => handleRewardsTypeFilterChange('points')}
                         >
-                          <Star className="h-3 w-3" />
+                          <Star className="h-3 w-3" strokeWidth={2.75} />
                           Points Required
                         </button>
                       </div>
@@ -5150,7 +5152,7 @@ export default function DashboardPage() {
                       return filteredRewards.length === 0 ? (
                         <div className="py-8 text-center">
                           <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
-                            <Gift className="h-6 w-6 text-gray-400" />
+                            <Gift className="h-6 w-6 text-gray-400" strokeWidth={2.75} />
                           </div>
                           <p className="text-sm font-medium text-gray-700">No rewards found</p>
                           <p className="text-xs text-gray-500 mt-1">Rewards will appear here once created</p>
@@ -5254,7 +5256,7 @@ export default function DashboardPage() {
                       <h3 className="text-sm font-semibold text-gray-900">All Customers</h3>
                       <Link href="/customers" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors">
                         View all
-                        <ChevronRight className="h-3 w-3" />
+                        <ChevronRight className="h-3 w-3" strokeWidth={2.75} />
                       </Link>
                     </div>
                     <div className="flex items-center gap-3">
@@ -5281,7 +5283,7 @@ export default function DashboardPage() {
                     ) : allCustomers.length === 0 ? (
                       <div className="py-8 text-center">
                         <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
-                          <Users className="h-6 w-6 text-gray-400" />
+                          <Users className="h-6 w-6 text-gray-400" strokeWidth={2.75} />
                         </div>
                         <p className="text-sm font-medium text-gray-700">No customers yet</p>
                         <p className="text-xs text-gray-500 mt-1">Customers will appear here once they join</p>
@@ -5297,7 +5299,7 @@ export default function DashboardPage() {
                               >
                                 Customer
                                 {customerSortField === 'fullName' && (
-                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" strokeWidth={2.75} /> : <ArrowDown className="h-3 w-3" strokeWidth={2.75} />
                                 )}
                               </button>
                             </th>
@@ -5308,7 +5310,7 @@ export default function DashboardPage() {
                               >
                                 Points
                                 {customerSortField === 'pointsBalance' && (
-                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" strokeWidth={2.75} /> : <ArrowDown className="h-3 w-3" strokeWidth={2.75} />
                                 )}
                               </button>
                             </th>
@@ -5319,7 +5321,7 @@ export default function DashboardPage() {
                               >
                                 <span className="text-blue-500 font-bold">Tap</span> Cash
                                 {customerSortField === 'cashback' && (
-                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" strokeWidth={2.75} /> : <ArrowDown className="h-3 w-3" strokeWidth={2.75} />
                                 )}
                               </button>
                             </th>
@@ -5330,7 +5332,7 @@ export default function DashboardPage() {
                               >
                                 Last Order
                                 {customerSortField === 'lastTransactionDate' && (
-                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" strokeWidth={2.75} /> : <ArrowDown className="h-3 w-3" strokeWidth={2.75} />
                                 )}
                               </button>
                             </th>
@@ -5341,7 +5343,7 @@ export default function DashboardPage() {
                               >
                                 Date Joined
                                 {customerSortField === 'firstTransactionDate' && (
-                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" strokeWidth={2.75} /> : <ArrowDown className="h-3 w-3" strokeWidth={2.75} />
                                 )}
                               </button>
                             </th>
@@ -5355,7 +5357,7 @@ export default function DashboardPage() {
                               >
                                 Lifetime Spend
                                 {customerSortField === 'totalLifetimeSpend' && (
-                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" strokeWidth={2.75} /> : <ArrowDown className="h-3 w-3" strokeWidth={2.75} />
                                 )}
                               </button>
                             </th>
@@ -5366,7 +5368,7 @@ export default function DashboardPage() {
                               >
                                 Orders
                                 {customerSortField === 'lifetimeTransactionCount' && (
-                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                  customerSortDirection === 'asc' ? <ArrowUp className="h-3 w-3" strokeWidth={2.75} /> : <ArrowDown className="h-3 w-3" strokeWidth={2.75} />
                                 )}
                               </button>
                             </th>
@@ -5471,7 +5473,7 @@ export default function DashboardPage() {
                         <TooltipProvider>
                           <TooltipComponent>
                             <TooltipTrigger asChild>
-                              <Info className="h-4 w-4 text-gray-500 cursor-help" />
+                              <Info className="h-4 w-4 text-gray-500 cursor-help" strokeWidth={2.75} />
                             </TooltipTrigger>
                             <TooltipContent>
                               <p className="text-xs max-w-xs">Customers are ranked by reward availability to help identify those who may need more engagement</p>
@@ -5491,7 +5493,7 @@ export default function DashboardPage() {
                     ) : customerRewardAnalytics.length === 0 ? (
                       <div className="py-8 text-center">
                         <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
-                          <Users className="h-6 w-6 text-gray-400" />
+                          <Users className="h-6 w-6 text-gray-400" strokeWidth={2.75} />
                         </div>
                         <p className="text-sm font-medium text-gray-700">No customer data available</p>
                         <p className="text-xs text-gray-500 mt-1">Customer engagement data will appear here once available</p>
@@ -5680,7 +5682,7 @@ export default function DashboardPage() {
                                         className="h-7 px-3 text-xs font-medium bg-gray-600 hover:bg-gray-700 text-white rounded-md flex items-center gap-1"
                                       >
                                         Create Reward
-                                        <ChevronDown className="h-3 w-3" />
+                                        <ChevronDown className="h-3 w-3" strokeWidth={2.75} />
                                       </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="w-48">
@@ -5691,7 +5693,7 @@ export default function DashboardPage() {
                                         }}
                                         className="flex items-center gap-2"
                                       >
-                                        <Settings className="h-4 w-4" />
+                                        <Settings className="h-4 w-4" strokeWidth={2.75} />
                                         Custom Reward
                                       </DropdownMenuItem>
                                       <DropdownMenuItem 
@@ -5701,7 +5703,7 @@ export default function DashboardPage() {
                                         }}
                                         className="flex items-center gap-2"
                                       >
-                                        <Zap className="h-4 w-4" />
+                                        <Zap className="h-4 w-4" strokeWidth={2.75} />
                                         Quick Reward
                                       </DropdownMenuItem>
                                     </DropdownMenuContent>
@@ -5968,7 +5970,7 @@ export default function DashboardPage() {
                           onClick={() => setInfoPopupOpen('integrations')}
                           className="opacity-40 hover:opacity-70 transition-opacity"
                         >
-                          <Info className="h-3 w-3 text-gray-600" />
+                          <Info className="h-3 w-3 text-gray-600" strokeWidth={2.75} />
                         </button>
                         <div className="h-2 w-2 bg-gray-300 rounded-full opacity-60"></div>
                       </div>
@@ -5995,7 +5997,7 @@ export default function DashboardPage() {
                           onClick={() => setInfoPopupOpen('agentCreation')}
                           className="opacity-40 hover:opacity-70 transition-opacity"
                         >
-                          <Info className="h-3 w-3 text-gray-600" />
+                          <Info className="h-3 w-3 text-gray-600" strokeWidth={2.75} />
                         </button>
                         <div className="h-2 w-2 bg-gray-300 rounded-full opacity-60"></div>
                   </div>
@@ -6042,7 +6044,7 @@ export default function DashboardPage() {
                         case 'outlook':
                           return <img src="/outlook.png" alt="Outlook" className="h-5 w-5 object-contain" />
                         default:
-                          return <Settings className="h-5 w-5 text-gray-500" />
+                          return <Settings className="h-5 w-5 text-gray-500" strokeWidth={2.75} />
                       }
                     }
 
@@ -6090,7 +6092,7 @@ export default function DashboardPage() {
                           asChild
                         >
                           <Link href="/dashboard/integrations" className="flex items-center gap-2">
-                            <CheckIcon className="h-4 w-4" />
+                            <CheckIcon className="h-4 w-4" strokeWidth={2.75} />
                             Connected
                           </Link>
                         </Button>
@@ -6102,7 +6104,7 @@ export default function DashboardPage() {
                       <div key="add-integrations" className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-2">
-                            <PlusCircle className="h-5 w-5 text-gray-500" />
+                            <PlusCircle className="h-5 w-5 text-gray-500" strokeWidth={2.75} />
                             <h4 className="text-sm font-medium text-gray-900">Add Integrations</h4>
                           </div>
                           <div className="h-2 w-2 bg-gray-300 rounded-full opacity-60"></div>
@@ -6184,7 +6186,7 @@ export default function DashboardPage() {
                   </div>
                                 </div>
                               ) : (
-                                <Bot className="h-5 w-5 text-gray-500" />
+                                <Bot className="h-5 w-5 text-gray-500" strokeWidth={2.75} />
                               )}
                               <h4 className="text-sm font-medium text-gray-900">{agent.name}</h4>
                             </div>
@@ -6197,7 +6199,7 @@ export default function DashboardPage() {
                         asChild
                       >
                             <Link href="/dashboard/agents" className="flex items-center gap-2">
-                              <CheckIcon className="h-4 w-4" />
+                              <CheckIcon className="h-4 w-4" strokeWidth={2.75} />
                               {agent.lastRun ? `Active` : 'Ready'}
                             </Link>
                           </Button>
@@ -6207,7 +6209,7 @@ export default function DashboardPage() {
                       <div className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-2">
-                            <PlusCircle className="h-5 w-5 text-gray-500" />
+                            <PlusCircle className="h-5 w-5 text-gray-500" strokeWidth={2.75} />
                             <h4 className="text-sm font-medium text-gray-900">Add Agents</h4>
             </div>
                           <div className="h-2 w-2 bg-gray-300 rounded-full opacity-60"></div>
@@ -6348,7 +6350,7 @@ export default function DashboardPage() {
             ) : insightError ? (
               <div className="text-center py-8">
                 <div className="bg-red-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
-                  <AlertCircle className="h-6 w-6 text-red-600" />
+                  <AlertCircle className="h-6 w-6 text-red-600" strokeWidth={2.75} />
                 </div>
                 <p className="text-sm font-medium text-red-700">Error generating insights</p>
                 <p className="text-xs text-red-600 mt-1">{insightError}</p>
@@ -6373,7 +6375,7 @@ export default function DashboardPage() {
             ) : (
               <div className="text-center py-8">
                 <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
-                  <BarChartIcon className="h-6 w-6 text-gray-400" />
+                                      <BarChartIcon className="h-6 w-6 text-gray-400" strokeWidth={2.75} />
                 </div>
                 <p className="text-sm font-medium text-gray-700">No insights available</p>
                 <p className="text-xs text-gray-500 mt-1">Generate insights to see recommendations</p>
@@ -6511,17 +6513,17 @@ export default function DashboardPage() {
              <DropdownMenu open={shareDropdownOpen} onOpenChange={setShareDropdownOpen}>
                <DropdownMenuTrigger asChild>
                  <Button variant="outline" size="sm" className="gap-2">
-                   <Share2 className="h-4 w-4" />
+                   <Share2 className="h-4 w-4" strokeWidth={2.75} />
                    Share
                  </Button>
                </DropdownMenuTrigger>
                <DropdownMenuContent align="end" className="w-48">
                  <DropdownMenuItem onClick={handleEmailShare} className="gap-2">
-                   <Mail className="h-4 w-4" />
+                   <Mail className="h-4 w-4" strokeWidth={2.75} />
                    Share via Email
                  </DropdownMenuItem>
                  <DropdownMenuItem onClick={handleDownload} className="gap-2">
-                   <Download className="h-4 w-4" />
+                   <Download className="h-4 w-4" strokeWidth={2.75} />
                    Download Details
                  </DropdownMenuItem>
                </DropdownMenuContent>
@@ -6559,7 +6561,7 @@ export default function DashboardPage() {
                     }
                   })()}
                 </h3>
-                <Info className="h-5 w-5" style={{ color: '#007AFF' }} />
+                                  <Info className="h-5 w-5" strokeWidth={2.75} style={{ color: '#007AFF' }} />
               </div>
             </div>
             
@@ -6640,7 +6642,7 @@ export default function DashboardPage() {
                     onClick={() => setQuickRewardStep('selection')}
                     className="p-1 hover:bg-gray-100 rounded-md transition-colors"
                   >
-                    <ChevronLeft className="h-4 w-4 text-gray-600" />
+                    <ChevronLeft className="h-4 w-4 text-gray-600" strokeWidth={2.75} />
                   </button>
                 )}
                 <div className="flex-1">
@@ -6679,12 +6681,12 @@ export default function DashboardPage() {
                     className="w-full p-3 text-left border border-gray-200 rounded-md hover:bg-gray-50 hover:border-gray-300 transition-all"
                   >
                     <div className="flex items-center gap-3">
-                      <Percent className="h-4 w-4 text-gray-500" />
+                      <Percent className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
                       <div className="flex-1">
                         <h4 className="text-sm font-medium text-gray-900">Percentage Off</h4>
                         <p className="text-xs text-gray-500">Give a percentage discount on their next purchase</p>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-gray-400" />
+                      <ChevronRight className="h-4 w-4 text-gray-400" strokeWidth={2.75} />
                     </div>
                   </button>
                   
@@ -6702,12 +6704,12 @@ export default function DashboardPage() {
                     className="w-full p-3 text-left border border-gray-200 rounded-md hover:bg-gray-50 hover:border-gray-300 transition-all"
                   >
                     <div className="flex items-center gap-3">
-                      <DollarSign className="h-4 w-4 text-gray-500" />
+                      <DollarSign className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
                       <div className="flex-1">
                         <h4 className="text-sm font-medium text-gray-900">Dollar Amount Off</h4>
                         <p className="text-xs text-gray-500">Give a fixed dollar amount off their purchase</p>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-gray-400" />
+                      <ChevronRight className="h-4 w-4 text-gray-400" strokeWidth={2.75} />
                     </div>
                   </button>
                   
@@ -6725,12 +6727,12 @@ export default function DashboardPage() {
                     className="w-full p-3 text-left border border-gray-200 rounded-md hover:bg-gray-50 hover:border-gray-300 transition-all"
                   >
                     <div className="flex items-center gap-3">
-                      <Gift className="h-4 w-4 text-gray-500" />
+                      <Gift className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
                       <div className="flex-1">
                         <h4 className="text-sm font-medium text-gray-900">Free Item</h4>
                         <p className="text-xs text-gray-500">Give them a free product or service</p>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-gray-400" />
+                      <ChevronRight className="h-4 w-4 text-gray-400" strokeWidth={2.75} />
                     </div>
                   </button>
                 </div>
@@ -6841,7 +6843,7 @@ export default function DashboardPage() {
                     >
                       {isCreatingQuickReward ? (
                         <>
-                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2.75} />
                           Creating...
                         </>
                       ) : (
@@ -6860,6 +6862,7 @@ export default function DashboardPage() {
 
       <IntroductoryRewardPopup open={introductoryRewardPopupOpen} onOpenChange={setIntroductoryRewardPopupOpen} />
       <CreateManualProgramDialog open={createManualProgramOpen} onOpenChange={setCreateManualProgramOpen} />
+      <CreateBannerDialog open={createBannerDialogOpen} onOpenChange={setCreateBannerDialogOpen} />
       <CreateRecurringRewardDialog open={createRecurringRewardOpen} onOpenChange={setCreateRecurringRewardOpen} />
 
             {/* Program Type Selector Popup */}
@@ -6890,7 +6893,7 @@ export default function DashboardPage() {
                   className="w-full p-3 text-left border border-gray-200 rounded-md hover:bg-gray-50 hover:border-blue-300 transition-colors"
                 >
                   <div className="flex items-start gap-3">
-                    <Settings className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                    <Settings className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" strokeWidth={2.75} />
                     <div>
                       <h4 className="text-sm font-medium text-gray-900">Custom Program</h4>
                       <p className="text-xs text-gray-500">Create a manual program with custom rewards and conditions</p>
@@ -6906,7 +6909,7 @@ export default function DashboardPage() {
                   className="w-full p-3 text-left border border-gray-200 rounded-md hover:bg-gray-50 hover:border-blue-300 transition-colors"
                 >
                   <div className="flex items-start gap-3">
-                    <Repeat className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                    <Repeat className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" strokeWidth={2.75} />
                     <div>
                       <h4 className="text-sm font-medium text-gray-900">Recurring Program</h4>
                       <p className="text-xs text-gray-500">Set up coffee programs, vouchers, or cashback rewards</p>

@@ -741,17 +741,17 @@ export default function AgentInboxPage() {
     }
   }
   
-  // Get color for priority
-  const getPriorityColor = (priority: string) => {
+  // Get color for priority dot
+  const getPriorityDotColor = (priority: string) => {
     switch (priority) {
       case "high":
-        return "bg-red-50 text-red-700 border-red-200"
+        return "bg-red-500"
       case "medium":
-        return "bg-orange-50 text-orange-700 border-orange-200"
+        return "bg-orange-500"
       case "low":
-        return "bg-blue-50 text-blue-700 border-blue-200"
+        return "bg-blue-500"
       default:
-        return "bg-gray-100 text-gray-800 border-gray-200"
+        return "bg-gray-500"
     }
   }
   
@@ -1083,15 +1083,10 @@ export default function AgentInboxPage() {
                           {action.shortSummary || action.description}
                         </p>
                         <div className="flex items-center gap-1.5 mt-2">
-                          <Badge 
-                            variant="outline" 
-                            className={cn(
-                              "text-[10px] px-1.5 py-0 h-4 rounded-full",
-                              getPriorityColor(action.priority)
-                            )}
-                          >
+                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                            <div className={cn("h-1.5 w-1.5 rounded-full flex-shrink-0", getPriorityDotColor(action.priority))}></div>
                             {action.priority.charAt(0).toUpperCase() + action.priority.slice(1)}
-                          </Badge>
+                          </span>
                           
                           <Badge 
                             variant="outline" 

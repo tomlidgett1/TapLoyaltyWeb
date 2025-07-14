@@ -21,6 +21,7 @@ import { AnnouncementDesignerDialog } from "@/components/announcement-designer-d
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useRouter } from "next/navigation"
 import { HexColorPicker } from "react-colorful"
+import { cn } from "@/lib/utils"
 
 // Banner enumerations
 export const BannerVisibility = {
@@ -476,6 +477,7 @@ export function CreateBannerDialog({
         }
         setActiveTab('design')
         setSaving(false)
+        setCurrentPage('main') // Reset to main page
       }, 300)
     } else if (open && initialBannerData) {
       // When opening with initialBannerData, make sure form is populated
@@ -499,6 +501,9 @@ export function CreateBannerDialog({
   const [loading, setLoading] = useState(false)
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([])
   const [showCustomerPicker, setShowCustomerPicker] = useState(false)
+  
+  // Page navigation state
+  const [currentPage, setCurrentPage] = useState<'main' | 'guide'>('main')
   
   // Options arrays
   const buttonOptions = ['Explore', 'Redeem', 'Learn More', 'View Offer', 'Shop Now']
@@ -550,9 +555,6 @@ export function CreateBannerDialog({
   // Add this new state for filtering templates
   const [templateFilter, setTemplateFilter] = useState<string>("all")
 
-  // First, add a new state to track if the guide is open
-  const [guideOpen, setGuideOpen] = useState(false);
-
   // Add this function to apply a template
   const applyTemplate = (template: typeof bannerTemplates[0]) => {
     setTitle(template.title)
@@ -576,6 +578,15 @@ export function CreateBannerDialog({
 
   // Create banner in Firestore
   const createBanner = async () => {
+    if (!user?.uid) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to create a banner.",
+        variant: "destructive"
+      })
+      return
+    }
+
     setLoading(true)
     try {
       // Get the color name from the hex value
@@ -685,11 +696,6 @@ export function CreateBannerDialog({
     return colorMap[hex] || "blue"
   }
 
-  const handleSave = () => {
-    console.log("CreateBannerDialog - Saving banner with data:", formData);
-    onSave(formData);
-  };
-
   // Update the color picker handler
   const handleColorChange = (newColor: string) => {
     setSelectedColor(newColor);
@@ -698,422 +704,587 @@ export function CreateBannerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out">
         <DialogHeader>
-          <DialogTitle>Create Banner</DialogTitle>
-          <DialogDescription>
-            Design a banner to promote your loyalty program to customers.
+          <DialogTitle>
+            <span className="text-[#007AFF]">Create</span> Banner
+          </DialogTitle>
+          <DialogDescription className="flex items-center justify-between">
+            <span>Design a banner to promote your loyalty program to customers.</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage('guide')}
+              className="flex items-center gap-2"
+            >
+              <HelpCircle className="h-4 w-4" strokeWidth={2.75} />
+              Banner Guide
+            </Button>
           </DialogDescription>
         </DialogHeader>
         
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "create" | "library")}>
-          <div className="flex justify-start mb-4">
-            <TabsList>
-              <TabsTrigger value="create" className="flex items-center gap-2">
-                <PenLine className="h-4 w-4" />
-                <span>Create Custom</span>
-              </TabsTrigger>
-              <TabsTrigger value="library" className="flex items-center gap-2">
-                <Library className="h-4 w-4" />
-                <span>Banner Library</span>
-              </TabsTrigger>
-            </TabsList>
-          </div>
-          
-          <TabsContent value="create">
-            {/* Preview Section */}
-            <div className="mb-6">
-              <h3 className="text-lg font-medium mb-2">Preview</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Dark Preview */}
-                <div className="flex flex-col">
-                  <div 
-                    className={`cursor-pointer transition-all rounded-xl overflow-hidden ${selectedStyle === BannerStyle.DARK ? 'ring-2 ring-primary' : 'opacity-70 hover:opacity-100'}`}
-                    onClick={() => {
-                      setSelectedStyle(BannerStyle.DARK)
-                      setCarouselIndex(stylesArray.indexOf(BannerStyle.DARK))
-                    }}
-                  >
-                    <BannerPreview
-                      title={title}
-                      description={description}
-                      buttonText={buttonText}
-                      color={selectedColor}
-                      styleType={BannerStyle.DARK}
-                      merchantName={merchantName}
-                      visibilityType={visibilityType}
-                      isActive={isActive}
-                    />
-                  </div>
-                  <p className="text-center text-sm mt-2 font-medium">Dark</p>
-                </div>
-                
-                {/* Glass Preview */}
-                <div className="flex flex-col">
-                  <div 
-                    className={`cursor-pointer transition-all rounded-xl overflow-hidden ${selectedStyle === BannerStyle.GLASS ? 'ring-2 ring-primary' : 'opacity-70 hover:opacity-100'}`}
-                    onClick={() => {
-                      setSelectedStyle(BannerStyle.GLASS)
-                      setCarouselIndex(stylesArray.indexOf(BannerStyle.GLASS))
-                    }}
-                  >
-                    <BannerPreview
-                      title={title}
-                      description={description}
-                      buttonText={buttonText}
-                      color={selectedColor}
-                      styleType={BannerStyle.GLASS}
-                      merchantName={merchantName}
-                      visibilityType={visibilityType}
-                      isActive={isActive}
-                    />
-                  </div>
-                  <p className="text-center text-sm mt-2 font-medium">Glass</p>
-                </div>
-              </div>
-            </div>
-            
-            {/* Color Picker - Moved here to be right below the preview */}
-            <div className="mb-6">
-              <div className="space-y-1.5">
-                <Label htmlFor="color">Banner Color</Label>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {colors.map((c) => (
-                    <div
-                      key={c}
-                      className={`h-6 w-6 rounded-full cursor-pointer transition-all ${
-                        selectedColor === c ? 'ring-2 ring-offset-2 ring-blue-500 scale-110' : ''
-                      }`}
-                      style={{ backgroundColor: c }}
-                      onClick={() => {
-                        setSelectedColor(c);
-                        setColor(c); // Make sure both state variables are updated
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-            
-            {/* Form Section */}
+        {/* Page Container with transition */}
+        <div className="relative overflow-hidden">
+          <div 
+            className={`transition-transform duration-300 ease-out ${
+              currentPage === 'main' ? 'translate-x-0' : '-translate-x-full'
+            }`}
+          >
+            {/* Main Banner Creation Content */}
             <div className="space-y-6">
-              {/* Content Section */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Content</h3>
-                
-                <div className="grid gap-2">
-                  <Label htmlFor="title">Title <span className="text-xs text-muted-foreground">({title.length}/23)</span></Label>
-                  <Input
-                    id="title"
-                    value={title}
-                    onChange={(e) => {
-                      // Capitalize the first letter of each word
-                      const inputValue = e.target.value;
-                      if (inputValue.length <= 23) {
-                        // Title case function: capitalize first letter of each word
-                        const titleCased = inputValue.replace(/\b\w/g, char => char.toUpperCase());
-                        setTitle(titleCased);
-                      }
-                    }}
-                    maxLength={23}
-                    placeholder="Enter banner title"
-                  />
-                </div>
-                
-                <div className="grid gap-2">
-                  <Label htmlFor="description">Description <span className="text-xs text-muted-foreground">({description.length}/40)</span></Label>
-                  <Input
-                    id="description"
-                    value={description}
-                    onChange={(e) => {
-                      // Limit to 40 characters
-                      const inputValue = e.target.value;
-                      if (inputValue.length <= 40) {
-                        // Capitalize only the first letter of the first word
-                        if (inputValue.length > 0) {
-                          const firstChar = inputValue.charAt(0).toUpperCase();
-                          const restOfText = inputValue.slice(1);
-                          setDescription(firstChar + restOfText);
-                        } else {
-                          setDescription(inputValue);
-                        }
-                      }
-                    }}
-                    maxLength={40}
-                    placeholder="Enter banner description"
-                  />
-                </div>
-                
-                <div className="grid gap-2">
-                  <Label htmlFor="buttonText">Button Text</Label>
-                  <Select value={buttonText} onValueChange={setButtonText}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select button text" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {buttonOptions.map((option) => (
-                        <SelectItem key={option} value={option}>{option}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              {/* Custom Tab Design */}
+              <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+                <button
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                    activeTab === 'create'
+                      ? "text-gray-800 bg-white shadow-sm"
+                      : "text-gray-600 hover:bg-gray-200/70"
+                  )}
+                  onClick={() => setActiveTab('create')}
+                >
+                  <PenLine size={15} strokeWidth={2.75} />
+                  Create Custom
+                </button>
+                <button
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                    activeTab === 'library'
+                      ? "text-gray-800 bg-white shadow-sm"
+                      : "text-gray-600 hover:bg-gray-200/70"
+                  )}
+                  onClick={() => setActiveTab('library')}
+                >
+                  <Library size={15} strokeWidth={2.75} />
+                  Banner Library
+                </button>
               </div>
               
-              {/* Appearance Section */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Appearance</h3>
-                
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="active">Active</Label>
-                  <Switch
-                    id="active"
-                    checked={isActive}
-                    onCheckedChange={setIsActive}
-                  />
-                </div>
-              </div>
-              
-              {/* Visibility Section */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Visibility</h3>
-                
-                <div className="grid gap-2">
-                  <Label htmlFor="visibility">Who can see this banner?</Label>
-                  <Select value={visibilityType} onValueChange={setVisibilityType}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select visibility" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={BannerVisibility.ALL}>All customers</SelectItem>
-                      <SelectItem value={BannerVisibility.NEW}>New customers</SelectItem>
-                      <SelectItem value={BannerVisibility.SELECTED}>Selected customers</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                {visibilityType === BannerVisibility.SELECTED && (
-                  <div className="pl-4 border-l-2 border-gray-200">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setShowCustomerPicker(true)}
-                      className="mb-2"
-                    >
-                      <Users className="mr-2 h-4 w-4" />
-                      Select Customers
-                    </Button>
-                    
-                    {selectedCustomers.length > 0 && (
-                      <div className="text-sm text-gray-500">
-                        {selectedCustomers.length} customers selected
+              {activeTab === 'create' && (
+                <div className="space-y-6">
+                  {/* Preview Section */}
+                  <div className="mb-6">
+                    <h3 className="text-lg font-medium mb-2">Preview</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Dark Preview */}
+                      <div className="flex flex-col">
+                        <div 
+                          className={`cursor-pointer transition-all rounded-xl overflow-hidden ${selectedStyle === BannerStyle.DARK ? 'ring-2 ring-primary' : 'opacity-70 hover:opacity-100'}`}
+                          onClick={() => {
+                            setSelectedStyle(BannerStyle.DARK)
+                            setCarouselIndex(stylesArray.indexOf(BannerStyle.DARK))
+                          }}
+                        >
+                          <BannerPreview
+                            title={title}
+                            description={description}
+                            buttonText={buttonText}
+                            color={selectedColor}
+                            styleType={BannerStyle.DARK}
+                            merchantName={merchantName}
+                            visibilityType={visibilityType}
+                            isActive={isActive}
+                          />
+                        </div>
+                        <p className="text-center text-sm mt-2 font-medium">Dark</p>
                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              
-              {/* Action Section */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Banner Action</h3>
-                <p className="text-sm text-gray-500">What happens when a customer taps on your banner?</p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div 
-                    className={`relative cursor-pointer rounded-xl border-2 p-4 transition-all ${
-                      bannerAction === BannerAction.STORE_REDIRECT 
-                        ? 'border-[#007AFF] bg-blue-50' 
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                    onClick={() => setBannerAction(BannerAction.STORE_REDIRECT)}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${
-                        bannerAction === BannerAction.STORE_REDIRECT ? 'bg-[#007AFF]' : 'bg-gray-100'
-                      }`}>
-                        <Store className={`h-5 w-5 ${
-                          bannerAction === BannerAction.STORE_REDIRECT ? 'text-white' : 'text-gray-500'
-                        }`} />
-                      </div>
-                      <div>
-                        <h4 className="font-medium">Take to Store Page</h4>
-                        <p className="text-sm text-gray-500">
-                          Redirect customers to your store page when they tap the banner.
-                        </p>
+                      
+                      {/* Glass Preview */}
+                      <div className="flex flex-col">
+                        <div 
+                          className={`cursor-pointer transition-all rounded-xl overflow-hidden ${selectedStyle === BannerStyle.GLASS ? 'ring-2 ring-primary' : 'opacity-70 hover:opacity-100'}`}
+                          onClick={() => {
+                            setSelectedStyle(BannerStyle.GLASS)
+                            setCarouselIndex(stylesArray.indexOf(BannerStyle.GLASS))
+                          }}
+                        >
+                          <BannerPreview
+                            title={title}
+                            description={description}
+                            buttonText={buttonText}
+                            color={selectedColor}
+                            styleType={BannerStyle.GLASS}
+                            merchantName={merchantName}
+                            visibilityType={visibilityType}
+                            isActive={isActive}
+                          />
+                        </div>
+                        <p className="text-center text-sm mt-2 font-medium">Glass</p>
                       </div>
                     </div>
-                    {bannerAction === BannerAction.STORE_REDIRECT && (
-                      <div className="absolute top-3 right-3 h-5 w-5 rounded-full bg-[#007AFF] flex items-center justify-center">
-                        <Check className="h-3 w-3 text-white" />
-                      </div>
-                    )}
                   </div>
                   
-                  <div 
-                    className={`relative cursor-pointer rounded-xl border-2 p-4 transition-all ${
-                      bannerAction === BannerAction.SHOW_ANNOUNCEMENT 
-                        ? 'border-[#007AFF] bg-blue-50' 
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                    onClick={() => setBannerAction(BannerAction.SHOW_ANNOUNCEMENT)}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${
-                        bannerAction === BannerAction.SHOW_ANNOUNCEMENT ? 'bg-[#007AFF]' : 'bg-gray-100'
-                      }`}>
-                        <Sparkles className={`h-5 w-5 ${
-                          bannerAction === BannerAction.SHOW_ANNOUNCEMENT ? 'text-white' : 'text-gray-500'
-                        }`} />
-                      </div>
-                      <div>
-                        <h4 className="font-medium">Show Announcement</h4>
-                        <p className="text-sm text-gray-500">
-                          Display a detailed announcement with more information.
-                        </p>
+                  {/* Color Picker - Moved here to be right below the preview */}
+                  <div className="mb-6">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="color">Banner Color</Label>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {colors.map((c) => (
+                          <div
+                            key={c}
+                            className={`h-6 w-6 rounded-full cursor-pointer transition-all ${
+                              selectedColor === c ? 'ring-2 ring-offset-2 ring-blue-500 scale-110' : ''
+                            }`}
+                            style={{ backgroundColor: c }}
+                            onClick={() => {
+                              setSelectedColor(c);
+                              setColor(c); // Make sure both state variables are updated
+                            }}
+                          />
+                        ))}
                       </div>
                     </div>
-                    {bannerAction === BannerAction.SHOW_ANNOUNCEMENT && (
-                      <div className="absolute top-3 right-3 h-5 w-5 rounded-full bg-[#007AFF] flex items-center justify-center">
-                        <Check className="h-3 w-3 text-white" />
-                      </div>
-                    )}
                   </div>
-                </div>
-                
-                {bannerAction === BannerAction.SHOW_ANNOUNCEMENT && (
-                  <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium">Announcement Details</h4>
-                        <p className="text-sm text-gray-500">
-                          {announcement 
-                            ? "Your announcement is ready" 
-                            : "Create an announcement that will show when customers tap the banner"}
-                        </p>
+                  
+                  {/* Form Section with Custom Scrollbar */}
+                  <div className="max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    <div className="space-y-6">
+                      {/* Content Section */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-medium">Content</h3>
+                        
+                        <div className="grid gap-2">
+                          <Label htmlFor="title">Title <span className="text-xs text-muted-foreground">({title.length}/23)</span></Label>
+                          <Input
+                            id="title"
+                            value={title}
+                            onChange={(e) => {
+                              // Capitalize the first letter of each word
+                              const inputValue = e.target.value;
+                              if (inputValue.length <= 23) {
+                                // Title case function: capitalize first letter of each word
+                                const titleCased = inputValue.replace(/\b\w/g, char => char.toUpperCase());
+                                setTitle(titleCased);
+                              }
+                            }}
+                            maxLength={23}
+                            placeholder="Enter banner title"
+                          />
+                        </div>
+                        
+                        <div className="grid gap-2">
+                          <Label htmlFor="description">Description <span className="text-xs text-muted-foreground">({description.length}/40)</span></Label>
+                          <Input
+                            id="description"
+                            value={description}
+                            onChange={(e) => {
+                              // Limit to 40 characters
+                              const inputValue = e.target.value;
+                              if (inputValue.length <= 40) {
+                                // Capitalize only the first letter of the first word
+                                if (inputValue.length > 0) {
+                                  const firstChar = inputValue.charAt(0).toUpperCase();
+                                  const restOfText = inputValue.slice(1);
+                                  setDescription(firstChar + restOfText);
+                                } else {
+                                  setDescription(inputValue);
+                                }
+                              }
+                            }}
+                            maxLength={40}
+                            placeholder="Enter banner description"
+                          />
+                        </div>
+                        
+                        <div className="grid gap-2">
+                          <Label htmlFor="buttonText">Button Text</Label>
+                          <Select value={buttonText} onValueChange={setButtonText}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select button text" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {buttonOptions.map((option) => (
+                                <SelectItem key={option} value={option}>{option}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        {announcement && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setAnnouncement(null)}
-                            className="flex items-center gap-1 text-red-600 border-red-200 hover:bg-red-50"
-                          >
-                            <X className="h-4 w-4" />
-                            <span>Remove</span>
-                          </Button>
+                      
+                      {/* Appearance Section */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-medium">Appearance</h3>
+                        
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="active">Active</Label>
+                          <Switch
+                            id="active"
+                            checked={isActive}
+                            onCheckedChange={setIsActive}
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Visibility Section */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-medium">Visibility</h3>
+                        
+                        <div className="grid gap-2">
+                          <Label htmlFor="visibility">Who can see this banner?</Label>
+                          <Select value={visibilityType} onValueChange={setVisibilityType}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select visibility" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={BannerVisibility.ALL}>All customers</SelectItem>
+                              <SelectItem value={BannerVisibility.NEW}>New customers</SelectItem>
+                              <SelectItem value={BannerVisibility.SELECTED}>Selected customers</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        {visibilityType === BannerVisibility.SELECTED && (
+                          <div className="pl-4 border-l-2 border-gray-200">
+                            <Button 
+                              variant="outline" 
+                              onClick={() => setShowCustomerPicker(true)}
+                              className="mb-2"
+                            >
+                              <Users className="mr-2 h-4 w-4" strokeWidth={2.75} />
+                              Select Customers
+                            </Button>
+                            
+                            {selectedCustomers.length > 0 && (
+                              <div className="text-sm text-gray-500">
+                                {selectedCustomers.length} customers selected
+                              </div>
+                            )}
+                          </div>
                         )}
+                      </div>
+                      
+                      {/* Action Section */}
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-medium">Banner Action</h3>
+                        <p className="text-sm text-gray-500">What happens when a customer taps on your banner?</p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div 
+                            className={`relative cursor-pointer rounded-xl border-2 p-4 transition-all ${
+                              bannerAction === BannerAction.STORE_REDIRECT 
+                                ? 'border-[#007AFF] bg-blue-50' 
+                                : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                            onClick={() => setBannerAction(BannerAction.STORE_REDIRECT)}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${
+                                bannerAction === BannerAction.STORE_REDIRECT ? 'bg-[#007AFF]' : 'bg-gray-100'
+                              }`}>
+                                <Store className={`h-5 w-5 ${
+                                  bannerAction === BannerAction.STORE_REDIRECT ? 'text-white' : 'text-gray-500'
+                                }`} strokeWidth={2.75} />
+                              </div>
+                              <div>
+                                <h4 className="font-medium">Take to Store Page</h4>
+                                <p className="text-sm text-gray-500">
+                                  Redirect customers to your store page when they tap the banner.
+                                </p>
+                              </div>
+                            </div>
+                            {bannerAction === BannerAction.STORE_REDIRECT && (
+                              <div className="absolute top-3 right-3 h-5 w-5 rounded-full bg-[#007AFF] flex items-center justify-center">
+                                <Check className="h-3 w-3 text-white" strokeWidth={2.75} />
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div 
+                            className={`relative cursor-pointer rounded-xl border-2 p-4 transition-all ${
+                              bannerAction === BannerAction.SHOW_ANNOUNCEMENT 
+                                ? 'border-[#007AFF] bg-blue-50' 
+                                : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                            onClick={() => setBannerAction(BannerAction.SHOW_ANNOUNCEMENT)}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${
+                                bannerAction === BannerAction.SHOW_ANNOUNCEMENT ? 'bg-[#007AFF]' : 'bg-gray-100'
+                              }`}>
+                                <Sparkles className={`h-5 w-5 ${
+                                  bannerAction === BannerAction.SHOW_ANNOUNCEMENT ? 'text-white' : 'text-gray-500'
+                                }`} strokeWidth={2.75} />
+                              </div>
+                              <div>
+                                <h4 className="font-medium">Show Announcement</h4>
+                                <p className="text-sm text-gray-500">
+                                  Display a detailed announcement with more information.
+                                </p>
+                              </div>
+                            </div>
+                            {bannerAction === BannerAction.SHOW_ANNOUNCEMENT && (
+                              <div className="absolute top-3 right-3 h-5 w-5 rounded-full bg-[#007AFF] flex items-center justify-center">
+                                <Check className="h-3 w-3 text-white" strokeWidth={2.75} />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {bannerAction === BannerAction.SHOW_ANNOUNCEMENT && (
+                          <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h4 className="font-medium">Announcement Details</h4>
+                                <p className="text-sm text-gray-500">
+                                  {announcement 
+                                    ? "Your announcement is ready" 
+                                    : "Create an announcement that will show when customers tap the banner"}
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                {announcement && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setAnnouncement(null)}
+                                    className="flex items-center gap-1 text-red-600 border-red-200 hover:bg-red-50"
+                                  >
+                                    <X className="h-4 w-4" strokeWidth={2.75} />
+                                    <span>Remove</span>
+                                  </Button>
+                                )}
+                                <Button
+                                  onClick={() => setShowAnnouncementDesigner(true)}
+                                  variant={announcement ? "outline" : "default"}
+                                  className="flex items-center gap-1"
+                                >
+                                  {announcement ? (
+                                    <>
+                                      <Edit className="h-4 w-4" strokeWidth={2.75} />
+                                      <span>Edit Announcement</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Plus className="h-4 w-4" strokeWidth={2.75} />
+                                      <span>Create Announcement</span>
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            {announcement && (
+                              <div className="mt-3 p-3 bg-white rounded-md border border-gray-100">
+                                <h5 className="font-medium text-sm">{announcement.title}</h5>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {announcement.messages && announcement.messages.length > 0 
+                                    ? announcement.messages[0] 
+                                    : "No message content"}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Submit Button */}
+                      <div className="flex justify-end">
                         <Button
-                          onClick={() => setShowAnnouncementDesigner(true)}
-                          variant={announcement ? "outline" : "default"}
-                          className="flex items-center gap-1"
+                          onClick={createBanner}
+                          disabled={!title || !description || loading}
                         >
-                          {announcement ? (
-                            <>
-                              <Edit className="h-4 w-4" />
-                              <span>Edit Announcement</span>
-                            </>
-                          ) : (
-                            <>
-                              <Plus className="h-4 w-4" />
-                              <span>Create Announcement</span>
-                            </>
-                          )}
+                          Select Banner
                         </Button>
                       </div>
                     </div>
-                    
-                    {announcement && (
-                      <div className="mt-3 p-3 bg-white rounded-md border border-gray-100">
-                        <h5 className="font-medium text-sm">{announcement.title}</h5>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {announcement.messages && announcement.messages.length > 0 
-                            ? announcement.messages[0] 
-                            : "No message content"}
-                        </p>
-                      </div>
-                    )}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
               
-              {/* Submit Button */}
-              <div className="flex justify-end">
-                <Button
-                  onClick={createBanner}
-                  disabled={!title || !description || loading}
-                >
-                  Select Banner
-                </Button>
-              </div>
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="library">
-            <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-medium">Banner Templates</h3>
-                
-                <Select value={templateFilter} onValueChange={setTemplateFilter}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Filter by category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    <SelectItem value="promotional">Promotional</SelectItem>
-                    <SelectItem value="loyalty">Loyalty</SelectItem>
-                    <SelectItem value="seasonal">Seasonal</SelectItem>
-                    <SelectItem value="onboarding">Onboarding</SelectItem>
-                    <SelectItem value="new-customers">New Customers</SelectItem>
-                    <SelectItem value="existing-customers">Existing Customers</SelectItem>
-                    <SelectItem value="cafe">Cafe</SelectItem>
-                    <SelectItem value="retail">Retail</SelectItem>
-                    <SelectItem value="restaurant">Restaurant</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <ScrollArea className="h-[400px] pr-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {bannerTemplates
-                    .filter(template => templateFilter === "all" || template.category === templateFilter)
-                    .map(template => (
-                      <div 
-                        key={template.id} 
-                        className="relative group rounded-lg overflow-hidden cursor-pointer"
-                        onClick={() => applyTemplate(template)}
-                      >
-                        <BannerPreview
-                          title={template.title}
-                          description={template.description}
-                          buttonText={template.buttonText}
-                          color={template.color}
-                          styleType={template.style}
-                          merchantName={merchantName}
-                          visibilityType={BannerVisibility.ALL}
-                          isActive={true}
-                        />
-                        
-                        {/* Lighter overlay that appears on hover */}
-                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                          <Button 
-                            variant="default" 
-                            onClick={(e) => {
-                              e.stopPropagation(); // Prevent double-triggering the parent onClick
-                              console.log("Customizing template:", template.id);
-                              applyTemplate(template);
-                            }}
-                            className="flex items-center gap-1"
+              {activeTab === 'library' && (
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-medium">Banner Templates</h3>
+                    
+                    <Select value={templateFilter} onValueChange={setTemplateFilter}>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Filter by category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Categories</SelectItem>
+                        <SelectItem value="promotional">Promotional</SelectItem>
+                        <SelectItem value="loyalty">Loyalty</SelectItem>
+                        <SelectItem value="seasonal">Seasonal</SelectItem>
+                        <SelectItem value="onboarding">Onboarding</SelectItem>
+                        <SelectItem value="new-customers">New Customers</SelectItem>
+                        <SelectItem value="existing-customers">Existing Customers</SelectItem>
+                        <SelectItem value="cafe">Cafe</SelectItem>
+                        <SelectItem value="retail">Retail</SelectItem>
+                        <SelectItem value="restaurant">Restaurant</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {bannerTemplates
+                        .filter(template => templateFilter === "all" || template.category === templateFilter)
+                        .map(template => (
+                          <div 
+                            key={template.id} 
+                            className="relative group rounded-lg overflow-hidden cursor-pointer"
+                            onClick={() => applyTemplate(template)}
                           >
-                            <Edit className="h-4 w-4" />
-                            <span>Customize</span>
-                          </Button>
+                            <BannerPreview
+                              title={template.title}
+                              description={template.description}
+                              buttonText={template.buttonText}
+                              color={template.color}
+                              styleType={template.style}
+                              merchantName={merchantName}
+                              visibilityType={BannerVisibility.ALL}
+                              isActive={true}
+                            />
+                            
+                            {/* Lighter overlay that appears on hover */}
+                            <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                              <Button 
+                                variant="default" 
+                                onClick={(e) => {
+                                  e.stopPropagation(); // Prevent double-triggering the parent onClick
+                                  console.log("Customizing template:", template.id);
+                                  applyTemplate(template);
+                                }}
+                                className="flex items-center gap-1"
+                              >
+                                <Edit className="h-4 w-4" strokeWidth={2.75} />
+                                <span>Customise</span>
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Guide Page */}
+          <div 
+            className={`absolute top-0 left-0 w-full transition-transform duration-300 ease-out ${
+              currentPage === 'guide' ? 'translate-x-0' : 'translate-x-full'
+            }`}
+          >
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setCurrentPage('main')}
+                    className="flex items-center gap-1"
+                  >
+                    <ChevronLeft className="h-4 w-4" strokeWidth={2.75} />
+                    Back
+                  </Button>
+                  <h2 className="text-xl font-semibold">Banner Guide</h2>
+                </div>
+              </div>
+              
+              <div className="max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="space-y-6">
+                  <div className="space-y-3">
+                    <h3 className="font-medium text-[#007AFF] text-lg">What are Banners?</h3>
+                    <p className="text-gray-600 leading-relaxed">
+                      Banners are promotional elements that appear at the top of your customers' app. 
+                      They're perfect for announcing sales, new products, or important information.
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <h3 className="font-medium text-[#007AFF] text-lg">Creating Effective Banners</h3>
+                    <div className="space-y-4">
+                      <div className="flex gap-3">
+                        <div className="flex-shrink-0 h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium text-sm">1</div>
+                        <div>
+                          <h4 className="font-medium">Keep it concise</h4>
+                          <p className="text-sm text-gray-600">Use short, compelling text that grabs attention immediately.</p>
                         </div>
                       </div>
-                    ))}
+                      <div className="flex gap-3">
+                        <div className="flex-shrink-0 h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium text-sm">2</div>
+                        <div>
+                          <h4 className="font-medium">Clear call-to-action</h4>
+                          <p className="text-sm text-gray-600">Make sure your button text clearly indicates what will happen when clicked.</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-3">
+                        <div className="flex-shrink-0 h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium text-sm">3</div>
+                        <div>
+                          <h4 className="font-medium">Choose the right style</h4>
+                          <p className="text-sm text-gray-600">Match the banner style to your message: Dark for impact, Light for subtlety, Glass for elegance.</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-3">
+                        <div className="flex-shrink-0 h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium text-sm">4</div>
+                        <div>
+                          <h4 className="font-medium">Target appropriately</h4>
+                          <p className="text-sm text-gray-600">Use customer targeting to show relevant banners to specific groups.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <h3 className="font-medium text-[#007AFF] text-lg">Banner Actions</h3>
+                    <div className="space-y-3">
+                      <div className="bg-gray-50 p-4 rounded-md">
+                        <h4 className="font-medium text-sm flex items-center gap-2">
+                          <Store className="h-4 w-4" strokeWidth={2.75} />
+                          Store Redirect
+                        </h4>
+                        <p className="text-xs text-gray-600 mt-1">
+                          Takes customers to your store page when they click the banner. Perfect for general promotions.
+                        </p>
+                      </div>
+                      <div className="bg-gray-50 p-4 rounded-md">
+                        <h4 className="font-medium text-sm flex items-center gap-2">
+                          <Sparkles className="h-4 w-4" strokeWidth={2.75} />
+                          Show Announcement
+                        </h4>
+                        <p className="text-xs text-gray-600 mt-1">
+                          Opens a detailed announcement with more information, perfect for promotions with terms and conditions.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <h3 className="font-medium text-[#007AFF] text-lg">Best Practices</h3>
+                    <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
+                      <ul className="text-sm text-gray-700 space-y-2">
+                        <li className="flex items-start gap-2">
+                          <span className="text-blue-600">•</span>
+                          <span>Test different colours to see what resonates with your customers</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-blue-600">•</span>
+                          <span>Update banners regularly to keep content fresh and engaging</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-blue-600">•</span>
+                          <span>Use seasonal templates for holidays and special occasions</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-blue-600">•</span>
+                          <span>Target new customers with onboarding banners</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <h3 className="font-medium text-[#007AFF] text-lg">Need More Help?</h3>
+                    <p className="text-sm text-gray-600">
+                      Visit our <a href="/help" className="text-blue-600 underline">help centre</a> for more detailed guides and best practices.
+                    </p>
+                  </div>
                 </div>
-              </ScrollArea>
+              </div>
             </div>
-          </TabsContent>
-        </Tabs>
+          </div>
+        </div>
         
         {/* Customer Picker Modal would go here */}
         
@@ -1127,99 +1298,50 @@ export function CreateBannerDialog({
           }}
           initialAnnouncement={announcement}
         />
-        
-        {/* Guide Panel */}
-        <div 
-          className={`fixed top-0 right-0 h-full w-[320px] bg-white shadow-lg z-[100] transition-transform duration-300 transform ${
-            guideOpen ? "translate-x-0" : "translate-x-full"
-          } overflow-y-auto border-l border-gray-200`}
-        >
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold">Banner Guide</h3>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => setGuideOpen(false)}
-                className="h-8 w-8"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <h4 className="font-medium text-[#007AFF]">What are Banners?</h4>
-                <p className="text-sm text-gray-600">
-                  Banners are promotional elements that appear at the top of your customers' app. 
-                  They're perfect for announcing sales, new products, or important information.
-                </p>
-              </div>
-              
-              <div className="space-y-2">
-                <h4 className="font-medium text-[#007AFF]">Creating Effective Banners</h4>
-                <ul className="text-sm text-gray-600 space-y-3">
-                  <li className="flex gap-2">
-                    <div className="flex-shrink-0 h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">1</div>
-                    <div>
-                      <strong>Keep it concise</strong> - Use short, compelling text that grabs attention.
-                    </div>
-                  </li>
-                  <li className="flex gap-2">
-                    <div className="flex-shrink-0 h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">2</div>
-                    <div>
-                      <strong>Clear call-to-action</strong> - Make sure your button text clearly indicates what will happen when clicked.
-                    </div>
-                  </li>
-                  <li className="flex gap-2">
-                    <div className="flex-shrink-0 h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">3</div>
-                    <div>
-                      <strong>Choose the right style</strong> - Match the banner style to your message: Dark for impact, Light for subtlety, Glass for elegance.
-                    </div>
-                  </li>
-                  <li className="flex gap-2">
-                    <div className="flex-shrink-0 h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">4</div>
-                    <div>
-                      <strong>Target appropriately</strong> - Use customer targeting to show relevant banners to specific groups.
-                    </div>
-                  </li>
-                </ul>
-              </div>
-              
-              <div className="space-y-2">
-                <h4 className="font-medium text-[#007AFF]">Banner Actions</h4>
-                <div className="space-y-3">
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <h5 className="font-medium text-sm">Store Redirect</h5>
-                    <p className="text-xs text-gray-600">
-                      Takes customers to your store page when they click the banner.
-                    </p>
-                  </div>
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <h5 className="font-medium text-sm">Show Announcement</h5>
-                    <p className="text-xs text-gray-600">
-                      Opens a detailed announcement with more information, perfect for promotions with terms and conditions.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <h4 className="font-medium text-[#007AFF]">Need More Help?</h4>
-                <p className="text-sm text-gray-600">
-                  Visit our <a href="/help" className="text-blue-600 underline">help center</a> for more detailed guides and best practices.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+
+        {/* Custom Scrollbar Styles */}
+        <style jsx>{`
+          .custom-scrollbar {
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5e1 #f1f5f9;
+          }
+          
+          .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+          }
+          
+          .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 3px;
+          }
+          
+          .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+          }
+          
+          .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+          }
+        `}</style>
       </DialogContent>
     </Dialog>
   )
 }
 
-// Banner Preview Component
-const BannerPreview = ({ 
+// Banner Preview Component with proper TypeScript types
+interface BannerPreviewProps {
+  title: string
+  description: string
+  buttonText: string
+  color: string
+  styleType: string
+  merchantName: string
+  visibilityType: string
+  isActive: boolean
+}
+
+const BannerPreview: React.FC<BannerPreviewProps> = ({ 
   title, 
   description, 
   buttonText, 
@@ -1239,20 +1361,8 @@ const BannerPreview = ({
     Icon = Sparkles
   }
   
-  // Get background color based on style
-  const getBackground = () => {
-    if (styleType === BannerStyle.LIGHT) {
-      return hexToRgba(color, 0.1)
-    } else if (styleType === BannerStyle.DARK) {
-      return `linear-gradient(135deg, ${hexToRgba(color, 0.8)}, ${hexToRgba(darkenColor(color, 20), 0.9)})`
-    } else if (styleType === BannerStyle.GLASS) {
-      return hexToRgba(color, 0.2)
-    }
-    return color
-  }
-  
   // Helper function to darken a color
-  function darkenColor(hex, percent) {
+  function darkenColor(hex: string, percent: number): string {
     // Remove the # if it exists
     hex = hex.replace('#', '')
     
@@ -1271,8 +1381,8 @@ const BannerPreview = ({
   }
   
   // Helper function to convert hex to rgba
-  const hexToRgba = (hex, alpha) => {
-    let c
+  const hexToRgba = (hex: string, alpha: number): string => {
+    let c: any
     if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
       c = hex.substring(1).split('')
       if (c.length === 3) {
@@ -1282,6 +1392,18 @@ const BannerPreview = ({
       return `rgba(${[(parseInt(c) >> 16) & 255, (parseInt(c) >> 8) & 255, parseInt(c) & 255].join(',')},${alpha})`
     }
     return hex
+  }
+  
+  // Get background color based on style
+  const getBackground = () => {
+    if (styleType === BannerStyle.LIGHT) {
+      return hexToRgba(color, 0.1)
+    } else if (styleType === BannerStyle.DARK) {
+      return `linear-gradient(135deg, ${hexToRgba(color, 0.8)}, ${hexToRgba(darkenColor(color, 20), 0.9)})`
+    } else if (styleType === BannerStyle.GLASS) {
+      return hexToRgba(color, 0.2)
+    }
+    return color
   }
   
   // Get text color based on style
@@ -1330,13 +1452,13 @@ const BannerPreview = ({
         </div>
         
         <div className="absolute top-0 right-0 opacity-20">
-          <Icon size={100} color={styleType === BannerStyle.DARK ? 'white' : color} />
+          <Icon size={100} color={styleType === BannerStyle.DARK ? 'white' : color} strokeWidth={2.75} />
         </div>
       </div>
       
       {visibilityType === BannerVisibility.NEW && (
         <div className="absolute bottom-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
-          <UserPlus className="h-3 w-3 mr-1" />
+          <UserPlus className="h-3 w-3 mr-1" strokeWidth={2.75} />
           <span>New Customers</span>
         </div>
       )}

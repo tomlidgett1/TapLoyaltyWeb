@@ -3894,7 +3894,10 @@ export default function DashboardPage() {
                       : 'border-gray-200 hover:border-gray-300'
                   }`}>
                     <div className="flex items-start justify-between mb-3">
-                      <h4 className="text-sm font-medium text-gray-900">Recurring Program</h4>
+                      <div className="flex items-center gap-2">
+                                                    <Repeat className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
+                        <h4 className="text-sm font-medium text-gray-900">Recurring Program</h4>
+                      </div>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setInfoPopupOpen('recurringProgram')}
@@ -3945,7 +3948,10 @@ export default function DashboardPage() {
                   {/* Individual Reward */}
                   <div className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
                     <div className="flex items-start justify-between mb-3">
-                      <h4 className="text-sm font-medium text-gray-900">Individual Reward</h4>
+                      <div className="flex items-center gap-2">
+                                                    <Gift className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
+                        <h4 className="text-sm font-medium text-gray-900">Individual Reward</h4>
+                      </div>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setInfoPopupOpen('individualReward')}
@@ -3969,7 +3975,10 @@ export default function DashboardPage() {
                   {/* Banner */}
                   <div className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
                     <div className="flex items-start justify-between mb-3">
-                      <h4 className="text-sm font-medium text-gray-900">Banner</h4>
+                      <div className="flex items-center gap-2">
+                                                    <Megaphone className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
+                        <h4 className="text-sm font-medium text-gray-900">Banner</h4>
+                      </div>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setInfoPopupOpen('banner')}
@@ -4000,7 +4009,10 @@ export default function DashboardPage() {
                       : 'border-gray-200 hover:border-gray-300'
                   }`}>
                     <div className="flex items-start justify-between mb-3">
-                      <h4 className="text-sm font-medium text-gray-900">Intro Reward</h4>
+                      <div className="flex items-center gap-2">
+                                                    <Sparkles className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
+                        <h4 className="text-sm font-medium text-gray-900">Intro Reward</h4>
+                      </div>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setInfoPopupOpen('introReward')}
@@ -5947,7 +5959,10 @@ export default function DashboardPage() {
                   {/* Integrations */}
                   <div className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
                     <div className="flex items-start justify-between mb-3">
-                      <h3 className="text-sm font-medium text-gray-900">Integrations</h3>
+                      <div className="flex items-center gap-2">
+                                                      <Layers className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
+                        <h3 className="text-sm font-medium text-gray-900">Integrations</h3>
+                      </div>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setInfoPopupOpen('integrations')}
@@ -5971,7 +5986,10 @@ export default function DashboardPage() {
                   {/* Agent Creation */}
                   <div className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
                     <div className="flex items-start justify-between mb-3">
-                      <h3 className="text-sm font-medium text-gray-900">Agent Creation</h3>
+                      <div className="flex items-center gap-2">
+                                                      <Bot className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
+                        <h3 className="text-sm font-medium text-gray-900">Agent Creation</h3>
+                      </div>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setInfoPopupOpen('agentCreation')}

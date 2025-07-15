@@ -43,8 +43,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogOverlay,
-  DialogPortal,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
@@ -817,7 +815,7 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
         return (
           <div className="space-y-6">
             {/* Business Information */}
-            <Card>
+            <Card className="rounded-md">
               <CardHeader>
                 <div className="flex items-center gap-4">
                   <div 
@@ -837,10 +835,10 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
                     )}
                   </div>
                   <div className="flex-1">
-                    <CardTitle className="text-xl">
+                    <CardTitle className="text-base font-medium">
                       {tradingName || legalBusinessName || "Your Business"}
                     </CardTitle>
-                    <CardDescription>{businessEmail}</CardDescription>
+                    <CardDescription className="text-xs text-gray-600">{businessEmail}</CardDescription>
                     <Button 
                       variant="ghost" 
                       size="sm" 
@@ -868,7 +866,7 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="legalBusinessName">Legal Business Name</Label>
+                    <Label htmlFor="legalBusinessName" className="text-sm font-medium">Legal Business Name</Label>
                     <Input
                       id="legalBusinessName"
                       value={legalBusinessName}
@@ -877,7 +875,7 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="tradingName">Trading Name</Label>
+                    <Label htmlFor="tradingName" className="text-sm font-medium">Trading Name</Label>
                     <Input
                       id="tradingName"
                       value={tradingName}
@@ -889,7 +887,7 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="businessEmail">Primary Email</Label>
+                    <Label htmlFor="businessEmail" className="text-sm font-medium">Primary Email</Label>
                     <Input
                       id="businessEmail"
                       type="email"
@@ -897,12 +895,12 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
                       readOnly
                       className="bg-muted"
                     />
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-gray-600">
                       This is your primary account email and cannot be changed
                     </p>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="businessType">Business Type</Label>
+                                        <div className="space-y-2">
+                        <Label htmlFor="businessType" className="text-sm font-medium">Business Type</Label>
                     <select 
                       id="businessType"
                       value={businessType}
@@ -921,12 +919,12 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
             </Card>
 
             {/* ABN & Verification */}
-            <Card>
+            <Card className="rounded-md">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle>ABN & Verification</CardTitle>
-                    <CardDescription>
+                    <CardTitle className="text-base font-medium">ABN & Verification</CardTitle>
+                    <CardDescription className="text-xs text-gray-600">
                       Australian Business Number and verification status
                     </CardDescription>
                   </div>
@@ -959,8 +957,8 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="abn">Australian Business Number (ABN)</Label>
+                                      <div className="space-y-2">
+                        <Label htmlFor="abn" className="text-sm font-medium">Australian Business Number (ABN)</Label>
                   <div className="flex gap-2">
                     <Input 
                       id="abn"
@@ -1425,10 +1423,10 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
             </div>
 
             {/* Refund Account Section */}
-            <Card>
+            <Card className="rounded-md">
               <CardHeader>
-                <CardTitle>Refund Account</CardTitle>
-                <CardDescription>Bank details for Tap Loyalty funded rewards refunds</CardDescription>
+                <CardTitle className="text-base font-medium">Refund Account</CardTitle>
+                <CardDescription className="text-xs text-gray-600">Bank details for Tap Loyalty funded rewards refunds</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="bg-blue-50 border border-blue-100 rounded-md p-4 text-sm text-blue-800">
@@ -1443,7 +1441,7 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="bsbNumber">BSB Number</Label>
+                    <Label htmlFor="bsbNumber" className="text-sm font-medium">BSB Number</Label>
                     <Input
                       id="bsbNumber"
                       value={bsbNumber}
@@ -1454,7 +1452,7 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="accountNumber">Account Number</Label>
+                    <Label htmlFor="accountNumber" className="text-sm font-medium">Account Number</Label>
                     <Input
                       id="accountNumber"
                       value={accountNumber}
@@ -1465,14 +1463,14 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="accountName">Account Name</Label>
+                  <Label htmlFor="accountName" className="text-sm font-medium">Account Name</Label>
                   <Input
                     id="accountName"
                     value={accountName}
                     onChange={(e) => setAccountName(e.target.value)}
                     placeholder="e.g. Business Name Pty Ltd"
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-gray-600">
                     Enter the exact name as it appears on your bank account
                   </p>
                 </div>
@@ -1484,7 +1482,7 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
       case "Memberships":
         return (
           <div className="space-y-6">
-            <div className="text-sm text-muted-foreground space-y-1 pb-4 border-b border-gray-100">
+            <div className="text-xs text-gray-600 space-y-1 pb-4 border-b border-gray-100">
               <p>All customers automatically start at the <strong>Bronze tier</strong> and are upgraded as they meet conditions for higher tiers.</p>
               <p>The Bronze tier serves as the default starting point and cannot be modified.</p>
             </div>
@@ -1496,8 +1494,8 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
             ) : memberships.length === 0 ? (
               <div className="bg-muted/50 border rounded-md shadow-sm p-8 text-center">
                 <Award className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium mb-2">No Membership Tiers</h3>
-                <p className="text-muted-foreground mb-4 max-w-md mx-auto">
+                <h3 className="text-base font-medium mb-2">No Membership Tiers</h3>
+                <p className="text-xs text-gray-600 mb-4 max-w-md mx-auto">
                   Create membership tiers to segment your customers and offer targeted rewards.
                 </p>
               </div>
@@ -1517,9 +1515,9 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">
-                          {membership.isActive ? 'Active' : 'Inactive'}
-                        </span>
+                                          <span className="text-xs text-gray-600">
+                    {membership.isActive ? 'Active' : 'Inactive'}
+                  </span>
                         <Switch 
                           checked={membership.isActive}
                           onCheckedChange={async (checked) => {
@@ -1550,16 +1548,16 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
                       </div>
                     </div>
                     
-                    <p className="text-sm text-muted-foreground mb-3">{membership.description}</p>
+                    <p className="text-xs text-gray-600 mb-3">{membership.description}</p>
                     
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center justify-between text-xs">
                         <span>Customers:</span>
                         <span className="font-medium">{membership.customerCount || 0}</span>
                       </div>
                       
                       <div className="space-y-1">
-                        <span className="text-sm font-medium">Requirements:</span>
+                        <span className="text-xs font-medium">Requirements:</span>
                         {membership.conditions && Object.entries(membership.conditions).map(([type, condition]) => {
                           if (!condition.enabled) return null;
                           
@@ -1584,7 +1582,7 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
                         })}
                         
                         {(!membership.conditions || Object.entries(membership.conditions).filter(([_, c]) => c.enabled).length === 0) && (
-                          <div className="text-xs text-muted-foreground">
+                          <div className="text-xs text-gray-600">
                             No active conditions
                           </div>
                         )}
@@ -1627,11 +1625,8 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
           }
           onOpenChange?.(newOpen)
         }}
-      key={open ? 'settings-open' : 'settings-closed'}
     >
-      <DialogPortal>
-        <DialogOverlay className="animate-in fade-in duration-200" />
-        <DialogContent className="p-0 h-[90vh] max-h-[90vh] md:max-w-[750px] lg:max-w-[950px] flex flex-col animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out">
+      <DialogContent className="p-0 h-[90vh] max-h-[90vh] md:max-w-[750px] lg:max-w-[950px] flex flex-col">
         <DialogTitle className="sr-only">Settings</DialogTitle>
         <DialogDescription className="sr-only">
           Customize your settings here.
@@ -1640,7 +1635,7 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
         <div className="flex flex-1 min-h-0">
           <div className="w-64 border-r bg-gray-50 flex flex-col relative">
             <div className="p-4 flex-1">
-              <h2 className="text-lg font-semibold mb-4">Settings</h2>
+              <h2 className="text-base font-medium mb-4">Settings</h2>
               <nav className="space-y-1">
                 {data.nav.map((item) => (
                   <button
@@ -1818,14 +1813,11 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
           </main>
         </div>
       </DialogContent>
-      </DialogPortal>
     </Dialog>
     
     {/* ABN Verification Dialog - Moved outside main dialog */}
     <Dialog open={showAbnVerificationDialog} onOpenChange={setShowAbnVerificationDialog}>
-      <DialogPortal>
-        <DialogOverlay className="animate-in fade-in duration-200" />
-        <DialogContent className="sm:max-w-md animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out">
+      <DialogContent className="sm:max-w-md">
         <DialogTitle>Change ABN</DialogTitle>
         <DialogDescription>
           Update your Australian Business Number. This requires password verification for security.
@@ -1921,7 +1913,6 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
           </Button>
         </div>
       </DialogContent>
-      </DialogPortal>
     </Dialog>
   </>
   )

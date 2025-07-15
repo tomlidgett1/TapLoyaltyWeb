@@ -206,6 +206,8 @@ export default function AgentsPage() {
   const [showLogsView, setShowLogsView] = useState(false)
   const [agentLogs, setAgentLogs] = useState<any[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
+  const [selectedLog, setSelectedLog] = useState<any>(null)
+  const [isLogDetailOpen, setIsLogDetailOpen] = useState(false)
   
   // Notification settings state
   const [notificationSettings, setNotificationSettings] = useState({
@@ -1721,15 +1723,15 @@ export default function AgentsPage() {
                               <>
                                 {/* Only show status indicator for Customer Service section agents */}
                                 {isEnrolled ? (
-                                  <div className="flex items-center gap-1 py-1 px-2 text-xs font-medium text-green-700 bg-green-50 rounded-md">
-                                    <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-                                    <span>Connected</span>
-                                  </div>
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                    <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                                    Connected
+                                  </span>
                                 ) : (
-                                  <div className="flex items-center gap-1 py-1 px-2 text-xs font-medium text-gray-700 bg-gray-100 rounded-md">
-                                    <div className="h-2 w-2 bg-gray-400 rounded-full"></div>
-                                    <span>Not Connected</span>
-                                  </div>
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                    <div className="h-1.5 w-1.5 bg-gray-400 rounded-full flex-shrink-0"></div>
+                                    Not Connected
+                                  </span>
                                 )}
                               </>
                             )
@@ -1878,9 +1880,6 @@ export default function AgentsPage() {
                 <div 
                   className="border border-gray-200 rounded-md bg-white overflow-hidden agent-logs-table"
                   onClick={(event) => {
-                    // Only proceed if handleLogClick function exists and user is logged in
-                    if (!(window as any).handleLogClick || !user?.uid) return;
-                    
                     // Find the closest table row element to get the row index
                     const rowElement = (event.target as HTMLElement).closest('tr');
                     if (!rowElement) return;
@@ -1890,8 +1889,9 @@ export default function AgentsPage() {
                     const rowIndex = allRows.indexOf(rowElement);
                     if (rowIndex === -1 || rowIndex >= agentLogs.length) return;
                     
-                    // Call the handleLogClick function with the log ID
-                    (window as any).handleLogClick(agentLogs[rowIndex].id, user.uid);
+                    // Open our popup with the selected log
+                    setSelectedLog(agentLogs[rowIndex]);
+                    setIsLogDetailOpen(true);
                   }}
                 >
                     <div className="overflow-x-auto">
@@ -1954,15 +1954,15 @@ export default function AgentsPage() {
                           
                           {/* Status indicator */}
                           {agent.status === 'active' ? (
-                            <div className="flex items-center gap-1">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <span className="text-xs text-green-600 font-medium">Active</span>
-                            </div>
+                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                              <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                              Active
+                            </span>
                           ) : (
-                            <div className="flex items-center gap-1">
-                              <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                              <span className="text-xs text-gray-600 font-medium">Inactive</span>
-                            </div>
+                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                              <div className="h-1.5 w-1.5 bg-gray-400 rounded-full flex-shrink-0"></div>
+                              Inactive
+                            </span>
                           )}
                         </div>
                       </div>
@@ -2151,10 +2151,10 @@ export default function AgentsPage() {
                   <div className="flex items-center gap-3">
                     <DialogTitle className="text-xl font-semibold">Customer Service Agent</DialogTitle>
                     {enrolledAgents['customer-service']?.status === 'active' && (
-                      <div className="flex items-center gap-1">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <span className="text-xs text-green-600 font-medium">Connected</span>
-                      </div>
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                        <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                        Connected
+                      </span>
                     )}
                   </div>
                   <div className="flex items-center gap-3">
@@ -3070,10 +3070,10 @@ export default function AgentsPage() {
                   <div className="flex items-center gap-3">
                     <DialogTitle className="text-xl font-semibold">Email Summary Agent</DialogTitle>
                     {enrolledAgents['email-summary']?.status === 'active' && (
-                      <div className="flex items-center gap-1">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <span className="text-xs text-green-600 font-medium">Connected</span>
-                      </div>
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                        <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                        Connected
+                      </span>
                     )}
                   </div>
                   <div className="flex items-center gap-3">
@@ -3532,10 +3532,10 @@ export default function AgentsPage() {
                   <div className="flex items-center gap-3">
                     <DialogTitle className="text-xl font-semibold">Email Executive Assistant</DialogTitle>
                     {enrolledAgents['email-executive']?.status === 'active' && (
-                      <div className="flex items-center gap-1">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <span className="text-xs text-green-600 font-medium">Connected</span>
-                      </div>
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                        <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                        Connected
+                      </span>
                     )}
                   </div>
                   <div className="flex items-center gap-3">
@@ -5514,6 +5514,161 @@ Describe the main purpose and goal of your agent...
                     Clear & Close
                   </Button>
                 </div>
+              </div>
+            </DialogPrimitive.Content>
+          </DialogPortal>
+        </Dialog>
+      )}
+
+      {/* Agent Log Detail Dialog */}
+      {selectedLog && (
+        <Dialog open={isLogDetailOpen} onOpenChange={setIsLogDetailOpen}>
+          <DialogPortal>
+            <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+            <DialogPrimitive.Content className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-2xl translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-md overflow-hidden p-6 max-h-[80vh]">
+              <DialogPrimitive.Title className="sr-only">Agent Log Details</DialogPrimitive.Title>
+              <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground z-10">
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </DialogPrimitive.Close>
+              
+              <div className="overflow-y-auto max-h-[calc(80vh-3rem)] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-300">
+                {/* Header */}
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="relative">
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={getAgentAvatar(selectedLog.agentname)} />
+                      <AvatarFallback className="text-sm">
+                        {selectedLog.agentname?.slice(0, 2) || 'AG'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div
+                      className="absolute -right-1 -bottom-1 h-3 w-3 rounded-full ring-2 ring-white"
+                      style={{
+                        backgroundColor: getStatusColor(selectedLog.status),
+                      }}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <h2 className="text-lg font-semibold">{selectedLog.agentname || 'Unknown Agent'}</h2>
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <span>Executed {selectedLog.executedAt ? new Intl.DateTimeFormat('en-AU', {
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
+                      }).format(selectedLog.executedAt.toDate ? selectedLog.executedAt.toDate() : new Date(selectedLog.executedAt)) : 'Unknown time'}</span>
+                      {selectedLog.scheduleId && (
+                        <>
+                          <span>•</span>
+                          <span className="font-mono text-xs">{selectedLog.scheduleId}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status and Metrics */}
+                                 <div className="grid grid-cols-2 gap-4 mb-6">
+                   <div className="bg-gray-50 rounded-md p-4">
+                     <div className="flex items-center gap-2 mb-2">
+                       <div
+                         className="h-2 w-2 rounded-full"
+                         style={{ backgroundColor: getStatusColor(selectedLog.status) }}
+                       />
+                       <span className="text-sm font-medium capitalize">{selectedLog.status || 'Unknown'}</span>
+                     </div>
+                     <div className="text-xs text-gray-600">
+                       {selectedLog.status === 'success' ? 'Completed successfully' : 
+                        selectedLog.status === 'failed' ? 'Execution failed' :
+                        selectedLog.status === 'running' ? 'Currently running' : 
+                        'Status unknown'}
+                     </div>
+                   </div>
+                   
+                   <div className="bg-gray-50 rounded-md p-4">
+                     <div className="text-sm font-medium mb-1">Tools Executed</div>
+                     <div className="text-xs text-gray-600">
+                       {selectedLog.toolsExecuted || 0} total • {selectedLog.successfulTools || 0} successful
+                     </div>
+                   </div>
+                 </div>
+
+                {/* Execution Details */}
+                {selectedLog.details && (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-medium mb-3">Execution Details</h3>
+                                         <div className="bg-gray-50 rounded-md p-4">
+                       {selectedLog.details.message && (
+                         <div className="mb-3">
+                           <div className="text-xs font-medium text-gray-700 mb-1">Message</div>
+                           <div className="text-sm text-gray-600">{selectedLog.details.message}</div>
+                         </div>
+                       )}
+                       
+                       {selectedLog.details.duration && (
+                         <div className="mb-3">
+                           <div className="text-xs font-medium text-gray-700 mb-1">Duration</div>
+                           <div className="text-sm text-gray-600">{selectedLog.details.duration}s</div>
+                         </div>
+                       )}
+                       
+                       {selectedLog.details.connectedApps && selectedLog.details.connectedApps.length > 0 && (
+                         <div className="mb-3">
+                           <div className="text-xs font-medium text-gray-700 mb-1">Connected Apps</div>
+                           <div className="flex flex-wrap gap-1">
+                             {selectedLog.details.connectedApps.map((app: string, index: number) => (
+                               <span key={index} className="text-xs bg-white px-2 py-1 rounded-md border">
+                                 {app}
+                               </span>
+                             ))}
+                           </div>
+                         </div>
+                       )}
+                     </div>
+                  </div>
+                )}
+
+                {/* Tools Execution Details */}
+                {selectedLog.toolsExecuted && selectedLog.toolsExecuted > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-medium mb-3">Tools Execution</h3>
+                                         <div className="bg-gray-50 rounded-md p-4">
+                       <div className="grid grid-cols-2 gap-4 text-sm">
+                         <div>
+                           <span className="text-gray-600">Total Tools:</span>
+                           <span className="ml-2 font-medium">{selectedLog.toolsExecuted}</span>
+                         </div>
+                         <div>
+                           <span className="text-gray-600">Successful:</span>
+                           <span className="ml-2 font-medium text-green-600">{selectedLog.successfulTools || 0}</span>
+                         </div>
+                         <div>
+                           <span className="text-gray-600">Failed:</span>
+                           <span className="ml-2 font-medium text-red-600">{(selectedLog.toolsExecuted || 0) - (selectedLog.successfulTools || 0)}</span>
+                         </div>
+                         <div>
+                           <span className="text-gray-600">Success Rate:</span>
+                           <span className="ml-2 font-medium">
+                             {selectedLog.toolsExecuted > 0 
+                               ? Math.round(((selectedLog.successfulTools || 0) / selectedLog.toolsExecuted) * 100) 
+                               : 0}%
+                           </span>
+                         </div>
+                       </div>
+                     </div>
+                  </div>
+                )}
+
+                {/* Raw Log Data */}
+                {selectedLog && (
+                  <div>
+                    <h3 className="text-sm font-medium mb-3">Raw Log Data</h3>
+                                         <div className="bg-gray-50 rounded-md p-4">
+                       <pre className="text-xs text-gray-700 whitespace-pre-wrap overflow-auto max-h-48 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-300">
+                         {JSON.stringify(selectedLog, null, 2)}
+                       </pre>
+                     </div>
+                  </div>
+                )}
               </div>
             </DialogPrimitive.Content>
           </DialogPortal>

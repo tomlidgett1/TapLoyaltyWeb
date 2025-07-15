@@ -46,6 +46,7 @@ import {
   Bot,
   FileText,
   TrendingUp,
+  TrendingDown,
   Receipt,
   Headphones,
   Brain,
@@ -161,6 +162,35 @@ const customAnimationStyles = `
     }
   }
   
+  @keyframes loading-to-75 {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(0.75);
+    }
+  }
+  
+  @keyframes loading-pulse {
+    0%, 100% {
+      opacity: 0.7;
+    }
+    50% {
+      opacity: 0.9;
+    }
+  }
+  
+  @keyframes loading-complete {
+    0% {
+      transform: scaleX(0.75);
+      opacity: 0.8;
+    }
+    100% {
+      transform: scaleX(1);
+      opacity: 0.9;
+    }
+  }
+  
   .animate-slideInUp {
     animation: slideInUp 0.3s ease-out forwards;
   }
@@ -232,7 +262,9 @@ export default function DashboardPage() {
 
 
   const [metricsLoading, setMetricsLoading] = useState(false)
+  const [metricsCompleting, setMetricsCompleting] = useState(false)
   const [activityLoading, setActivityLoading] = useState(false)
+  const [activityCompleting, setActivityCompleting] = useState(false)
   const [rewardsLoading, setRewardsLoading] = useState(false)
   const [recentActivity, setRecentActivity] = useState<any[]>([])
   const [popularRewards, setPopularRewards] = useState<any[]>([])
@@ -317,7 +349,32 @@ export default function DashboardPage() {
     totalStoreViews: 0,
     totalRewardViews: 0,
     customersWithRedeemableRewards: 0,
-    customersWithoutRedeemableRewards: 0
+    customersWithoutRedeemableRewards: 0,
+    activePrograms: 0,
+    activeProgramsBreakdown: {
+      coffee: 0,
+      voucher: 0,
+      transaction: 0,
+      cashback: 0,
+      custom: 0
+    },
+    visitFrequency: 0,
+    tapCashIssued: 0,
+    tapCashUsed: 0,
+    newCustomers: 0,
+    totalSpend: 0,
+    // Trend data for comparison
+    trends: {
+      activeCustomers: { current: 0, previous: 0, change: 0, changePercent: 0 },
+      totalTransactions: { current: 0, previous: 0, change: 0, changePercent: 0 },
+      totalRedemptions: { current: 0, previous: 0, change: 0, changePercent: 0 },
+      totalSpend: { current: 0, previous: 0, change: 0, changePercent: 0 },
+      totalPointsIssued: { current: 0, previous: 0, change: 0, changePercent: 0 },
+      totalStoreViews: { current: 0, previous: 0, change: 0, changePercent: 0 },
+      tapCashIssued: { current: 0, previous: 0, change: 0, changePercent: 0 },
+      tapCashUsed: { current: 0, previous: 0, change: 0, changePercent: 0 },
+      newCustomers: { current: 0, previous: 0, change: 0, changePercent: 0 }
+    }
   })
   const [histogramData, setHistogramData] = useState<any[]>([])
   const [chartTimeframe, setChartTimeframe] = useState<"7days" | "30days" | "90days">("30days")
@@ -465,112 +522,156 @@ export default function DashboardPage() {
     };
   }, [setShowIntegrations]);
   
+  // Helper function to generate trend text and icon
+  const getTrendDisplay = (trend: { change: number; changePercent: number }, metricType: 'count' | 'currency' | 'percentage' = 'count') => {
+    const isPositive = trend.change > 0
+    const isNegative = trend.change < 0
+    
+    const periodText = {
+      today: 'vs yesterday',
+      yesterday: 'vs day before',
+      thisweek: 'vs last week', 
+      thismonth: 'vs last month'
+    }[timeframe] || 'vs previous period'
+    
+    let changeText = ''
+    if (metricType === 'currency') {
+      changeText = `$${Math.abs(trend.change).toLocaleString()}`
+    } else if (metricType === 'percentage') {
+      changeText = `${Math.abs(trend.changePercent).toFixed(1)}%`
+    } else {
+      changeText = `${Math.abs(trend.change)}`
+    }
+    
+    return {
+      text: trend.change === 0 ? `No change ${periodText}` : `${changeText} ${periodText}`,
+      icon: isPositive ? TrendingUp : isNegative ? TrendingDown : ArrowRight,
+      color: isPositive ? 'text-green-600' : isNegative ? 'text-red-600' : 'text-gray-600'
+    }
+  }
+  
   // Metric definitions
   const metricsConfig = {
-    totalCustomers: {
-      title: "Total Customers",
-      icon: Users,
-      value: "1,234",
-      trend: "+12% this month",
-      color: "blue"
-    },
     activePrograms: {
       title: "Active Programs", 
       icon: Zap,
-      value: "8",
-      trend: "2 Coffee, 3 Voucher, 3 Transaction",
+      value: metrics.activePrograms.toString(),
+      trend: (() => {
+        const parts = []
+        const tapPrograms = metrics.activeProgramsBreakdown.coffee + 
+                          metrics.activeProgramsBreakdown.voucher + 
+                          metrics.activeProgramsBreakdown.transaction + 
+                          metrics.activeProgramsBreakdown.cashback
+        const customPrograms = metrics.activeProgramsBreakdown.custom
+        
+        if (tapPrograms > 0) parts.push(`${tapPrograms} Tap Program${tapPrograms > 1 ? 's' : ''}`)
+        if (customPrograms > 0) parts.push(`${customPrograms} Custom`)
+        
+        return parts.length > 0 ? parts.join(', ') : 'No active programs'
+      })(),
       color: "green"
+    },
+    pointsIssued: {
+      title: "Points Issued",
+      icon: Star,
+      value: metrics.totalPointsIssued.toLocaleString(),
+      trend: getTrendDisplay(metrics.trends.totalPointsIssued).text,
+      trendIcon: getTrendDisplay(metrics.trends.totalPointsIssued).icon,
+      trendColor: getTrendDisplay(metrics.trends.totalPointsIssued).color,
+      color: "yellow"
     },
     totalRewards: {
       title: "Total Rewards",
       icon: Gift,
-      value: "56", 
+      value: metrics.activeRewards.toString(), 
       trend: "+4 added this week",
       color: "purple"
     },
-    revenueImpact: {
-      title: "Revenue Impact",
-      icon: DollarSign,
-      value: "$12,450",
-      trend: "+18% this month", 
-      color: "green"
-    },
-    redemptionRate: {
-      title: "Redemption Rate",
-      icon: Percent,
-      value: "67.8%",
-      trend: "+2.4% vs last month",
+    customersWithoutRewards: {
+      title: "Customers Without Rewards",
+      icon: Users,
+      value: "234",
+      trend: "-12 this week",
       color: "orange"
     },
-    pointsEarned: {
-      title: "Points Earned",
-      icon: Star,
-      value: "89,240",
-      trend: "+15% this month",
-      color: "yellow"
-    },
-    avgOrderValue: {
-      title: "Avg Order Value",
-      icon: ShoppingCart,
-      value: "$28.50", 
-      trend: "+$3.20 vs last month",
-      color: "indigo"
-    },
-    customerRetention: {
-      title: "Customer Retention",
-      icon: TrendingUp,
-      value: "84.2%",
-      trend: "+3.1% this quarter",
-      color: "red"
-    },
-    growthRate: {
-      title: "Growth Rate", 
-      icon: LineChart,
-      value: "23.5%",
-      trend: "+5.2% vs last month",
+    activeCustomers: {
+      title: "Active Customers",
+      icon: Users,
+      value: metrics.activeCustomers.toString(),
+      trend: getTrendDisplay(metrics.trends.activeCustomers).text,
+      trendIcon: getTrendDisplay(metrics.trends.activeCustomers).icon,
+      trendColor: getTrendDisplay(metrics.trends.activeCustomers).color,
       color: "blue"
     },
-    avgVisitDuration: {
-      title: "Avg Visit Duration",
-      icon: Clock,
-      value: "4m 32s",
-      trend: "+45s this week",
+    newCustomers: {
+      title: "New Customers",
+      icon: TrendingUp,
+      value: metrics.newCustomers.toString(),
+      trend: getTrendDisplay(metrics.trends.newCustomers).text,
+      trendIcon: getTrendDisplay(metrics.trends.newCustomers).icon,
+      trendColor: getTrendDisplay(metrics.trends.newCustomers).color,
+      color: "green"
+    },
+    totalSpend: {
+      title: "Total Spend",
+      icon: DollarSign,
+      value: `$${metrics.totalSpend.toLocaleString()}`,
+      trend: getTrendDisplay(metrics.trends.totalSpend, 'currency').text,
+      trendIcon: getTrendDisplay(metrics.trends.totalSpend, 'currency').icon,
+      trendColor: getTrendDisplay(metrics.trends.totalSpend, 'currency').color,
       color: "green"
     },
     visitFrequency: {
       title: "Visit Frequency",
       icon: Calendar,
-      value: "2.8x",
+      value: metrics.visitFrequency.toFixed(1) + "x",
       trend: "per month average",
       color: "purple"
     },
     transactionVolume: {
       title: "Transaction Volume",
       icon: Receipt,
-      value: "1,847",
-      trend: "+156 this week",
+      value: metrics.totalTransactions.toString(),
+      trend: getTrendDisplay(metrics.trends.totalTransactions).text,
+      trendIcon: getTrendDisplay(metrics.trends.totalTransactions).icon,
+      trendColor: getTrendDisplay(metrics.trends.totalTransactions).color,
       color: "orange"
     },
-    customerSatisfaction: {
-      title: "Customer Satisfaction",
-      icon: Heart,
-      value: "4.7/5",
-      trend: "+0.2 this month",
-      color: "pink"
-    },
-    conversionRate: {
-      title: "Conversion Rate",
-      icon: ArrowUp,
-      value: "3.4%",
-      trend: "+0.8% this week",
+    totalRedemptions: {
+      title: "Total Redemptions",
+      icon: ArrowDown,
+      value: metrics.totalRedemptions.toString(),
+      trend: getTrendDisplay(metrics.trends.totalRedemptions).text,
+      trendIcon: getTrendDisplay(metrics.trends.totalRedemptions).icon,
+      trendColor: getTrendDisplay(metrics.trends.totalRedemptions).color,
       color: "indigo"
     },
-    engagementScore: {
-      title: "Engagement Score",
-      icon: Sparkles,
-      value: "78.3",
-      trend: "+6.1 points",
-      color: "yellow"
+    storeViews: {
+      title: "Store Views",
+      icon: Eye,
+      value: metrics.totalStoreViews.toString(),
+      trend: getTrendDisplay(metrics.trends.totalStoreViews).text,
+      trendIcon: getTrendDisplay(metrics.trends.totalStoreViews).icon,
+      trendColor: getTrendDisplay(metrics.trends.totalStoreViews).color,
+      color: "blue"
+    },
+    tapCashUsed: {
+      title: "TapCash Used",
+      icon: DollarSign,
+      value: "$" + metrics.tapCashUsed.toLocaleString(),
+      trend: getTrendDisplay(metrics.trends.tapCashUsed, 'currency').text,
+      trendIcon: getTrendDisplay(metrics.trends.tapCashUsed, 'currency').icon,
+      trendColor: getTrendDisplay(metrics.trends.tapCashUsed, 'currency').color,
+      color: "green"
+    },
+    tapCashIssued: {
+      title: "TapCash Issued",
+      icon: Star,
+      value: "$" + metrics.tapCashIssued.toLocaleString(),
+      trend: getTrendDisplay(metrics.trends.tapCashIssued, 'currency').text,
+      trendIcon: getTrendDisplay(metrics.trends.tapCashIssued, 'currency').icon,
+      trendColor: getTrendDisplay(metrics.trends.tapCashIssued, 'currency').color,
+      color: "orange"
     }
   }
 
@@ -588,6 +689,13 @@ export default function DashboardPage() {
     return colorMap[color as keyof typeof colorMap] || "bg-gray-500"
   }
 
+  // Convert trend text colors to background colors for dots
+  const getTrendDotColor = (trendColor: string) => {
+    if (trendColor?.includes('green')) return 'bg-green-500'
+    if (trendColor?.includes('red')) return 'bg-red-500'
+    return 'bg-gray-500'
+  }
+
   const renderMetricBox = (metricId: string) => {
     const metric = metricsConfig[metricId as keyof typeof metricsConfig]
     if (!metric) return null
@@ -602,13 +710,24 @@ export default function DashboardPage() {
           isRemoving ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'
         }`}
       >
+        {/* Loading bar at top */}
+        {(metricsLoading || metricsCompleting) && (
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gray-100 rounded-t-lg overflow-hidden">
+            <div className={`h-full bg-[#007AFF] rounded-t-lg origin-left ${
+              metricsCompleting 
+                ? 'animate-[loading-complete_0.5s_ease-out_forwards]' 
+                : 'animate-[loading-to-75_0.8s_ease-out_forwards,loading-pulse_2s_ease-in-out_infinite]'
+            }`}></div>
+          </div>
+        )}
+        
         <div className="flex items-start justify-between mb-2">
           <div className="flex items-center gap-2">
             <IconComponent className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
             <h4 className="text-sm font-medium text-gray-900">{metric.title}</h4>
           </div>
           <div className="flex items-center gap-2">
-            <div className={`h-2 w-2 ${getColorClasses(metric.color)} rounded-full`}></div>
+            <div className={`h-2 w-2 ${getTrendDotColor((metric as any).trendColor)} rounded-full`}></div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -627,11 +746,17 @@ export default function DashboardPage() {
           </div>
         </div>
         
-        {metricId === 'avgOrderValue' ? (
+        {metricId === 'totalSpend' ? (
           <div className="flex items-end justify-between">
             <div className="flex-1">
               <div className="text-lg font-semibold text-gray-900 mb-1">{metric.value}</div>
-              <p className="text-xs text-gray-500">{metric.trend}</p>
+              <div className="flex items-center gap-1">
+                {(metric as any).trendIcon && React.createElement((metric as any).trendIcon, {
+                  className: `h-3 w-3 ${(metric as any).trendColor}`,
+                  strokeWidth: 2.75
+                })}
+                <p className={`text-xs ${(metric as any).trendColor || 'text-gray-500'}`}>{metric.trend}</p>
+              </div>
             </div>
             <div className="flex-shrink-0 ml-3">
               {/* Mini Line Graph */}
@@ -695,7 +820,13 @@ export default function DashboardPage() {
         ) : (
           <>
             <div className="text-lg font-semibold text-gray-900 mb-1">{metric.value}</div>
-            <p className="text-xs text-gray-500">{metric.trend}</p>
+            <div className="flex items-center gap-1">
+              {(metric as any).trendIcon && React.createElement((metric as any).trendIcon, {
+                className: `h-3 w-3 ${(metric as any).trendColor}`,
+                strokeWidth: 2.75
+              })}
+              <p className={`text-xs ${(metric as any).trendColor || 'text-gray-500'}`}>{metric.trend}</p>
+            </div>
           </>
         )}
       </div>
@@ -759,8 +890,8 @@ export default function DashboardPage() {
   
   // Metrics state management
   const [enabledMetrics, setEnabledMetrics] = useState<string[]>([
-    'totalCustomers', 'activePrograms', 'totalRewards', 'revenueImpact',
-    'redemptionRate', 'pointsEarned', 'avgOrderValue'
+    'activePrograms', 'pointsIssued', 'totalRewards', 'activeCustomers',
+    'newCustomers', 'totalSpend', 'tapCashUsed', 'tapCashIssued'
   ])
   const [removingMetrics, setRemovingMetrics] = useState<string[]>([])
 
@@ -1160,6 +1291,65 @@ export default function DashboardPage() {
     }
   }
 
+  const getPreviousDateRange = (tf: TimeframeType): { start: Date; end: Date } => {
+    const now = new Date()
+    
+    switch (tf) {
+      case "today":
+        const yesterdayStart = new Date(now)
+        yesterdayStart.setDate(yesterdayStart.getDate() - 1)
+        yesterdayStart.setHours(0, 0, 0, 0)
+        
+        const yesterdayEnd = new Date(yesterdayStart)
+        yesterdayEnd.setHours(23, 59, 59, 999)
+        
+        return { start: yesterdayStart, end: yesterdayEnd }
+        
+      case "yesterday":
+        const twoDaysAgoStart = new Date(now)
+        twoDaysAgoStart.setDate(twoDaysAgoStart.getDate() - 2)
+        twoDaysAgoStart.setHours(0, 0, 0, 0)
+        
+        const twoDaysAgoEnd = new Date(twoDaysAgoStart)
+        twoDaysAgoEnd.setHours(23, 59, 59, 999)
+        
+        return { start: twoDaysAgoStart, end: twoDaysAgoEnd }
+        
+      case "thisweek":
+        const lastWeekStart = new Date(now)
+        const dayOfWeek = lastWeekStart.getDay()
+        const diff = lastWeekStart.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1) - 7
+        lastWeekStart.setDate(diff)
+        lastWeekStart.setHours(0, 0, 0, 0)
+        
+        const lastWeekEnd = new Date(lastWeekStart)
+        lastWeekEnd.setDate(lastWeekEnd.getDate() + 6)
+        lastWeekEnd.setHours(23, 59, 59, 999)
+        
+        return { start: lastWeekStart, end: lastWeekEnd }
+        
+      case "thismonth":
+        const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0)
+        lastMonthEnd.setHours(23, 59, 59, 999)
+        
+        const lastMonthStart = new Date(lastMonthEnd.getFullYear(), lastMonthEnd.getMonth(), 1)
+        lastMonthStart.setHours(0, 0, 0, 0)
+        
+        return { start: lastMonthStart, end: lastMonthEnd }
+        
+      default:
+        // Default to yesterday for today comparison
+        const defaultYesterdayStart = new Date(now)
+        defaultYesterdayStart.setDate(defaultYesterdayStart.getDate() - 1)
+        defaultYesterdayStart.setHours(0, 0, 0, 0)
+        
+        const defaultYesterdayEnd = new Date(defaultYesterdayStart)
+        defaultYesterdayEnd.setHours(23, 59, 59, 999)
+        
+        return { start: defaultYesterdayStart, end: defaultYesterdayEnd }
+    }
+  }
+
   useEffect(() => {
     const fetchRecentActivity = async () => {
       if (!user?.uid) return
@@ -1313,7 +1503,13 @@ export default function DashboardPage() {
           variant: "destructive"
         })
       } finally {
-        setActivityLoading(false)
+        // Start completion animation
+        setActivityCompleting(true)
+        // Hide loading bar after completion animation
+        setTimeout(() => {
+          setActivityLoading(false)
+          setActivityCompleting(false)
+        }, 500) // 500ms for completion animation
         setInitialLoading(false)
       }
     }
@@ -1459,25 +1655,30 @@ export default function DashboardPage() {
       try {
         setMetricsLoading(true)
         const { start, end } = getDateRange(timeframe)
+        const { start: prevStart, end: prevEnd } = getPreviousDateRange(timeframe)
         
-        // Fetch total customers
-        const customersRef = collection(db, 'customers')
-        const customersQuery = query(
-          customersRef,
-          where('merchantId', '==', user.uid)
-        )
+        // Fetch total customers from merchants/merchantId/customers
+        const customersRef = collection(db, 'merchants', user.uid, 'customers')
+        const customersQuery = query(customersRef)
         const customersSnapshot = await getDocs(customersQuery)
         const totalCustomers = customersSnapshot.docs.length
         
-        // Calculate active customers (had a transaction in the last 30 days)
-        const thirtyDaysAgo = new Date()
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+        // Calculate new customers based on firstTransactionDate within selected timeframe
+        const newCustomersCount = customersSnapshot.docs.filter(doc => {
+          const data = doc.data()
+          if (data.firstTransactionDate) {
+            const firstTransactionDate = data.firstTransactionDate.toDate()
+            return firstTransactionDate >= start && firstTransactionDate <= end
+          }
+          return false
+        }).length
         
-        // Get all transactions in the last 30 days
+        // Calculate active customers (had a transaction in the selected timeframe)
         const transactionsRef = collection(db, 'merchants', user.uid, 'transactions')
         const recentTransactionsQuery = query(
           transactionsRef,
-          where('createdAt', '>=', thirtyDaysAgo)
+          where('createdAt', '>=', start),
+          where('createdAt', '<=', end)
         )
         const recentTransactionsSnapshot = await getDocs(recentTransactionsQuery)
         
@@ -1490,6 +1691,29 @@ export default function DashboardPage() {
           }
         })
         const activeCustomers = activeCustomerIds.size
+
+        // Calculate visit frequency (transactions per customer in last 30 days)
+        const thirtyDaysAgo = new Date()
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+        
+        const last30DaysTransactionsQuery = query(
+          transactionsRef,
+          where('createdAt', '>=', thirtyDaysAgo)
+        )
+        const last30DaysTransactionsSnapshot = await getDocs(last30DaysTransactionsQuery)
+        
+        // Get unique customers in last 30 days
+        const last30DaysActiveCustomerIds = new Set()
+        last30DaysTransactionsSnapshot.docs.forEach(doc => {
+          const data = doc.data()
+          if (data.customerId) {
+            last30DaysActiveCustomerIds.add(data.customerId)
+          }
+        })
+        
+        const visitFrequency = last30DaysActiveCustomerIds.size > 0 
+          ? (last30DaysTransactionsSnapshot.docs.length / last30DaysActiveCustomerIds.size) 
+          : 0
         
         // Calculate customers with redeemable rewards (customers with points >= minimum reward threshold)
         const minPointsForReward = 100 // Adjust this based on your reward system
@@ -1508,29 +1732,35 @@ export default function DashboardPage() {
         // Fetch total points issued
         const transactionsQuery = query(
           transactionsRef,
-          where('merchantId', '==', user.uid),
           where('createdAt', '>=', start),
           where('createdAt', '<=', end)
         )
         const transactionsSnapshot = await getDocs(transactionsQuery)
-        const totalPointsIssued = transactionsSnapshot.docs.reduce((total, doc) => total + (doc.data().amount || 0), 0)
+        const totalPointsIssued = transactionsSnapshot.docs.reduce((total, doc) => total + (doc.data().pointsEarned || 0), 0)
         
-        // Fetch store views
+        // Calculate TapCash issued by summing cashbackAmount from transactions
+        const totalTapCashIssued = transactionsSnapshot.docs.reduce((total, doc) => total + (doc.data().cashbackAmount || 0), 0)
+        
+        // Fetch store views with date filtering
         const storeViewsRef = collection(db, 'merchants', user.uid, 'storeViews')
-        const storeViewsQuery = query(storeViewsRef)
+        const storeViewsQuery = query(
+          storeViewsRef,
+          where('timestamp', '>=', start),
+          where('timestamp', '<=', end)
+        )
         const storeViewsSnapshot = await getDocs(storeViewsQuery)
         const totalStoreViews = storeViewsSnapshot.docs.length
         
-        // Calculate customer growth
-        const customersRef2 = collection(db, 'customers')
-        const customersQuery2 = query(
-          customersRef2,
-          where('merchantId', '==', user.uid),
-          where('createdAt', '<', start)
-        )
-        const customersSnapshot2 = await getDocs(customersQuery2)
-        const previousTotalCustomers = customersSnapshot2.docs.length
-        const customerGrowth = ((totalCustomers - previousTotalCustomers) / previousTotalCustomers) * 100
+        // Calculate customer growth based on firstTransactionDate
+        const previousCustomersCount = customersSnapshot.docs.filter(doc => {
+          const data = doc.data()
+          if (data.firstTransactionDate) {
+            const firstTransactionDate = data.firstTransactionDate.toDate()
+            return firstTransactionDate < start
+          }
+          return false
+        }).length
+        const customerGrowth = previousCustomersCount > 0 ? ((newCustomersCount / previousCustomersCount) * 100) : 0
         
         // Fetch active rewards from the correct path
         const rewardsRef = collection(db, 'merchants', user.uid, 'rewards')
@@ -1562,14 +1792,114 @@ export default function DashboardPage() {
         const totalAmount = transactionsSnapshot.docs.reduce((total, doc) => total + (doc.data().amount || 0), 0)
         const avgOrderValue = totalAmount / totalCustomers
         
-        // Fetch redemptions data
-        const redemptionsRef = collection(db, 'redemptions')
+        // Fetch redemptions data with date filtering
+        const redemptionsRef = collection(db, 'merchants', user.uid, 'redemptions')
         const redemptionsQuery = query(
           redemptionsRef,
-          where('merchantId', '==', user.uid)
+          where('redemptionDate', '>=', start),
+          where('redemptionDate', '<=', end)
         )
         const redemptionsSnapshot = await getDocs(redemptionsQuery)
         const totalRedemptions = redemptionsSnapshot.docs.length
+        
+        // Calculate total TapCash used by summing TapCashUsed from redemptions
+        const totalTapCashUsed = redemptionsSnapshot.docs.reduce((total, doc) => total + (doc.data().TapCashUsed || 0), 0)
+        
+        // Count active programs
+        let activePrograms = 0
+        const activeProgramsBreakdown = {
+          coffee: 0,
+          voucher: 0,
+          transaction: 0,
+          cashback: 0,
+          custom: 0
+        }
+        
+        // Get merchant document to check built-in programs
+        const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
+        if (merchantDoc.exists()) {
+          const merchantData = merchantDoc.data()
+          
+          // Count coffee programs
+          if (merchantData.coffeePrograms && Array.isArray(merchantData.coffeePrograms)) {
+            const activeCoffeePrograms = merchantData.coffeePrograms.filter((program: any) => program.active === true)
+            activeProgramsBreakdown.coffee = activeCoffeePrograms.length
+            activePrograms += activeCoffeePrograms.length
+          }
+          
+          // Count voucher programs
+          if (merchantData.voucherPrograms && Array.isArray(merchantData.voucherPrograms)) {
+            const activeVoucherPrograms = merchantData.voucherPrograms.filter((program: any) => program.active === true)
+            activeProgramsBreakdown.voucher = activeVoucherPrograms.length
+            activePrograms += activeVoucherPrograms.length
+          }
+          
+          // Count transaction programs
+          if (merchantData.transactionRewards && Array.isArray(merchantData.transactionRewards)) {
+            const activeTransactionPrograms = merchantData.transactionRewards.filter((program: any) => program.active === true)
+            activeProgramsBreakdown.transaction = activeTransactionPrograms.length
+            activePrograms += activeTransactionPrograms.length
+          }
+          
+          // Count cashback program
+          if (merchantData.isCashback === true && merchantData.cashbackProgram?.isActive === true) {
+            activeProgramsBreakdown.cashback = 1
+            activePrograms += 1
+          }
+        }
+        
+        // Count custom programs
+        const customProgramsRef = collection(db, 'merchants', user.uid, 'customprograms')
+        const customProgramsSnapshot = await getDocs(customProgramsRef)
+        const activeCustomPrograms = customProgramsSnapshot.docs.filter(doc => doc.data().status === 'active')
+        activeProgramsBreakdown.custom = activeCustomPrograms.length
+        activePrograms += activeCustomPrograms.length
+        
+        // Calculate previous period data for trends
+        const prevTransactionsQuery = query(
+          transactionsRef,
+          where('createdAt', '>=', prevStart),
+          where('createdAt', '<=', prevEnd)
+        )
+        const prevTransactionsSnapshot = await getDocs(prevTransactionsQuery)
+        const prevActiveCustomers = new Set(prevTransactionsSnapshot.docs.map(doc => doc.data().customerId)).size
+        const prevTotalTransactions = prevTransactionsSnapshot.docs.length
+        const prevTotalSpend = prevTransactionsSnapshot.docs.reduce((total, doc) => total + (doc.data().amount || 0), 0)
+        const prevTotalPointsIssued = prevTransactionsSnapshot.docs.reduce((total, doc) => total + (doc.data().pointsEarned || 0), 0)
+        const prevTapCashIssued = prevTransactionsSnapshot.docs.reduce((total, doc) => total + (doc.data().cashbackAmount || 0), 0)
+        
+        const prevRedemptionsQuery = query(
+          redemptionsRef,
+          where('redemptionDate', '>=', prevStart),
+          where('redemptionDate', '<=', prevEnd)
+        )
+        const prevRedemptionsSnapshot = await getDocs(prevRedemptionsQuery)
+        const prevTotalRedemptions = prevRedemptionsSnapshot.docs.length
+        const prevTapCashUsed = prevRedemptionsSnapshot.docs.reduce((total, doc) => total + (doc.data().TapCashUsed || 0), 0)
+        
+        const prevStoreViewsQuery = query(
+          storeViewsRef,
+          where('timestamp', '>=', prevStart),
+          where('timestamp', '<=', prevEnd)
+        )
+        const prevStoreViewsSnapshot = await getDocs(prevStoreViewsQuery)
+        const prevTotalStoreViews = prevStoreViewsSnapshot.docs.length
+        
+        const prevNewCustomersCount = customersSnapshot.docs.filter(doc => {
+          const data = doc.data()
+          if (data.firstTransactionDate) {
+            const firstTransactionDate = data.firstTransactionDate.toDate()
+            return firstTransactionDate >= prevStart && firstTransactionDate <= prevEnd
+          }
+          return false
+        }).length
+        
+        // Calculate trends
+        const calculateTrend = (current: number, previous: number) => {
+          const change = current - previous
+          const changePercent = previous > 0 ? (change / previous) * 100 : 0
+          return { current, previous, change, changePercent }
+        }
         
         // Update metrics state with all values
         setMetrics({
@@ -1586,7 +1916,25 @@ export default function DashboardPage() {
           totalBannerImpressions,
           totalRewardViews,
           customersWithRedeemableRewards,
-          customersWithoutRedeemableRewards
+          customersWithoutRedeemableRewards,
+          activePrograms,
+          activeProgramsBreakdown,
+          visitFrequency,
+          tapCashIssued: totalTapCashIssued,
+          tapCashUsed: totalTapCashUsed,
+          newCustomers: newCustomersCount,
+          totalSpend: totalAmount,
+          trends: {
+            activeCustomers: calculateTrend(activeCustomers, prevActiveCustomers),
+            totalTransactions: calculateTrend(transactionsSnapshot.docs.length, prevTotalTransactions),
+            totalRedemptions: calculateTrend(totalRedemptions, prevTotalRedemptions),
+            totalSpend: calculateTrend(totalAmount, prevTotalSpend),
+            totalPointsIssued: calculateTrend(totalPointsIssued, prevTotalPointsIssued),
+            totalStoreViews: calculateTrend(totalStoreViews, prevTotalStoreViews),
+            tapCashIssued: calculateTrend(totalTapCashIssued, prevTapCashIssued),
+            tapCashUsed: calculateTrend(totalTapCashUsed, prevTapCashUsed),
+            newCustomers: calculateTrend(newCustomersCount, prevNewCustomersCount)
+          }
         })
       } catch (error) {
         console.error('Error fetching metrics:', error)
@@ -1596,7 +1944,13 @@ export default function DashboardPage() {
           variant: "destructive"
         })
       } finally {
-        setMetricsLoading(false)
+        // Start completion animation
+        setMetricsCompleting(true)
+        // Hide loading bar after completion animation
+        setTimeout(() => {
+          setMetricsLoading(false)
+          setMetricsCompleting(false)
+        }, 500) // 500ms for completion animation
       }
     }
     
@@ -4675,7 +5029,18 @@ export default function DashboardPage() {
 
                 {/* Metrics */}
                 {!isAdvancedActivity && (
-                <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                <div className="bg-white rounded-md border border-gray-200 overflow-hidden relative">
+                  {/* Loading bar at top */}
+                  {(metricsLoading || metricsCompleting) && (
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-gray-100 overflow-hidden">
+                                             <div className={`h-full bg-[#007AFF] origin-left ${
+                         metricsCompleting 
+                           ? 'animate-[loading-complete_0.5s_ease-out_forwards]' 
+                           : 'animate-[loading-to-75_0.8s_ease-out_forwards,loading-pulse_2s_ease-in-out_infinite]'
+                       }`}></div>
+                    </div>
+                  )}
+                  
                   <div className="px-6 py-3.5 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
                       <h3 className="text-sm font-medium text-gray-900">Metrics</h3>

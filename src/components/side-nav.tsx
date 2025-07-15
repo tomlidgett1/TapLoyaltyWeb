@@ -72,6 +72,7 @@ import { SendBroadcastPopup } from "@/components/send-broadcast-popup"
 import { CreatePointsRulePopup } from "@/components/create-points-rule-popup"
 import { IntroductoryRewardPopup } from "@/components/introductory-reward-popup"
 import { CreateManualProgramDialog } from "@/components/create-manual-program-dialog"
+import { SettingsDialog } from "@/components/settings-dialog"
 
 // Get auth instance
 const auth = getAuth();
@@ -258,6 +259,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   const [supportBoxOpen, setSupportBoxOpen] = useState(false)
   const [supportMessage, setSupportMessage] = useState("")
   const [supportLoading, setSupportLoading] = useState(false)
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false)
   
   // Merchant status and plan state
   const [merchantStatus, setMerchantStatus] = useState<'active' | 'inactive'>('active')
@@ -280,10 +282,10 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
         createBannerOpen || broadcastDialogOpen || createRuleOpen || introRewardOpen || 
         setupPopupOpen || networkRewardOpen || networkRewardPopupOpen || sendBroadcastPopupOpen || 
         createPointsRulePopupOpen || introductoryRewardPopupOpen || programTypeSelectorOpen || 
-        createManualProgramOpen) {
+        createManualProgramOpen || settingsDialogOpen) {
       setCreateDropdownOpen(false)
     }
-  }, [createSheetOpen, createRewardSheetOpen, createRewardPopupOpen, createRecurringOpen, createBannerOpen, broadcastDialogOpen, createRuleOpen, introRewardOpen, setupPopupOpen, networkRewardOpen, networkRewardPopupOpen, sendBroadcastPopupOpen, createPointsRulePopupOpen, introductoryRewardPopupOpen, programTypeSelectorOpen, createManualProgramOpen])
+  }, [createSheetOpen, createRewardSheetOpen, createRewardPopupOpen, createRecurringOpen, createBannerOpen, broadcastDialogOpen, createRuleOpen, introRewardOpen, setupPopupOpen, networkRewardOpen, networkRewardPopupOpen, sendBroadcastPopupOpen, createPointsRulePopupOpen, introductoryRewardPopupOpen, programTypeSelectorOpen, createManualProgramOpen, settingsDialogOpen])
 
   // Notify parent component when collapse state changes (only for internal changes)
   useEffect(() => {
@@ -938,11 +940,9 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                       <span>Profile</span>
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/dashboard/settings" className="cursor-pointer flex items-center text-sm font-[450] text-gray-800">
-                      <Settings className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                      <span>Settings</span>
-                    </Link>
+                  <DropdownMenuItem onClick={() => setSettingsDialogOpen(true)} className="cursor-pointer text-sm font-[450] text-gray-800">
+                    <Settings className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
+                    <span>Settings</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link href="/dashboard/integrations" className="cursor-pointer flex items-center text-sm font-[450] text-gray-800">
@@ -1015,11 +1015,9 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                         <span>Profile</span>
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/dashboard/settings" className="cursor-pointer flex items-center text-sm font-[450] text-gray-800">
-                        <Settings className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                        <span>Settings</span>
-                      </Link>
+                    <DropdownMenuItem onClick={() => setSettingsDialogOpen(true)} className="cursor-pointer text-sm font-[450] text-gray-800">
+                      <Settings className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
+                      <span>Settings</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link href="/dashboard/integrations" className="cursor-pointer flex items-center text-sm font-[450] text-gray-800">
@@ -1304,6 +1302,9 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
           </div>
         </>
       )}
+
+      {/* Settings Dialog */}
+      <SettingsDialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen} />
     </div>
   )
 }

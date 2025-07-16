@@ -1,418 +1,667 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
-import { useToast } from "@/components/ui/use-toast"
-import { useAuth } from "@/contexts/auth-context"
-import { useMerchant } from "@/hooks/use-merchant"
-import axios from "axios"
+import { Textarea } from "@/components/ui/textarea"
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
-  Mail,
-  Users,
-  FileText,
-  Send,
-  Clock,
-  BarChart2,
-  Settings,
+  Search, 
+  Archive, 
+  Trash2, 
+  Star, 
+  Reply, 
+  Forward, 
+  MoreHorizontal,
+  Paperclip,
+  ReplyAll,
+  ArrowLeft,
+  Inbox,
+  Edit3,
+  Shield,
+  Check,
   Plus,
-  RefreshCw,
-  AlertCircle,
-  CheckCircle2,
-  Loader2
+  Send,
+  RefreshCw
 } from "lucide-react"
-import { fetchMerchantCustomers, fetchTemplates, getMerchantCampaignReports } from "@/services/mailchimp"
+import { useState } from "react"
+import Image from "next/image"
 
-// Mailchimp API configuration
-const API_KEY = '47fbae78b915abaa7956de0baf066b4b-us9';
-const SERVER_PREFIX = 'us9';
-const BASE_URL = `https://${SERVER_PREFIX}.api.mailchimp.com/3.0`;
+// Mock email data
+const emails = [
+  {
+    id: 1,
+    sender: "John Doe",
+    email: "john@example.com",
+    subject: "Meeting reminder for tomorrow",
+    preview: "Don't forget about our meeting scheduled for 2 PM tomorrow. Please bring the quarterly reports...",
+    content: `Hi there,
+
+I hope this email finds you well. I wanted to send you a quick reminder about our meeting scheduled for tomorrow (Tuesday) at 2:00 PM in Conference Room B.
+
+Please make sure to bring:
+• Q4 financial reports
+• Project timeline updates  
+• Budget allocation spreadsheet
+
+Looking forward to our discussion about the upcoming product launch and marketing strategy.
+
+Best regards,
+John Doe
+Senior Project Manager`,
+    time: "2:30 PM",
+    read: false,
+    starred: true,
+    hasAttachment: false,
+    folder: "inbox"
+  },
+  {
+    id: 2,
+    sender: "Sarah Wilson",
+    email: "sarah@company.com", 
+    subject: "Project update - Q4 deliverables",
+    preview: "Hi team, I wanted to share an update on our Q4 deliverables. We're making good progress...",
+    content: `Hi team,
+
+I wanted to share an update on our Q4 deliverables. We're making good progress on all fronts:
+
+✅ Website redesign - 85% complete
+✅ Mobile app updates - 70% complete  
+🔄 Marketing campaign - In progress
+⏳ User testing - Starting next week
+
+The team has been working incredibly hard, and I'm confident we'll meet our December deadline. 
+
+I've attached the detailed project timeline for your review.
+
+Thanks for your continued dedication!
+
+Sarah Wilson
+Product Manager`,
+    time: "1:15 PM",
+    read: true,
+    starred: false,
+    hasAttachment: true,
+    folder: "inbox"
+  },
+  {
+    id: 3,
+    sender: "Marketing Team",
+    email: "marketing@company.com",
+    subject: "New campaign launch next week",
+    preview: "Exciting news! We're launching our new customer acquisition campaign next Monday...",
+    content: `Team,
+
+Exciting news! We're launching our new customer acquisition campaign next Monday, and I wanted to make sure everyone is aligned on the key details.
+
+Campaign Overview:
+• Launch Date: Monday, November 20th
+• Duration: 4 weeks
+• Target: New customers aged 25-45
+• Budget: $50,000
+• Expected ROI: 300%
+
+Key deliverables this week:
+- Final creative assets (Due: Friday)
+- Landing page optimization (Due: Thursday)  
+- Email sequences setup (Due: Wednesday)
+
+Let's make this our most successful campaign yet!
+
+Marketing Team`,
+    time: "11:45 AM",
+    read: false,
+    starred: false,
+    hasAttachment: false,
+    folder: "inbox"
+  },
+  {
+    id: 4,
+    sender: "Spam Bot",
+    email: "noreply@spamsite.com",
+    subject: "Congratulations! You've won $1,000,000!",
+    preview: "Click here to claim your prize! Limited time offer...",
+    content: "This is obviously spam content...",
+    time: "9:00 AM",
+    read: false,
+    starred: false,
+    hasAttachment: false,
+    folder: "spam"
+  },
+  {
+    id: 5,
+    sender: "Me",
+    email: "me@company.com",
+    subject: "Draft: Quarterly review notes",
+    preview: "Need to finish writing the quarterly review...",
+    content: "This is a draft email that hasn't been sent yet...",
+    time: "Yesterday",
+    read: false,
+    starred: false,
+    hasAttachment: false,
+    folder: "drafts"
+  }
+]
 
 export default function EmailPage() {
-  const router = useRouter()
-  const { toast } = useToast()
-  const { user } = useAuth()
-  const { merchant } = useMerchant()
-  const [activeTab, setActiveTab] = useState("templates")
-  const [isConnected, setIsConnected] = useState(true)
-  const [isLoading, setIsLoading] = useState(false)
-  const [isLoadingTemplates, setIsLoadingTemplates] = useState(true)
-  const [customers, setCustomers] = useState([])
-  const [templates, setTemplates] = useState([])
-  const [campaigns, setCampaigns] = useState([])
-  const [isSyncing, setIsSyncing] = useState(false)
+  const [selectedFolder, setSelectedFolder] = useState("inbox")
+  const [selectedEmail, setSelectedEmail] = useState<typeof emails[0] | null>(null)
+  const [selectedAccount, setSelectedAccount] = useState("gmail")
+  const [composeMode, setComposeMode] = useState<"none" | "reply" | "replyAll" | "forward">("none")
+  const [composeSubject, setComposeSubject] = useState("")
+  const [composeContent, setComposeContent] = useState("")
+  const [composeTo, setComposeTo] = useState("")
 
-  // Load templates
-  useEffect(() => {
-    const loadTemplates = async () => {
-      if (!user?.uid) return
-      
-      try {
-        setIsLoadingTemplates(true)
-        
-        // For demo purposes, we'll use sample templates with placeholder images
-        setTimeout(() => {
-          const sampleTemplates = [
-            {
-              id: "template-1",
-              name: "Welcome Email",
-              category: "Onboarding",
-              preview_image: null
-            },
-            {
-              id: "template-2",
-              name: "Monthly Newsletter",
-              category: "Newsletters",
-              preview_image: null
-            },
-            {
-              id: "template-3",
-              name: "Special Offer",
-              category: "Promotions",
-              preview_image: null
-            },
-            {
-              id: "template-4",
-              name: "Product Announcement",
-              category: "Marketing",
-              preview_image: null
-            }
-          ];
-          
-          setTemplates(sampleTemplates);
-          setIsLoadingTemplates(false);
-        }, 1000);
-        
-      } catch (error) {
-        console.error("Error loading templates:", error)
-        setIsLoadingTemplates(false)
-        toast({
-          title: "Error",
-          description: "Failed to load email templates. Please try again.",
-          variant: "destructive",
-        })
-      }
-    }
-    
-    loadTemplates()
-  }, [user, toast])
+  const filteredEmails = emails.filter(email => {
+    if (selectedFolder === "inbox") return email.folder === "inbox"
+    if (selectedFolder === "spam") return email.folder === "spam"
+    if (selectedFolder === "trash") return email.folder === "trash"
+    if (selectedFolder === "drafts") return email.folder === "drafts"
+    return true
+  })
 
-  // Load merchant data
-  useEffect(() => {
-    const loadMerchantData = async () => {
-      if (!user?.uid || !merchant?.id) return
-      
-      try {
-        // No need to set loading state here since we're initializing with false
-        // Just simulate loading data
-        // In a real implementation, you would fetch this data from your Mailchimp service
-        
-        // For now, we'll just set some dummy data
-        setCustomers([])
-        setCampaigns([])
-      } catch (error) {
-        console.error("Error loading merchant data:", error)
-        toast({
-          title: "Error",
-          description: "Failed to load email marketing data. Please try again.",
-          variant: "destructive",
-        })
-      }
-    }
-    
-    loadMerchantData()
-  }, [user, merchant, toast])
+  const handleReply = (email: typeof emails[0]) => {
+    setComposeMode("reply")
+    setComposeTo(email.email)
+    setComposeSubject(`Re: ${email.subject}`)
+    setComposeContent(`\n\n---\nOn ${email.time}, ${email.sender} <${email.email}> wrote:\n\n${email.content}`)
+  }
 
-  // Function to sync customers
-  const syncCustomers = async () => {
-    if (!merchant?.id) return
+  const handleReplyAll = (email: typeof emails[0]) => {
+    setComposeMode("replyAll")
+    setComposeTo(email.email)
+    setComposeSubject(`Re: ${email.subject}`)
+    setComposeContent(`\n\n---\nOn ${email.time}, ${email.sender} <${email.email}> wrote:\n\n${email.content}`)
+  }
+
+  const handleForward = (email: typeof emails[0]) => {
+    setComposeMode("forward")
+    setComposeTo("")
+    setComposeSubject(`Fwd: ${email.subject}`)
+    setComposeContent(`\n\n---\nForwarded message from ${email.sender} <${email.email}>:\n\nSubject: ${email.subject}\nDate: ${email.time}\n\n${email.content}`)
+  }
+
+  const handleSend = () => {
+    // Here you would typically send the email to your backend
+    console.log("Sending email:", { to: composeTo, subject: composeSubject, content: composeContent })
     
-    try {
-      setIsSyncing(true)
-      toast({
-        title: "Syncing Customers",
-        description: "Please wait while we sync your customers...",
-      })
-      
-      // In a real implementation, you would call your syncCustomersToMailchimp function
-      // For now, we'll simulate a sync
-      setTimeout(() => {
-        setIsSyncing(false)
-        toast({
-          title: "Sync Complete",
-          description: "Your customers have been synced successfully.",
-          variant: "success",
-        })
-      }, 2000)
-    } catch (error) {
-      console.error("Error syncing customers:", error)
-      setIsSyncing(false)
-      toast({
-        title: "Sync Failed",
-        description: "Failed to sync customers. Please try again.",
-        variant: "destructive",
-      })
+    // Reset compose mode
+    setComposeMode("none")
+    setComposeSubject("")
+    setComposeContent("")
+    setComposeTo("")
+  }
+
+  const handleCancelCompose = () => {
+    setComposeMode("none")
+    setComposeSubject("")
+    setComposeContent("")
+    setComposeTo("")
+  }
+
+  const handleArchive = () => {
+    if (selectedEmail) {
+      console.log("Archiving email:", selectedEmail.id)
+      // Here you would typically update the email status in your backend
     }
   }
 
-  // Loading state - only show if explicitly loading
-  if (isLoading) {
-    return (
-      <div className="p-6 flex items-center justify-center h-[70vh]">
-        <div className="flex flex-col items-center">
-          <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-4" />
-          <p className="text-gray-500">Loading email marketing dashboard...</p>
-        </div>
-      </div>
-    )
+  const handleDelete = () => {
+    if (selectedEmail) {
+      console.log("Deleting email:", selectedEmail.id)
+      // Here you would typically move the email to trash or delete it
+      setSelectedEmail(null)
+    }
   }
 
-  // Main email dashboard
+  const handleMarkAsSpam = () => {
+    if (selectedEmail) {
+      console.log("Marking as spam:", selectedEmail.id)
+      // Here you would typically move the email to spam folder
+      setSelectedEmail(null)
+    }
+  }
+
+  const handleSync = () => {
+    console.log("Syncing emails...")
+    // Here you would typically sync with the email server
+  }
+
+  const handleComposeNew = () => {
+    setComposeMode("reply") // Use reply mode for new compose
+    setComposeTo("")
+    setComposeSubject("")
+    setComposeContent("")
+  }
+
+  const handleEmailSelect = (email: typeof emails[0]) => {
+    setSelectedEmail(email)
+    // Mark email as read when selected
+    email.read = true
+  }
+
+  const toggleStar = (emailId: number, event: React.MouseEvent) => {
+    event.stopPropagation()
+    const email = emails.find(e => e.id === emailId)
+    if (email) {
+      email.starred = !email.starred
+      console.log(`${email.starred ? 'Starred' : 'Unstarred'} email:`, email.subject)
+    }
+  }
+
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-8 flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Email Marketing</h1>
-          <p className="text-gray-500 mt-2">
-            Create and manage email campaigns for your customers
-          </p>
+    <div className="flex flex-col h-full">
+      {/* Combined Header with folder dropdown, toolbar, and connected account */}
+      <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-gray-300">
+        <div className="flex items-center gap-4">
+          {/* Folder Dropdown */}
+          <Select value={selectedFolder} onValueChange={setSelectedFolder}>
+            <SelectTrigger className="w-32 h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="inbox">
+                <div className="flex items-center gap-2">
+                  <Inbox className="h-4 w-4" />
+                  <span>Inbox</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="spam">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  <span>Spam</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="trash">
+                <div className="flex items-center gap-2">
+                  <Trash2 className="h-4 w-4" />
+                  <span>Trash</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="drafts">
+                <div className="flex items-center gap-2">
+                  <Edit3 className="h-4 w-4" />
+                  <span>Drafts</span>
         </div>
-        
-        <Button onClick={() => router.push('/email/create')}>
-          <Plus className="h-4 w-4 mr-2" />
-          Create Campaign
-        </Button>
-      </div>
-      
-      <Tabs defaultValue="templates" value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid grid-cols-5 w-full max-w-3xl">
-          <TabsTrigger value="campaigns" className="flex items-center gap-2">
-            <Mail className="h-4 w-4" />
-            <span className="hidden sm:inline">Campaigns</span>
-          </TabsTrigger>
-          <TabsTrigger value="templates" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            <span className="hidden sm:inline">Templates</span>
-          </TabsTrigger>
-          <TabsTrigger value="audiences" className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            <span className="hidden sm:inline">Audiences</span>
-          </TabsTrigger>
-          <TabsTrigger value="reports" className="flex items-center gap-2">
-            <BarChart2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Reports</span>
-          </TabsTrigger>
-          <TabsTrigger value="settings" className="flex items-center gap-2">
-            <Settings className="h-4 w-4" />
-            <span className="hidden sm:inline">Settings</span>
-          </TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="campaigns" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Email Campaigns</CardTitle>
-              <CardDescription>
-                Create and manage your email marketing campaigns
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-gray-50 rounded-lg p-8 text-center">
-                <Mail className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium mb-2">No campaigns yet</h3>
-                <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                  Create your first email campaign to start connecting with your customers
-                </p>
-                <Button onClick={() => router.push('/email/create')}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Campaign
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="templates" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Email Templates</CardTitle>
-              <CardDescription>
-                Browse and use pre-designed email templates
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoadingTemplates ? (
-                <div className="flex items-center justify-center p-8">
-                  <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-4" />
-                  <p className="text-gray-500 ml-3">Loading templates...</p>
-                </div>
-              ) : templates.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {templates.map(template => (
-                    <div key={template.id} className="border rounded-md overflow-hidden hover:shadow-md transition-shadow">
-                      <div className="bg-gray-50 p-3 border-b flex items-center justify-between">
-                        <div>
-                          <h3 className="font-medium text-sm">{template.name}</h3>
-                          <p className="text-xs text-gray-500">{template.category}</p>
-                        </div>
-                      </div>
-                      <div className="p-4 bg-white">
-                        <div className="aspect-video bg-gray-100 rounded-md flex flex-col items-center justify-center p-8">
-                          <FileText className="h-16 w-16 text-gray-400 mb-2" />
-                          <p className="text-sm text-gray-500 text-center">
-                            {template.name} template
-                          </p>
-                        </div>
-                      </div>
-                      <div className="p-3 border-t bg-white">
-                        <Button 
-                          variant="outline" 
-                          className="w-full text-sm"
-                          onClick={() => router.push(`/email/create?template=${template.id}`)}
-                        >
-                          Use Template
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="bg-gray-50 rounded-lg p-8 text-center">
-                  <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium mb-2">No templates available</h3>
-                  <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                    There are currently no email templates available.
-                  </p>
-                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Toolbar Actions */}
+          <TooltipProvider>
+            <div className="flex items-center gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={handleComposeNew} size="sm" className="bg-blue-500 hover:bg-blue-600 text-white">
+                    <Edit3 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>New Email</p>
+                </TooltipContent>
+              </Tooltip>
+              
+              <div className="h-6 w-px bg-gray-300 mx-1"></div>
+              
+              {selectedEmail && (
+                <>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="sm" onClick={() => handleReply(selectedEmail)} className="text-gray-700 hover:bg-gray-200">
+                        <Reply className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Reply</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="sm" onClick={() => handleReplyAll(selectedEmail)} className="text-gray-700 hover:bg-gray-200">
+                        <ReplyAll className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Reply All</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="sm" onClick={() => handleForward(selectedEmail)} className="text-gray-700 hover:bg-gray-200">
+                        <Forward className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Forward</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  
+                  <div className="h-6 w-px bg-gray-300 mx-1"></div>
+                </>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="audiences" className="space-y-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Customer Audience</CardTitle>
-                <CardDescription>
-                  Manage your customer email list
-                </CardDescription>
-              </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="gap-1"
-                onClick={syncCustomers}
-                disabled={isSyncing}
-              >
-                {isSyncing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Syncing...
-                  </>
-                ) : (
-                  <>
+              
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="sm" onClick={handleDelete} className="text-gray-700 hover:bg-gray-200">
+                    <Trash2 className="h-4 w-4" />
+        </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Delete</p>
+                </TooltipContent>
+              </Tooltip>
+              
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="sm" onClick={handleArchive} className="text-gray-700 hover:bg-gray-200">
+                    <Archive className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Archive</p>
+                </TooltipContent>
+              </Tooltip>
+              
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="sm" onClick={handleSync} className="text-gray-700 hover:bg-gray-200">
                     <RefreshCw className="h-4 w-4" />
-                    Sync Customers
-                  </>
-                )}
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-gray-50 rounded-lg p-8 text-center">
-                <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium mb-2">Your Customer List</h3>
-                <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                  Your customers are automatically synced with our email system. Click "Sync Customers" to update the list.
-                </p>
-                <div className="flex items-center justify-center gap-2">
-                  <div className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-sm font-medium">
-                    0 Active Subscribers
+                </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Sync</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
+              </div>
+
+        <div className="flex items-center gap-2">
+          {/* Connected Account Selector */}
+          <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+            <SelectTrigger className="w-64 h-8 text-sm">
+              <SelectValue>
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 flex-shrink-0">
+                    <Image 
+                      src={selectedAccount === "gmail" ? "/gmailnew.png" : "/outlook.png"}
+                      alt={selectedAccount === "gmail" ? "Gmail" : "Outlook"}
+                      width={24}
+                      height={24}
+                      className="w-full h-full object-contain"
+                    />
                   </div>
+                  <span className="text-sm text-gray-700">
+                    {selectedAccount === "gmail" ? "john.doe@gmail.com" : "john.doe@outlook.com"}
+                  </span>
+                </div>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="gmail">
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 flex-shrink-0">
+                    <Image 
+                      src="/gmailnew.png"
+                      alt="Gmail"
+                      width={24}
+                      height={24}
+                      className="w-full h-full object-contain"
+                    />
+                        </div>
+                  <span>john.doe@gmail.com</span>
+                  {selectedAccount === "gmail" && <Check className="h-4 w-4 text-blue-500 ml-2" />}
+                      </div>
+              </SelectItem>
+              <SelectItem value="outlook">
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 flex-shrink-0">
+                    <Image 
+                      src="/outlook.png"
+                      alt="Outlook"
+                      width={24}
+                      height={24}
+                      className="w-full h-full object-contain"
+                    />
+                        </div>
+                  <span>john.doe@outlook.com</span>
+                  {selectedAccount === "outlook" && <Check className="h-4 w-4 text-blue-500 ml-2" />}
+                </div>
+              </SelectItem>
+              <Separator className="my-1" />
+              <SelectItem value="new">
+                <div className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  <span>Add New Account</span>
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Button variant="ghost" size="sm" className="h-9 px-2 text-gray-600 hover:bg-gray-200">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+        {/* Main Content */}
+        <div className="flex flex-1">
+          {/* Left Panel - Email List */}
+          <div className="w-2/5 border-r border-gray-200 flex flex-col">
+            {/* Search Bar */}
+            <div className="p-4 border-b border-gray-200">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Search emails..."
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+          {/* Email list */}
+          <div className="flex-1 overflow-auto">
+            <div className="divide-y divide-gray-200">
+              {filteredEmails.map((email) => (
+                <div
+                  key={email.id}
+                  className={`flex items-center gap-4 p-4 hover:bg-gray-50 cursor-pointer transition-colors duration-200 ${
+                    !email.read ? 'bg-blue-50/30' : ''
+                  } ${selectedEmail?.id === email.id ? 'bg-blue-100 border-r-2 border-blue-500' : ''}`}
+                  onClick={() => handleEmailSelect(email)}
+                >
+                  {/* Star */}
+                  <button 
+                    className="text-gray-400 hover:text-yellow-500 transition-colors duration-200"
+                    onClick={(e) => toggleStar(email.id, e)}
+                  >
+                    <Star className={`h-4 w-4 ${email.starred ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                  </button>
+
+                  {/* Email content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-sm truncate ${!email.read ? 'font-semibold' : 'font-medium'}`}>
+                        {email.sender}
+                      </span>
+                      {email.hasAttachment && (
+                        <Paperclip className="h-3 w-3 text-gray-400 flex-shrink-0" />
+                      )}
+                      <span className="text-xs text-gray-500 ml-auto">{email.time}</span>
+                    </div>
+                    <div className={`text-sm truncate ${!email.read ? 'font-semibold' : 'font-medium'} mb-1`}>
+                      {email.subject}
+                    </div>
+                    <div className="text-sm text-gray-600 truncate">
+                      {email.preview}
+                    </div>
+                  </div>
+
+                  {/* Unread indicator */}
+                  {!email.read && (
+                    <div className="h-2 w-2 bg-blue-500 rounded-full flex-shrink-0"></div>
+                  )}
+                </div>
+              ))}
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="reports" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Campaign Reports</CardTitle>
-              <CardDescription>
-                View performance metrics for your email campaigns
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-gray-50 rounded-lg p-8 text-center">
-                <BarChart2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium mb-2">No reports available</h3>
-                <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                  Send your first campaign to start collecting performance data
-                </p>
-                <Button onClick={() => router.push('/email/create')}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Campaign
-                </Button>
+
+          {/* Email stats footer */}
+          <div className="p-4 border-t bg-gray-50 text-center">
+            <div className="text-sm text-gray-600">
+              Showing {filteredEmails.length} emails • {filteredEmails.filter(e => !e.read).length} unread
+            </div>
+          </div>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="settings" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Email Settings</CardTitle>
-              <CardDescription>
-                Manage your email marketing settings
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center p-4 bg-green-50 rounded-lg">
-                <CheckCircle2 className="h-5 w-5 text-green-500 mr-3 flex-shrink-0" />
-                <div>
-                  <p className="font-medium">Email Marketing Enabled</p>
-                  <p className="text-sm text-gray-500">Your account is ready to send email campaigns</p>
+
+        {/* Right Panel - Email Content */}
+        <div className="flex-1 flex flex-col">
+          {composeMode !== "none" ? (
+            /* Compose Interface */
+            <div key="compose" className="p-6 animate-fade-in">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-semibold">
+                  {composeMode === "reply" && "Reply"}
+                  {composeMode === "replyAll" && "Reply All"}
+                  {composeMode === "forward" && "Forward"}
+                </h2>
+                <div className="flex gap-2">
+                  <Button onClick={handleSend} size="sm" className="transition-all duration-200 hover:scale-105">
+                    <Send className="h-4 w-4 mr-1" />
+                    Send
+                  </Button>
+                  <Button variant="outline" onClick={handleCancelCompose} size="sm" className="transition-all duration-200 hover:scale-105">
+                    Cancel
+                  </Button>
                 </div>
               </div>
               
               <div className="space-y-4">
-                <h3 className="text-lg font-medium">Default Settings</h3>
-                <div className="grid gap-2">
-                  <Label htmlFor="default-from-name">Default From Name</Label>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">To</label>
                   <Input 
-                    id="default-from-name" 
-                    placeholder="Your Business Name"
-                    defaultValue={merchant?.merchantName || ""}
+                      value={composeTo}
+                      onChange={(e) => setComposeTo(e.target.value)}
+                      placeholder="Enter recipient email"
+                      className="rounded-md"
                   />
                 </div>
                 
-                <div className="grid gap-2">
-                  <Label htmlFor="default-from-email">Default From Email</Label>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Subject</label>
                   <Input 
-                    id="default-from-email" 
-                    type="email"
-                    placeholder="hello@taployalty.com"
-                    defaultValue="hello@taployalty.com"
-                    disabled
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    All emails are sent through the TapLoyalty email system
-                  </p>
+                      value={composeSubject}
+                      onChange={(e) => setComposeSubject(e.target.value)}
+                      placeholder="Email subject"
+                      className="rounded-md"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Message</label>
+                    <Textarea
+                      value={composeContent}
+                      onChange={(e) => setComposeContent(e.target.value)}
+                      placeholder="Type your message here..."
+                      className="min-h-[300px] rounded-md"
+                    />
+                  </div>
+                </div>
+            </div>
+                    ) : selectedEmail ? (
+            /* Email Viewer */
+            <div key={`email-${selectedEmail.id}`} className="p-6 animate-fade-in">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${selectedEmail.sender}`} />
+                    <AvatarFallback className="rounded-md">{selectedEmail.sender.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <div className="font-medium">{selectedEmail.sender}</div>
+                    <div className="text-sm text-gray-500">{selectedEmail.email}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleReply(selectedEmail)} 
+                    className="rounded-md transition-all duration-200 hover:scale-105"
+                  >
+                    <Reply className="h-4 w-4 mr-2" />
+                    Reply
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleReplyAll(selectedEmail)} 
+                    className="rounded-md transition-all duration-200 hover:scale-105"
+                  >
+                    <ReplyAll className="h-4 w-4 mr-2" />
+                    Reply All
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleForward(selectedEmail)} 
+                    className="rounded-md transition-all duration-200 hover:scale-105"
+                  >
+                    <Forward className="h-4 w-4 mr-2" />
+                    Forward
+                  </Button>
+                  <Button variant="outline" size="sm" className="rounded-md">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
-            </CardContent>
-            <CardFooter className="flex justify-end">
-              <Button>Save Settings</Button>
-            </CardFooter>
-          </Card>
-        </TabsContent>
-      </Tabs>
+
+              <div className="border-b pb-4 mb-6">
+                <h1 className="text-xl font-semibold mb-2">{selectedEmail.subject}</h1>
+                <div className="flex items-center gap-4 text-sm text-gray-500">
+                  <span>{selectedEmail.time}</span>
+                  {selectedEmail.hasAttachment && (
+                    <div className="flex items-center gap-1">
+                      <Paperclip className="h-4 w-4" />
+                      <span>Has attachment</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="prose max-w-none">
+                <pre className="whitespace-pre-wrap font-sans text-gray-800 leading-relaxed">
+                  {selectedEmail.content}
+                </pre>
+              </div>
+            </div>
+          ) : (
+            /* No Email Selected */
+            <div key="no-email" className="flex-1 flex items-center justify-center animate-fade-in">
+              <div className="text-center text-gray-500">
+                <div className="text-lg font-medium mb-2">No email selected</div>
+                <div className="text-sm">Choose an email from the list to view its content</div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 } 

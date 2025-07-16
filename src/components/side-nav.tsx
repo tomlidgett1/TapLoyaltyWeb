@@ -9,14 +9,11 @@ import {
   Users, 
   BarChart, 
   Store,
-  Layers,
   LogOut,
-  User,
   ChevronDown,
   MessageSquare,
   Clock,
   Settings,
-  MoreVertical,
   FileText,
   Bot,
   Rocket,
@@ -37,7 +34,8 @@ import {
   Zap as ZapIcon,
   Headphones,
   Send,
-  X
+  X,
+  Mail
 } from "lucide-react"
 
 import {
@@ -73,6 +71,8 @@ import { CreatePointsRulePopup } from "@/components/create-points-rule-popup"
 import { IntroductoryRewardPopup } from "@/components/introductory-reward-popup"
 import { CreateManualProgramDialog } from "@/components/create-manual-program-dialog"
 import { SettingsDialog } from "@/components/settings-dialog"
+import { NavUser } from "@/components/nav-user"
+import { NavCreate } from "@/components/nav-create"
 
 // Get auth instance
 const auth = getAuth();
@@ -155,6 +155,11 @@ const navItems: NavItem[] = [
     title: "Inbox",
     href: "/dashboard/agent-inbox",
     icon: Inbox,
+  },
+  {
+    title: "Email",
+    href: "/email",
+    icon: Mail
   },
   {
     title: "Documents",
@@ -255,7 +260,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   const [createManualProgramOpen, setCreateManualProgramOpen] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isInternalChange, setIsInternalChange] = useState(true)
-  const [createDropdownOpen, setCreateDropdownOpen] = useState(false)
+
   const [supportBoxOpen, setSupportBoxOpen] = useState(false)
   const [supportMessage, setSupportMessage] = useState("")
   const [supportLoading, setSupportLoading] = useState(false)
@@ -283,7 +288,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
         setupPopupOpen || networkRewardOpen || networkRewardPopupOpen || sendBroadcastPopupOpen || 
         createPointsRulePopupOpen || introductoryRewardPopupOpen || programTypeSelectorOpen || 
         createManualProgramOpen || settingsDialogOpen) {
-      setCreateDropdownOpen(false)
+
     }
   }, [createSheetOpen, createRewardSheetOpen, createRewardPopupOpen, createRecurringOpen, createBannerOpen, broadcastDialogOpen, createRuleOpen, introRewardOpen, setupPopupOpen, networkRewardOpen, networkRewardPopupOpen, sendBroadcastPopupOpen, createPointsRulePopupOpen, introductoryRewardPopupOpen, programTypeSelectorOpen, createManualProgramOpen, settingsDialogOpen])
 
@@ -610,118 +615,17 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
       
       {/* Create Button */}
       <div className="px-3 mb-2">
-        {isCollapsed ? (
-          <DropdownMenu open={createDropdownOpen} onOpenChange={setCreateDropdownOpen}>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="group flex items-center gap-3 rounded-md px-3 py-1 text-sm font-[450] transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 w-full h-8 cursor-pointer"
-                title="Create"
-              >
-                <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                  <PlusCircle className="h-4 w-4 text-gray-500 group-hover:text-[#007AFF]" strokeWidth={2.75} />
-                </div>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="right" className="w-48">
-              <DropdownMenuItem onClick={() => setCreateRewardPopupOpen(true)} className="text-sm font-[450] text-gray-800">
-                <Gift className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                Create Reward New
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setNetworkRewardOpen(true)} className="text-sm font-[450] text-gray-800">
-                <ZapIcon className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                Network Reward
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setProgramTypeSelectorOpen(true)} className="text-sm font-[450] text-gray-800">
-                <Coffee className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                Create Program
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCreateBannerOpen(true)} className="text-sm font-[450] text-gray-800">
-                <Image className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                New Banner
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setBroadcastDialogOpen(true)} className="text-sm font-[450] text-gray-800">
-                <MessageSquare className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                New Message
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCreateRuleOpen(true)} className="text-sm font-[450] text-gray-800">
-                <Zap className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                New Points Rule
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setIntroRewardOpen(true)} className="text-sm font-[450] text-gray-800">
-                <Sparkles className="w-4 h-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                Intro Reward
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setSetupPopupOpen(true)} className="text-sm font-[450] text-purple-600">
-                <Settings className="w-4 h-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                Setup Popup (Dev)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : (
-          <DropdownMenu open={createDropdownOpen} onOpenChange={setCreateDropdownOpen}>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="group flex items-center justify-between w-full gap-3 rounded-md px-3 py-1 text-sm font-[450] transition-all duration-200 ease-in-out text-gray-800 hover:bg-[#007AFF]/5 h-8 cursor-pointer"
-              >
-                <div className="flex items-center gap-3 h-full">
-                  <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                    <PlusCircle className="h-4 w-4 text-gray-500 group-hover:text-[#007AFF]" strokeWidth={2.75} />
-                  </div>
-                  <div className="h-full flex items-center overflow-hidden">
-                    <span className={cn(
-                      "transition-all duration-300 ease-in-out whitespace-nowrap group-hover:text-[#007AFF]",
-                      isCollapsed ? "w-0 opacity-0 delay-0" : "w-auto opacity-100 delay-75"
-                    )}>
-                      Create
-                    </span>
-                  </div>
-                </div>
-                <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                  <ChevronDown className={cn(
-                    "h-4 w-4 transition-all duration-300 ease-in-out text-gray-500 group-hover:text-[#007AFF]",
-                    isCollapsed ? "w-0 opacity-0 delay-0" : "w-auto opacity-100 delay-75"
-                  )} strokeWidth={2.75} />
-                </div>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuItem onClick={() => setCreateRewardPopupOpen(true)} className="text-sm font-[450] text-gray-800">
-                <Gift className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                Create Reward New
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setNetworkRewardPopupOpen(true)} className="text-sm font-[450] text-gray-800">
-                <ZapIcon className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                Network Reward
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setProgramTypeSelectorOpen(true)} className="text-sm font-[450] text-gray-800">
-                <Coffee className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                Create Program
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCreateBannerOpen(true)} className="text-sm font-[450] text-gray-800">
-                <Image className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                New Banner
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSendBroadcastPopupOpen(true)} className="text-sm font-[450] text-gray-800">
-                <MessageSquare className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                New Message
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCreatePointsRulePopupOpen(true)} className="text-sm font-[450] text-gray-800">
-                <Zap className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                New Points Rule
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setIntroductoryRewardPopupOpen(true)} className="text-sm font-[450] text-gray-800">
-                <Sparkles className="w-4 h-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                Intro Reward
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setSetupPopupOpen(true)} className="text-sm font-[450] text-purple-600">
-                <Settings className="w-4 h-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                Setup Popup (Dev)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+        <NavCreate
+          isCollapsed={isCollapsed}
+          onCreateReward={() => setCreateRewardPopupOpen(true)}
+          onNetworkReward={() => isCollapsed ? setNetworkRewardOpen(true) : setNetworkRewardPopupOpen(true)}
+          onCreateProgram={() => setProgramTypeSelectorOpen(true)}
+          onCreateBanner={() => setCreateBannerOpen(true)}
+          onNewMessage={() => isCollapsed ? setBroadcastDialogOpen(true) : setSendBroadcastPopupOpen(true)}
+          onNewPointsRule={() => isCollapsed ? setCreateRuleOpen(true) : setCreatePointsRulePopupOpen(true)}
+          onIntroReward={() => isCollapsed ? setIntroRewardOpen(true) : setIntroductoryRewardPopupOpen(true)}
+          onSetupPopup={() => setSetupPopupOpen(true)}
+        />
       </div>
       
       {/* Horizontal separator */}
@@ -893,238 +797,23 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
         )}
       </nav>
       
-      {/* Account section at the bottom */}
-      <div className="mt-auto border-t border-gray-200 py-3 px-3">
-          {isCollapsed ? (
-            <div className="flex justify-center">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-md relative">
-                    <div className="h-8 w-8 rounded-md overflow-hidden">
-                      {merchantData?.logoUrl && !logoError ? (
-                        <div className="w-full h-full relative">
-                          <img 
-                            src={merchantData.logoUrl} 
-                            alt={merchantName} 
-                            className="w-full h-full object-cover"
-                            onError={() => setLogoError(true)}
-                            onLoad={() => setLogoLoading(false)}
-                            style={{ opacity: logoLoading ? 0 : 1, transition: 'opacity 0.2s ease-in-out' }}
-                          />
-                          {logoLoading && (
-                            <div className="absolute inset-0 bg-primary text-white text-xs flex items-center justify-center">
-                              {initials}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="w-full h-full bg-primary text-white text-xs flex items-center justify-center">
-                          {initials}
-                        </div>
-                      )}
-                    </div>
-                    {/* Status indicator for collapsed view */}
-                    <div className="absolute -bottom-0.5 -right-0.5">
-                      {merchantStatus === 'active' ? (
-                        <CheckCircle className="h-3 w-3 text-green-500 bg-white rounded-full" strokeWidth={2.75} />
-                      ) : (
-                                                  <Circle className="h-3 w-3 text-gray-400 bg-white rounded-full" strokeWidth={2.75} />
-                      )}
-                    </div>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem asChild>
-                    <Link href="/merchant/profile" className="cursor-pointer flex items-center text-sm font-[450] text-gray-800">
-                      <User className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                      <span>Profile</span>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSettingsDialogOpen(true)} className="cursor-pointer text-sm font-[450] text-gray-800">
-                    <Settings className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                    <span>Settings</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/dashboard/integrations" className="cursor-pointer flex items-center text-sm font-[450] text-gray-800">
-                      <Layers className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                      <span>Integrations</span>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/docs" className="cursor-pointer flex items-center text-sm font-[450] text-gray-800">
-                      <FileText className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                      <span>Help Guide</span>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setSupportBoxOpen(true)} className="cursor-pointer text-sm font-[450] text-gray-800">
-                    <Headphones className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                    <span>Customer Support</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-sm font-[450] text-red-600">
-                    <LogOut className="h-4 w-4 mr-2 text-red-600" strokeWidth={2.75} />
-                    <span>Log out</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {/* Top row: Avatar, Name, Email, and Menu */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3 overflow-hidden min-w-0 max-w-[80%]">
-                  <div className="h-8 w-8 rounded-md overflow-hidden flex-shrink-0">
-                    {merchantData?.logoUrl && !logoError ? (
-                      <div className="w-full h-full relative">
-                        <img 
-                          src={merchantData.logoUrl} 
-                          alt={merchantName} 
-                          className="w-full h-full object-cover"
-                          onError={() => setLogoError(true)}
-                          onLoad={() => setLogoLoading(false)}
-                          style={{ opacity: logoLoading ? 0 : 1, transition: 'opacity 0.2s ease-in-out' }}
-                        />
-                        {logoLoading && (
-                          <div className="absolute inset-0 bg-primary text-white text-xs flex items-center justify-center">
-                            {initials}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="w-full h-full bg-primary text-white text-xs flex items-center justify-center">
-                        {initials}
-                      </div>
-                    )}
-                  </div>
-                  <div className="overflow-hidden">
-                    <p className="text-sm font-[450] truncate">{merchantName}</p>
-                    <p className="text-xs text-muted-foreground truncate">{merchantEmail}</p>
-                  </div>
-                </div>
-                
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild className="flex-shrink-0 ml-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
-                      <MoreVertical className="h-4 w-4" strokeWidth={2.75} />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem asChild>
-                      <Link href="/merchant/profile" className="cursor-pointer flex items-center text-sm font-[450] text-gray-800">
-                        <User className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                        <span>Profile</span>
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setSettingsDialogOpen(true)} className="cursor-pointer text-sm font-[450] text-gray-800">
-                      <Settings className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                      <span>Settings</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/dashboard/integrations" className="cursor-pointer flex items-center text-sm font-[450] text-gray-800">
-                        <Layers className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                        <span>Integrations</span>
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/docs" className="cursor-pointer flex items-center text-sm font-[450] text-gray-800">
-                        <FileText className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                        <span>Help Guide</span>
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setSupportBoxOpen(true)} className="cursor-pointer text-sm font-[450] text-gray-800">
-                      <Headphones className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-                      <span>Customer Support</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-sm font-[450] text-red-600">
-                      <LogOut className="h-4 w-4 mr-2 text-red-600" strokeWidth={2.75} />
-                      <span>Log out</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-
-              {/* Status and Plan Info */}
-              <div className="pt-3 border-t border-gray-200 space-y-2">
-                {/* Status Row */}
-                <div className="flex items-center justify-between group">
-                  <span className="text-xs text-gray-500">Status</span>
-                  <div className="relative">
-                    {/* Default status display */}
-                    <div className="flex items-center gap-1.5 group-hover:opacity-0 transition-opacity duration-500 ease-out">
-                      <div className={cn(
-                        "h-2 w-2 rounded-full",
-                        merchantStatus === 'active' ? "bg-green-500" : "bg-gray-400"
-                      )} />
-                      <span className={cn(
-                        "text-xs font-medium",
-                        merchantStatus === 'active' ? "text-green-700" : "text-gray-600"
-                      )}>
-                        {merchantStatus === 'active' ? 'Live' : 'Offline'}
-                      </span>
-                    </div>
-                    
-                    {/* Hover state: Deactivate/Activate button */}
-                    {merchantStatus === 'active' && (
-                      <button 
-                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out flex items-center justify-end"
-                        onClick={() => updateMerchantStatus('inactive')}
-                      >
-                        <span className="bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-md border border-red-200 hover:bg-red-200 transition-colors whitespace-nowrap">
-                          Deactivate
-                        </span>
-                      </button>
-                    )}
-                    
-                    {merchantStatus === 'inactive' && (
-                      <button 
-                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out flex items-center justify-end"
-                        onClick={() => updateMerchantStatus('active')}
-                      >
-                        <span className="bg-green-100 text-green-700 text-xs font-medium px-2 py-0.5 rounded-md border border-green-200 hover:bg-green-200 transition-colors whitespace-nowrap">
-                          Activate
-                        </span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Plan Row */}
-                <div className="flex items-center justify-between group">
-                  <span className="text-xs text-gray-500">Plan</span>
-                  <div className="relative">
-                    {/* Default plan display */}
-                    <div className="flex items-center gap-1.5 group-hover:opacity-0 transition-opacity duration-500 ease-out">
-                      {merchantData?.isNetworkStore ? (
-                        <Globe className="h-3 w-3 text-blue-500" strokeWidth={2.75} />
-                      ) : (
-                                                  <Circle className="h-3 w-3 text-gray-500" strokeWidth={2.75} />
-                      )}
-                      <span className={cn(
-                        "text-xs font-medium",
-                        merchantData?.isNetworkStore ? "text-blue-700" : "text-gray-700"
-                      )}>
-                        {merchantData?.isNetworkStore ? "Tap Network" : "Tap Standard"}
-                      </span>
-                    </div>
-                    
-                    {/* Hover state: Change Plan badge */}
-                    <button 
-                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out flex items-center justify-end"
-                      onClick={() => {
-                        // Add navigation to plan page or plan change modal
-                        window.location.href = '/plan';
-                      }}
-                    >
-                      <span className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-md border border-blue-200 hover:bg-blue-200 transition-colors whitespace-nowrap">
-                        Change Plan
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+      {/* Account section at the bottom - using NavUser component */}
+      <div className="mt-auto border-t border-gray-200 p-3">
+        <NavUser 
+          user={{
+            name: merchantName,
+            email: merchantEmail,
+            avatar: merchantData?.logoUrl && !logoError ? merchantData.logoUrl : "",
+            initials: initials,
+            uid: user?.uid
+          }}
+          status={merchantStatus}
+          isNetworkStore={merchantData?.isNetworkStore}
+          onLogout={handleLogout}
+          onOpenSettings={() => setSettingsDialogOpen(true)}
+          onOpenSupport={() => setSupportBoxOpen(true)}
+          onStatusChange={(newStatus) => setMerchantStatus(newStatus)}
+        />
       </div>
 
       {/* CreateSheet component */}

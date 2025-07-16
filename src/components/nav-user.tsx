@@ -127,21 +127,18 @@ export function NavUser({
         sideOffset={4}
       >
             <DropdownMenuLabel className="p-0 font-normal">
-              <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                <div className="relative">
-                  <Avatar className="h-8 w-8 rounded-lg">
-                    <AvatarImage src={user.avatar} alt={user.name} />
-                    <AvatarFallback className="rounded-lg">{user.initials}</AvatarFallback>
-                  </Avatar>
-                  {/* Status dot in bottom right corner */}
-                  <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${
-                    status === 'active' ? 'bg-green-500' : 'bg-red-500'
-                  }`} />
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
+              <div className="flex items-center gap-2 px-1 py-1 text-left text-sm">
+                <Avatar className="h-6 w-6 rounded-md">
+                  <AvatarImage src={user.avatar} alt={user.name} />
+                  <AvatarFallback className="rounded-md text-xs">{user.initials}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
-                  <span className="truncate text-xs">{user.email}</span>
                 </div>
+                {/* Status dot on far right */}
+                <div className={`h-2 w-2 rounded-full ${
+                  status === 'active' ? 'bg-green-500' : 'bg-red-500'
+                }`} />
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />

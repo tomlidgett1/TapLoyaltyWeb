@@ -573,6 +573,11 @@ export default function EmailPage() {
   const [selectedFolder, setSelectedFolder] = useState("inbox")
   const [selectedEmail, setSelectedEmail] = useState<any>(null)
   const [selectedThread, setSelectedThread] = useState<any>(null)
+  const [replyMode, setReplyMode] = useState<{
+    type: 'reply' | 'replyAll' | 'forward'
+    originalEmail: any
+    thread?: any
+  } | null>(null)
   const [selectedAccount, setSelectedAccount] = useState("")
   const [composeMode, setComposeMode] = useState<"none" | "reply" | "replyAll" | "forward">("none")
   const [composeSubject, setComposeSubject] = useState("")
@@ -1610,7 +1615,7 @@ export default function EmailPage() {
                         }}
                       >
                           <ChevronRight 
-                            className={`h-3.5 w-3.5 transition-transform duration-300 ease-in-out ${
+                            className={`h-3.5 w-3.5 transition-transform duration-200 ease-out ${
                               expandedThreads.has(thread.threadId) ? 'rotate-90' : 'rotate-0'
                             }`} 
                           />
@@ -1671,14 +1676,14 @@ export default function EmailPage() {
                   {/* Expanded thread emails */}
                   {thread.count > 1 && (
                     <div 
-                      className={`bg-gray-50 overflow-hidden transition-all duration-300 ease-in-out ${
+                      className={`bg-gray-50 overflow-hidden transition-all duration-200 ease-out ${
                         expandedThreads.has(thread.threadId) 
                           ? 'max-h-screen opacity-100' 
                           : 'max-h-0 opacity-0'
                       }`}
                       style={{
                         transitionProperty: 'max-height, opacity',
-                        maxHeight: expandedThreads.has(thread.threadId) ? '1000px' : '0px'
+                        maxHeight: expandedThreads.has(thread.threadId) ? '800px' : '0px'
                       }}
                     >
                       {thread.emails.slice(1).map((email: any, index: number) => (
@@ -1730,12 +1735,38 @@ export default function EmailPage() {
 
         {/* Right Panel - Email Content */}
         <div className="flex-1 flex flex-col h-full">
-          {selectedThread ? (
+          {replyMode ? (
+            <EmailReplyView
+              replyData={replyMode}
+              merchantData={merchantData}
+              userEmail={user?.email || ''}
+              merchantEmail={merchantEmail}
+              onSend={async (content: string, subject: string, recipients: string[]) => {
+                try {
+                  // TODO: Implement actual email sending logic here
+                  console.log('Sending email:', { content, subject, recipients });
+                  
+                  // For now, just close the reply interface
+                  setReplyMode(null);
+                  
+                  // You can add your email sending API call here
+                  alert('Email sent successfully!');
+                } catch (error) {
+                  console.error('Error sending email:', error);
+                  alert('Failed to send email');
+                }
+              }}
+              onCancel={() => setReplyMode(null)}
+            />
+          ) : selectedThread ? (
             <EmailThreadViewer 
               thread={selectedThread} 
               merchantData={merchantData}
               userEmail={user?.email || ''}
               merchantEmail={merchantEmail}
+              onReply={(email: any) => setReplyMode({ type: 'reply', originalEmail: email, thread: selectedThread })}
+              onReplyAll={(email: any) => setReplyMode({ type: 'replyAll', originalEmail: email, thread: selectedThread })}
+              onForward={(email: any) => setReplyMode({ type: 'forward', originalEmail: email, thread: selectedThread })}
             />
           ) : selectedEmail ? (
             <EmailViewer 
@@ -1743,6 +1774,9 @@ export default function EmailPage() {
               merchantData={merchantData}
               userEmail={user?.email || ''}
               merchantEmail={merchantEmail}
+              onReply={(email: any) => setReplyMode({ type: 'reply', originalEmail: email })}
+              onReplyAll={(email: any) => setReplyMode({ type: 'replyAll', originalEmail: email })}
+              onForward={(email: any) => setReplyMode({ type: 'forward', originalEmail: email })}
             />
           ) : (
             <EmptyEmailView />
@@ -1930,6 +1964,189 @@ const EmptyEmailView = () => (
   </div>
 );
 
+// Full-panel Email Reply View Component
+const EmailReplyView = ({ 
+  replyData,
+  merchantData,
+  userEmail,
+  merchantEmail,
+  onSend,
+  onCancel
+}: {
+  replyData: { type: 'reply' | 'replyAll' | 'forward', originalEmail: any, thread?: any }
+  merchantData: any
+  userEmail: string
+  merchantEmail: string
+  onSend: (content: string, subject: string, recipients: string[]) => void
+  onCancel: () => void
+}) => {
+  const [replyContent, setReplyContent] = useState('');
+  const [subject, setSubject] = useState('');
+  const [recipients, setRecipients] = useState<string[]>([]);
+
+  useEffect(() => {
+    // Set default subject and recipients based on reply type
+    if (replyData.type === 'reply') {
+      setSubject(replyData.originalEmail.subject.startsWith('Re: ') ? replyData.originalEmail.subject : `Re: ${replyData.originalEmail.subject}`);
+      setRecipients([replyData.originalEmail.email]);
+    } else if (replyData.type === 'replyAll') {
+      setSubject(replyData.originalEmail.subject.startsWith('Re: ') ? replyData.originalEmail.subject : `Re: ${replyData.originalEmail.subject}`);
+      // Add logic to get all recipients (for now, just sender)
+      setRecipients([replyData.originalEmail.email]);
+    } else if (replyData.type === 'forward') {
+      setSubject(replyData.originalEmail.subject.startsWith('Fwd: ') ? replyData.originalEmail.subject : `Fwd: ${replyData.originalEmail.subject}`);
+      setRecipients([]);
+    }
+  }, [replyData]);
+
+  const handleSend = () => {
+    if (replyContent.trim()) {
+      onSend(replyContent, subject, recipients);
+    }
+  };
+
+  const getDisplayName = () => {
+    switch (replyData.type) {
+      case 'reply': return 'Reply'
+      case 'replyAll': return 'Reply All'
+      case 'forward': return 'Forward'
+      default: return 'Compose'
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="border-b border-gray-200 p-6 bg-white">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Reply className="h-5 w-5 text-gray-600" />
+            <h1 className="text-base font-medium text-gray-900">{getDisplayName()}</h1>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onCancel}
+            className="h-8 w-8 p-0 hover:bg-gray-100"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Compose Form */}
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-medium text-gray-700 mb-1 block">Subject</label>
+            <Input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="text-sm"
+              placeholder="Subject"
+            />
+          </div>
+          
+          {replyData.type === 'forward' ? (
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-1 block">To</label>
+              <Input
+                value={recipients.join(', ')}
+                onChange={(e) => setRecipients(e.target.value.split(',').map(r => r.trim()).filter(r => r))}
+                className="text-sm"
+                placeholder="Enter email addresses"
+              />
+            </div>
+          ) : (
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-1 block">To</label>
+              <div className="text-sm text-gray-600 py-2 px-3 bg-gray-50 rounded-md border border-gray-200">
+                {recipients.join(', ')}
+              </div>
+            </div>
+          )}
+
+          {/* Compose Textarea */}
+          <div>
+            <label className="text-xs font-medium text-gray-700 mb-1 block">Message</label>
+            <Textarea
+              value={replyContent}
+              onChange={(e) => setReplyContent(e.target.value)}
+              placeholder="Type your message..."
+              className="min-h-[120px] resize-none border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+          
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 pt-2">
+            <Button
+              onClick={handleSend}
+              disabled={!replyContent.trim() || (replyData.type === 'forward' && recipients.length === 0)}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <Send className="h-4 w-4 mr-2" />
+              Send
+            </Button>
+            <Button
+              variant="outline"
+              onClick={onCancel}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Thread/Email History Below */}
+      <div className="flex-1 overflow-auto bg-white custom-scrollbar">
+        <div className="p-6">
+          <div className="text-sm text-gray-500 mb-4 border-b border-gray-200 pb-2">
+            Previous messages
+          </div>
+          
+          {replyData.thread ? (
+            // Show thread messages
+            <div className="space-y-4">
+              {replyData.thread.emails.map((email: any, index: number) => (
+                <div key={email.id || index} className="border border-gray-200 rounded-md p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-900">{email.sender}</span>
+                      <span className="text-xs text-gray-500">&lt;{email.email}&gt;</span>
+                    </div>
+                    <span className="text-xs text-gray-500">
+                      {formatMelbourneTime(email.messageTimestamp)}
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-600 mb-2">{email.subject}</div>
+                  <div className="text-sm text-gray-800 leading-relaxed">
+                    {email.preview}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            // Show single email
+            <div className="border border-gray-200 rounded-md p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-900">{replyData.originalEmail.sender}</span>
+                  <span className="text-xs text-gray-500">&lt;{replyData.originalEmail.email}&gt;</span>
+                </div>
+                <span className="text-xs text-gray-500">
+                  {formatMelbourneTime(replyData.originalEmail.messageTimestamp)}
+                </span>
+              </div>
+              <div className="text-sm text-gray-600 mb-2">{replyData.originalEmail.subject}</div>
+              <div className="text-sm text-gray-800 leading-relaxed">
+                {replyData.originalEmail.preview}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Email Reply Interface Component
 const EmailReplyInterface = ({ 
   email, 
@@ -2055,11 +2272,14 @@ const EmailReplyInterface = ({
 };
 
 // Single email viewer component
-const EmailViewer = ({ email, merchantData, userEmail, merchantEmail }: {
+const EmailViewer = ({ email, merchantData, userEmail, merchantEmail, onReply, onReplyAll, onForward }: {
   email: any;
   merchantData: any;
   userEmail: string;
   merchantEmail: string;
+  onReply?: (email: any) => void;
+  onReplyAll?: (email: any) => void;
+  onForward?: (email: any) => void;
 }) => {
   const [htmlContent, setHtmlContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -2133,7 +2353,7 @@ const EmailViewer = ({ email, merchantData, userEmail, merchantEmail }: {
                      variant="ghost" 
                      size="sm" 
                      className="h-8 w-8 p-0 hover:bg-gray-100"
-                     onClick={() => setReplyMode('reply')}
+                     onClick={() => onReply?.(email)}
                    >
                      <Reply className="h-4 w-4" />
                    </Button>
@@ -2151,7 +2371,7 @@ const EmailViewer = ({ email, merchantData, userEmail, merchantEmail }: {
                      variant="ghost" 
                      size="sm" 
                      className="h-8 w-8 p-0 hover:bg-gray-100"
-                     onClick={() => setReplyMode('replyAll')}
+                     onClick={() => onReplyAll?.(email)}
                    >
                      <ReplyAll className="h-4 w-4" />
                    </Button>
@@ -2169,7 +2389,7 @@ const EmailViewer = ({ email, merchantData, userEmail, merchantEmail }: {
                      variant="ghost" 
                      size="sm" 
                      className="h-8 w-8 p-0 hover:bg-gray-100"
-                     onClick={() => setReplyMode('forward')}
+                     onClick={() => onForward?.(email)}
                    >
                      <Forward className="h-4 w-4" />
                    </Button>
@@ -2264,11 +2484,14 @@ const EmailViewer = ({ email, merchantData, userEmail, merchantEmail }: {
 };
 
 // Thread viewer component
-const EmailThreadViewer = ({ thread, merchantData, userEmail, merchantEmail }: {
+const EmailThreadViewer = ({ thread, merchantData, userEmail, merchantEmail, onReply, onReplyAll, onForward }: {
   thread: any;
   merchantData: any;
   userEmail: string;
   merchantEmail: string;
+  onReply?: (email: any) => void;
+  onReplyAll?: (email: any) => void;
+  onForward?: (email: any) => void;
 }) => {
   const [expandedEmails, setExpandedEmails] = useState<Set<string>>(new Set([thread.emails[0]?.id]));
   const [replyMode, setReplyMode] = useState<'reply' | 'replyAll' | 'forward' | null>(null);
@@ -2327,7 +2550,7 @@ const EmailThreadViewer = ({ thread, merchantData, userEmail, merchantEmail }: {
                       variant="ghost" 
                       size="sm" 
                       className="h-8 w-8 p-0 hover:bg-gray-100"
-                      onClick={() => setReplyMode('reply')}
+                      onClick={() => onReply?.(mostRecentEmail)}
                     >
                       <Reply className="h-4 w-4" />
                     </Button>
@@ -2345,7 +2568,7 @@ const EmailThreadViewer = ({ thread, merchantData, userEmail, merchantEmail }: {
                       variant="ghost" 
                       size="sm" 
                       className="h-8 w-8 p-0 hover:bg-gray-100"
-                      onClick={() => setReplyMode('replyAll')}
+                      onClick={() => onReplyAll?.(mostRecentEmail)}
                     >
                       <ReplyAll className="h-4 w-4" />
                     </Button>
@@ -2363,7 +2586,7 @@ const EmailThreadViewer = ({ thread, merchantData, userEmail, merchantEmail }: {
                       variant="ghost" 
                       size="sm" 
                       className="h-8 w-8 p-0 hover:bg-gray-100"
-                      onClick={() => setReplyMode('forward')}
+                      onClick={() => onForward?.(mostRecentEmail)}
                     >
                       <Forward className="h-4 w-4" />
                     </Button>
@@ -2475,7 +2698,7 @@ const EmailInThread = ({ email, isExpanded, onToggleExpansion, merchantData, use
         <div className="flex items-center gap-3">
           <button className="text-gray-400 hover:text-gray-600">
             <ChevronRight 
-              className={`h-4 w-4 transition-transform duration-300 ease-in-out ${
+              className={`h-4 w-4 transition-transform duration-200 ease-out ${
                 isExpanded ? 'rotate-90' : 'rotate-0'
               }`} 
             />

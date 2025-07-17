@@ -52,17 +52,17 @@ export function NavCreate({
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          className="w-full justify-start gap-2 h-auto p-2 data-[state=open]:bg-gray-100 focus:outline-none focus-visible:outline-none focus-visible:ring-0"
+          className="group w-full justify-start gap-2 h-auto p-2 data-[state=open]:bg-gray-100 hover:bg-[#007AFF]/5 focus:outline-none focus-visible:outline-none focus-visible:ring-0 transition-colors duration-200"
         >
           <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-            <PlusCircle className="h-4 w-4 text-gray-500 group-hover:text-[#007AFF]" strokeWidth={2.75} />
+            <PlusCircle className="h-4 w-4 text-gray-500 group-hover:text-[#007AFF] transition-colors duration-200" strokeWidth={2.75} />
           </div>
           {!isCollapsed && (
             <>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium text-gray-800">Create</span>
+                <span className="truncate font-medium text-gray-800 group-hover:text-[#007AFF] transition-colors duration-200">Create</span>
               </div>
-              <ChevronDown className="ml-auto size-4 text-gray-500" strokeWidth={2.75} />
+              <ChevronDown className="ml-auto size-4 text-gray-500 group-hover:text-[#007AFF] transition-colors duration-200" strokeWidth={2.75} />
             </>
           )}
         </Button>

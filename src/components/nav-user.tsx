@@ -10,6 +10,7 @@ import {
   Headphones,
   Circle,
   Globe,
+  Activity,
 } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
@@ -101,7 +102,7 @@ export function NavUser({
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          className="w-full justify-start gap-2 h-auto p-2 data-[state=open]:bg-gray-100 focus:outline-none focus-visible:outline-none focus-visible:ring-0"
+          className="w-full justify-start gap-2 h-auto p-2 data-[state=open]:bg-gray-100 hover:bg-[#007AFF]/5 focus:outline-none focus-visible:outline-none focus-visible:ring-0 transition-colors duration-200"
         >
           <div className="relative">
             <Avatar className="h-8 w-8 rounded-lg">
@@ -121,8 +122,8 @@ export function NavUser({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="w-56 rounded-lg"
-        side="right"
+        className="w-56 rounded-lg ml-4"
+        side="top"
         align="end"
         sideOffset={4}
       >
@@ -149,33 +150,29 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuGroup>
               <DropdownMenuItem 
-                className="flex items-center justify-between cursor-pointer group"
+                className="cursor-pointer group"
                 onClick={toggleStoreStatus}
                 disabled={loading}
               >
-                <div className="flex items-center gap-2">
-                  <div className={`h-2 w-2 rounded-full ${status === 'active' ? 'bg-green-500' : 'bg-red-500'}`} />
-                  <span className="text-sm">Status</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs font-medium ${status === 'active' ? 'text-green-700' : 'text-red-700'} group-hover:hidden`}>
+                <Activity className="h-4 w-4" strokeWidth={2.75} />
+                <span>Status</span>
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="text-xs font-medium group-hover:hidden">
                     {loading ? 'Updating...' : (status === 'active' ? 'Live' : 'Offline')}
                   </span>
-                  <span className={`text-xs font-medium hidden group-hover:inline ${status === 'active' ? 'text-red-600' : 'text-green-600'}`}>
+                  <span className="text-xs font-medium hidden group-hover:inline">
                     {loading ? 'Updating...' : (status === 'active' ? 'Click to Deactivate' : 'Click to Activate')}
                   </span>
                 </div>
               </DropdownMenuItem>
-              <DropdownMenuItem className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {isNetworkStore ? (
-                    <Globe className="h-3 w-3 text-blue-500" strokeWidth={2.75} />
-                  ) : (
-                    <Circle className="h-3 w-3 text-gray-500" strokeWidth={2.75} />
-                  )}
-                  <span className="text-sm">Plan</span>
-                </div>
-                <span className={`text-xs font-medium ${isNetworkStore ? 'text-blue-700' : 'text-gray-700'}`}>
+              <DropdownMenuItem>
+                {isNetworkStore ? (
+                  <Globe className="h-4 w-4" strokeWidth={2.75} />
+                ) : (
+                  <Circle className="h-4 w-4" strokeWidth={2.75} />
+                )}
+                <span>Plan</span>
+                <span className="ml-auto text-xs font-medium">
                   {isNetworkStore ? "Network" : "Standard"}
                 </span>
               </DropdownMenuItem>

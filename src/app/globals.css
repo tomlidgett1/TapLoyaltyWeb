@@ -286,3 +286,213 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
 .constrained-width .agent-logs-table td:nth-child(4) {
   width: 20%;
 }
+
+/* Email Content Styling */
+.email-content {
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+.email-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.email-content table {
+  max-width: 100%;
+  border-collapse: collapse;
+  margin: 1.5em 0;
+  line-height: 1.6;
+}
+
+.email-content table td,
+.email-content table th {
+  padding: 12px 16px;
+  border: 1px solid #e5e7eb;
+  vertical-align: top;
+  line-height: 1.6;
+}
+
+.email-content blockquote {
+  border-left: 4px solid #e5e7eb;
+  margin: 0.75em 0;
+  padding: 0.25em 0 0.25em 1em;
+  color: #6b7280;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.email-content a {
+  color: #3b82f6;
+  text-decoration: underline;
+}
+
+.email-content a:hover {
+  color: #1d4ed8;
+}
+
+.email-content pre,
+.email-content code {
+  background-color: #f3f4f6;
+  border-radius: 4px;
+  padding: 0.25em 0.5em;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.85em;
+}
+
+.email-content pre {
+  padding: 1em;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.email-content h1,
+.email-content h2,
+.email-content h3,
+.email-content h4,
+.email-content h5,
+.email-content h6 {
+  margin: 1em 0 0.5em 0;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.email-content p {
+  margin: 0.5em 0;
+  line-height: 1.5;
+}
+
+.email-content ul,
+.email-content ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+  line-height: 1.5;
+}
+
+.email-content li {
+  margin: 0.25em 0;
+}
+
+/* Handle email signatures and quoted content */
+.email-content [style*="color: rgb(136, 136, 136)"],
+.email-content [style*="color: #888"],
+.email-content [style*="color: gray"] {
+  opacity: 0.7;
+  font-size: 0.9em;
+}
+
+/* Ensure email content respects container boundaries */
+.email-content * {
+  max-width: 100% !important;
+  box-sizing: border-box;
+}
+
+/* Reduce excessive spacing in email content */
+.email-content div {
+  margin: 0;
+}
+
+.email-content div + div {
+  margin-top: 0.25em;
+}
+
+.email-content br + br {
+  display: none;
+}
+
+.email-content p:first-child {
+  margin-top: 0;
+}
+
+.email-content p:last-child {
+  margin-bottom: 0;
+}
+
+/* Handle common email spacing patterns */
+.email-content div > p:only-child {
+  margin: 0;
+}
+
+.email-content div > div {
+  margin-top: 0.25em;
+}
+
+/* Thread expansion animations */
+.thread-expand-enter {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out;
+}
+
+.thread-expand-enter-active {
+  max-height: 1000px;
+  opacity: 1;
+}
+
+.thread-expand-exit {
+  max-height: 1000px;
+  opacity: 1;
+  overflow: hidden;
+  transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out;
+}
+
+.thread-expand-exit-active {
+  max-height: 0;
+  opacity: 0;
+}
+
+/* Smooth slide animations for email threads */
+@keyframes slideDown {
+  from {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    max-height: 1000px;
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    max-height: 1000px;
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+.slide-down {
+  animation: slideDown 0.3s ease-in-out forwards;
+}
+
+.slide-up {
+  animation: slideUp 0.3s ease-in-out forwards;
+}
+
+/* Unread indicator pulse animation */
+@keyframes unreadPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+.unread-indicator {
+  animation: unreadPulse 2s infinite;
+}

@@ -1735,38 +1735,27 @@ export default function EmailPage() {
 
         {/* Right Panel - Email Content */}
         <div className="flex-1 flex flex-col h-full">
-          {replyMode ? (
-            <EmailReplyView
-              replyData={replyMode}
+          {selectedThread ? (
+            <EmailThreadViewer 
+              thread={selectedThread} 
               merchantData={merchantData}
               userEmail={user?.email || ''}
               merchantEmail={merchantEmail}
-              onSend={async (content: string, subject: string, recipients: string[]) => {
+              replyMode={replyMode}
+              onStartReply={(email: any) => setReplyMode({ type: 'reply', originalEmail: email, thread: selectedThread })}
+              onStartReplyAll={(email: any) => setReplyMode({ type: 'replyAll', originalEmail: email, thread: selectedThread })}
+              onStartForward={(email: any) => setReplyMode({ type: 'forward', originalEmail: email, thread: selectedThread })}
+              onSendReply={async (content: string, subject: string, recipients: string[]) => {
                 try {
-                  // TODO: Implement actual email sending logic here
                   console.log('Sending email:', { content, subject, recipients });
-                  
-                  // For now, just close the reply interface
                   setReplyMode(null);
-                  
-                  // You can add your email sending API call here
                   alert('Email sent successfully!');
                 } catch (error) {
                   console.error('Error sending email:', error);
                   alert('Failed to send email');
                 }
               }}
-              onCancel={() => setReplyMode(null)}
-            />
-          ) : selectedThread ? (
-            <EmailThreadViewer 
-              thread={selectedThread} 
-              merchantData={merchantData}
-              userEmail={user?.email || ''}
-              merchantEmail={merchantEmail}
-              onReply={(email: any) => setReplyMode({ type: 'reply', originalEmail: email, thread: selectedThread })}
-              onReplyAll={(email: any) => setReplyMode({ type: 'replyAll', originalEmail: email, thread: selectedThread })}
-              onForward={(email: any) => setReplyMode({ type: 'forward', originalEmail: email, thread: selectedThread })}
+              onCancelReply={() => setReplyMode(null)}
             />
           ) : selectedEmail ? (
             <EmailViewer 
@@ -1774,9 +1763,21 @@ export default function EmailPage() {
               merchantData={merchantData}
               userEmail={user?.email || ''}
               merchantEmail={merchantEmail}
-              onReply={(email: any) => setReplyMode({ type: 'reply', originalEmail: email })}
-              onReplyAll={(email: any) => setReplyMode({ type: 'replyAll', originalEmail: email })}
-              onForward={(email: any) => setReplyMode({ type: 'forward', originalEmail: email })}
+              replyMode={replyMode}
+              onStartReply={(email: any) => setReplyMode({ type: 'reply', originalEmail: email })}
+              onStartReplyAll={(email: any) => setReplyMode({ type: 'replyAll', originalEmail: email })}
+              onStartForward={(email: any) => setReplyMode({ type: 'forward', originalEmail: email })}
+              onSendReply={async (content: string, subject: string, recipients: string[]) => {
+                try {
+                  console.log('Sending email:', { content, subject, recipients });
+                  setReplyMode(null);
+                  alert('Email sent successfully!');
+                } catch (error) {
+                  console.error('Error sending email:', error);
+                  alert('Failed to send email');
+                }
+              }}
+              onCancelReply={() => setReplyMode(null)}
             />
           ) : (
             <EmptyEmailView />
@@ -1964,21 +1965,15 @@ const EmptyEmailView = () => (
   </div>
 );
 
-// Full-panel Email Reply View Component
-const EmailReplyView = ({ 
+// Integrated Reply Interface Component
+const IntegratedReplyInterface = ({ 
   replyData,
-  merchantData,
-  userEmail,
-  merchantEmail,
   onSend,
   onCancel
 }: {
   replyData: { type: 'reply' | 'replyAll' | 'forward', originalEmail: any, thread?: any }
-  merchantData: any
-  userEmail: string
-  merchantEmail: string
-  onSend: (content: string, subject: string, recipients: string[]) => void
-  onCancel: () => void
+  onSend?: (content: string, subject: string, recipients: string[]) => void
+  onCancel?: () => void
 }) => {
   const [replyContent, setReplyContent] = useState('');
   const [subject, setSubject] = useState('');
@@ -1991,7 +1986,6 @@ const EmailReplyView = ({
       setRecipients([replyData.originalEmail.email]);
     } else if (replyData.type === 'replyAll') {
       setSubject(replyData.originalEmail.subject.startsWith('Re: ') ? replyData.originalEmail.subject : `Re: ${replyData.originalEmail.subject}`);
-      // Add logic to get all recipients (for now, just sender)
       setRecipients([replyData.originalEmail.email]);
     } else if (replyData.type === 'forward') {
       setSubject(replyData.originalEmail.subject.startsWith('Fwd: ') ? replyData.originalEmail.subject : `Fwd: ${replyData.originalEmail.subject}`);
@@ -2000,7 +1994,7 @@ const EmailReplyView = ({
   }, [replyData]);
 
   const handleSend = () => {
-    if (replyContent.trim()) {
+    if (replyContent.trim() && onSend) {
       onSend(replyContent, subject, recipients);
     }
   };
@@ -2015,245 +2009,69 @@ const EmailReplyView = ({
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="border-b border-gray-200 p-6 bg-white">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Reply className="h-5 w-5 text-gray-600" />
-            <h1 className="text-base font-medium text-gray-900">{getDisplayName()}</h1>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onCancel}
-            className="h-8 w-8 p-0 hover:bg-gray-100"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+    <div className="border-b border-gray-200 p-6 bg-white">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Reply className="h-5 w-5 text-gray-600" />
+          <h1 className="text-base font-medium text-gray-900">{getDisplayName()}</h1>
         </div>
-
-        {/* Compose Form */}
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs font-medium text-gray-700 mb-1 block">Subject</label>
-            <Input
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              className="text-sm"
-              placeholder="Subject"
-            />
-          </div>
-          
-          {replyData.type === 'forward' ? (
-            <div>
-              <label className="text-xs font-medium text-gray-700 mb-1 block">To</label>
-              <Input
-                value={recipients.join(', ')}
-                onChange={(e) => setRecipients(e.target.value.split(',').map(r => r.trim()).filter(r => r))}
-                className="text-sm"
-                placeholder="Enter email addresses"
-              />
-            </div>
-          ) : (
-            <div>
-              <label className="text-xs font-medium text-gray-700 mb-1 block">To</label>
-              <div className="text-sm text-gray-600 py-2 px-3 bg-gray-50 rounded-md border border-gray-200">
-                {recipients.join(', ')}
-              </div>
-            </div>
-          )}
-
-          {/* Compose Textarea */}
-          <div>
-            <label className="text-xs font-medium text-gray-700 mb-1 block">Message</label>
-            <Textarea
-              value={replyContent}
-              onChange={(e) => setReplyContent(e.target.value)}
-              placeholder="Type your message..."
-              className="min-h-[120px] resize-none border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-            />
-          </div>
-          
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 pt-2">
-            <Button
-              onClick={handleSend}
-              disabled={!replyContent.trim() || (replyData.type === 'forward' && recipients.length === 0)}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Send
-            </Button>
-            <Button
-              variant="outline"
-              onClick={onCancel}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onCancel}
+          className="h-8 w-8 p-0 hover:bg-gray-100"
+        >
+          <X className="h-4 w-4" />
+        </Button>
       </div>
 
-      {/* Thread/Email History Below */}
-      <div className="flex-1 overflow-auto bg-white custom-scrollbar">
-        <div className="p-6">
-          <div className="text-sm text-gray-500 mb-4 border-b border-gray-200 pb-2">
-            Previous messages
-          </div>
-          
-          {replyData.thread ? (
-            // Show thread messages
-            <div className="space-y-4">
-              {replyData.thread.emails.map((email: any, index: number) => (
-                <div key={email.id || index} className="border border-gray-200 rounded-md p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-gray-900">{email.sender}</span>
-                      <span className="text-xs text-gray-500">&lt;{email.email}&gt;</span>
-                    </div>
-                    <span className="text-xs text-gray-500">
-                      {formatMelbourneTime(email.messageTimestamp)}
-                    </span>
-                  </div>
-                  <div className="text-sm text-gray-600 mb-2">{email.subject}</div>
-                  <div className="text-sm text-gray-800 leading-relaxed">
-                    {email.preview}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            // Show single email
-            <div className="border border-gray-200 rounded-md p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-gray-900">{replyData.originalEmail.sender}</span>
-                  <span className="text-xs text-gray-500">&lt;{replyData.originalEmail.email}&gt;</span>
-                </div>
-                <span className="text-xs text-gray-500">
-                  {formatMelbourneTime(replyData.originalEmail.messageTimestamp)}
-                </span>
-              </div>
-              <div className="text-sm text-gray-600 mb-2">{replyData.originalEmail.subject}</div>
-              <div className="text-sm text-gray-800 leading-relaxed">
-                {replyData.originalEmail.preview}
-              </div>
-            </div>
-          )}
+      {/* Compose Form */}
+      <div className="space-y-3">
+        <div>
+          <label className="text-xs font-medium text-gray-700 mb-1 block">Subject</label>
+          <Input
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            className="text-sm"
+            placeholder="Subject"
+          />
         </div>
-      </div>
-    </div>
-  );
-};
-
-// Email Reply Interface Component
-const EmailReplyInterface = ({ 
-  email, 
-  replyType, 
-  onSend, 
-  onCancel,
-  userEmail,
-  merchantData 
-}: {
-  email: any;
-  replyType: 'reply' | 'replyAll' | 'forward';
-  onSend: (content: string, subject: string, recipients: string[]) => void;
-  onCancel: () => void;
-  userEmail: string;
-  merchantData: any;
-}) => {
-  const [replyContent, setReplyContent] = useState('');
-  const [subject, setSubject] = useState('');
-  const [recipients, setRecipients] = useState<string[]>([]);
-
-  useEffect(() => {
-    // Set default subject and recipients based on reply type
-    if (replyType === 'reply') {
-      setSubject(email.subject.startsWith('Re: ') ? email.subject : `Re: ${email.subject}`);
-      setRecipients([email.email]);
-    } else if (replyType === 'replyAll') {
-      setSubject(email.subject.startsWith('Re: ') ? email.subject : `Re: ${email.subject}`);
-      // Add logic to get all recipients (for now, just sender)
-      setRecipients([email.email]);
-    } else if (replyType === 'forward') {
-      setSubject(email.subject.startsWith('Fwd: ') ? email.subject : `Fwd: ${email.subject}`);
-      setRecipients([]);
-    }
-  }, [email, replyType]);
-
-  const handleSend = () => {
-    if (replyContent.trim()) {
-      onSend(replyContent, subject, recipients);
-    }
-  };
-
-  return (
-    <div className="border-t border-gray-200 bg-gray-50">
-      {/* Reply Header */}
-      <div className="p-4 border-b border-gray-200 bg-white">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Reply className="h-4 w-4 text-gray-600" />
-            <span className="font-medium text-gray-900 capitalize">{replyType === 'replyAll' ? 'Reply All' : replyType}</span>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onCancel}
-            className="h-8 w-8 p-0 hover:bg-gray-100"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Reply Fields */}
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs font-medium text-gray-700 mb-1 block">Subject</label>
-            <Input
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              className="text-sm"
-              placeholder="Subject"
-            />
-          </div>
-          
-          {replyType === 'forward' && (
-            <div>
-              <label className="text-xs font-medium text-gray-700 mb-1 block">To</label>
-              <Input
-                value={recipients.join(', ')}
-                onChange={(e) => setRecipients(e.target.value.split(',').map(r => r.trim()).filter(r => r))}
-                className="text-sm"
-                placeholder="Enter email addresses"
-              />
-            </div>
-          )}
-          
-          {replyType !== 'forward' && (
-            <div>
-              <label className="text-xs font-medium text-gray-700 mb-1 block">To</label>
-              <div className="text-sm text-gray-600 py-2">{recipients.join(', ')}</div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Reply Content */}
-      <div className="p-4">
-        <Textarea
-          value={replyContent}
-          onChange={(e) => setReplyContent(e.target.value)}
-          placeholder="Type your message..."
-          className="min-h-[150px] resize-none border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-        />
         
-        {/* Reply Actions */}
-        <div className="flex items-center gap-2 mt-4">
+        {replyData.type === 'forward' ? (
+          <div>
+            <label className="text-xs font-medium text-gray-700 mb-1 block">To</label>
+            <Input
+              value={recipients.join(', ')}
+              onChange={(e) => setRecipients(e.target.value.split(',').map(r => r.trim()).filter(r => r))}
+              className="text-sm"
+              placeholder="Enter email addresses"
+            />
+          </div>
+        ) : (
+          <div>
+            <label className="text-xs font-medium text-gray-700 mb-1 block">To</label>
+            <div className="text-sm text-gray-600 py-2 px-3 bg-gray-50 rounded-md border border-gray-200">
+              {recipients.join(', ')}
+            </div>
+          </div>
+        )}
+
+        {/* Compose Textarea */}
+        <div>
+          <label className="text-xs font-medium text-gray-700 mb-1 block">Message</label>
+          <Textarea
+            value={replyContent}
+            onChange={(e) => setReplyContent(e.target.value)}
+            placeholder="Type your message..."
+            className="min-h-[120px] resize-none border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+          />
+        </div>
+        
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 pt-2">
           <Button
             onClick={handleSend}
-            disabled={!replyContent.trim() || (replyType === 'forward' && recipients.length === 0)}
+            disabled={!replyContent.trim() || (replyData.type === 'forward' && recipients.length === 0)}
             className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             <Send className="h-4 w-4 mr-2" />
@@ -2271,20 +2089,33 @@ const EmailReplyInterface = ({
   );
 };
 
-// Single email viewer component
-const EmailViewer = ({ email, merchantData, userEmail, merchantEmail, onReply, onReplyAll, onForward }: {
+// Single email viewer component with integrated reply
+const EmailViewer = ({ 
+  email, 
+  merchantData, 
+  userEmail, 
+  merchantEmail, 
+  replyMode,
+  onStartReply, 
+  onStartReplyAll, 
+  onStartForward,
+  onSendReply,
+  onCancelReply
+}: {
   email: any;
   merchantData: any;
   userEmail: string;
   merchantEmail: string;
-  onReply?: (email: any) => void;
-  onReplyAll?: (email: any) => void;
-  onForward?: (email: any) => void;
+  replyMode?: { type: 'reply' | 'replyAll' | 'forward', originalEmail: any, thread?: any } | null;
+  onStartReply?: (email: any) => void;
+  onStartReplyAll?: (email: any) => void;
+  onStartForward?: (email: any) => void;
+  onSendReply?: (content: string, subject: string, recipients: string[]) => void;
+  onCancelReply?: () => void;
 }) => {
   const [htmlContent, setHtmlContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const [replyMode, setReplyMode] = useState<'reply' | 'replyAll' | 'forward' | null>(null);
 
   useEffect(() => {
     const loadEmailContent = async () => {
@@ -2319,123 +2150,116 @@ const EmailViewer = ({ email, merchantData, userEmail, merchantEmail, onReply, o
 
   const isFromCurrentUser = isEmailFromCurrentUser(email.email, userEmail, merchantEmail);
 
-  const handleSendReply = async (content: string, subject: string, recipients: string[]) => {
-    try {
-      // TODO: Implement actual email sending logic here
-      console.log('Sending reply:', { content, subject, recipients });
-      
-      // For now, just close the reply interface
-      setReplyMode(null);
-      
-      // You can add your email sending API call here
-      alert('Reply sent successfully!');
-    } catch (error) {
-      console.error('Error sending reply:', error);
-      alert('Failed to send reply');
-    }
-  };
+  return (
+    <div className="flex flex-col h-full">
+      {/* Integrated Reply Interface - Shows at top when replying */}
+      {replyMode && (
+        <IntegratedReplyInterface
+          replyData={replyMode}
+          onSend={onSendReply}
+          onCancel={onCancelReply}
+        />
+      )}
 
-  const handleCancelReply = () => {
-    setReplyMode(null);
-  };
+      {/* Email Header */}
+      <div className="p-6 bg-white border-b border-gray-200">
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-base font-medium text-gray-900">{email.subject}</h1>
+          <div className="flex items-center gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 w-8 p-0 hover:bg-gray-100"
+                    onClick={() => onStartReply?.(email)}
+                  >
+                    <Reply className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Reply</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 w-8 p-0 hover:bg-gray-100"
+                    onClick={() => onStartReplyAll?.(email)}
+                  >
+                    <ReplyAll className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Reply All</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 w-8 p-0 hover:bg-gray-100"
+                    onClick={() => onStartForward?.(email)}
+                  >
+                    <Forward className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Forward</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        </div>
 
-     return (
-     <div className="flex flex-col h-full">
-       {/* Email Header */}
-       <div className="p-6 bg-white">
-         <div className="flex items-center justify-between mb-4">
-           <h1 className="text-base font-medium text-gray-900">{email.subject}</h1>
-           <div className="flex items-center gap-2">
-             <TooltipProvider>
-               <Tooltip>
-                 <TooltipTrigger asChild>
-                   <Button 
-                     variant="ghost" 
-                     size="sm" 
-                     className="h-8 w-8 p-0 hover:bg-gray-100"
-                     onClick={() => onReply?.(email)}
-                   >
-                     <Reply className="h-4 w-4" />
-                   </Button>
-                 </TooltipTrigger>
-                 <TooltipContent>
-                   <p>Reply</p>
-                 </TooltipContent>
-               </Tooltip>
-             </TooltipProvider>
-             
-             <TooltipProvider>
-               <Tooltip>
-                 <TooltipTrigger asChild>
-                   <Button 
-                     variant="ghost" 
-                     size="sm" 
-                     className="h-8 w-8 p-0 hover:bg-gray-100"
-                     onClick={() => onReplyAll?.(email)}
-                   >
-                     <ReplyAll className="h-4 w-4" />
-                   </Button>
-                 </TooltipTrigger>
-                 <TooltipContent>
-                   <p>Reply All</p>
-                 </TooltipContent>
-               </Tooltip>
-             </TooltipProvider>
-             
-             <TooltipProvider>
-               <Tooltip>
-                 <TooltipTrigger asChild>
-                   <Button 
-                     variant="ghost" 
-                     size="sm" 
-                     className="h-8 w-8 p-0 hover:bg-gray-100"
-                     onClick={() => onForward?.(email)}
-                   >
-                     <Forward className="h-4 w-4" />
-                   </Button>
-                 </TooltipTrigger>
-                 <TooltipContent>
-                   <p>Forward</p>
-                 </TooltipContent>
-               </Tooltip>
-             </TooltipProvider>
-           </div>
-         </div>
-         <div className="flex items-start justify-between">
-           <div className="flex items-center gap-3">
-             <Avatar className="h-8 w-8">
-               <AvatarImage src={merchantData?.logoUrl} />
-               <AvatarFallback className="bg-blue-100 text-blue-600 font-semibold text-sm">
-                 {email.sender.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
-               </AvatarFallback>
-             </Avatar>
-             <div>
-               <div className="flex items-center gap-2">
-                 <h2 className="font-medium text-gray-900 text-sm">{email.sender}</h2>
-                 {isFromCurrentUser && (
-                   <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                     <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
-                     You
-                   </span>
-                 )}
-               </div>
-               <p className="text-xs text-gray-600">{email.email}</p>
-             </div>
-           </div>
-           <div className="text-right">
-             <p className="text-sm text-gray-600">{formatMelbourneTime(email.time, 'Unknown time')}</p>
-             {email.hasAttachment && (
-               <div className="flex items-center gap-1 mt-1">
-                 <Paperclip className="h-3 w-3 text-gray-400" />
-                 <span className="text-xs text-gray-500">Attachment</span>
-               </div>
-             )}
-           </div>
-         </div>
-       </div>
+        <div className="flex items-center gap-3">
+          <Avatar className="h-10 w-10">
+            <AvatarImage src={merchantData?.logoUrl} />
+            <AvatarFallback className="bg-blue-100 text-blue-600 font-semibold">
+              {email.sender.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-gray-900">{email.sender}</span>
+              {isFromCurrentUser && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                  <div className="h-1 w-1 bg-blue-500 rounded-full flex-shrink-0"></div>
+                  You
+                </span>
+              )}
+              {(email as any).isGmail && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                  <div className="h-1 w-1 bg-blue-500 rounded-full flex-shrink-0"></div>
+                  Gmail
+                </span>
+              )}
+              {email.hasAttachment && (
+                <Paperclip className="h-3 w-3 text-gray-400 flex-shrink-0" />
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <span>to {userEmail}</span>
+              <span>•</span>
+              <span>{formatMelbourneTime(email.time, 'Unknown time')}</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
-       {/* Email Content */}
-       <div className="flex-1 overflow-auto p-6 pb-8 bg-white custom-scrollbar">
+      {/* Email Content */}
+      <div className="flex-1 overflow-auto p-6 bg-white custom-scrollbar">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <RefreshCw className="h-6 w-6 animate-spin text-gray-400 mr-3" />
@@ -2467,34 +2291,35 @@ const EmailViewer = ({ email, merchantData, userEmail, merchantEmail, onReply, o
           </div>
         )}
       </div>
-
-      {/* Reply Interface */}
-      {replyMode && (
-        <EmailReplyInterface
-          email={email}
-          replyType={replyMode}
-          onSend={handleSendReply}
-          onCancel={handleCancelReply}
-          userEmail={userEmail}
-          merchantData={merchantData}
-        />
-      )}
     </div>
   );
 };
 
-// Thread viewer component
-const EmailThreadViewer = ({ thread, merchantData, userEmail, merchantEmail, onReply, onReplyAll, onForward }: {
+// Thread viewer component with integrated reply
+const EmailThreadViewer = ({ 
+  thread, 
+  merchantData, 
+  userEmail, 
+  merchantEmail, 
+  replyMode,
+  onStartReply, 
+  onStartReplyAll, 
+  onStartForward,
+  onSendReply,
+  onCancelReply
+}: {
   thread: any;
   merchantData: any;
   userEmail: string;
   merchantEmail: string;
-  onReply?: (email: any) => void;
-  onReplyAll?: (email: any) => void;
-  onForward?: (email: any) => void;
+  replyMode?: { type: 'reply' | 'replyAll' | 'forward', originalEmail: any, thread?: any } | null;
+  onStartReply?: (email: any) => void;
+  onStartReplyAll?: (email: any) => void;
+  onStartForward?: (email: any) => void;
+  onSendReply?: (content: string, subject: string, recipients: string[]) => void;
+  onCancelReply?: () => void;
 }) => {
   const [expandedEmails, setExpandedEmails] = useState<Set<string>>(new Set([thread.emails[0]?.id]));
-  const [replyMode, setReplyMode] = useState<'reply' | 'replyAll' | 'forward' | null>(null);
 
   const toggleEmailExpansion = (emailId: string) => {
     const newExpanded = new Set(expandedEmails);
@@ -2506,31 +2331,20 @@ const EmailThreadViewer = ({ thread, merchantData, userEmail, merchantEmail, onR
     setExpandedEmails(newExpanded);
   };
 
-  const handleSendReply = async (content: string, subject: string, recipients: string[]) => {
-    try {
-      // TODO: Implement actual email sending logic here
-      console.log('Sending thread reply:', { content, subject, recipients });
-      
-      // For now, just close the reply interface
-      setReplyMode(null);
-      
-      // You can add your email sending API call here
-      alert('Reply sent successfully!');
-    } catch (error) {
-      console.error('Error sending reply:', error);
-      alert('Failed to send reply');
-    }
-  };
-
-  const handleCancelReply = () => {
-    setReplyMode(null);
-  };
-
   // Get the most recent email for replying
   const mostRecentEmail = thread.emails[thread.emails.length - 1];
 
   return (
     <div className="flex flex-col h-full">
+      {/* Integrated Reply Interface - Shows at top when replying */}
+      {replyMode && (
+        <IntegratedReplyInterface
+          replyData={replyMode}
+          onSend={onSendReply}
+          onCancel={onCancelReply}
+        />
+      )}
+
       {/* Thread Header */}
       <div className="border-b border-gray-200 p-6 bg-white">
         <div className="flex items-center justify-between mb-2">
@@ -2550,7 +2364,7 @@ const EmailThreadViewer = ({ thread, merchantData, userEmail, merchantEmail, onR
                       variant="ghost" 
                       size="sm" 
                       className="h-8 w-8 p-0 hover:bg-gray-100"
-                      onClick={() => onReply?.(mostRecentEmail)}
+                      onClick={() => onStartReply?.(mostRecentEmail)}
                     >
                       <Reply className="h-4 w-4" />
                     </Button>
@@ -2568,7 +2382,7 @@ const EmailThreadViewer = ({ thread, merchantData, userEmail, merchantEmail, onR
                       variant="ghost" 
                       size="sm" 
                       className="h-8 w-8 p-0 hover:bg-gray-100"
-                      onClick={() => onReplyAll?.(mostRecentEmail)}
+                      onClick={() => onStartReplyAll?.(mostRecentEmail)}
                     >
                       <ReplyAll className="h-4 w-4" />
                     </Button>
@@ -2586,7 +2400,7 @@ const EmailThreadViewer = ({ thread, merchantData, userEmail, merchantEmail, onR
                       variant="ghost" 
                       size="sm" 
                       className="h-8 w-8 p-0 hover:bg-gray-100"
-                      onClick={() => onForward?.(mostRecentEmail)}
+                      onClick={() => onStartForward?.(mostRecentEmail)}
                     >
                       <Forward className="h-4 w-4" />
                     </Button>
@@ -2622,18 +2436,6 @@ const EmailThreadViewer = ({ thread, merchantData, userEmail, merchantEmail, onR
           ))}
         </div>
       </div>
-
-      {/* Thread Reply Interface */}
-      {replyMode && (
-        <EmailReplyInterface
-          email={mostRecentEmail}
-          replyType={replyMode}
-          onSend={handleSendReply}
-          onCancel={handleCancelReply}
-          userEmail={userEmail}
-          merchantData={merchantData}
-        />
-      )}
     </div>
   );
 };

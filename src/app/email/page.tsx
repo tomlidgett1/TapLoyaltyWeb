@@ -50,13 +50,14 @@ import {
   Users,
   X,
   Eye,
-  AlertCircle
+  AlertCircle,
+  Bell
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnapshot } from "firebase/firestore"
+import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
 import { functions } from "@/lib/firebase"
 import { formatMelbourneTime } from "@/lib/date-utils"
@@ -91,6 +92,97 @@ const customScrollbarStyles = `
     overscroll-behavior: contain;
   }
 `
+
+// Utility function to convert files to base64
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Remove data:mime/type;base64, prefix
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = error => reject(error);
+  });
+};
+
+// Utility function to create quoted reply content with HTML formatting
+const createQuotedReplyContent = (originalEmail: any, replyType: 'reply' | 'replyAll' | 'forward') => {
+  const dateStr = formatMelbourneTime(originalEmail.time, 'Unknown time');
+  
+  // Preserve HTML content but clean it for quoting
+  let htmlContent = originalEmail.content || '';
+  
+  // If content is not HTML, wrap it in paragraphs
+  if (!htmlContent.includes('<') || !htmlContent.includes('>')) {
+    // Plain text content - convert line breaks to paragraphs
+    htmlContent = htmlContent.split('\n').filter((line: string) => line.trim()).map((line: string) => `<p>${line.trim()}</p>`).join('');
+  }
+  
+  // Create HTML quoted content with proper styling
+  const quotedContent = `<div style="margin-top: 20px;">
+<div style="border-left: 3px solid #ccc; padding-left: 15px; margin: 10px 0; color: #666;">
+<div style="font-size: 12px; color: #888; margin-bottom: 10px;">
+On ${dateStr}, ${originalEmail.sender} &lt;${originalEmail.email}&gt; wrote:
+</div>
+${htmlContent}
+</div>
+</div>`;
+
+  return quotedContent;
+};
+
+// IframeEmail component for safe HTML rendering
+type IframeEmailProps = { html: string; className?: string };
+
+const IframeEmail = ({ html, className = "" }: IframeEmailProps) => {
+  const clean = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+  return (
+    <iframe
+      className={`email-iframe border-0 w-full min-h-[200px] ${className}`}
+      sandbox="allow-same-origin allow-top-navigation-by-user-activation allow-popups allow-popups-to-escape-sandbox"
+      srcDoc={`<!doctype html>
+        <html>
+        <head>
+          <base target="_blank">
+          <style>
+            body { 
+              margin: 0; 
+              padding: 16px;
+              font-family: system-ui, -apple-system, sans-serif;
+              line-height: 1.5;
+              word-wrap: break-word;
+              overflow-wrap: break-word;
+              font-size: 15px;
+            }
+            img { max-width: 100%; height: auto; }
+            table { border-collapse: collapse; width: 100%; }
+            a { 
+              color: #2563eb; 
+              cursor: pointer;
+              text-decoration: underline;
+            }
+            a:hover {
+              color: #1d4ed8;
+              text-decoration: underline;
+            }
+          </style>
+        </head>
+        <body>${clean}</body>
+        </html>`}
+      onLoad={(e) => {
+        // Auto-resize iframe to content height
+        const iframe = e.target as HTMLIFrameElement;
+        if (iframe.contentDocument) {
+          const height = iframe.contentDocument.documentElement.scrollHeight;
+          iframe.style.height = `${Math.max(height, 200)}px`;
+        }
+      }}
+    />
+  );
+};
 
 // Utility functions for email processing
 const decodeBase64Url = (input: string): string => {
@@ -568,6 +660,36 @@ interface ConnectedAccount {
   provider: 'gmail' | 'outlook'
 }
 
+// Format time for preview display using Melbourne time
+const formatPreviewTime = (timestamp: any) => {
+  if (!timestamp) return 'Unknown time'
+  
+  try {
+    // Handle Firestore timestamp format
+    let dateToFormat: string | Date
+    
+    if (timestamp && typeof timestamp.toDate === 'function') {
+      // Firestore timestamp - convert to Date
+      dateToFormat = timestamp.toDate()
+    } else if (timestamp && typeof timestamp === 'string') {
+      // String timestamp
+      dateToFormat = timestamp
+    } else if (timestamp instanceof Date) {
+      // Already a Date object
+      dateToFormat = timestamp
+    } else {
+      console.warn('Unknown timestamp format:', timestamp)
+      return 'Invalid time'
+    }
+    
+    // Use the same Melbourne time formatting as formatMelbourneTime
+    return formatMelbourneTime(dateToFormat, 'Invalid time')
+  } catch (e) {
+    console.error('Error formatting preview time:', timestamp, e)
+    return 'Invalid time'
+  }
+}
+
 export default function EmailPage() {
   const { user } = useAuth()
   const [selectedFolder, setSelectedFolder] = useState("inbox")
@@ -595,19 +717,20 @@ export default function EmailPage() {
   const [decodeTestResults, setDecodeTestResults] = useState<any>(null)
   const [showDecodeResults, setShowDecodeResults] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [isSending, setIsSending] = useState(false)
+  const [successMessage, setSuccessMessage] = useState<string>('')
+  const [isComposing, setIsComposing] = useState(false)
+  const [isEnablingTrigger, setIsEnablingTrigger] = useState(false)
 
-  // Format time for preview display using Melbourne time
-  const formatPreviewTime = (timestamp: string | null | undefined) => {
-    if (!timestamp) return 'Unknown time'
-    
-    try {
-      // Use the same Melbourne time formatting as formatMelbourneTime
-      return formatMelbourneTime(timestamp, 'Invalid time')
-    } catch (e) {
-      console.error('Error formatting preview time:', timestamp, e)
-      return 'Invalid time'
+  // Auto-hide success message after 5 seconds
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => {
+        setSuccessMessage('');
+      }, 5000);
+      return () => clearTimeout(timer);
     }
-  }
+  }, [successMessage]);
 
   // Use only fetched Gmail emails
   const allEmails = fetchedEmails
@@ -628,9 +751,27 @@ export default function EmailPage() {
     return Array.from(threads.entries()).map(([threadId, threadEmails]) => {
       // Sort emails in thread by time (most recent first)
       const sortedEmails = threadEmails.sort((a, b) => {
-        const timeA = new Date(a.time || 0).getTime()
-        const timeB = new Date(b.time || 0).getTime()
-        return timeB - timeA
+        let timeA: Date
+        let timeB: Date
+        
+        // Handle different timestamp formats
+        if (typeof a.time === 'string') {
+          timeA = new Date(a.time)
+        } else if (a.time && typeof a.time.toDate === 'function') {
+          timeA = a.time.toDate()
+        } else {
+          timeA = new Date(a.time || 0)
+        }
+        
+        if (typeof b.time === 'string') {
+          timeB = new Date(b.time)
+        } else if (b.time && typeof b.time.toDate === 'function') {
+          timeB = b.time.toDate()
+        } else {
+          timeB = new Date(b.time || 0)
+        }
+        
+        return timeB.getTime() - timeA.getTime()
       })
       
       const representative = sortedEmails[0]
@@ -771,99 +912,117 @@ export default function EmailPage() {
       setEmailsLoading(true)
       console.log("Fetching Gmail emails from Firestore for merchant:", user.uid)
       
-      // Query the fetchedemails collection
-      const emailsRef = collection(db, 'merchants', user.uid, 'fetchedemails')
-      const emailsQuery = query(
-        emailsRef,
-        orderBy('messageTimestamp', 'desc'),
-        limit(50) // Limit to most recent 50 emails
+      // Query both fetchedemails and threadreplies collections
+      const fetchedEmailsRef = collection(db, 'merchants', user.uid, 'fetchedemails')
+      const threadRepliesRef = collection(db, 'merchants', user.uid, 'threadreplies')
+      
+      const fetchedEmailsQuery = query(
+        fetchedEmailsRef,
+        orderBy('receivedAt', 'desc'),
+        limit(25) // Limit to 25 each for a total of 50
       )
       
-      const querySnapshot = await getDocs(emailsQuery)
-      console.log(`Found ${querySnapshot.size} emails in Firestore`)
+      const threadRepliesQuery = query(
+        threadRepliesRef,
+        orderBy('repliedAt', 'desc'),
+        limit(25) // Limit to 25 each for a total of 50
+      )
       
-      // Transform Firestore data to our format
-      const transformedEmails = querySnapshot.docs.map((doc) => {
+      // Fetch both collections in parallel
+      console.log("🔍 Querying collections:")
+      console.log("🔍 Fetched emails path:", `merchants/${user.uid}/fetchedemails`)
+      console.log("🔍 Thread replies path:", `merchants/${user.uid}/threadreplies`)
+      
+      const [fetchedSnapshot, threadRepliesSnapshot] = await Promise.all([
+        getDocs(fetchedEmailsQuery),
+        getDocs(threadRepliesQuery)
+      ])
+      
+      console.log(`📊 Found ${fetchedSnapshot.size} fetched emails and ${threadRepliesSnapshot.size} thread replies in Firestore`)
+      console.log("🔍 Thread replies docs:", threadRepliesSnapshot.docs.map(doc => ({ id: doc.id, data: doc.data() })))
+      
+      // Transform fetched emails
+      const transformedFetchedEmails = fetchedSnapshot.docs.map((doc) => {
         const emailData = doc.data()
         console.log("Processing email:", doc.id, emailData)
         
-        // Extract sender information from headers
-        const headers = emailData.payload?.headers || []
-        const fromHeader = headers.find((h: any) => h.name === 'From')
-        const toHeader = headers.find((h: any) => h.name === 'To')
-        const subjectHeader = headers.find((h: any) => h.name === 'Subject')
-        const dateHeader = headers.find((h: any) => h.name === 'Date')
+        // Use the new direct fields
+        const senderInfo = emailData.sender || "Unknown Sender"
+        const subject = emailData.subject || "No Subject"
+        const toInfo = emailData.to || ""
+        const receivedAt = emailData.receivedAt
         
-        // Parse sender name and email
-        const fromValue = fromHeader?.value || "Unknown Sender"
-        let senderName = fromValue
+        // Parse sender name and email from sender field
+        let senderName = senderInfo
         let senderEmail = ""
         
         // Extract name and email from "Name <email@domain.com>" format
-        const emailMatch = fromValue.match(/<([^>]+)>/)
+        const emailMatch = senderInfo.match(/<([^>]+)>/)
         if (emailMatch) {
           senderEmail = emailMatch[1]
-          senderName = fromValue.replace(/<[^>]+>/, '').trim()
-        } else if (fromValue.includes('@')) {
-          senderEmail = fromValue
-          senderName = fromValue
+          senderName = senderInfo.replace(/<[^>]+>/, '').trim()
+        } else if (senderInfo.includes('@')) {
+          senderEmail = senderInfo
+          senderName = senderInfo
         }
         
-        // Extract preview text using processed content
-        let preview = ""
-        const { content: processedContent, isHtml } = processEmailContent(emailData);
-        if (processedContent) {
-          let textContent = processedContent;
-          
-          // If it's HTML, extract text content
-          if (isHtml) {
-            try {
-              const tempDiv = typeof window !== 'undefined' ? document.createElement('div') : null;
-              if (tempDiv) {
-                tempDiv.innerHTML = DOMPurify.sanitize(processedContent);
-                textContent = tempDiv.textContent || tempDiv.innerText || '';
-              } else {
-                // Fallback: strip HTML tags
-                textContent = processedContent.replace(/<[^>]*>/g, ' ');
-              }
+        // Get preview from payload.data.preview
+        const previewBody = emailData.payload?.data?.preview?.body || ""
+        const previewSubject = emailData.payload?.data?.preview?.subject || subject
+        const preview = previewBody || "No preview available"
+        
+        // Get content from payload.data.payload.parts.body.data for part 1, with fallback
+        let content = ""
+        try {
+          const parts = emailData.payload?.data?.payload?.parts
+          if (parts && Array.isArray(parts) && parts.length > 0) {
+            const firstPart = parts[0]
+            if (firstPart?.body?.data) {
+              content = firstPart.body.data
+              // Decode if it's base64
+              try {
+                content = decodePart(content)
             } catch (error) {
-              // Fallback: strip HTML tags
-              textContent = processedContent.replace(/<[^>]*>/g, ' ');
+                console.warn("Failed to decode email content from part 1:", error)
+              }
             }
           }
           
-          // Clean and truncate for preview
-          preview = textContent
-            .replace(/\s+/g, ' ')
-            .trim()
-            .substring(0, 150) + (textContent.length > 150 ? '...' : '');
+          // Fallback to payload.data.payload.body.data if no part 1 content
+          if (!content) {
+            const fallbackContent = emailData.payload?.data?.payload?.body?.data
+            if (fallbackContent) {
+              content = fallbackContent
+              // Decode if it's base64
+              try {
+                content = decodePart(content)
+              } catch (error) {
+                console.warn("Failed to decode email content from fallback:", error)
+              }
+            }
+          }
+        } catch (error) {
+          console.warn("Error extracting email content:", error)
         }
         
-        // Keep raw timestamp for proper time formatting
-        const rawTimestamp = emailData.messageTimestamp
-        
-        // Check if email is unread (has UNREAD label)
-        const isUnread = emailData.labelIds?.includes('UNREAD') || false
+        // Assume all emails are unread by default, unless explicitly marked as read
+        const isRead = emailData.read === true
         
         // Check for attachments
         const hasAttachment = emailData.attachmentList?.length > 0 || false
         
         const emailObj = {
           id: doc.id,
-          threadId: emailData.threadId || doc.id, // Use threadId from Gmail data or fallback to message ID
+          threadId: emailData.threadId || doc.id,
           sender: senderName,
           email: senderEmail,
-          subject: subjectHeader?.value || "No Subject",
-          preview: preview || "No preview available",
-          content: (() => {
-            const { content } = processEmailContent(emailData);
-            return content;
-          })(),
-          time: rawTimestamp, // Store raw timestamp
-          read: !isUnread,
+          subject: subject,
+          preview: preview,
+          content: content || "No content available",
+          time: receivedAt, // Use receivedAt timestamp
+          read: isRead,
           hasAttachment: hasAttachment,
           folder: "inbox", // Default to inbox for Gmail emails
-          isGmail: true,
           // Store original data for debugging
           rawData: emailData
         }
@@ -879,13 +1038,91 @@ export default function EmailPage() {
         return emailObj;
       })
         
-        console.log("Transformed emails:", transformedEmails)
-        setFetchedEmails(transformedEmails)
+      // Transform thread replies
+      const transformedThreadReplies = threadRepliesSnapshot.docs.map((doc) => {
+        const emailData = doc.data() as any
+        console.log("🔍 Processing thread reply:", doc.id, emailData)
+        console.log("🔍 Thread reply threadId:", emailData.threadId)
+        console.log("🔍 Full thread reply data structure:", Object.keys(emailData))
+        
+        // For thread replies, we are the sender
+        const senderInfo = user?.email || "You"
+        const subject = emailData.subject || "Re: Thread Reply"
+        const recipientEmail = emailData.recipient_email || ""
+        const repliedAt = emailData.repliedAt // This is a Firestore timestamp
+        
+        // Use message_body content for thread replies
+        const content = emailData.message_body || emailData.body || "No content available"
+        const preview = content.length > 100 ? content.substring(0, 100) + "..." : content
+        
+        const emailObj = {
+          id: doc.id,
+          threadId: emailData.threadId || emailData.originalThreadId || doc.id,
+          sender: senderInfo,
+          email: user?.email || "",
+          subject: subject,
+          preview: preview,
+          content: content,
+          time: repliedAt, // Use repliedAt timestamp (Firestore timestamp format)
+          read: true, // Thread replies are always "read"
+          hasAttachment: false, // Can be updated if attachment info is available
+          folder: "sent", // Mark as sent folder
+          isSent: true, // Flag to identify sent emails
+          to: recipientEmail, // Store recipient for thread replies
+          rawData: emailData
+        }
+        
+        console.log("📤 Processed thread reply object:", {
+          id: emailObj.id,
+          sender: emailObj.sender,
+          recipient: recipientEmail,
+          subject: emailObj.subject,
+          repliedAt: repliedAt,
+          repliedAtType: typeof repliedAt,
+          isFirestoreTimestamp: repliedAt && typeof repliedAt.toDate === 'function',
+          threadId: emailObj.threadId
+        });
+        
+        return emailObj;
+      })
+      
+      // Merge and sort all emails by timestamp
+      const allEmails = [...transformedFetchedEmails, ...transformedThreadReplies]
+      
+      // Sort by timestamp (newest first)
+      const sortedEmails = allEmails.sort((a, b) => {
+        let timeA: Date
+        let timeB: Date
+        
+        // Handle different timestamp formats
+        if (typeof a.time === 'string') {
+          timeA = new Date(a.time)
+        } else if (a.time && typeof a.time.toDate === 'function') {
+          timeA = a.time.toDate()
+        } else {
+          timeA = new Date(a.time)
+        }
+        
+        if (typeof b.time === 'string') {
+          timeB = new Date(b.time)
+        } else if (b.time && typeof b.time.toDate === 'function') {
+          timeB = b.time.toDate()
+        } else {
+          timeB = new Date(b.time)
+        }
+        
+        return timeB.getTime() - timeA.getTime() // Newest first
+      })
+        
+        console.log("All emails merged and sorted:", sortedEmails)
+        setFetchedEmails(sortedEmails)
       
       // Store debug response
       setDebugResponse({
         success: true,
-        emailsFetched: transformedEmails.length,
+        emailsFetched: sortedEmails.length,
+        fetchedCount: transformedFetchedEmails.length,
+        threadRepliesCount: transformedThreadReplies.length,
         source: 'firestore',
         merchantId: user.uid
       })
@@ -1002,13 +1239,12 @@ export default function EmailPage() {
   useEffect(() => {
     if (user?.uid) {
       fetchConnectedAccounts()
-      fetchGmailEmails()
       
       // Set up Firestore listener for real-time email updates
       const emailsRef = collection(db, 'merchants', user.uid, 'fetchedemails')
       const emailsQuery = query(
         emailsRef,
-        orderBy('messageTimestamp', 'desc'),
+        orderBy('receivedAt', 'desc'),
         limit(50)
       )
       
@@ -1025,18 +1261,10 @@ export default function EmailPage() {
         console.error("Error in Firestore listener:", error)
       })
       
-      // Set up 2-minute refresh interval
-      console.log("Setting up 2-minute refresh interval")
-      const refreshInterval = setInterval(() => {
-        console.log("Auto-refreshing emails (2-minute interval)")
-        fetchGmailEmails()
-      }, 2 * 60 * 1000) // 2 minutes in milliseconds
-      
       // Cleanup function
       return () => {
-        console.log("Cleaning up Firestore listener and refresh interval")
+        console.log("Cleaning up Firestore listener")
         unsubscribe()
-        clearInterval(refreshInterval)
       }
     }
   }, [user?.uid])
@@ -1077,16 +1305,71 @@ export default function EmailPage() {
   }
 
   const handleSync = () => {
-    console.log("Syncing emails...")
-    // Sync Gmail emails from API and refresh local cache
-    syncGmailEmails()
+    console.log("Refreshing emails from Firestore...")
+    // Refresh email list from Firestore index
+    fetchGmailEmails()
+  }
+
+  // Mark email as read in Firestore
+  const markEmailAsRead = async (emailId: string) => {
+    if (!user?.uid) return
+
+    try {
+      const emailRef = doc(db, 'merchants', user.uid, 'fetchedemails', emailId)
+      await updateDoc(emailRef, {
+        read: true
+      })
+      console.log("Marked email as read:", emailId)
+    } catch (error) {
+      console.error("Error marking email as read:", error)
+    }
+  }
+
+  const handleEnableGmailTrigger = async () => {
+    if (!user?.uid) {
+      alert('User not authenticated')
+      return
+    }
+
+    try {
+      setIsEnablingTrigger(true)
+      console.log("Enabling Gmail trigger for merchant:", user.uid)
+      
+      // Use Firebase SDK to avoid CORS issues - data gets wrapped in req.body.data
+      const enrollGmailTriggerFunction = httpsCallable(functions, 'enrollGmailTrigger')
+      const result = await enrollGmailTriggerFunction({
+        merchantId: user.uid
+      })
+      
+      console.log("Gmail trigger enabled successfully:", result.data)
+      setSuccessMessage('Gmail trigger enabled successfully! You will now receive real-time email notifications.')
+      
+    } catch (error) {
+      console.error("Error enabling Gmail trigger:", error)
+      
+      let errorMessage = 'Failed to enable Gmail trigger'
+      if (error instanceof Error) {
+        if (error.message.includes('Gmail connection')) {
+          errorMessage = 'Please check your Gmail connection in Settings > Integrations'
+        } else if (error.message.includes('authentication')) {
+          errorMessage = 'Authentication error. Please try signing in again.'
+        } else {
+          errorMessage = error.message
+        }
+      }
+      
+      alert(errorMessage)
+    } finally {
+      setIsEnablingTrigger(false)
+    }
   }
 
   const handleComposeNew = () => {
-    setComposeMode("reply") // Use reply mode for new compose
-    setComposeTo("")
-    setComposeSubject("")
-    setComposeContent("")
+    // Clear any current selections and enter compose mode
+    setSelectedEmail(null);
+    setSelectedThread(null);
+    setReplyMode(null);
+    setIsComposing(true);
   }
 
   const toggleThread = (threadId: string) => {
@@ -1112,6 +1395,9 @@ export default function EmailPage() {
         ? { ...e, read: true }
         : e
     ))
+
+    // Mark as read in Firestore
+    markEmailAsRead(email.id)
   }
 
   const handleThreadSelect = async (thread: any) => {
@@ -1121,7 +1407,7 @@ export default function EmailPage() {
     console.log("Thread has", thread.count, "emails")
     
     try {
-      setSelectedThread(null) // Clear any selected thread
+      setSelectedEmail(null) // Clear any selected email
       
       // Close all other threads and expand only the current one (if it has multiple emails)
       if (thread.count > 1) {
@@ -1135,22 +1421,49 @@ export default function EmailPage() {
         console.log("Closing all expanded threads for single email")
       }
       
-      // Query Firestore to find the most recent email document with this threadId
-      console.log("Querying Firestore for threadId:", thread.threadId)
+      // Query Firestore to find ALL emails in this thread (both fetched and sent)
+      console.log("🧵 Querying Firestore for all emails in threadId:", thread.threadId)
+      console.log("🧵 Thread object:", thread)
       
-      const emailsRef = collection(db, 'merchants', user.uid, 'fetchedemails')
-      const threadQuery = query(
-        emailsRef,
+      const fetchedEmailsRef = collection(db, 'merchants', user.uid, 'fetchedemails')
+      const threadRepliesRef = collection(db, 'merchants', user.uid, 'threadreplies')
+      
+      console.log("🧵 Querying collections for thread:")
+      console.log("🧵 Fetched path:", `merchants/${user.uid}/fetchedemails`)
+      console.log("🧵 Thread replies path:", `merchants/${user.uid}/threadreplies`)
+      console.log("🧵 Looking for threadId:", thread.threadId)
+      
+      const fetchedThreadQuery = query(
+        fetchedEmailsRef,
         where('threadId', '==', thread.threadId),
-        orderBy('messageTimestamp', 'desc'),
-        limit(1) // Get only the most recent
+        orderBy('receivedAt', 'desc')
       )
       
-      const querySnapshot = await getDocs(threadQuery)
+      const threadRepliesThreadQuery = query(
+        threadRepliesRef,
+        where('threadId', '==', thread.threadId),
+        orderBy('repliedAt', 'desc')
+      )
       
-      if (querySnapshot.empty) {
+      // Query both collections in parallel
+      const [fetchedSnapshot, threadRepliesSnapshot] = await Promise.all([
+        getDocs(fetchedThreadQuery),
+        getDocs(threadRepliesThreadQuery)
+      ])
+      
+      console.log(`🧵 Thread query results: ${fetchedSnapshot.size} fetched, ${threadRepliesSnapshot.size} thread replies`)
+      console.log("🧵 Thread replies docs in thread:", threadRepliesSnapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        threadId: (doc.data() as any).threadId,
+        subject: (doc.data() as any).subject,
+        repliedAt: (doc.data() as any).repliedAt
+      })))
+      
+      const totalEmailsFound = fetchedSnapshot.size + threadRepliesSnapshot.size
+      
+      if (totalEmailsFound === 0) {
         console.warn("No Firestore documents found for threadId:", thread.threadId)
-        // Fallback to representative email
+        // Fallback to single email view with representative email
         setSelectedEmail(thread.representative)
         thread.representative.read = true
         
@@ -1160,86 +1473,184 @@ export default function EmailPage() {
             ? { ...email, read: true }
             : email
         ))
+
+        // Mark as read in Firestore
+        markEmailAsRead(thread.representative.id)
         return
       }
       
-      // Get the most recent document (first in results due to desc order)
-      const mostRecentDoc = querySnapshot.docs[0]
-      const emailData = mostRecentDoc.data()
+      console.log(`Found ${totalEmailsFound} emails in thread ${thread.threadId} (${fetchedSnapshot.size} fetched, ${threadRepliesSnapshot.size} thread replies)`)
       
-      console.log("Found most recent email document:", mostRecentDoc.id, "timestamp:", emailData.messageTimestamp)
+      // Transform all fetched emails in the thread
+      const fetchedThreadEmails = fetchedSnapshot.docs.map((doc) => {
+        const emailData = doc.data()
+        
+        // Use the new fields directly
+        const senderInfo = emailData.sender || "Unknown Sender"
+        const subject = emailData.subject || "No Subject"
+        
+        // Parse sender name and email from sender field
+        let senderName = senderInfo
+        let senderEmail = ""
+        
+        const emailMatch = senderInfo.match(/<([^>]+)>/)
+        if (emailMatch) {
+          senderEmail = emailMatch[1]
+          senderName = senderInfo.replace(/<[^>]+>/, '').trim()
+        } else if (senderInfo.includes('@')) {
+          senderEmail = senderInfo
+          senderName = senderInfo
+        }
+        
+        // Get content from payload.data.payload.parts.body.data for part 1, with fallback
+        let content = ""
+        try {
+          const parts = emailData.payload?.data?.payload?.parts
+          if (parts && Array.isArray(parts) && parts.length > 0) {
+            const firstPart = parts[0]
+            if (firstPart?.body?.data) {
+              content = firstPart.body.data
+              try {
+                content = decodePart(content)
+              } catch (error) {
+                console.warn("Failed to decode email content from part 1:", error)
+              }
+            }
+          }
+          
+          // Fallback to payload.data.payload.body.data if no part 1 content
+          if (!content) {
+            const fallbackContent = emailData.payload?.data?.payload?.body?.data
+            if (fallbackContent) {
+              content = fallbackContent
+              try {
+                content = decodePart(content)
+              } catch (error) {
+                console.warn("Failed to decode email content from fallback:", error)
+              }
+            }
+          }
+        } catch (error) {
+          console.warn("Error extracting email content:", error)
+        }
+        
+        const isRead = emailData.read === true
+        const hasAttachment = emailData.attachmentList?.length > 0 || false
+              
+              return {
+          id: doc.id,
+          threadId: emailData.threadId || doc.id,
+          sender: senderName,
+          email: senderEmail,
+          subject: subject,
+          content: content || "No content available",
+          time: emailData.receivedAt,
+          read: isRead,
+          hasAttachment: hasAttachment,
+          folder: "inbox",
+          rawData: emailData
+        }
+      })
       
-      // Process the email content from the raw Firestore data
-      const { content } = processEmailContent(emailData)
+            // Transform all thread replies in the thread
+      console.log("🧵 Processing thread replies for thread expansion...")
+      const threadRepliesInThread = threadRepliesSnapshot.docs.map((doc) => {
+        const emailData = doc.data() as any
+        console.log("🧵 Thread reply data:", emailData)
+        console.log("🧵 Thread reply repliedAt:", emailData.repliedAt, typeof emailData.repliedAt)
+        
+        const subject = emailData.subject || "Re: Thread Reply"
+        const recipientEmail = emailData.recipient_email || ""
+        const content = emailData.message_body || emailData.body || "No content available"
+        
+        return {
+          id: doc.id,
+          threadId: emailData.threadId || emailData.originalThreadId || doc.id,
+          sender: user?.email || "You",
+          email: user?.email || "",
+          subject: subject,
+          preview: content.length > 100 ? content.substring(0, 100) + "..." : content,
+          content: content,
+          time: emailData.repliedAt, // Firestore timestamp from thread reply
+          read: true, // Thread replies are always "read"
+          hasAttachment: false,
+          folder: "sent",
+          isSent: true,
+          to: recipientEmail,
+                rawData: emailData
+              }
+      })
       
-      // Extract sender information from headers
-      const headers = emailData.payload?.headers || []
-      const fromHeader = headers.find((h: any) => h.name === 'From')
-      const subjectHeader = headers.find((h: any) => h.name === 'Subject')
+      // Merge and sort all thread emails by timestamp
+      const allThreadEmails = [...fetchedThreadEmails, ...threadRepliesInThread]
       
-      // Parse sender name and email
-      const fromValue = fromHeader?.value || "Unknown Sender"
-      let senderName = fromValue
-      let senderEmail = ""
+      // Sort by timestamp (most recent first)
+      const threadEmails = allThreadEmails.sort((a, b) => {
+        let timeA: Date
+        let timeB: Date
+        
+        if (typeof a.time === 'string') {
+          timeA = new Date(a.time)
+        } else if (a.time && typeof a.time.toDate === 'function') {
+          timeA = a.time.toDate()
+            } else {
+          timeA = new Date(a.time || 0)
+        }
+        
+        if (typeof b.time === 'string') {
+          timeB = new Date(b.time)
+        } else if (b.time && typeof b.time.toDate === 'function') {
+          timeB = b.time.toDate()
+        } else {
+          timeB = new Date(b.time || 0)
+        }
+        
+        return timeB.getTime() - timeA.getTime()
+      })
       
-      // Extract name and email from "Name <email@domain.com>" format
-      const emailMatch = fromValue.match(/<([^>]+)>/)
-      if (emailMatch) {
-        senderEmail = emailMatch[1]
-        senderName = fromValue.replace(/<[^>]+>/, '').trim()
-      } else if (fromValue.includes('@')) {
-        senderEmail = fromValue
-        senderName = fromValue
+      // Create complete thread object with all emails
+      const completeThread = {
+          threadId: thread.threadId,
+        representative: threadEmails[0], // Most recent email as representative
+        count: threadEmails.length,
+        unreadCount: threadEmails.filter((email: any) => !email.read).length,
+        emails: threadEmails,
+        hasUnread: threadEmails.some((email: any) => !email.read)
       }
       
-      // Check if email is unread (has UNREAD label)
-      const isUnread = emailData.labelIds?.includes('UNREAD') || false
+      console.log("Setting complete thread with", threadEmails.length, "emails")
+      setSelectedThread(completeThread)
       
-      // Check for attachments
-      const hasAttachment = emailData.attachmentList?.length > 0 || false
-      
-      // Create the complete email object with full thread history
-      const completeThreadEmail = {
-        id: mostRecentDoc.id,
-        threadId: emailData.threadId || mostRecentDoc.id,
-        sender: senderName,
-        email: senderEmail,
-        subject: subjectHeader?.value || "No Subject",
-        content: content, // This should contain the full thread history
-        time: emailData.messageTimestamp,
-        read: !isUnread,
-        hasAttachment: hasAttachment,
-        folder: "inbox",
-        isGmail: true,
-        rawData: emailData // Store the complete raw data
-      }
-      
-      console.log("Setting complete thread email with full history:", completeThreadEmail.id)
-      setSelectedEmail(completeThreadEmail)
-      
-      // Mark as read and update local state
-      completeThreadEmail.read = true
-      
-      // Update local fetchedEmails state to mark all emails in this thread as read
+      // Mark all emails in thread as read and update local state
       setFetchedEmails(prev => prev.map(email => 
         email.threadId === thread.threadId 
           ? { ...email, read: true }
           : email
       ))
+
+      // Mark all emails in the thread as read in Firestore
+      threadEmails.forEach(email => {
+        if (!email.read) {
+          markEmailAsRead(email.id)
+        }
+      })
       
     } catch (error) {
       console.error("Error in handleThreadSelect:", error)
-        // Ultimate fallback - use representative email
-        setSelectedEmail(thread.representative)
-        thread.representative.read = true
-        
-        // Update local state for fallback as well
-        setFetchedEmails(prev => prev.map(email => 
-          email.threadId === thread.threadId 
-            ? { ...email, read: true }
-            : email
-        ))
-      }
+      // Ultimate fallback - use single email view with representative email
+      setSelectedEmail(thread.representative)
+      thread.representative.read = true
+      
+      // Update local state for fallback as well
+      setFetchedEmails(prev => prev.map(email => 
+        email.threadId === thread.threadId 
+          ? { ...email, read: true }
+          : email
+      ))
+
+      // Mark as read in Firestore
+      markEmailAsRead(thread.representative.id)
+    }
   }
 
 
@@ -1303,36 +1714,63 @@ export default function EmailPage() {
               
               <div className="h-6 w-px bg-gray-300 mx-1"></div>
               
-              <Tooltip>
-                <TooltipTrigger asChild>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
                   <Button variant="ghost" size="sm" onClick={handleDelete} className="text-gray-700 hover:bg-gray-200">
                     <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                  <p>Delete</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                  <Button variant="ghost" size="sm" onClick={handleArchive} className="text-gray-700 hover:bg-gray-200">
+                    <Archive className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                  <p>Archive</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={handleSync} 
+                    disabled={emailsLoading}
+                    className="text-gray-700 hover:bg-gray-200 transition-all duration-200"
+                  >
+                    <RefreshCw className={`h-4 w-4 transition-transform duration-300 ${emailsLoading ? 'animate-spin' : 'hover:rotate-180'}`} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                  <p>{emailsLoading ? 'Refreshing...' : 'Refresh'}</p>
+                    </TooltipContent>
+                  </Tooltip>
+              
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={handleEnableGmailTrigger}
+                    disabled={isEnablingTrigger}
+                    className="text-gray-700 hover:bg-gray-200"
+                  >
+                    {isEnablingTrigger ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Bell className="h-4 w-4" />
+                    )}
         </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Delete</p>
-                </TooltipContent>
-              </Tooltip>
-              
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="sm" onClick={handleArchive} className="text-gray-700 hover:bg-gray-200">
-                    <Archive className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Archive</p>
-                </TooltipContent>
-              </Tooltip>
-              
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="sm" onClick={handleSync} className="text-gray-700 hover:bg-gray-200">
-                    <RefreshCw className="h-4 w-4" />
-                </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Sync</p>
+                  <p>{isEnablingTrigger ? 'Enabling...' : 'Enable Gmail Trigger'}</p>
                 </TooltipContent>
               </Tooltip>
               
@@ -1599,7 +2037,7 @@ export default function EmailPage() {
                       selectedThread?.threadId === thread.threadId || selectedEmail?.id === thread.representative.id
                         ? 'bg-blue-100 border-l-blue-500 shadow-sm' 
                         : !thread.representative.read 
-                          ? 'bg-blue-50 border-l-blue-300 hover:bg-blue-100' 
+                          ? 'bg-gray-100 border-l-gray-300 hover:bg-gray-200' 
                           : 'bg-white border-l-transparent hover:bg-gray-50 hover:border-l-gray-300'
                     }`}
                     onClick={() => handleThreadSelect(thread)}
@@ -1648,12 +2086,7 @@ export default function EmailPage() {
                           </span>
                         )}
                         
-                        {(thread.representative as any).isGmail && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                            <div className="h-1 w-1 bg-blue-500 rounded-full flex-shrink-0"></div>
-                            Gmail
-                          </span>
-                        )}
+
                         {thread.representative.hasAttachment && (
                           <Paperclip className="h-3 w-3 text-gray-400 flex-shrink-0" />
                         )}
@@ -1686,39 +2119,46 @@ export default function EmailPage() {
                         maxHeight: expandedThreads.has(thread.threadId) ? '800px' : '0px'
                       }}
                     >
-                      {thread.emails.slice(1).map((email: any, index: number) => (
-                <div
-                  key={email.id}
+                      {(() => {
+                        // Use selectedThread emails if this thread is selected, otherwise use original thread emails
+                        const emailsToShow = selectedThread?.threadId === thread.threadId 
+                          ? selectedThread.emails.slice(1) 
+                          : thread.emails.slice(1);
+                        console.log("🎯 Left panel dropdown showing emails for thread:", thread.threadId, emailsToShow.length, "emails");
+                        return emailsToShow;
+                      })().map((email: any, index: number) => (
+                        <div
+                          key={email.id}
                           className={`flex items-center gap-2 p-2 pl-10 cursor-pointer transition-all duration-200 border-l-4 ${
                             selectedEmail?.id === email.id
                               ? 'bg-blue-100 border-l-blue-500 shadow-sm'
                               : !email.read 
-                                ? 'bg-blue-50 border-l-blue-300 hover:bg-blue-100' 
-                                : 'bg-gray-50 border-l-gray-300 hover:bg-gray-100'
+                                ? 'bg-gray-100 border-l-gray-300 hover:bg-gray-200' 
+                                : 'bg-white border-l-transparent hover:bg-gray-50'
                           }`}
-                  onClick={() => handleEmailSelect(email)}
-                >
-                  {/* Placeholder for alignment with main threads */}
-                  <div className="w-3.5 h-3.5"></div>
+                          onClick={() => handleEmailSelect(email)}
+                        >
+                          {/* Placeholder for alignment with main threads */}
+                          <div className="w-3.5 h-3.5"></div>
 
-                  {/* Email content */}
-                  <div className="flex-1 min-w-0">
+                          {/* Email content */}
+                          <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
                               <span className={`text-xs truncate ${!email.read ? 'font-bold text-gray-900' : 'font-normal text-gray-600'}`}>
-                        {email.sender}
-                      </span>
-                      {email.hasAttachment && (
+                                {email.sender}
+                              </span>
+                              {email.hasAttachment && (
                                 <Paperclip className="h-2.5 w-2.5 text-gray-400 flex-shrink-0" />
-                      )}
+                              )}
                               <span className={`text-xs ml-auto ${!email.read ? 'text-blue-600 font-semibold' : 'text-gray-500'}`}>{formatPreviewTime(email.time)}</span>
-                    </div>
+                            </div>
                             <div className={`text-xs truncate ${!email.read ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
-                      {email.preview}
-                    </div>
-                  </div>
+                              {email.preview}
+                            </div>
+                          </div>
 
-                  {/* Unread indicator */}
-                  {!email.read && (
+                          {/* Unread indicator */}
+                          {!email.read && (
                             <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0 shadow-sm unread-indicator"></div>
                           )}
                         </div>
@@ -1729,30 +2169,220 @@ export default function EmailPage() {
               ))}
             </div>
           </div>
-
-
-              </div>
+        </div>
 
         {/* Right Panel - Email Content */}
         <div className="flex-1 flex flex-col h-full">
-          {selectedThread ? (
+          {/* Success Message */}
+          {successMessage && (
+            <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-md mx-6 mt-4 mb-2 animate-in slide-in-from-top-2 duration-200 ease-out">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <Check className="h-4 w-4 mr-2" />
+                  <span className="text-sm font-medium">✅ {successMessage}</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSuccessMessage('')}
+                  className="h-6 w-6 p-0 text-green-600 hover:text-green-800"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          )}
+          
+          {isComposing ? (
+            <ComposeEmailView
+              isSending={isSending}
+              onCancel={() => setIsComposing(false)}
+              onSend={async (to: string, subject: string, content: string) => {
+                try {
+                  setIsSending(true);
+                  
+                  if (!user?.uid) {
+                    throw new Error('User not authenticated');
+                  }
+                  
+                  // Use sendGmailEmail for new emails
+                  const sendGmailEmail = httpsCallable(functions, 'sendGmailEmail');
+                  const emailData = {
+                    merchantId: user.uid,
+                    body: content,
+                    recipient_email: to,
+                    subject: subject || '(No Subject)',
+                    is_html: true,
+                  };
+                  
+                  const response = await sendGmailEmail(emailData);
+                  console.log('Email sent successfully:', response.data);
+                  
+                  // Show success message
+                  setSuccessMessage(`Email sent successfully to: ${to}`);
+                  
+                  // Exit compose mode
+                  setIsComposing(false);
+                  
+                } catch (error) {
+                  console.error('Error sending email:', error);
+                  
+                  let errorMessage = 'Failed to send email';
+                  if (error instanceof Error) {
+                    if (error.message.includes('Gmail connection')) {
+                      errorMessage = 'Please check your Gmail connection in Settings > Integrations';
+                    } else if (error.message.includes('authentication')) {
+                      errorMessage = 'Authentication error. Please try signing in again.';
+                    } else {
+                      errorMessage = error.message;
+                    }
+                  }
+                  
+                  alert(errorMessage);
+                } finally {
+                  setIsSending(false);
+                }
+              }}
+            />
+          ) : selectedThread ? (
             <EmailThreadViewer 
               thread={selectedThread} 
               merchantData={merchantData}
               userEmail={user?.email || ''}
               merchantEmail={merchantEmail}
               replyMode={replyMode}
+              isSending={isSending}
               onStartReply={(email: any) => setReplyMode({ type: 'reply', originalEmail: email, thread: selectedThread })}
               onStartReplyAll={(email: any) => setReplyMode({ type: 'replyAll', originalEmail: email, thread: selectedThread })}
               onStartForward={(email: any) => setReplyMode({ type: 'forward', originalEmail: email, thread: selectedThread })}
-              onSendReply={async (content: string, subject: string, recipients: string[]) => {
+              onSendReply={async (content: string, subject: string, recipients: string[], attachments: File[]) => {
                 try {
-                  console.log('Sending email:', { content, subject, recipients });
+                  setIsSending(true);
+                  console.log('Handling reply/forward:', { type: replyMode?.type, content, subject, recipients, attachments: attachments.length });
+                  
+                  if (!user?.uid) {
+                    throw new Error('User not authenticated');
+                  }
+                  
+                  // Check if this is a forward operation
+                  if (replyMode?.type === 'forward') {
+                    // For forwarding, use the sendGmailEmail function with message history
+                    const sendGmailEmail = httpsCallable(functions, 'sendGmailEmail');
+                    
+                    // Include original message history in the content
+                    const originalEmail = replyMode.originalEmail;
+                    const forwardContent = `
+                      ${content}
+                      
+                      ---------- Forwarded message ----------
+                      From: ${originalEmail.sender} <${originalEmail.email}>
+                      Date: ${formatMelbourneTime(originalEmail.time, 'Unknown time')}
+                      Subject: ${originalEmail.subject}
+                      To: ${user?.email || merchantEmail}
+                      
+                      ${originalEmail.content}
+                    `;
+                    
+                    const emailData: any = {
+                      merchantId: user.uid,
+                      body: forwardContent,
+                      recipient_email: recipients[0], // Primary recipient
+                      subject: subject,
+                      is_html: true,
+                      cc: recipients.length > 1 ? recipients.slice(1) : [], // Additional recipients as CC
+                    };
+                    
+                    // Note: Attachments require S3 upload workflow (not yet implemented)
+                    if (attachments.length > 0) {
+                      throw new Error('Attachments are not yet supported. The Composio API requires files to be uploaded to S3 first.');
+                    }
+                    
+                    const response = await sendGmailEmail(emailData);
+                    
+                    console.log('Email forwarded successfully:', response.data);
+                    
+                    // Show success message
+                    const recipientList = recipients.join(', ');
+                    setSuccessMessage(`Email forwarded successfully to: ${recipientList}`);
+                    
+                  } else {
+                    // For reply/replyAll, use the replyToGmailThread function
+                    const replyToGmailThread = httpsCallable(functions, 'replyToGmailThread');
+                    
+                    const replyData: any = {
+                      merchantId: user.uid,
+                      message_body: content,
+                      recipient_email: recipients[0], // Primary recipient
+                      thread_id: selectedThread.threadId,
+                      is_html: true,
+                    };
+                    
+                    // Add CC recipients if present
+                    if (recipients.length > 1) {
+                      replyData.cc = recipients.slice(1);
+                    }
+                    
+                    // Note: Attachments require S3 upload workflow (not yet implemented)
+                    if (attachments.length > 0) {
+                      throw new Error('Attachments are not yet supported. The Composio API requires files to be uploaded to S3 first.');
+                    }
+                    
+                    const response = await replyToGmailThread(replyData);
+                    
+                    console.log('Reply sent successfully:', response.data);
+                    
+                    // Show success message
+                    const recipientList = recipients.join(', ');
+                    setSuccessMessage(`Reply sent successfully to: ${recipientList}`);
+                  }
+                  
+                  // Create the sent message object for UI
+                  const sentMessage = {
+                    id: `sent-${Date.now()}`,
+                    threadId: selectedThread.threadId,
+                    sender: merchantData?.businessName || user?.displayName || 'You',
+                    email: user?.email || merchantEmail,
+                    subject: subject,
+                    content: content,
+                    time: new Date().toISOString(),
+                    messageTimestamp: new Date().toISOString(),
+                    read: true,
+                    hasAttachment: false,
+                    folder: "sent",
+                    rawData: null
+                  };
+                  
+                  // Add the sent message to the thread
+                  const updatedThread = {
+                    ...selectedThread,
+                    emails: [...selectedThread.emails, sentMessage],
+                    count: selectedThread.count + 1
+                  };
+                  
+                  // Update the selected thread
+                  setSelectedThread(updatedThread);
+                  
+                  // Close reply mode
                   setReplyMode(null);
-                  alert('Email sent successfully!');
+                  
                 } catch (error) {
                   console.error('Error sending email:', error);
-                  alert('Failed to send email');
+                  
+                  // Show specific error message if available
+                  let errorMessage = 'Failed to send email';
+                  if (error instanceof Error) {
+                    if (error.message.includes('Gmail connection')) {
+                      errorMessage = 'Please check your Gmail connection in Settings > Integrations';
+                    } else if (error.message.includes('authentication')) {
+                      errorMessage = 'Authentication error. Please try signing in again.';
+                    } else {
+                      errorMessage = error.message;
+                    }
+                  }
+                  
+                  alert(errorMessage);
+                } finally {
+                  setIsSending(false);
                 }
               }}
               onCancelReply={() => setReplyMode(null)}
@@ -1764,17 +2394,141 @@ export default function EmailPage() {
               userEmail={user?.email || ''}
               merchantEmail={merchantEmail}
               replyMode={replyMode}
+              isSending={isSending}
               onStartReply={(email: any) => setReplyMode({ type: 'reply', originalEmail: email })}
               onStartReplyAll={(email: any) => setReplyMode({ type: 'replyAll', originalEmail: email })}
               onStartForward={(email: any) => setReplyMode({ type: 'forward', originalEmail: email })}
-              onSendReply={async (content: string, subject: string, recipients: string[]) => {
+              onSendReply={async (content: string, subject: string, recipients: string[], attachments: File[]) => {
                 try {
-                  console.log('Sending email:', { content, subject, recipients });
+                  setIsSending(true);
+                  console.log('Handling reply/forward:', { type: replyMode?.type, content, subject, recipients, attachments: attachments.length });
+                  
+                  if (!user?.uid) {
+                    throw new Error('User not authenticated');
+                  }
+                  
+                  // Check if this is a forward operation
+                  if (replyMode?.type === 'forward') {
+                    // For forwarding, use the sendGmailEmail function with message history
+                    const sendGmailEmail = httpsCallable(functions, 'sendGmailEmail');
+                    
+                    // Include original message history in the content
+                    const originalEmail = replyMode.originalEmail;
+                    const forwardContent = `
+                      ${content}
+                      
+                      ---------- Forwarded message ----------
+                      From: ${originalEmail.sender} <${originalEmail.email}>
+                      Date: ${formatMelbourneTime(originalEmail.time, 'Unknown time')}
+                      Subject: ${originalEmail.subject}
+                      To: ${user?.email || merchantEmail}
+                      
+                      ${originalEmail.content}
+                    `;
+                    
+                    const emailData: any = {
+                      merchantId: user.uid,
+                      body: forwardContent,
+                      recipient_email: recipients[0], // Primary recipient
+                      subject: subject,
+                      is_html: true,
+                      cc: recipients.length > 1 ? recipients.slice(1) : [], // Additional recipients as CC
+                    };
+                    
+                    // Note: Attachments require S3 upload workflow (not yet implemented)
+                    if (attachments.length > 0) {
+                      throw new Error('Attachments are not yet supported. The Composio API requires files to be uploaded to S3 first.');
+                    }
+                    
+                    const response = await sendGmailEmail(emailData);
+                    
+                    console.log('Email forwarded successfully:', response.data);
+                    
+                    // Show success message
+                    const recipientList = recipients.join(', ');
+                    setSuccessMessage(`Email forwarded successfully to: ${recipientList}`);
+                    
+                  } else {
+                    // For reply/replyAll, use the replyToGmailThread function
+                    const replyToGmailThread = httpsCallable(functions, 'replyToGmailThread');
+                    
+                    const replyData: any = {
+                      merchantId: user.uid,
+                      message_body: content,
+                      recipient_email: recipients[0], // Primary recipient
+                      thread_id: selectedEmail.threadId || selectedEmail.id,
+                      is_html: true,
+                    };
+                    
+                    // Add CC recipients if present
+                    if (recipients.length > 1) {
+                      replyData.cc = recipients.slice(1);
+                    }
+                    
+                    // Note: Attachments require S3 upload workflow (not yet implemented)
+                    if (attachments.length > 0) {
+                      throw new Error('Attachments are not yet supported. The Composio API requires files to be uploaded to S3 first.');
+                    }
+                    
+                    const response = await replyToGmailThread(replyData);
+                    
+                    console.log('Reply sent successfully:', response.data);
+                    
+                    // Show success message
+                    const recipientList = recipients.join(', ');
+                    setSuccessMessage(`Reply sent successfully to: ${recipientList}`);
+                  }
+                  
+                  // Create the sent message object for UI
+                  const sentMessage = {
+                    id: `sent-${Date.now()}`,
+                    threadId: selectedEmail.threadId || selectedEmail.id,
+                    sender: merchantData?.businessName || user?.displayName || 'You',
+                    email: user?.email || merchantEmail,
+                    subject: subject,
+                    content: content,
+                    time: new Date().toISOString(),
+                    messageTimestamp: new Date().toISOString(),
+                    read: true,
+                    hasAttachment: false,
+                    folder: "sent",
+                    rawData: null
+                  };
+                  
+                  // Convert single email to thread with the reply
+                  const newThread = {
+                    threadId: selectedEmail.threadId || selectedEmail.id,
+                    representative: selectedEmail,
+                    count: 2,
+                    unreadCount: 0,
+                    emails: [selectedEmail, sentMessage]
+                  };
+                  
+                  // Switch to thread view
+                  setSelectedThread(newThread);
+                  setSelectedEmail(null);
+                  
+                  // Close reply mode
                   setReplyMode(null);
-                  alert('Email sent successfully!');
+                  
                 } catch (error) {
                   console.error('Error sending email:', error);
-                  alert('Failed to send email');
+                  
+                  // Show specific error message if available
+                  let errorMessage = 'Failed to send email';
+                  if (error instanceof Error) {
+                    if (error.message.includes('Gmail connection')) {
+                      errorMessage = 'Please check your Gmail connection in Settings > Integrations';
+                    } else if (error.message.includes('authentication')) {
+                      errorMessage = 'Authentication error. Please try signing in again.';
+                    } else {
+                      errorMessage = error.message;
+                    }
+                  }
+                  
+                  alert(errorMessage);
+                } finally {
+                  setIsSending(false);
                 }
               }}
               onCancelReply={() => setReplyMode(null)}
@@ -1846,21 +2600,56 @@ const advancedDecodeHtml = (data: string): string => {
 const extractHtmlContent = (emailData: any): string => {
   console.log('🔍 Extracting HTML content from email data');
   
-  // Check for parts structure first
+  // First try the new structure: payload.data.payload.parts
+  const newParts = emailData.payload?.data?.payload?.parts;
+  if (newParts && Array.isArray(newParts)) {
+    console.log('📦 Found new format payload.data.payload.parts, searching for HTML content');
+    
+    for (const part of newParts) {
+      console.log(`🔍 Checking part: ${part.mimeType}, hasData: ${!!part.body?.data}`);
+      
+      if (part.mimeType === 'text/html' && part.body?.data) {
+        try {
+          console.log('🌐 Found HTML part in new format, decoding...');
+          const htmlContent = advancedDecodeHtml(part.body.data);
+          console.log('✅ HTML content decoded successfully from new format');
+          return htmlContent;
+        } catch (error) {
+          console.error('❌ Failed to decode HTML part from new format:', error);
+          continue; // Try next part
+        }
+      }
+    }
+  }
+  
+  // Fallback to payload.data.payload.body.data if no parts found
+  const directBodyData = emailData.payload?.data?.payload?.body?.data;
+  if (directBodyData) {
+    try {
+      console.log('📄 Found fallback payload.data.payload.body.data, decoding...');
+      const htmlContent = advancedDecodeHtml(directBodyData);
+      console.log('✅ HTML content decoded successfully from fallback');
+      return htmlContent;
+    } catch (error) {
+      console.error('❌ Failed to decode HTML from fallback:', error);
+    }
+  }
+  
+  // Fallback to old structure for backward compatibility
   if (emailData.payload?.parts && Array.isArray(emailData.payload.parts)) {
-    console.log('📦 Found payload.parts, searching for HTML content');
+    console.log('📦 Found old format payload.parts, searching for HTML content');
     
     for (const part of emailData.payload.parts) {
       console.log(`🔍 Checking part: ${part.mimeType}, hasData: ${!!part.body?.data}`);
       
       if (part.mimeType === 'text/html' && part.body?.data) {
         try {
-          console.log('🌐 Found HTML part, decoding...');
+          console.log('🌐 Found HTML part in old format, decoding...');
           const htmlContent = advancedDecodeHtml(part.body.data);
-          console.log('✅ HTML content decoded successfully');
+          console.log('✅ HTML content decoded successfully from old format');
           return htmlContent;
         } catch (error) {
-          console.error('❌ Failed to decode HTML part:', error);
+          console.error('❌ Failed to decode HTML part from old format:', error);
           continue; // Try next part
         }
       }
@@ -1881,18 +2670,6 @@ const extractHtmlContent = (emailData: any): string => {
           }
         }
       }
-    }
-  }
-  
-  // Fallback to direct payload body if it's HTML
-  if (emailData.payload?.body?.data && emailData.payload?.mimeType === 'text/html') {
-    try {
-      console.log('📄 Found direct HTML payload, decoding...');
-      const htmlContent = advancedDecodeHtml(emailData.payload.body.data);
-      console.log('✅ Direct HTML payload decoded successfully');
-      return htmlContent;
-    } catch (error) {
-      console.error('❌ Failed to decode direct HTML payload:', error);
     }
   }
   
@@ -1950,6 +2727,94 @@ const sanitiseAndRenderHtml = (htmlContent: string): string => {
   }
 };
 
+// Compose email component
+const ComposeEmailView = ({ 
+  onSend, 
+  onCancel, 
+  isSending 
+}: { 
+  onSend: (to: string, subject: string, content: string) => void;
+  onCancel: () => void;
+  isSending: boolean;
+}) => {
+  const [to, setTo] = useState('');
+  const [subject, setSubject] = useState('');
+  const [content, setContent] = useState('');
+
+  return (
+    <div className="flex flex-col h-full bg-white">
+      {/* Compose Header */}
+      <div className="border-b border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-xl font-semibold text-gray-900">New Email</h1>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => {
+                if (to.trim() && content.trim()) {
+                  onSend(to, subject, content);
+                }
+              }}
+              disabled={!to.trim() || !content.trim() || isSending}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSending ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4 mr-2" />
+              )}
+              {isSending ? 'Sending...' : 'Send'}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={onCancel}
+              disabled={isSending}
+              className="px-4 py-2"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+
+        {/* Compose Form */}
+        <div className="space-y-4">
+          {/* To Field */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+            <Input
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="w-full border-gray-300 focus:border-gray-400 focus:outline-none focus:ring-0"
+              placeholder="Enter recipient email address"
+            />
+          </div>
+
+          {/* Subject Field */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+            <Input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="w-full border-gray-300 focus:border-gray-400 focus:outline-none focus:ring-0"
+              placeholder="Enter subject"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Message Content */}
+      <div className="flex-1 p-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Message</label>
+        <Textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          className="w-full h-full min-h-[300px] resize-none border-gray-300 focus:border-gray-400 focus:outline-none focus:ring-0"
+          placeholder="Type your message..."
+        />
+      </div>
+    </div>
+  );
+};
+
 // Empty state component
 const EmptyEmailView = () => (
   <div className="flex-1 flex items-center justify-center bg-gray-50 h-full">
@@ -1965,129 +2830,7 @@ const EmptyEmailView = () => (
   </div>
 );
 
-// Integrated Reply Interface Component
-const IntegratedReplyInterface = ({ 
-  replyData,
-  onSend,
-  onCancel
-}: {
-  replyData: { type: 'reply' | 'replyAll' | 'forward', originalEmail: any, thread?: any }
-  onSend?: (content: string, subject: string, recipients: string[]) => void
-  onCancel?: () => void
-}) => {
-  const [replyContent, setReplyContent] = useState('');
-  const [subject, setSubject] = useState('');
-  const [recipients, setRecipients] = useState<string[]>([]);
 
-  useEffect(() => {
-    // Set default subject and recipients based on reply type
-    if (replyData.type === 'reply') {
-      setSubject(replyData.originalEmail.subject.startsWith('Re: ') ? replyData.originalEmail.subject : `Re: ${replyData.originalEmail.subject}`);
-      setRecipients([replyData.originalEmail.email]);
-    } else if (replyData.type === 'replyAll') {
-      setSubject(replyData.originalEmail.subject.startsWith('Re: ') ? replyData.originalEmail.subject : `Re: ${replyData.originalEmail.subject}`);
-      setRecipients([replyData.originalEmail.email]);
-    } else if (replyData.type === 'forward') {
-      setSubject(replyData.originalEmail.subject.startsWith('Fwd: ') ? replyData.originalEmail.subject : `Fwd: ${replyData.originalEmail.subject}`);
-      setRecipients([]);
-    }
-  }, [replyData]);
-
-  const handleSend = () => {
-    if (replyContent.trim() && onSend) {
-      onSend(replyContent, subject, recipients);
-    }
-  };
-
-  const getDisplayName = () => {
-    switch (replyData.type) {
-      case 'reply': return 'Reply'
-      case 'replyAll': return 'Reply All'
-      case 'forward': return 'Forward'
-      default: return 'Compose'
-    }
-  };
-
-  return (
-    <div className="border-b border-gray-200 p-6 bg-white">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Reply className="h-5 w-5 text-gray-600" />
-          <h1 className="text-base font-medium text-gray-900">{getDisplayName()}</h1>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onCancel}
-          className="h-8 w-8 p-0 hover:bg-gray-100"
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-
-      {/* Compose Form */}
-      <div className="space-y-3">
-        <div>
-          <label className="text-xs font-medium text-gray-700 mb-1 block">Subject</label>
-          <Input
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            className="text-sm"
-            placeholder="Subject"
-          />
-        </div>
-        
-        {replyData.type === 'forward' ? (
-          <div>
-            <label className="text-xs font-medium text-gray-700 mb-1 block">To</label>
-            <Input
-              value={recipients.join(', ')}
-              onChange={(e) => setRecipients(e.target.value.split(',').map(r => r.trim()).filter(r => r))}
-              className="text-sm"
-              placeholder="Enter email addresses"
-            />
-          </div>
-        ) : (
-          <div>
-            <label className="text-xs font-medium text-gray-700 mb-1 block">To</label>
-            <div className="text-sm text-gray-600 py-2 px-3 bg-gray-50 rounded-md border border-gray-200">
-              {recipients.join(', ')}
-            </div>
-          </div>
-        )}
-
-        {/* Compose Textarea */}
-        <div>
-          <label className="text-xs font-medium text-gray-700 mb-1 block">Message</label>
-          <Textarea
-            value={replyContent}
-            onChange={(e) => setReplyContent(e.target.value)}
-            placeholder="Type your message..."
-            className="min-h-[120px] resize-none border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-          />
-        </div>
-        
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2 pt-2">
-          <Button
-            onClick={handleSend}
-            disabled={!replyContent.trim() || (replyData.type === 'forward' && recipients.length === 0)}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            <Send className="h-4 w-4 mr-2" />
-            Send
-          </Button>
-          <Button
-            variant="outline"
-            onClick={onCancel}
-          >
-            Cancel
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 // Single email viewer component with integrated reply
 const EmailViewer = ({ 
@@ -2100,7 +2843,8 @@ const EmailViewer = ({
   onStartReplyAll, 
   onStartForward,
   onSendReply,
-  onCancelReply
+  onCancelReply,
+  isSending
 }: {
   email: any;
   merchantData: any;
@@ -2110,12 +2854,18 @@ const EmailViewer = ({
   onStartReply?: (email: any) => void;
   onStartReplyAll?: (email: any) => void;
   onStartForward?: (email: any) => void;
-  onSendReply?: (content: string, subject: string, recipients: string[]) => void;
+  onSendReply?: (content: string, subject: string, recipients: string[], attachments: File[]) => void;
   onCancelReply?: () => void;
+  isSending?: boolean;
 }) => {
   const [htmlContent, setHtmlContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const [replyContent, setReplyContent] = useState('');
+  const [replyQuotedContent, setReplyQuotedContent] = useState('');
+  const [replyRecipients, setReplyRecipients] = useState('');
+  const [replyCc, setReplyCc] = useState('');
+  const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
 
   useEffect(() => {
     const loadEmailContent = async () => {
@@ -2148,19 +2898,52 @@ const EmailViewer = ({
     loadEmailContent();
   }, [email]);
 
+  // Reset reply content when reply mode changes (only on mode change, not on every render)
+  const [replyModeKey, setReplyModeKey] = useState<string>('');
+  
+  useEffect(() => {
+    const newKey = replyMode ? `${replyMode.type}-${replyMode.originalEmail.id}` : '';
+    
+    // Only update if the mode actually changed (not just a re-render)
+    if (newKey !== replyModeKey) {
+      setReplyModeKey(newKey);
+      
+      if (replyMode) {
+        // Auto-populate recipients based on reply type
+        if (replyMode.type === 'reply') {
+          setReplyRecipients(replyMode.originalEmail.email);
+          setReplyCc('');
+          // Set quoted content separately and clear user input
+          const quotedContent = createQuotedReplyContent(replyMode.originalEmail, replyMode.type);
+          setReplyQuotedContent(quotedContent);
+          setReplyContent('');
+        } else if (replyMode.type === 'replyAll') {
+          setReplyRecipients(replyMode.originalEmail.email);
+          setReplyCc('');
+          // Set quoted content separately and clear user input
+          const quotedContent = createQuotedReplyContent(replyMode.originalEmail, replyMode.type);
+          setReplyQuotedContent(quotedContent);
+          setReplyContent('');
+        } else if (replyMode.type === 'forward') {
+          setReplyRecipients('');
+          setReplyCc('');
+          setReplyContent('');
+          setReplyQuotedContent('');
+        }
+      } else {
+        setReplyContent('');
+        setReplyQuotedContent('');
+        setReplyRecipients('');
+        setReplyCc('');
+        setReplyAttachments([]);
+      }
+    }
+  }, [replyMode, replyModeKey]);
+
   const isFromCurrentUser = isEmailFromCurrentUser(email.email, userEmail, merchantEmail);
 
   return (
     <div className="flex flex-col h-full">
-      {/* Integrated Reply Interface - Shows at top when replying */}
-      {replyMode && (
-        <IntegratedReplyInterface
-          replyData={replyMode}
-          onSend={onSendReply}
-          onCancel={onCancelReply}
-        />
-      )}
-
       {/* Email Header */}
       <div className="p-6 bg-white border-b border-gray-200">
         <div className="flex items-center justify-between mb-4">
@@ -2219,46 +3002,228 @@ const EmailViewer = ({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+
+            {/* Send Button - Shows when replying */}
+            {replyMode && (
+              <Button
+                onClick={() => {
+                  if ((replyContent.trim() || replyQuotedContent.trim()) && replyRecipients.trim()) {
+                    const subject = replyMode.originalEmail.subject.startsWith('Re: ') ? replyMode.originalEmail.subject : `Re: ${replyMode.originalEmail.subject}`;
+                    const recipients = [
+                      ...replyRecipients.split(',').map(email => email.trim()).filter(Boolean),
+                      ...replyCc.split(',').map(email => email.trim()).filter(Boolean)
+                    ];
+                    // Combine user input (as HTML paragraphs) with quoted content
+                    const userHtml = replyContent.trim() ? 
+                      `<div>${replyContent.split('\n').map((line: string) => line.trim() ? `<p>${line.trim()}</p>` : '<br>').join('')}</div>` : '';
+                    const combinedContent = userHtml + replyQuotedContent;
+                    onSendReply?.(combinedContent, subject, recipients, replyAttachments);
+                  }
+                }}
+                disabled={!replyRecipients.trim() || isSending}
+                className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSending ? (
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4 mr-2" />
+                )}
+                {isSending ? 'Sending...' : 'Send'}
+              </Button>
+            )}
+
+            {/* Cancel Button - Shows when replying */}
+            {replyMode && (
+              <Button
+                variant="outline"
+                onClick={onCancelReply}
+                className="h-8 px-3"
+              >
+                Cancel
+              </Button>
+            )}
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Avatar className="h-10 w-10">
-            <AvatarImage src={merchantData?.logoUrl} />
-            <AvatarFallback className="bg-blue-100 text-blue-600 font-semibold">
-              {email.sender.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-gray-900">{email.sender}</span>
-              {isFromCurrentUser && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                  <div className="h-1 w-1 bg-blue-500 rounded-full flex-shrink-0"></div>
-                  You
-                </span>
-              )}
-              {(email as any).isGmail && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                  <div className="h-1 w-1 bg-blue-500 rounded-full flex-shrink-0"></div>
-                  Gmail
-                </span>
-              )}
-              {email.hasAttachment && (
-                <Paperclip className="h-3 w-3 text-gray-400 flex-shrink-0" />
-              )}
-            </div>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <span>to {userEmail}</span>
-              <span>•</span>
-              <span>{formatMelbourneTime(email.time, 'Unknown time')}</span>
+        {!replyMode && (
+          <div className="flex items-center gap-3">
+            <Avatar className="h-10 w-10">
+              <AvatarImage src={merchantData?.logoUrl} />
+              <AvatarFallback className="bg-blue-100 text-blue-600 font-semibold">
+                {email.sender.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-gray-900">{email.sender}</span>
+                {isFromCurrentUser && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                            <div className="h-1 w-1 bg-blue-500 rounded-full flex-shrink-0"></div>
+                    You
+                  </span>
+                )}
+
+                {email.hasAttachment && (
+                  <Paperclip className="h-3 w-3 text-gray-400 flex-shrink-0" />
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <span>to {userEmail}</span>
+                <span>•</span>
+                <span>{formatMelbourneTime(email.time, 'Unknown time')}</span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Reply Compose Area - Shows below header when replying */}
+        {replyMode && (
+          <div className="mt-4 pt-4 border-t border-gray-200 animate-in slide-in-from-top-2 duration-200 ease-out">
+            {/* From Field */}
+            <div className="flex items-center py-2 border-b border-gray-100">
+              <div className="w-16 text-sm text-gray-600 font-medium">From:</div>
+              <div className="flex-1 text-sm text-gray-900">{merchantData?.businessName || 'You'} ({userEmail || merchantEmail})</div>
+              <div className="flex gap-1">
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                  <ChevronRight className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+
+            {/* To Field */}
+            <div className="flex items-center py-2 border-b border-gray-100">
+              <div className="w-16 text-sm text-gray-600 font-medium">To:</div>
+              <div className="flex-1">
+                <Input
+                  value={replyRecipients}
+                  onChange={(e) => setReplyRecipients(e.target.value)}
+                  className="border-0 p-0 h-auto text-sm focus:ring-0 focus:outline-none shadow-none"
+                  placeholder="Enter recipient email addresses"
+                />
+              </div>
+              <div className="flex gap-2 text-sm text-gray-500">
+                <button 
+                  type="button"
+                  className="hover:text-gray-700"
+                  onClick={() => {
+                    // Toggle CC field visibility
+                    if (!replyCc) {
+                      setReplyCc('');
+                    }
+                  }}
+                >
+                  Cc
+                </button>
+                <button 
+                  type="button"
+                  className="hover:text-gray-700"
+                >
+                  Bcc
+                </button>
+              </div>
+            </div>
+
+            {/* CC Field (if populated or clicked) */}
+            {replyCc !== undefined && (
+              <div className="flex items-center py-2 border-b border-gray-100">
+                <div className="w-16 text-sm text-gray-600 font-medium">Cc:</div>
+                <div className="flex-1">
+                  <Input
+                    value={replyCc}
+                    onChange={(e) => setReplyCc(e.target.value)}
+                    className="border-0 p-0 h-auto text-sm focus:ring-0 focus:outline-none shadow-none"
+                    placeholder="Enter CC email addresses"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Subject Field */}
+            <div className="flex items-center py-2 border-b border-gray-100">
+              <div className="w-16 text-sm text-gray-600 font-medium">Subject:</div>
+              <div className="flex-1 text-sm text-gray-900">
+                {replyMode.type === 'forward' 
+                  ? `Fwd: ${replyMode.originalEmail.subject}`
+                  : replyMode.originalEmail.subject.startsWith('Re: ') 
+                    ? replyMode.originalEmail.subject 
+                    : `Re: ${replyMode.originalEmail.subject}`
+                }
+              </div>
+            </div>
+
+            {/* Attachments (if any) */}
+            {replyAttachments.length > 0 && (
+              <div className="py-2 border-b border-gray-100">
+                <div className="flex items-start gap-2">
+                  <div className="w-16 text-sm text-gray-600 font-medium">Files:</div>
+                  <div className="flex-1 space-y-1">
+                    {replyAttachments.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between bg-gray-50 px-2 py-1 rounded text-xs">
+                        <span className="truncate">{file.name}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setReplyAttachments(prev => prev.filter((_, i) => i !== index));
+                          }}
+                          className="h-4 w-4 p-0 ml-2"
+                        >
+                          <X className="h-2 w-2" />
+                        </Button>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+                    </div>
+                  )}
+
+            {/* Toolbar */}
+            <div className="py-2 flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.multiple = true;
+                  input.onchange = (e) => {
+                    const files = Array.from((e.target as HTMLInputElement).files || []);
+                    setReplyAttachments(prev => [...prev, ...files]);
+                  };
+                  input.click();
+                }}
+                className="h-7 px-2 text-xs"
+              >
+                <Paperclip className="h-3 w-3 mr-1" />
+                Attach
+              </Button>
+            </div>
+
+            {/* Message Content */}
+            <div className="py-2">
+              <Textarea
+                value={replyContent}
+                onChange={(e) => setReplyContent(e.target.value)}
+                className="w-full min-h-[120px] resize-none border-0 p-0 focus:ring-0 focus:outline-none shadow-none text-sm"
+                placeholder="Type your reply above the quoted message..."
+              />
+              {/* Quoted Content Preview */}
+              {replyQuotedContent && (
+                <div className="mt-2 border-t border-gray-100 pt-2">
+                  <div className="opacity-75">
+                    <IframeEmail html={replyQuotedContent} className="text-sm min-h-[100px]" />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Email Content */}
+            {/* Email Content */}
       <div className="flex-1 overflow-auto p-6 bg-white custom-scrollbar">
         {loading ? (
           <div className="flex items-center justify-center py-12">
@@ -2277,17 +3242,7 @@ const EmailViewer = ({
           </div>
         ) : (
           <div className="prose max-w-none">
-            <div 
-              className="email-content"
-              dangerouslySetInnerHTML={{ __html: htmlContent }}
-              style={{
-                lineHeight: '1.5',
-                fontFamily: 'system-ui, -apple-system, sans-serif',
-                wordWrap: 'break-word',
-                overflowWrap: 'break-word',
-                fontSize: '15px'
-              }}
-            />
+            <IframeEmail html={htmlContent} />
           </div>
         )}
       </div>
@@ -2306,7 +3261,8 @@ const EmailThreadViewer = ({
   onStartReplyAll, 
   onStartForward,
   onSendReply,
-  onCancelReply
+  onCancelReply,
+  isSending
 }: {
   thread: any;
   merchantData: any;
@@ -2316,10 +3272,34 @@ const EmailThreadViewer = ({
   onStartReply?: (email: any) => void;
   onStartReplyAll?: (email: any) => void;
   onStartForward?: (email: any) => void;
-  onSendReply?: (content: string, subject: string, recipients: string[]) => void;
+  onSendReply?: (content: string, subject: string, recipients: string[], attachments: File[]) => void;
   onCancelReply?: () => void;
+  isSending?: boolean;
 }) => {
   const [expandedEmails, setExpandedEmails] = useState<Set<string>>(new Set([thread.emails[0]?.id]));
+  const [replyContent, setReplyContent] = useState('');
+  const [replyQuotedContent, setReplyQuotedContent] = useState('');
+  const [replyRecipients, setReplyRecipients] = useState('');
+  const [replyCc, setReplyCc] = useState('');
+  const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
+
+  // Auto-expand the latest email when thread updates (for sent messages)
+  useEffect(() => {
+    if (thread.emails.length > 0) {
+      const latestEmail = thread.emails[thread.emails.length - 1];
+      if (latestEmail.folder === 'sent' || latestEmail.id?.startsWith('sent-')) {
+        setExpandedEmails(prev => new Set([...prev, latestEmail.id]));
+        
+        // Scroll to the bottom to show the new message
+        setTimeout(() => {
+          const threadMessagesContainer = document.querySelector('.thread-messages-container');
+          if (threadMessagesContainer) {
+            threadMessagesContainer.scrollTop = threadMessagesContainer.scrollHeight;
+          }
+        }, 100);
+      }
+    }
+  }, [thread.emails]);
 
   const toggleEmailExpansion = (emailId: string) => {
     const newExpanded = new Set(expandedEmails);
@@ -2331,20 +3311,54 @@ const EmailThreadViewer = ({
     setExpandedEmails(newExpanded);
   };
 
+  // Reset reply content when reply mode changes (only on mode change, not on every render)
+  const [replyModeKey, setReplyModeKey] = useState<string>('');
+  
+  useEffect(() => {
+    const newKey = replyMode ? `${replyMode.type}-${replyMode.originalEmail.id}` : '';
+    
+    // Only update if the mode actually changed (not just a re-render)
+    if (newKey !== replyModeKey) {
+      setReplyModeKey(newKey);
+      
+      if (replyMode) {
+        // Auto-populate recipients based on reply type
+        const mostRecentEmail = thread.emails[thread.emails.length - 1];
+        if (replyMode.type === 'reply') {
+          setReplyRecipients(mostRecentEmail.email);
+          setReplyCc('');
+          // Set quoted content separately and clear user input
+          const quotedContent = createQuotedReplyContent(replyMode.originalEmail, replyMode.type);
+          setReplyQuotedContent(quotedContent);
+          setReplyContent('');
+        } else if (replyMode.type === 'replyAll') {
+          setReplyRecipients(mostRecentEmail.email);
+          setReplyCc('');
+          // Set quoted content separately and clear user input
+          const quotedContent = createQuotedReplyContent(replyMode.originalEmail, replyMode.type);
+          setReplyQuotedContent(quotedContent);
+          setReplyContent('');
+        } else if (replyMode.type === 'forward') {
+          setReplyRecipients('');
+          setReplyCc('');
+          setReplyContent('');
+          setReplyQuotedContent('');
+        }
+      } else {
+        setReplyContent('');
+        setReplyQuotedContent('');
+        setReplyRecipients('');
+        setReplyCc('');
+        setReplyAttachments([]);
+      }
+    }
+  }, [replyMode, replyModeKey, thread.emails]);
+
   // Get the most recent email for replying
   const mostRecentEmail = thread.emails[thread.emails.length - 1];
 
   return (
     <div className="flex flex-col h-full">
-      {/* Integrated Reply Interface - Shows at top when replying */}
-      {replyMode && (
-        <IntegratedReplyInterface
-          replyData={replyMode}
-          onSend={onSendReply}
-          onCancel={onCancelReply}
-        />
-      )}
-
       {/* Thread Header */}
       <div className="border-b border-gray-200 p-6 bg-white">
         <div className="flex items-center justify-between mb-2">
@@ -2410,16 +3424,203 @@ const EmailThreadViewer = ({
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+
+              {/* Send Button - Shows when replying */}
+              {replyMode && (
+                <Button
+                  onClick={() => {
+                    if ((replyContent.trim() || replyQuotedContent.trim()) && replyRecipients.trim()) {
+                      const subject = replyMode.originalEmail.subject.startsWith('Re: ') ? replyMode.originalEmail.subject : `Re: ${replyMode.originalEmail.subject}`;
+                      const recipients = [
+                        ...replyRecipients.split(',').map(email => email.trim()).filter(Boolean),
+                        ...replyCc.split(',').map(email => email.trim()).filter(Boolean)
+                      ];
+                      // Combine user input (as HTML paragraphs) with quoted content
+                      const userHtml = replyContent.trim() ? 
+                        `<div>${replyContent.split('\n').map((line: string) => line.trim() ? `<p>${line.trim()}</p>` : '<br>').join('')}</div>` : '';
+                      const combinedContent = userHtml + replyQuotedContent;
+                      onSendReply?.(combinedContent, subject, recipients, replyAttachments);
+                    }
+                  }}
+                  disabled={!replyRecipients.trim() || isSending}
+                  className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSending ? (
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4 mr-2" />
+                  )}
+                  {isSending ? 'Sending...' : 'Send'}
+                </Button>
+              )}
+
+              {/* Cancel Button - Shows when replying */}
+              {replyMode && (
+                <Button
+                  variant="outline"
+                  onClick={onCancelReply}
+                  className="h-8 px-3"
+                >
+                  Cancel
+                </Button>
+              )}
             </div>
           </div>
         </div>
-        <p className="text-sm text-gray-600">
-          Conversation with {thread.emails.map((e: any) => e.sender).filter((v: any, i: number, a: any[]) => a.indexOf(v) === i).join(', ')}
-        </p>
-      </div>
+        {!replyMode && (
+          <p className="text-sm text-gray-600">
+            Conversation with {thread.emails.map((e: any) => e.sender).filter((v: any, i: number, a: any[]) => a.indexOf(v) === i).join(', ')}
+          </p>
+        )}
+
+        {/* Reply Compose Area - Shows below header when replying */}
+        {replyMode && (
+          <div className="mt-4 pt-4 border-t border-gray-200 animate-in slide-in-from-top-2 duration-200 ease-out">
+            {/* From Field */}
+            <div className="flex items-center py-2 border-b border-gray-100">
+              <div className="w-16 text-sm text-gray-600 font-medium">From:</div>
+              <div className="flex-1 text-sm text-gray-900">{merchantData?.businessName || 'You'} ({userEmail || merchantEmail})</div>
+              <div className="flex gap-1">
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                  <ChevronRight className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+
+            {/* To Field */}
+            <div className="flex items-center py-2 border-b border-gray-100">
+              <div className="w-16 text-sm text-gray-600 font-medium">To:</div>
+              <div className="flex-1">
+                <Input
+                  value={replyRecipients}
+                  onChange={(e) => setReplyRecipients(e.target.value)}
+                  className="border-0 p-0 h-auto text-sm focus:ring-0 focus:outline-none shadow-none"
+                  placeholder="Enter recipient email addresses"
+                />
+              </div>
+              <div className="flex gap-2 text-sm text-gray-500">
+                <button 
+                  type="button"
+                  className="hover:text-gray-700"
+                  onClick={() => {
+                    // Toggle CC field visibility
+                    if (!replyCc) {
+                      setReplyCc('');
+                    }
+                  }}
+                >
+                  Cc
+                </button>
+                <button 
+                  type="button"
+                  className="hover:text-gray-700"
+                >
+                  Bcc
+                </button>
+              </div>
+            </div>
+
+            {/* CC Field (if populated or clicked) */}
+            {replyCc !== undefined && (
+              <div className="flex items-center py-2 border-b border-gray-100">
+                <div className="w-16 text-sm text-gray-600 font-medium">Cc:</div>
+                <div className="flex-1">
+                  <Input
+                    value={replyCc}
+                    onChange={(e) => setReplyCc(e.target.value)}
+                    className="border-0 p-0 h-auto text-sm focus:ring-0 focus:outline-none shadow-none"
+                    placeholder="Enter CC email addresses"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Subject Field */}
+            <div className="flex items-center py-2 border-b border-gray-100">
+              <div className="w-16 text-sm text-gray-600 font-medium">Subject:</div>
+              <div className="flex-1 text-sm text-gray-900">
+                {replyMode.type === 'forward' 
+                  ? `Fwd: ${replyMode.originalEmail.subject}`
+                  : replyMode.originalEmail.subject.startsWith('Re: ') 
+                    ? replyMode.originalEmail.subject 
+                    : `Re: ${replyMode.originalEmail.subject}`
+                }
+              </div>
+            </div>
+
+            {/* Attachments (if any) */}
+            {replyAttachments.length > 0 && (
+              <div className="py-2 border-b border-gray-100">
+                <div className="flex items-start gap-2">
+                  <div className="w-16 text-sm text-gray-600 font-medium">Files:</div>
+                  <div className="flex-1 space-y-1">
+                    {replyAttachments.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between bg-gray-50 px-2 py-1 rounded text-xs">
+                        <span className="truncate">{file.name}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setReplyAttachments(prev => prev.filter((_, i) => i !== index));
+                          }}
+                          className="h-4 w-4 p-0 ml-2"
+                        >
+                          <X className="h-2 w-2" />
+                        </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+              </div>
+            )}
+
+            {/* Toolbar */}
+            <div className="py-2 flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.multiple = true;
+                  input.onchange = (e) => {
+                    const files = Array.from((e.target as HTMLInputElement).files || []);
+                    setReplyAttachments(prev => [...prev, ...files]);
+                  };
+                  input.click();
+                }}
+                className="h-7 px-2 text-xs"
+              >
+                <Paperclip className="h-3 w-3 mr-1" />
+                Attach
+              </Button>
+            </div>
+
+            {/* Message Content */}
+            <div className="py-2">
+              <Textarea
+                value={replyContent}
+                onChange={(e) => setReplyContent(e.target.value)}
+                className="w-full min-h-[120px] resize-none border-0 p-0 focus:ring-0 focus:outline-none shadow-none text-sm"
+                placeholder="Type your reply above the quoted message..."
+              />
+              {/* Quoted Content Preview */}
+              {replyQuotedContent && (
+                <div className="mt-2 border-t border-gray-100 pt-2">
+                  <div className="opacity-75">
+                    <IframeEmail html={replyQuotedContent} className="text-sm min-h-[100px]" />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+              </div>
 
       {/* Thread Messages */}
-      <div className="flex-1 overflow-auto custom-scrollbar">
+      <div className="flex-1 overflow-auto custom-scrollbar thread-messages-container">
         <div className="divide-y divide-gray-200 pb-8">
           {thread.emails.map((email: any, index: number) => (
             <EmailInThread
@@ -2490,6 +3691,8 @@ const EmailInThread = ({ email, isExpanded, onToggleExpansion, merchantData, use
     }
   }, [isExpanded, email]);
 
+  const isSentMessage = email.folder === 'sent' || email.id?.startsWith('sent-');
+
   return (
     <div className={`${isFirst ? '' : 'border-t border-gray-200'}`}>
       {/* Email Header */}
@@ -2508,7 +3711,9 @@ const EmailInThread = ({ email, isExpanded, onToggleExpansion, merchantData, use
           
           <Avatar className="h-8 w-8">
             <AvatarImage src={merchantData?.logoUrl} />
-            <AvatarFallback className="bg-blue-100 text-blue-600 font-semibold text-sm">
+            <AvatarFallback className={`font-semibold text-sm ${
+              isSentMessage ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
+            }`}>
               {email.sender.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
             </AvatarFallback>
           </Avatar>
@@ -2522,13 +3727,19 @@ const EmailInThread = ({ email, isExpanded, onToggleExpansion, merchantData, use
                   You
                 </span>
               )}
+              {isSentMessage && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                  <div className="h-1 w-1 bg-green-500 rounded-full flex-shrink-0"></div>
+                  Sent
+                </span>
+              )}
             </div>
             <p className="text-sm text-gray-600">{email.email}</p>
           </div>
         </div>
         
         <div className="text-right">
-          <p className="text-sm text-gray-600">{formatMelbourneTime(email.time, 'Unknown time')}</p>
+          <p className="text-sm text-gray-600">{formatPreviewTime(email.time)}</p>
           {email.hasAttachment && (
             <div className="flex items-center gap-1 mt-1">
               <Paperclip className="h-3 w-3 text-gray-400" />
@@ -2538,7 +3749,7 @@ const EmailInThread = ({ email, isExpanded, onToggleExpansion, merchantData, use
         </div>
       </div>
 
-      {/* Expanded Email Content */}
+            {/* Expanded Email Content */}
       {isExpanded && (
         <div className="px-4 pb-6">
           <div className="bg-gray-50 rounded-md p-4">
@@ -2554,21 +3765,28 @@ const EmailInThread = ({ email, isExpanded, onToggleExpansion, merchantData, use
                 </div>
                 <p className="text-red-600 text-sm">{error}</p>
               </div>
-                         ) : (
-               <div className="prose max-w-none">
-                 <div 
-                   className="email-content"
-                   dangerouslySetInnerHTML={{ __html: htmlContent }}
-                   style={{
-                     lineHeight: '1.5',
-                     fontFamily: 'system-ui, -apple-system, sans-serif',
-                     wordWrap: 'break-word',
-                     overflowWrap: 'break-word',
-                     fontSize: '14px'
-                   }}
-                 />
-               </div>
-             )}
+            ) : (
+              <div className="prose max-w-none">
+                {isSentMessage ? (
+                  // For sent messages, display plain text content
+                  <div 
+                    className="email-content whitespace-pre-wrap"
+                    style={{
+                      lineHeight: '1.5',
+                      fontFamily: 'system-ui, -apple-system, sans-serif',
+                      wordWrap: 'break-word',
+                      overflowWrap: 'break-word',
+                      fontSize: '14px'
+                    }}
+                  >
+                    {email.content}
+                  </div>
+                ) : (
+                  // For received messages, display HTML content
+                  <IframeEmail html={htmlContent} className="text-sm" />
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

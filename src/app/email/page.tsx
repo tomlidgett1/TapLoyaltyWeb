@@ -29,6 +29,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu"
+import {
   Search, 
   Archive, 
   Trash2, 
@@ -48,12 +56,12 @@ import {
   Bug,
   ChevronRight,
   ChevronUp,
+  Bell,
   ChevronDown,
   Users,
   X,
   Eye,
-  AlertCircle,
-  Bell
+  AlertCircle
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import Image from "next/image"
@@ -63,6 +71,8 @@ import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnaps
 import { httpsCallable } from "firebase/functions"
 import { functions } from "@/lib/firebase"
 import { formatMelbourneTime } from "@/lib/date-utils"
+import { formatDistanceToNow } from "date-fns"
+import { cn } from "@/lib/utils"
 
 // Add custom CSS for discreet scrollbar
 const customScrollbarStyles = `
@@ -110,9 +120,53 @@ const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
+// Notification interface
+interface Notification {
+  id: string
+  message: string
+  type: string
+  customerId?: string
+  dateCreated?: Date
+  idSuffix?: string
+  timestamp: Date
+  read: boolean
+  customerFirstName?: string
+  customerFullName?: string
+  customerProfilePictureUrl?: string
+}
+
 // Utility function to create quoted reply content with HTML formatting
 const createQuotedReplyContent = (originalEmail: any, replyType: 'reply' | 'replyAll' | 'forward') => {
-  const dateStr = formatMelbourneTime(originalEmail.time, 'Unknown time');
+  // Format date in Outlook style (e.g., "Saturday, 19 July 2025 at 10:41 am")
+  const formatOutlookDate = (timestamp: any) => {
+    try {
+      let date: Date;
+      if (timestamp && typeof timestamp.toDate === 'function') {
+        date = timestamp.toDate();
+      } else if (timestamp instanceof Date) {
+        date = timestamp;
+      } else if (typeof timestamp === 'string') {
+        date = new Date(timestamp);
+      } else {
+        return 'Unknown time';
+      }
+      
+      return date.toLocaleDateString('en-AU', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'Australia/Melbourne'
+      }).replace(' at ', ' at ');
+    } catch (error) {
+      return 'Unknown time';
+    }
+  };
+
+  const dateStr = formatOutlookDate(originalEmail.repliedAt || originalEmail.receivedAt || originalEmail.time);
   
   // Preserve HTML content but clean it for quoting - use htmlMessage field
   let htmlContent = originalEmail.htmlMessage || originalEmail.content || '';
@@ -123,11 +177,14 @@ const createQuotedReplyContent = (originalEmail: any, replyType: 'reply' | 'repl
     htmlContent = htmlContent.split('\n').filter((line: string) => line.trim()).map((line: string) => `<p>${line.trim()}</p>`).join('');
   }
   
-  // Create HTML quoted content with proper styling (no left border)
+  // Create HTML quoted content with Outlook-style header (4 lines)
   const quotedContent = `<div style="margin-top: 20px;">
 <div style="padding-left: 15px; margin: 10px 0; color: #666;">
-<div style="font-size: 12px; color: #888; margin-bottom: 10px;">
-On ${dateStr}, ${originalEmail.sender} &lt;${originalEmail.email}&gt; wrote:
+<div style="font-size: 16px; color: #888; margin-bottom: 15px; line-height: 1.4;">
+<strong>From:</strong> ${originalEmail.sender} &lt;${originalEmail.email}&gt;<br>
+<strong>Date:</strong> ${dateStr}<br>
+<strong>To:</strong> ${originalEmail.to || 'Unknown Recipient'}<br>
+<strong>Subject:</strong> ${originalEmail.subject || 'No Subject'}
 </div>
 ${htmlContent}
 </div>
@@ -729,6 +786,16 @@ export default function EmailPage() {
   const [successMessage, setSuccessMessage] = useState<string>('')
   const [isComposing, setIsComposing] = useState(false)
   const [isEnablingTrigger, setIsEnablingTrigger] = useState(false)
+  
+  // Notification state
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [notificationsLoading, setNotificationsLoading] = useState(true)
+
+  // Agent response state
+  const [agentResponse, setAgentResponse] = useState<string>('')
+  const [isGeneratingAgent, setIsGeneratingAgent] = useState(false)
+  const [showAgentResponse, setShowAgentResponse] = useState(false)
 
   // Auto-hide success message after 5 seconds
   useEffect(() => {
@@ -950,7 +1017,7 @@ export default function EmailPage() {
       console.log("🔍 Thread documents:", threadsSnapshot.docs.map(doc => ({ id: doc.id, data: doc.data() })))
       
       // Transform thread documents into thread objects for the left panel
-      const transformedThreads = threadsSnapshot.docs.map((doc) => {
+      const transformedThreads = await Promise.all(threadsSnapshot.docs.map(async (doc) => {
         const threadData = doc.data()
         console.log("Processing thread:", doc.id, threadData)
         
@@ -959,7 +1026,18 @@ export default function EmailPage() {
         const subject = threadData.subject || "No Subject"
         const latestSender = threadData.latestSender || "Unknown Sender"
         const latestReceivedAt = threadData.latestReceivedAt
-        const messageCount = threadData.messageCount || 1
+        
+        // Query the chain subcollection to get actual message count
+        let messageCount = 1;
+        try {
+          const chainRef = collection(db, 'merchants', user.uid, 'fetchedemails', threadId, 'chain')
+          const chainSnapshot = await getDocs(chainRef)
+          messageCount = chainSnapshot.size || 1
+          console.log(`📊 Thread ${threadId}: Found ${messageCount} messages in chain subcollection`)
+        } catch (error) {
+          console.error(`Error querying chain for thread ${threadId}:`, error)
+          messageCount = 1 // Fallback to 1 if query fails
+        }
         
         // Parse latest sender name and email
         let senderName = latestSender
@@ -1003,7 +1081,7 @@ export default function EmailPage() {
         });
         
         return threadObj;
-      })
+      }))
         
             // Sort threads by latest activity (newest first)
       const sortedThreads = transformedThreads.sort((a, b) => {
@@ -1190,6 +1268,64 @@ export default function EmailPage() {
         console.log("🧹 Cleaning up Firestore listener")
         unsubscribe()
       }
+    }
+  }, [user?.uid])
+
+  // Fetch notifications from Firestore
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      if (!user?.uid) return
+      
+      try {
+        setNotificationsLoading(true)
+        
+        // Create reference to merchant's notifications collection
+        const notificationsRef = collection(db, 'merchants', user.uid, 'notifications')
+        const notificationsQuery = query(
+          notificationsRef,
+          orderBy('dateCreated', 'desc'),
+          limit(10)
+        )
+        
+        const notificationsSnapshot = await getDocs(notificationsQuery)
+        
+        // Get notifications data
+        const notificationsData = notificationsSnapshot.docs.map(doc => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            message: data.message || 'No message provided',
+            type: data.type || 'INFO',
+            customerId: data.customerId,
+            dateCreated: data.dateCreated?.toDate(),
+            timestamp: data.dateCreated?.toDate() || new Date(),
+            read: data.read || false
+          }
+        })
+        
+        setNotifications(notificationsData)
+        setUnreadCount(notificationsData.filter(n => !n.read).length)
+      } catch (error) {
+        console.error('Error fetching notifications:', error)
+        // Set fallback notifications if there's an error
+        const fallbackNotifications: Notification[] = [
+          {
+            id: "fallback-1",
+            message: "Welcome to your email dashboard",
+            timestamp: new Date(),
+            read: false,
+            type: "INFO"
+          }
+        ]
+        setNotifications(fallbackNotifications)
+        setUnreadCount(1)
+      } finally {
+        setNotificationsLoading(false)
+      }
+    }
+    
+    if (user?.uid) {
+      fetchNotifications()
     }
   }, [user?.uid])
 
@@ -1632,10 +1768,21 @@ export default function EmailPage() {
       
       // Set the thread for dropdown functionality
       setSelectedThread(completeThread)
+      console.log("🎯 Selected thread set:", {
+        threadId: completeThread.threadId,
+        emailCount: completeThread.emails.length,
+        threadCount: completeThread.count,
+        willAutoExpand: threadEmails.length > 1,
+        shouldShowDropdown: completeThread.emails.length > 1
+      });
       
       // Automatically expand the thread dropdown if it has multiple emails
       if (threadEmails.length > 1) {
-        setExpandedThreads(prev => new Set([...prev, thread.threadId]))
+        setExpandedThreads(prev => {
+          const newSet = new Set([...prev, thread.threadId]);
+          console.log("📂 Auto-expanding thread:", thread.threadId, "Expanded threads now:", [...newSet]);
+          return newSet;
+        });
       }
       
       // Set the most recent email to show in the right panel
@@ -1680,17 +1827,59 @@ export default function EmailPage() {
     }
   }
 
+  // Notification helper functions
+  const formatTimeAgo = (date: Date) => {
+    return formatDistanceToNow(date, { addSuffix: true })
+  }
 
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case "SUCCESS":
+      case "REWARD_REDEEMED":
+      case "POINTS_AWARDED":
+        return <Check className="h-4 w-4 text-green-500" />
+      case "WARNING":
+        return <Bell className="h-4 w-4 text-amber-500" />
+      case "ERROR":
+        return <X className="h-4 w-4 text-red-500" />
+      case "AGENT_ACTION":
+        return (
+          <div className="h-4 w-4 flex items-center justify-center">
+            <div className="h-4 w-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-orange-500">🤖</div>
+          </div>
+        )
+      default:
+        return <Bell className="h-4 w-4 text-blue-500" />
+    }
+  }
+
+  const markAsRead = async (id: string) => {
+    setNotifications(prev => 
+      prev.map(notification => 
+        notification.id === id 
+          ? { ...notification, read: true } 
+          : notification
+      )
+    )
+    setUnreadCount(prev => Math.max(0, prev - 1))
+  }
+
+  const markAllAsRead = async () => {
+    setNotifications(prev => 
+      prev.map(notification => ({ ...notification, read: true }))
+    )
+    setUnreadCount(0)
+  }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden bg-[#F5F5F5]">
       <style dangerouslySetInnerHTML={{ 
         __html: `
           ${customScrollbarStyles}
         `
       }} />
-      {/* Combined Header with folder dropdown, toolbar, and connected account */}
-      <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-gray-300 flex-shrink-0">
+      {/* Top Bar - Combined Header with folder dropdown, toolbar, and connected account */}
+      <div className="mx-3 mt-3 mb-3 bg-white rounded-xl shadow-lg border border-gray-100 flex items-center justify-between px-4 py-3 flex-shrink-0">
         <div className="flex items-center gap-4">
           {/* Folder Dropdown */}
           <Select value={selectedFolder} onValueChange={setSelectedFolder}>
@@ -2013,6 +2202,90 @@ export default function EmailPage() {
             </SelectContent>
           </Select>
 
+          {/* Notifications button */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="relative h-8 w-8 p-0">
+                <Bell className="h-4 w-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 h-3 w-3 bg-red-500 rounded-full text-white font-medium flex items-center justify-center min-w-3 text-[7px]">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[450px] rounded-md">
+              <div className="flex items-center justify-between px-4 py-2 border-b">
+                <h3 className="font-medium">Notifications</h3>
+                {unreadCount > 0 && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 text-xs rounded-md"
+                    onClick={markAllAsRead}
+                  >
+                    Mark all as read
+                  </Button>
+                )}
+              </div>
+              <div className="max-h-[400px] overflow-y-auto">
+                {notificationsLoading ? (
+                  <div className="py-6 text-center">
+                    <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto mb-2"></div>
+                    <p className="text-sm text-muted-foreground">Loading notifications...</p>
+                  </div>
+                ) : notifications.length === 0 ? (
+                  <div className="py-6 text-center">
+                    <Bell className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">No notifications yet</p>
+                  </div>
+                ) : (
+                  notifications.map((notification) => (
+                    <div 
+                      key={notification.id} 
+                      className={cn(
+                        "px-4 py-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors cursor-pointer",
+                        !notification.read && "bg-blue-50/50"
+                      )}
+                      onClick={() => markAsRead(notification.id)}
+                    >
+                      <div className="flex gap-3">
+                        <div className="flex-shrink-0 pt-1">
+                          {getNotificationIcon(notification.type)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-start gap-3">
+                            <p className="text-sm font-medium flex-1">
+                              {notification.type === "AGENT_ACTION" ? (
+                                <>
+                                  <span className="bg-gradient-to-r from-blue-500 to-orange-400 bg-clip-text text-transparent font-semibold">
+                                    Agent Notification:
+                                  </span>{' '}
+                                  {notification.message}
+                                </>
+                              ) : (
+                                notification.message
+                              )}
+                            </p>
+                            <p className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+                              {formatTimeAgo(notification.dateCreated || notification.timestamp)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="justify-center" asChild>
+                <a href="/notifications" className="w-full text-center cursor-pointer">
+                  View all notifications
+                </a>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Button variant="ghost" size="sm" className="h-9 px-2 text-gray-600 hover:bg-gray-200">
             <MoreHorizontal className="h-4 w-4" />
           </Button>
@@ -2020,11 +2293,11 @@ export default function EmailPage() {
                 </div>
 
         {/* Main Content */}
-        <div className="flex flex-1 min-h-0">
-          {/* Left Panel - Email List */}
-        <div className="w-2/5 border-r border-gray-200 flex flex-col h-full">
+        <div className="flex flex-1 min-h-0 gap-3 px-3 pb-3">
+          {/* Left Panel - Email List Card */}
+          <div className="w-2/5 bg-white rounded-xl shadow-lg border border-gray-100 flex flex-col h-full">
           {/* Search Bar - Fixed at top */}
-          <div className="flex-shrink-0 p-4 border-b border-gray-200 bg-white">
+          <div className="flex-shrink-0 p-4 border-b border-gray-200 bg-white rounded-t-xl">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
@@ -2068,7 +2341,7 @@ export default function EmailPage() {
                           : 'bg-white hover:bg-gray-50'
                     }`}
                   >
-                    {/* Expand/Collapse Chevron - always render for alignment */}
+                    {/* Expand/Collapse Chevron - show when thread has 2+ documents in chain */}
                     <div className="w-6 flex justify-center items-center flex-shrink-0">
                       {thread.count > 1 ? (
                         <button
@@ -2144,8 +2417,26 @@ export default function EmailPage() {
                     )}
                   </div>
 
-                  {/* Thread dropdown - show individual emails when expanded */}
-                  {thread.count > 1 && expandedThreads.has(thread.threadId) && selectedThread?.threadId === thread.threadId && (
+                  {/* Thread dropdown - show individual emails when expanded (only when 2+ documents in chain) */}
+                  {(() => {
+                    const hasMultipleEmails = selectedThread?.emails?.length > 1;
+                    const isExpanded = expandedThreads.has(thread.threadId);
+                    const isCurrentThread = selectedThread?.threadId === thread.threadId;
+                    const shouldShow = hasMultipleEmails && isExpanded && isCurrentThread;
+                    
+                    if (isCurrentThread) {
+                      console.log("🔽 Dropdown check for thread:", thread.threadId, {
+                        emailsInSelectedThread: selectedThread?.emails?.length,
+                        threadCount: thread.count,
+                        hasMultipleEmails,
+                        isExpanded,
+                        isCurrentThread,
+                        shouldShow
+                      });
+                    }
+                    
+                    return shouldShow;
+                  })() && (
                     <div className="border-l-4 border-l-gray-200 bg-gray-50">
                       {selectedThread.emails
                         .slice()
@@ -2204,7 +2495,23 @@ export default function EmailPage() {
                               </span>
                             </div>
                             <div className={`text-xs truncate ${!email.read ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
-                              {email.content?.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().substring(0, 60) || 'No preview available'}...
+                              {(() => {
+                                // Use htmlMessage first, fallback to content
+                                const htmlContent = email.htmlMessage || email.content || '';
+                                if (!htmlContent) return 'No preview available...';
+                                
+                                // Strip HTML tags and clean up text for preview
+                                const cleanText = htmlContent
+                                  .replace(/<[^>]+>/g, '') // Remove HTML tags
+                                  .replace(/&nbsp;/g, ' ') // Replace &nbsp; with spaces
+                                  .replace(/&amp;/g, '&') // Replace &amp; with &
+                                  .replace(/&lt;/g, '<') // Replace &lt; with <
+                                  .replace(/&gt;/g, '>') // Replace &gt; with >
+                                  .replace(/\s+/g, ' ') // Replace multiple whitespace with single space
+                                  .trim();
+                                
+                                return cleanText.substring(0, 60) + (cleanText.length > 60 ? '...' : '');
+                              })()}
                             </div>
                           </div>
                           {!email.read && (
@@ -2220,8 +2527,8 @@ export default function EmailPage() {
           </div>
         </div>
 
-        {/* Right Panel - Email Content */}
-        <div className="flex-1 flex flex-col h-full">
+        {/* Right Panel - Email Content Card */}
+        <div className="flex-1 bg-white rounded-xl shadow-lg border border-gray-100 flex flex-col h-full overflow-hidden">
           {/* Success Message */}
           {successMessage && (
             <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-md mx-6 mt-4 mb-2 animate-in slide-in-from-top-2 duration-200 ease-out">
@@ -3250,12 +3557,6 @@ const EmailViewer = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-gray-900">{email.sender}</span>
-                {isFromCurrentUser && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                            <div className="h-1 w-1 bg-blue-500 rounded-full flex-shrink-0"></div>
-                    You
-                  </span>
-                )}
 
                 {email.hasAttachment && (
                   <Paperclip className="h-3 w-3 text-gray-400 flex-shrink-0" />
@@ -3842,6 +4143,7 @@ const EmailInThread = ({
     sender: email.sender,
     to: email.to,
     contentLength: email.content?.length || 0,
+    htmlMessageLength: email.htmlMessage?.length || 0,
     hasRawData: !!email.rawData,
     isFirst,
     isLast
@@ -3853,7 +4155,13 @@ const EmailInThread = ({
         setLoading(true);
         setError('');
         
-        if (email.rawData) {
+        // Priority 1: Use htmlMessage if available
+        if (email.htmlMessage) {
+          const sanitisedHtml = sanitiseAndRenderHtml(email.htmlMessage);
+          setHtmlContent(sanitisedHtml);
+        }
+        // Priority 2: Extract from raw data
+        else if (email.rawData) {
           // Extract and decode HTML content from raw email data
           const extractedHtml = extractHtmlContent(email.rawData);
           if (extractedHtml) {
@@ -3863,7 +4171,9 @@ const EmailInThread = ({
             // Fallback to existing content
             setHtmlContent(email.content || 'No content available');
           }
-        } else if (email.content) {
+        } 
+        // Priority 3: Use content field
+        else if (email.content) {
           // Check if content contains HTML tags (for thread replies with HTML content)
           const containsHtml = /<[^>]*>/g.test(email.content);
           if (containsHtml) {
@@ -3880,7 +4190,7 @@ const EmailInThread = ({
       } catch (error) {
         console.error('Error loading email content:', error);
         setError('Failed to load email content');
-        setHtmlContent(email.content || 'Error loading content');
+        setHtmlContent(email.htmlMessage || email.content || 'Error loading content');
       } finally {
         setLoading(false);
       }
@@ -3894,9 +4204,18 @@ const EmailInThread = ({
 
   // Create a preview of the email content for collapsed state
   const getEmailPreview = () => {
-    if (email.content) {
-      // Strip HTML tags and get first 100 characters
-      const textContent = email.content.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    // Use htmlMessage first, fallback to content
+    const htmlContent = email.htmlMessage || email.content || '';
+    if (htmlContent) {
+      // Strip HTML tags and clean up text for preview
+      const textContent = htmlContent
+        .replace(/<[^>]+>/g, '') // Remove HTML tags
+        .replace(/&nbsp;/g, ' ') // Replace &nbsp; with spaces
+        .replace(/&amp;/g, '&') // Replace &amp; with &
+        .replace(/&lt;/g, '<') // Replace &lt; with <
+        .replace(/&gt;/g, '>') // Replace &gt; with >
+        .replace(/\s+/g, ' ') // Replace multiple whitespace with single space
+        .trim();
       return textContent.length > 100 ? textContent.substring(0, 100) + '...' : textContent;
     }
     return 'No content available';
@@ -3922,12 +4241,6 @@ const EmailInThread = ({
           <div className="flex items-center gap-2 mb-1">
             <span className="font-semibold text-gray-900">{email.sender}</span>
             <span className="text-sm text-gray-600">&lt;{email.email}&gt;</span>
-            {isFromCurrentUser && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
-                You
-              </span>
-            )}
             {isSentMessage && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
                 <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>

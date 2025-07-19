@@ -68,11 +68,13 @@ import {
   MessageSquare,
   Lightbulb,
   Palette,
-  WandSparkles
+  WandSparkles,
+  Loader2
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
+import GradientText from "@/components/GradientText"
 import { db } from "@/lib/firebase"
 import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
@@ -758,6 +760,10 @@ const formatPreviewTime = (timestamp: any) => {
 
 export default function EmailPage() {
   const { user } = useAuth()
+  
+  // Firebase function for generating email responses
+  const generateEmailResponse = httpsCallable(functions, 'generateEmailResponse');
+  
   const [selectedFolder, setSelectedFolder] = useState("inbox")
   const [selectedEmail, setSelectedEmail] = useState<any>(null)
   const [selectedThread, setSelectedThread] = useState<any>(null)
@@ -805,6 +811,197 @@ export default function EmailPage() {
   const [selectedTone, setSelectedTone] = useState('professional')
   const [isGenerating, setIsGenerating] = useState(false)
   const [showInstructions, setShowInstructions] = useState(false)
+
+  // Helper function to call generateEmailResponse with proper error handling
+  const callGenerateEmailResponse = async (requestType: string, tone?: string, customInstructions?: string, replyEditor?: React.RefObject<HTMLDivElement | null>) => {
+    if (!user?.uid) {
+      console.error('User not authenticated');
+      return;
+    }
+
+    const editorRef = replyEditor || { current: null };
+    const currentEmailContent = editorRef.current?.innerHTML || '';
+    if (!currentEmailContent.trim()) {
+      console.error('No email content to improve');
+      return;
+    }
+
+    setIsGenerating(true);
+    
+    // Add magical gradient animation to email responses in reply module only
+    if (editorRef.current) {
+      console.log('🎨 Applying magical gradient animation to email responses...');
+      
+      // Find the email thread/reply container first
+      const replyContainer = editorRef.current.closest('.flex-1') || 
+                           editorRef.current.closest('.email-viewer') ||
+                           document.querySelector('.flex.flex-col.h-full > div:first-child');
+      
+      if (replyContainer) {
+        // Target email content within the reply module only
+        const emailSelectors = [
+          '.prose',
+          '.whitespace-pre-wrap',
+          '.text-gray-900',
+          '.border-b.border-gray-100 > div',
+          '[data-email-content]'
+        ];
+        
+        emailSelectors.forEach(selector => {
+          const elements = replyContainer.querySelectorAll(selector);
+          console.log(`🔍 Found ${elements.length} email elements with selector: ${selector}`);
+          
+          elements.forEach((emailElement: Element) => {
+            const element = emailElement as HTMLElement;
+            
+            // Skip the compose area and any buttons/controls
+            if (element === editorRef.current || 
+                element.closest('.tap-agent') ||
+                element.tagName === 'BUTTON' ||
+                element.closest('button') ||
+                element.closest('.flex.items-center.gap-2')) {
+              return;
+            }
+            
+            // Only animate elements that contain email content (substantial text)
+            if (element.textContent && element.textContent.trim().length > 50) {
+              element.style.transition = 'all 0.5s ease';
+              element.style.background = 'linear-gradient(45deg, #ff6b35, #4079ff, #ff8500, #3b82f6, #ff6b35)';
+              element.style.backgroundSize = '300% 100%';
+              element.style.backgroundClip = 'text';
+              element.style.webkitBackgroundClip = 'text';
+              element.style.color = 'transparent';
+              element.style.animation = 'gradient 3s linear infinite';
+              
+              console.log('✨ Applied gradient to email content:', element.className || element.tagName);
+            }
+          });
+        });
+        
+        // Add subtle glow to just the reply container
+        (replyContainer as HTMLElement).style.boxShadow = '0 0 20px rgba(255, 107, 53, 0.2), 0 0 40px rgba(64, 121, 255, 0.1)';
+        (replyContainer as HTMLElement).style.transition = 'box-shadow 0.5s ease';
+        console.log('🌟 Applied subtle glow to reply container');
+      } else {
+        console.log('⚠️ Could not find reply container');
+      }
+    }
+
+    try {
+      console.log('Calling generateEmailResponse with:', { requestType, tone, customInstructions });
+      
+      const response = await generateEmailResponse({
+        merchantId: user.uid,
+        requestType,
+        tone: tone || null,
+        customInstructions: customInstructions || null,
+        email: currentEmailContent
+      }) as { data?: { response?: string } };
+
+      console.log('Generated response:', response.data);
+
+      // Update only the reply compose area with the generated content
+      if (editorRef.current && response.data?.response) {
+        const replyEditor = editorRef.current;
+        
+        // Double-check we have the right element (should be contenteditable)
+        if (replyEditor.getAttribute('contenteditable') === 'true' || replyEditor.isContentEditable) {
+          console.log('Updating compose area with AI response - preserving email thread');
+          
+          // Get current content and find the separator between compose and quoted content
+          const currentHTML = replyEditor.innerHTML;
+          const hrIndex = currentHTML.indexOf('<hr');
+          
+          if (hrIndex !== -1) {
+            // Preserve everything from the <hr> onwards (quoted email thread)
+            const quotedContent = currentHTML.substring(hrIndex);
+            
+            // Create new content with AI response in compose area + preserved quoted content
+            const newContent = `<div>${response.data.response}</div>${quotedContent}`;
+            replyEditor.innerHTML = newContent;
+            
+            console.log('AI response applied to compose area only - quoted emails preserved');
+          } else {
+            // No quoted content found, safe to replace entire content
+            replyEditor.innerHTML = `<div>${response.data.response}</div>`;
+            console.log('AI response applied - no quoted content to preserve');
+          }
+          
+          // Focus the editor and position cursor at the end of compose area (before quoted content)
+          replyEditor.focus();
+          
+          // Find the first child (compose area) and set cursor there
+          const firstChild = replyEditor.firstChild;
+          if (firstChild) {
+            const range = document.createRange();
+            const selection = window.getSelection();
+            
+            // Set cursor at end of first div (compose area)
+            if (firstChild.nodeType === Node.ELEMENT_NODE) {
+              range.selectNodeContents(firstChild);
+              range.collapse(false); // Collapse to end
+            } else {
+              range.setStart(firstChild, firstChild.textContent?.length || 0);
+              range.collapse(true);
+            }
+            
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+          }
+          
+        } else {
+          console.error('Invalid target element - not updating to prevent affecting email thread');
+        }
+      }
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error generating email response:', error);
+      // You might want to show a user-friendly error message here
+    } finally {
+      setIsGenerating(false);
+      
+      // Remove magical effects from email responses only
+      if (editorRef.current) {
+        console.log('🧹 Cleaning up magical gradient animation...');
+        
+        // Find the same reply container we animated
+        const replyContainer = editorRef.current.closest('.flex-1') || 
+                             editorRef.current.closest('.email-viewer') ||
+                             document.querySelector('.flex.flex-col.h-full > div:first-child');
+        
+        if (replyContainer) {
+          // Remove gradient animation from email content elements only
+          const emailSelectors = [
+            '.prose',
+            '.whitespace-pre-wrap',
+            '.text-gray-900',
+            '.border-b.border-gray-100 > div',
+            '[data-email-content]'
+          ];
+          
+          emailSelectors.forEach(selector => {
+            const elements = replyContainer.querySelectorAll(selector);
+            elements.forEach((emailElement: Element) => {
+              const element = emailElement as HTMLElement;
+              element.style.background = '';
+              element.style.backgroundClip = '';
+              element.style.webkitBackgroundClip = '';
+              element.style.color = '';
+              element.style.animation = '';
+              element.style.transition = '';
+            });
+          });
+          
+          // Remove glow from reply container
+          (replyContainer as HTMLElement).style.boxShadow = '';
+          (replyContainer as HTMLElement).style.transition = '';
+        }
+        
+        console.log('✅ Email response animations cleaned up');
+      }
+    }
+  };
 
   // Auto-hide success message after 5 seconds
   useEffect(() => {
@@ -2753,6 +2950,7 @@ export default function EmailPage() {
                 }
               }}
               onCancelReply={() => setReplyMode(null)}
+              callGenerateEmailResponse={callGenerateEmailResponse}
             />
           ) : selectedEmail ? (
             <EmailViewer 
@@ -2763,6 +2961,7 @@ export default function EmailPage() {
               selectedAccount={selectedAccount}
               replyMode={replyMode}
               isSending={isSending}
+              isGenerating={isGenerating}
               onStartReply={(email: any) => setReplyMode({ type: 'reply', originalEmail: email })}
               onStartReplyAll={(email: any) => setReplyMode({ type: 'replyAll', originalEmail: email })}
               onStartForward={(email: any) => setReplyMode({ type: 'forward', originalEmail: email })}
@@ -3045,6 +3244,7 @@ export default function EmailPage() {
                 }
               }}
               onCancelReply={() => setReplyMode(null)}
+              callGenerateEmailResponse={callGenerateEmailResponse}
             />
           ) : (
             <EmptyEmailView />
@@ -3358,7 +3558,9 @@ const EmailViewer = ({
   onStartForward,
   onSendReply,
   onCancelReply,
-  isSending
+  isSending,
+  isGenerating,
+  callGenerateEmailResponse
 }: {
   email: any;
   merchantData: any;
@@ -3372,6 +3574,8 @@ const EmailViewer = ({
   onSendReply?: (content: string, subject: string, recipients: string[], attachments: File[]) => void;
   onCancelReply?: () => void;
   isSending?: boolean;
+  isGenerating?: boolean;
+  callGenerateEmailResponse?: (requestType: string, tone?: string, customInstructions?: string, replyEditor?: React.RefObject<HTMLDivElement | null>) => Promise<any>;
 }) => {
   const [htmlContent, setHtmlContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -3501,7 +3705,7 @@ const EmailViewer = ({
   const isFromCurrentUser = isEmailFromCurrentUser(email.email, userEmail, merchantEmail);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full email-viewer">
       {/* Email Header - Hidden when replying */}
       {!replyMode && (
         <div className="px-4 py-3 bg-white border-b border-gray-200">
@@ -3690,19 +3894,51 @@ const EmailViewer = ({
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-1.5">
                     <WandSparkles className="h-4 w-4 text-blue-500" />
-                    <span className="text-xs">
-                      <span className="text-blue-500 font-medium">Tap</span>
-                      <span className="ml-1 bg-gradient-to-r from-orange-500 to-blue-500 bg-clip-text text-transparent font-medium">Agent</span>
-                    </span>
+                    <GradientText
+                      colors={["#ff6b35", "#4079ff", "#ff8500", "#3b82f6", "#ff6b35"]}
+                      animationSpeed={3}
+                      showBorder={false}
+                      className="text-xs font-medium"
+                    >
+                      Tap Agent
+                    </GradientText>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => console.log('Generate Full Response clicked')}
-                      className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                    >
-                      <Sparkles className="h-3 w-3 text-gray-500" />
-                      Generate
-                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors">
+                          <Sparkles className="h-3 w-3 text-gray-500" />
+                          Generate
+                          <ChevronDown className="h-3 w-3 text-gray-500" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-40">
+                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)}>
+                          <Lightbulb className="h-3 w-3 text-gray-500 mr-2" />
+                          <span className="text-xs">Friendly tone</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)}>
+                          <Users className="h-3 w-3 text-gray-500 mr-2" />
+                          <span className="text-xs">Professional tone</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'direct', undefined, replyEditorRef)}>
+                          <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
+                          <span className="text-xs">Direct tone</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'casual', undefined, replyEditorRef)}>
+                          <Eye className="h-3 w-3 text-gray-500 mr-2" />
+                          <span className="text-xs">Casual tone</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'formal', undefined, replyEditorRef)}>
+                          <Shield className="h-3 w-3 text-gray-500 mr-2" />
+                          <span className="text-xs">Formal tone</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'persuasive', undefined, replyEditorRef)}>
+                          <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
+                          <span className="text-xs">Persuasive tone</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <button
                       onClick={() => setShowInstructions(!showInstructions)}
                       className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
@@ -3716,14 +3952,14 @@ const EmailViewer = ({
                 {/* Tone Buttons on Right */}
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => console.log('Friendly tone clicked')}
+                    onClick={() => callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)}
                     className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
                   >
                     <Lightbulb className="h-3 w-3 text-gray-500" />
                     Friendly
                   </button>
                   <button
-                    onClick={() => console.log('Professional tone clicked')}
+                    onClick={() => callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)}
                     className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
                   >
                     <Users className="h-3 w-3 text-gray-500" />
@@ -3738,19 +3974,19 @@ const EmailViewer = ({
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-36">
-                      <DropdownMenuItem onClick={() => console.log('Direct tone clicked')}>
+                      <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'direct', undefined, replyEditorRef)}>
                         <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
                         <span className="text-xs">Direct</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => console.log('Casual tone clicked')}>
+                      <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'casual', undefined, replyEditorRef)}>
                         <Eye className="h-3 w-3 text-gray-500 mr-2" />
                         <span className="text-xs">Casual</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => console.log('Formal tone clicked')}>
+                      <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'formal', undefined, replyEditorRef)}>
                         <Shield className="h-3 w-3 text-gray-500 mr-2" />
                         <span className="text-xs">Formal</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => console.log('Persuasive tone clicked')}>
+                      <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'persuasive', undefined, replyEditorRef)}>
                         <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
                         <span className="text-xs">Persuasive</span>
                       </DropdownMenuItem>
@@ -3770,6 +4006,7 @@ const EmailViewer = ({
                         Custom Instructions
                       </label>
                       <textarea
+                        ref={(el) => { if (el) el.id = 'instructions-textarea-1'; }}
                         placeholder="Enter specific instructions for how you'd like the AI to respond..."
                         className="w-full text-xs border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                         rows={3}
@@ -3787,13 +4024,36 @@ const EmailViewer = ({
                           Cancel
                         </button>
                         <button
+                          disabled={isGenerating}
                           onClick={() => {
-                            console.log('Apply instructions clicked');
+                            const textarea = document.getElementById('instructions-textarea-1') as HTMLTextAreaElement;
+                            const customInstructions = textarea?.value || '';
+                            if (customInstructions.trim()) {
+                              callGenerateEmailResponse?.('custom', undefined, customInstructions, replyEditorRef);
+                            }
                             setShowInstructions(false);
                           }}
-                          className="text-xs text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded transition-colors"
+                          className={`text-xs px-3 py-1 rounded transition-all duration-300 ${
+                            isGenerating 
+                              ? 'text-white bg-blue-600 button-pulse cursor-not-allowed' 
+                              : 'text-white bg-blue-500 hover:bg-blue-600 hover:shadow-md'
+                          }`}
                         >
-                          Apply
+                          {isGenerating ? (
+                            <div className="flex items-center gap-1">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              <GradientText
+                                colors={["#ff6b35", "#4079ff", "#ff8500", "#3b82f6", "#ff6b35"]}
+                                animationSpeed={2}
+                                showBorder={false}
+                                className="text-xs"
+                              >
+                                Applying magic...
+                              </GradientText>
+                            </div>
+                          ) : (
+                            'Apply'
+                          )}
                         </button>
                       </div>
                     </div>
@@ -3839,7 +4099,7 @@ const EmailViewer = ({
               </div>
             </div>
           ) : (
-            <div className="prose max-w-none">
+            <div className="prose max-w-none email-content" data-email-content>
               <IframeEmail html={htmlContent} />
             </div>
           )}
@@ -3870,7 +4130,8 @@ const EmailThreadViewer = ({
   selectedTone,
   setSelectedTone,
   isGenerating,
-  setIsGenerating
+  setIsGenerating,
+  callGenerateEmailResponse
 }: {
   thread: any;
   merchantData: any;
@@ -3892,6 +4153,7 @@ const EmailThreadViewer = ({
   setSelectedTone?: (tone: string) => void;
   isGenerating?: boolean;
   setIsGenerating?: (generating: boolean) => void;
+  callGenerateEmailResponse?: (requestType: string, tone?: string, customInstructions?: string, replyEditor?: React.RefObject<HTMLDivElement | null>) => Promise<any>;
 }) => {
   const [replyContent, setReplyContent] = useState('');
   const [replyQuotedContent, setReplyQuotedContent] = useState('');
@@ -4020,7 +4282,7 @@ const EmailThreadViewer = ({
   const mostRecentEmail = thread.emails[thread.emails.length - 1];
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full email-thread-container">
       {/* Thread Header - Hidden when replying */}
       {!replyMode && (
         <div className="border-b border-gray-200 p-6 bg-white">
@@ -4165,7 +4427,7 @@ const EmailThreadViewer = ({
           <div className="flex items-center py-4 px-6 border-b border-gray-100">
             <div className="w-16 text-sm text-gray-600 font-medium">Subject:</div>
             <div className="flex-1 text-sm text-gray-900">
-              {replyMode.type === 'forward' 
+                            {replyMode.type === 'forward'
                 ? `Fwd: ${replyMode.originalEmail.subject}`
                 : replyMode.originalEmail.subject.startsWith('Re: ') 
                   ? replyMode.originalEmail.subject 
@@ -4181,19 +4443,51 @@ const EmailThreadViewer = ({
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-1.5">
                     <WandSparkles className="h-4 w-4 text-blue-500" />
-                    <span className="text-xs">
-                      <span className="text-blue-500 font-medium">Tap</span>
-                      <span className="ml-1 bg-gradient-to-r from-orange-500 to-blue-500 bg-clip-text text-transparent font-medium">Agent</span>
-                    </span>
+                    <GradientText
+                      colors={["#ff6b35", "#4079ff", "#ff8500", "#3b82f6", "#ff6b35"]}
+                      animationSpeed={3}
+                      showBorder={false}
+                      className="text-xs font-medium"
+                    >
+                      Tap Agent
+                    </GradientText>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => console.log('Generate Full Response clicked')}
-                      className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                    >
-                      <Sparkles className="h-3 w-3 text-gray-500" />
-                      Generate
-                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors">
+                          <Sparkles className="h-3 w-3 text-gray-500" />
+                          Generate
+                          <ChevronDown className="h-3 w-3 text-gray-500" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-40">
+                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)}>
+                          <Lightbulb className="h-3 w-3 text-gray-500 mr-2" />
+                          <span className="text-xs">Friendly tone</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)}>
+                          <Users className="h-3 w-3 text-gray-500 mr-2" />
+                          <span className="text-xs">Professional tone</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'direct', undefined, replyEditorRef)}>
+                          <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
+                          <span className="text-xs">Direct tone</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'casual', undefined, replyEditorRef)}>
+                          <Eye className="h-3 w-3 text-gray-500 mr-2" />
+                          <span className="text-xs">Casual tone</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'formal', undefined, replyEditorRef)}>
+                          <Shield className="h-3 w-3 text-gray-500 mr-2" />
+                          <span className="text-xs">Formal tone</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'persuasive', undefined, replyEditorRef)}>
+                          <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
+                          <span className="text-xs">Persuasive tone</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <button
                       onClick={() => setShowInstructions(!showInstructions)}
                       className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
@@ -4207,14 +4501,14 @@ const EmailThreadViewer = ({
                 {/* Tone Buttons on Right */}
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => console.log('Friendly tone clicked')}
+                    onClick={() => callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)}
                     className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
                   >
                     <Lightbulb className="h-3 w-3 text-gray-500" />
                     Friendly
                   </button>
                   <button
-                    onClick={() => console.log('Professional tone clicked')}
+                    onClick={() => callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)}
                     className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
                   >
                     <Users className="h-3 w-3 text-gray-500" />
@@ -4229,19 +4523,19 @@ const EmailThreadViewer = ({
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-36">
-                      <DropdownMenuItem onClick={() => console.log('Direct tone clicked')}>
+                      <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'direct', undefined, replyEditorRef)}>
                         <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
                         <span className="text-xs">Direct</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => console.log('Casual tone clicked')}>
+                      <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'casual', undefined, replyEditorRef)}>
                         <Eye className="h-3 w-3 text-gray-500 mr-2" />
                         <span className="text-xs">Casual</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => console.log('Formal tone clicked')}>
+                      <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'formal', undefined, replyEditorRef)}>
                         <Shield className="h-3 w-3 text-gray-500 mr-2" />
                         <span className="text-xs">Formal</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => console.log('Persuasive tone clicked')}>
+                      <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'persuasive', undefined, replyEditorRef)}>
                         <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
                         <span className="text-xs">Persuasive</span>
                       </DropdownMenuItem>
@@ -4261,6 +4555,7 @@ const EmailThreadViewer = ({
                         Custom Instructions
                       </label>
                       <textarea
+                        ref={(el) => { if (el) el.id = 'instructions-textarea-2'; }}
                         placeholder="Enter specific instructions for how you'd like the AI to respond..."
                         className="w-full text-xs border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                         rows={3}
@@ -4278,13 +4573,36 @@ const EmailThreadViewer = ({
                           Cancel
                         </button>
                         <button
+                          disabled={isGenerating}
                           onClick={() => {
-                            console.log('Apply instructions clicked');
+                            const textarea = document.getElementById('instructions-textarea-2') as HTMLTextAreaElement;
+                            const customInstructions = textarea?.value || '';
+                            if (customInstructions.trim()) {
+                              callGenerateEmailResponse?.('custom', undefined, customInstructions, replyEditorRef);
+                            }
                             setShowInstructions(false);
                           }}
-                          className="text-xs text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded transition-colors"
+                          className={`text-xs px-3 py-1 rounded transition-all duration-300 ${
+                            isGenerating 
+                              ? 'text-white bg-blue-600 button-pulse cursor-not-allowed' 
+                              : 'text-white bg-blue-500 hover:bg-blue-600 hover:shadow-md'
+                          }`}
                         >
-                          Apply
+                          {isGenerating ? (
+                            <div className="flex items-center gap-1">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              <GradientText
+                                colors={["#ff6b35", "#4079ff", "#ff8500", "#3b82f6", "#ff6b35"]}
+                                animationSpeed={2}
+                                showBorder={false}
+                                className="text-xs"
+                              >
+                                Applying magic...
+                              </GradientText>
+                            </div>
+                          ) : (
+                            'Apply'
+                          )}
                         </button>
                       </div>
                     </div>
@@ -4604,7 +4922,9 @@ const EmailInThread = ({
                 </div>
               ) : (
                 // For all messages with HTML content (including thread replies), display HTML
-                <IframeEmail html={htmlContent || email.content || 'No content available'} className="text-sm" />
+                <div className="email-content" data-email-content>
+                  <IframeEmail html={htmlContent || email.content || 'No content available'} className="text-sm" />
+                </div>
               )}
             </div>
           )}

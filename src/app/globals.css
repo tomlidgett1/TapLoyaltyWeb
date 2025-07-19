@@ -496,3 +496,93 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
 .unread-indicator {
   animation: unreadPulse 2s infinite;
 }
+
+/* AI Loading Animations */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes magicGlow {
+  0% {
+    box-shadow: 0 0 5px rgba(59, 130, 246, 0.3), 0 0 10px rgba(139, 92, 246, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.6), 0 0 25px rgba(139, 92, 246, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 5px rgba(59, 130, 246, 0.3), 0 0 10px rgba(139, 92, 246, 0.2);
+  }
+}
+
+@keyframes sparkle {
+  0% {
+    transform: rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: rotate(180deg) scale(1.1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes buttonPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+.generating-shimmer {
+  background: linear-gradient(45deg, #f8fafc, #e2e8f0, #f1f5f9, #e2e8f0, #f8fafc);
+  background-size: 400% 400%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+.magic-glow {
+  animation: magicGlow 2s ease-in-out infinite;
+}
+
+.sparkle-spin {
+  animation: sparkle 1.5s ease-in-out infinite;
+}
+
+.button-pulse {
+  animation: buttonPulse 1.5s ease-in-out infinite;
+}
+
+/* Tap Agent Magical Loading States */
+.tap-agent-generating .tap-agent-button {
+  pointer-events: none;
+  cursor: not-allowed;
+  background: linear-gradient(45deg, #dbeafe, #e0e7ff) !important;
+  border-color: #93c5fd !important;
+  color: #3b82f6 !important;
+  animation: buttonPulse 1.5s ease-in-out infinite;
+}
+
+.tap-agent-generating .tap-agent-icon {
+  animation: sparkle 1.5s ease-in-out infinite;
+}
+
+.magical-overlay {
+  background: linear-gradient(45deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+  backdrop-filter: blur(2px);
+  animation: magicGlow 2s ease-in-out infinite;
+}

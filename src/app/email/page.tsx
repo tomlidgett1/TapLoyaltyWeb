@@ -114,8 +114,8 @@ const fileToBase64 = (file: File): Promise<string> => {
 const createQuotedReplyContent = (originalEmail: any, replyType: 'reply' | 'replyAll' | 'forward') => {
   const dateStr = formatMelbourneTime(originalEmail.time, 'Unknown time');
   
-  // Preserve HTML content but clean it for quoting
-  let htmlContent = originalEmail.content || '';
+  // Preserve HTML content but clean it for quoting - use htmlMessage field
+  let htmlContent = originalEmail.htmlMessage || originalEmail.content || '';
   
   // If content is not HTML, wrap it in paragraphs
   if (!htmlContent.includes('<') || !htmlContent.includes('>')) {
@@ -123,9 +123,9 @@ const createQuotedReplyContent = (originalEmail: any, replyType: 'reply' | 'repl
     htmlContent = htmlContent.split('\n').filter((line: string) => line.trim()).map((line: string) => `<p>${line.trim()}</p>`).join('');
   }
   
-  // Create HTML quoted content with proper styling
+  // Create HTML quoted content with proper styling (no left border)
   const quotedContent = `<div style="margin-top: 20px;">
-<div style="border-left: 3px solid #ccc; padding-left: 15px; margin: 10px 0; color: #666;">
+<div style="padding-left: 15px; margin: 10px 0; color: #666;">
 <div style="font-size: 12px; color: #888; margin-bottom: 10px;">
 On ${dateStr}, ${originalEmail.sender} &lt;${originalEmail.email}&gt; wrote:
 </div>
@@ -984,7 +984,7 @@ export default function EmailPage() {
           preview: `Thread with ${messageCount} message${messageCount > 1 ? 's' : ''}`,
           content: "Click to view thread messages",
           time: latestReceivedAt,
-          read: true, // Thread containers don't have read status - individual messages do
+          read: false, // All emails start as unread
           hasAttachment: false, // Can be updated based on chain messages if needed
           folder: "inbox",
           isThread: true,
@@ -1238,6 +1238,12 @@ export default function EmailPage() {
   const markEmailAsRead = async (emailId: string, threadId?: string) => {
     if (!user?.uid) return
 
+    // Skip marking sent messages as read (they're locally generated and don't exist in Firestore)
+    if (emailId.startsWith('sent-')) {
+      console.log("Skipping read status update for locally generated sent message:", emailId)
+      return
+    }
+
     try {
       let emailRef;
       
@@ -1335,11 +1341,25 @@ export default function EmailPage() {
     email.read = true
     
     // Update local fetchedEmails state to mark this specific email as read
-    setFetchedEmails(prev => prev.map(e => 
+    setFetchedEmails((prev: any[]) => prev.map(e => 
       e.id === email.id 
         ? { ...e, read: true }
         : e
     ))
+
+    // If this email is part of a thread, also update the thread's emails
+    if (selectedThread && email.threadId === selectedThread.threadId) {
+      setSelectedThread((prev: any) => ({
+        ...prev,
+        emails: prev.emails.map((e: any) => 
+          e.id === email.id 
+            ? { ...e, read: true }
+            : e
+        ),
+        unreadCount: prev.emails.filter((e: any) => e.id === email.id ? false : !e.read).length,
+        hasUnread: prev.emails.some((e: any) => e.id === email.id ? false : !e.read)
+      }))
+    }
 
     // Mark as read in Firestore - pass threadId if this email is from a thread
     markEmailAsRead(email.id, email.threadId)
@@ -1425,6 +1445,7 @@ export default function EmailPage() {
           to: toInfo,
           subject: subject.substring(0, 50),
           hasPayload: !!messageData.payload,
+          htmlMessageLength: messageData.htmlMessage?.length || 0,
           payloadMessageText: messageData.payload?.data?.message_text?.length || 0,
           directMessageText: messageText.length || 0
         })
@@ -1448,20 +1469,25 @@ export default function EmailPage() {
           senderName = "Unknown"
         }
         
-        // Get content from payload.data.message_text (priority) or fallback to other sources
+        // Get content from htmlMessage (priority) or fallback to other sources
         let content = ""
         
-        // Priority 1: payload.data.message_text
-        if (messageData.payload?.data?.message_text) {
+        // Priority 1: htmlMessage field
+        if (messageData.htmlMessage) {
+          content = messageData.htmlMessage
+          console.log("📝 Using content from htmlMessage field, length:", content.length)
+        }
+        // Priority 2: payload.data.message_text
+        else if (messageData.payload?.data?.message_text) {
           content = messageData.payload.data.message_text
           console.log("📝 Using content from payload.data.message_text, length:", content.length)
         }
-        // Priority 2: direct message_text field
+        // Priority 3: direct message_text field
         else if (messageText) {
           content = messageText
           console.log("📝 Using content from message_text field, length:", content.length)
         }
-        // Priority 3: Extract from payload parts (existing logic)
+        // Priority 4: Extract from payload parts (existing logic)
         else if (messageData.payload) {
           try {
             const parts = messageData.payload?.data?.payload?.parts
@@ -1519,7 +1545,7 @@ export default function EmailPage() {
           time: receivedAtField,
           receivedAt: receivedAtField, // Store receivedAt explicitly for sorting
           repliedAt: repliedAtField, // Store repliedAt as-is (could be Firestore Timestamp or null)
-          read: true, // Chain messages are considered read when viewing thread
+          read: false, // All emails start as unread
           hasAttachment: false, // Can be updated if attachment info is available
           folder: "inbox",
           rawData: messageData
@@ -1617,19 +1643,8 @@ export default function EmailPage() {
       setSelectedEmail(mostRecentEmail)
       setSelectedEmailFromDropdown(false) // This email was auto-selected, not clicked from dropdown
       
-      // Mark all emails in thread as read and update local state
-      setFetchedEmails(prev => prev.map(email => 
-        email.threadId === thread.threadId 
-          ? { ...email, read: true }
-          : email
-      ))
-
-      // Mark all emails in the thread as read in Firestore
-      threadEmails.forEach(email => {
-        if (!email.read) {
-          markEmailAsRead(email.id, thread.threadId)
-        }
-      })
+      // Don't automatically mark emails as read when viewing thread
+      // They will be marked as read individually when clicked
       
     } catch (error) {
       console.error("❌ Error in handleThreadSelect:", error)
@@ -1660,17 +1675,8 @@ export default function EmailPage() {
       setSelectedEmail(fallbackThread.representative)
       setSelectedEmailFromDropdown(false) // This email was auto-selected, not clicked from dropdown
       
-      // Update local state 
-      setFetchedEmails(prev => prev.map(email => 
-        email.threadId === thread.threadId 
-          ? { ...email, read: true }
-          : email
-      ))
-
-      // Mark as read in Firestore if we have an ID
-      if (thread.representative?.id) {
-        markEmailAsRead(thread.representative.id, thread.threadId)
-      }
+      // Don't automatically mark fallback emails as read
+      // They will be marked as read individually when clicked
     }
   }
 
@@ -2141,7 +2147,27 @@ export default function EmailPage() {
                   {/* Thread dropdown - show individual emails when expanded */}
                   {thread.count > 1 && expandedThreads.has(thread.threadId) && selectedThread?.threadId === thread.threadId && (
                     <div className="border-l-4 border-l-gray-200 bg-gray-50">
-                      {selectedThread.emails.map((email: any, index: number) => (
+                      {selectedThread.emails
+                        .slice()
+                        .sort((a: any, b: any) => {
+                          // Sort newest first for dropdown
+                          const getEmailDate = (email: any) => {
+                            const dateField = email.repliedAt || email.receivedAt || email.time;
+                            if (typeof dateField === 'string') {
+                              return new Date(dateField);
+                            } else if (dateField && typeof dateField.toDate === 'function') {
+                              return dateField.toDate();
+                            } else if (dateField instanceof Date) {
+                              return dateField;
+                            } else {
+                              return new Date(0);
+                            }
+                          };
+                          const timeA = getEmailDate(a);
+                          const timeB = getEmailDate(b);
+                          return timeB.getTime() - timeA.getTime(); // Newest first
+                        })
+                        .map((email: any, index: number) => (
                         <div
                           key={email.id}
                                                        className={`flex items-center gap-2 p-3 pl-20 cursor-pointer transition-all duration-200 border-t border-t-gray-200 ${
@@ -2273,6 +2299,7 @@ export default function EmailPage() {
               merchantData={merchantData}
               userEmail={user?.email || ''}
               merchantEmail={merchantEmail}
+              selectedAccount={selectedAccount}
               replyMode={replyMode}
               isSending={isSending}
               onStartReply={(email: any) => setReplyMode({ type: 'reply', originalEmail: email })}
@@ -2417,6 +2444,7 @@ export default function EmailPage() {
               merchantData={merchantData}
               userEmail={user?.email || ''}
               merchantEmail={merchantEmail}
+              selectedAccount={selectedAccount}
               replyMode={replyMode}
               isSending={isSending}
               onStartReply={(email: any) => setReplyMode({ type: 'reply', originalEmail: email })}
@@ -2564,6 +2592,7 @@ export default function EmailPage() {
               merchantData={merchantData}
               userEmail={user?.email || ''}
               merchantEmail={merchantEmail}
+              selectedAccount={selectedAccount}
               replyMode={replyMode}
               isSending={isSending}
               onStartReply={(email: any) => setReplyMode({ type: 'reply', originalEmail: email, thread: selectedThread })}
@@ -2998,6 +3027,7 @@ const EmailViewer = ({
   merchantData, 
   userEmail, 
   merchantEmail, 
+  selectedAccount,
   replyMode,
   onStartReply, 
   onStartReplyAll, 
@@ -3010,6 +3040,7 @@ const EmailViewer = ({
   merchantData: any;
   userEmail: string;
   merchantEmail: string;
+  selectedAccount: string;
   replyMode?: { type: 'reply' | 'replyAll' | 'forward', originalEmail: any, thread?: any } | null;
   onStartReply?: (email: any) => void;
   onStartReplyAll?: (email: any) => void;
@@ -3148,9 +3179,9 @@ const EmailViewer = ({
     <div className="flex flex-col h-full">
       {/* Email Header - Hidden when replying */}
       {!replyMode && (
-        <div className="p-6 bg-white border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-base font-medium text-gray-900">{email.subject}</h1>
+        <div className="px-4 py-3 bg-white border-b border-gray-200">
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-sm font-medium text-gray-900">{email.subject}</h1>
             <div className="flex items-center gap-2">
               <TooltipProvider>
                 <Tooltip>
@@ -3158,10 +3189,10 @@ const EmailViewer = ({
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      className="h-8 w-8 p-0 hover:bg-gray-100"
+                      className="h-6 w-6 p-0 hover:bg-gray-100"
                       onClick={() => onStartReply?.(email)}
                     >
-                      <Reply className="h-4 w-4" />
+                      <Reply className="h-3 w-3" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -3176,10 +3207,10 @@ const EmailViewer = ({
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      className="h-8 w-8 p-0 hover:bg-gray-100"
+                      className="h-6 w-6 p-0 hover:bg-gray-100"
                       onClick={() => onStartReplyAll?.(email)}
                     >
-                      <ReplyAll className="h-4 w-4" />
+                      <ReplyAll className="h-3 w-3" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -3194,10 +3225,10 @@ const EmailViewer = ({
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      className="h-8 w-8 p-0 hover:bg-gray-100"
+                      className="h-6 w-6 p-0 hover:bg-gray-100"
                       onClick={() => onStartForward?.(email)}
                     >
-                      <Forward className="h-4 w-4" />
+                      <Forward className="h-3 w-3" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -3209,16 +3240,16 @@ const EmailViewer = ({
           </div>
 
           {/* From Section */}
-          <div className="flex items-center gap-3 mb-6">
-            <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-blue-100 text-blue-600 font-semibold">
+          <div className="flex items-center gap-2 mb-0">
+            <Avatar className="h-6 w-6">
+              <AvatarFallback className="bg-blue-100 text-blue-600 font-semibold text-xs">
                 {email.sender.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
               </AvatarFallback>
             </Avatar>
             
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-medium text-gray-900">{email.sender}</span>
+                <span className="text-sm font-medium text-gray-900">{email.sender}</span>
                 {isFromCurrentUser && (
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
                             <div className="h-1 w-1 bg-blue-500 rounded-full flex-shrink-0"></div>
@@ -3230,8 +3261,8 @@ const EmailViewer = ({
                   <Paperclip className="h-3 w-3 text-gray-400 flex-shrink-0" />
                 )}
               </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <span><span className="font-bold">To:</span> {userEmail}</span>
+              <div className="flex items-center gap-1 text-xs text-gray-600">
+                <span><span className="font-bold">To:</span> {email.to}</span>
                 <span>•</span>
                 <span>{(() => {
                   // Get the appropriate timestamp with proper Firestore handling
@@ -3258,7 +3289,7 @@ const EmailViewer = ({
           {/* From Field */}
           <div className="flex items-center py-4 px-6 border-b border-gray-100">
             <div className="w-16 text-sm text-gray-600 font-medium">From:</div>
-            <div className="flex-1 text-sm text-gray-900">{userEmail || merchantEmail}</div>
+            <div className="flex-1 text-sm text-gray-900">{selectedAccount}</div>
             <div className="flex gap-2">
               <Button
                 onClick={() => {
@@ -3385,6 +3416,7 @@ const EmailThreadViewer = ({
   merchantData, 
   userEmail, 
   merchantEmail, 
+  selectedAccount,
   replyMode,
   onStartReply, 
   onStartReplyAll, 
@@ -3397,6 +3429,7 @@ const EmailThreadViewer = ({
   merchantData: any;
   userEmail: string;
   merchantEmail: string;
+  selectedAccount: string;
   replyMode?: { type: 'reply' | 'replyAll' | 'forward', originalEmail: any, thread?: any } | null;
   onStartReply?: (email: any) => void;
   onStartReplyAll?: (email: any) => void;
@@ -3610,7 +3643,7 @@ const EmailThreadViewer = ({
           {/* From Field */}
           <div className="flex items-center py-4 px-6 border-b border-gray-100">
             <div className="w-16 text-sm text-gray-600 font-medium">From:</div>
-            <div className="flex-1 text-sm text-gray-900">{userEmail || merchantEmail}</div>
+            <div className="flex-1 text-sm text-gray-900">{selectedAccount}</div>
             <div className="flex gap-2">
               <Button
                 onClick={() => {

@@ -2178,7 +2178,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <div className="flex h-full">
             {/* Main content area - no width animation, just translate */}
             <div 
-              className="bg-white rounded-md overflow-hidden border border-gray-200 flex flex-col flex-1"
+              className={`bg-white rounded-md overflow-hidden flex flex-col flex-1 ${
+                pathname?.includes('/email') ? '' : 'border border-gray-200'
+              }`}
               style={{
                 marginRight: showChatbotPanel ? '488px' : showLogsPanel ? '488px' : showIntegrationsPanel ? '408px' : '0', // Chat/Logs: 480px + 8px gap, Integrations: 400px + 8px gap
                 transition: 'margin-right 0.4s ease-in-out'

@@ -46,6 +46,7 @@ import {
   Paperclip,
   ReplyAll,
   ArrowLeft,
+  ArrowRight,
   Inbox,
   Edit3,
   Shield,
@@ -61,7 +62,13 @@ import {
   Users,
   X,
   Eye,
-  AlertCircle
+  AlertCircle,
+  Sparkles,
+  Wand2,
+  MessageSquare,
+  Lightbulb,
+  Palette,
+  WandSparkles
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import Image from "next/image"
@@ -792,10 +799,12 @@ export default function EmailPage() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [notificationsLoading, setNotificationsLoading] = useState(true)
 
-  // Agent response state
-  const [agentResponse, setAgentResponse] = useState<string>('')
-  const [isGeneratingAgent, setIsGeneratingAgent] = useState(false)
-  const [showAgentResponse, setShowAgentResponse] = useState(false)
+  // Tap Agent state
+  const [tapAgentMode, setTapAgentMode] = useState<'full-response' | 'instructions' | 'tone' | null>(null)
+  const [tapAgentInstructions, setTapAgentInstructions] = useState('')
+  const [selectedTone, setSelectedTone] = useState('professional')
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [showInstructions, setShowInstructions] = useState(false)
 
   // Auto-hide success message after 5 seconds
   useEffect(() => {
@@ -2902,6 +2911,14 @@ export default function EmailPage() {
               selectedAccount={selectedAccount}
               replyMode={replyMode}
               isSending={isSending}
+              tapAgentMode={tapAgentMode}
+              setTapAgentMode={setTapAgentMode}
+              tapAgentInstructions={tapAgentInstructions}
+              setTapAgentInstructions={setTapAgentInstructions}
+              selectedTone={selectedTone}
+              setSelectedTone={setSelectedTone}
+              isGenerating={isGenerating}
+              setIsGenerating={setIsGenerating}
               onStartReply={(email: any) => setReplyMode({ type: 'reply', originalEmail: email, thread: selectedThread })}
               onStartReplyAll={(email: any) => setReplyMode({ type: 'replyAll', originalEmail: email, thread: selectedThread })}
               onStartForward={(email: any) => setReplyMode({ type: 'forward', originalEmail: email, thread: selectedThread })}
@@ -3365,6 +3382,7 @@ const EmailViewer = ({
   const [replyCc, setReplyCc] = useState('');
   const replyEditorRef = useRef<HTMLDivElement>(null);
   const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
+  const [showInstructions, setShowInstructions] = useState(false);
 
   useEffect(() => {
     const loadEmailContent = async () => {
@@ -3606,7 +3624,7 @@ const EmailViewer = ({
                   }
                 }}
                 disabled={!replyRecipients.trim() || isSending}
-                className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-blue-500 hover:bg-blue-600 text-white h-8 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSending ? (
                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
@@ -3663,6 +3681,126 @@ const EmailViewer = ({
                   ? replyMode.originalEmail.subject
                   : `Re: ${replyMode.originalEmail.subject}`)}
             </div>
+          </div>
+
+          {/* Tap Agent Section */}
+          <div className="bg-gray-50/50 border-b border-gray-100">
+            <div className="px-6 py-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5">
+                    <WandSparkles className="h-4 w-4 text-blue-500" />
+                    <span className="text-xs">
+                      <span className="text-blue-500 font-medium">Tap</span>
+                      <span className="ml-1 bg-gradient-to-r from-orange-500 to-blue-500 bg-clip-text text-transparent font-medium">Agent</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => console.log('Generate Full Response clicked')}
+                      className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                    >
+                      <Sparkles className="h-3 w-3 text-gray-500" />
+                      Generate
+                    </button>
+                    <button
+                      onClick={() => setShowInstructions(!showInstructions)}
+                      className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                    >
+                      <MessageSquare className="h-3 w-3 text-gray-500" />
+                      Instructions
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Tone Buttons on Right */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => console.log('Friendly tone clicked')}
+                    className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                  >
+                    <Lightbulb className="h-3 w-3 text-gray-500" />
+                    Friendly
+                  </button>
+                  <button
+                    onClick={() => console.log('Professional tone clicked')}
+                    className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                  >
+                    <Users className="h-3 w-3 text-gray-500" />
+                    Professional
+                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors">
+                        <Palette className="h-3 w-3 text-gray-500" />
+                        More
+                        <ChevronDown className="h-3 w-3 text-gray-500" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-36">
+                      <DropdownMenuItem onClick={() => console.log('Direct tone clicked')}>
+                        <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
+                        <span className="text-xs">Direct</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => console.log('Casual tone clicked')}>
+                        <Eye className="h-3 w-3 text-gray-500 mr-2" />
+                        <span className="text-xs">Casual</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => console.log('Formal tone clicked')}>
+                        <Shield className="h-3 w-3 text-gray-500 mr-2" />
+                        <span className="text-xs">Formal</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => console.log('Persuasive tone clicked')}>
+                        <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
+                        <span className="text-xs">Persuasive</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            </div>
+            
+            {/* Instructions Dropdown - Now part of normal flow */}
+            {showInstructions && (
+              <div className="border-t border-gray-200 bg-gray-50 animate-in slide-in-from-top-2 duration-200">
+                <div className="p-4">
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Custom Instructions
+                      </label>
+                      <textarea
+                        placeholder="Enter specific instructions for how you'd like the AI to respond..."
+                        className="w-full text-xs border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                        rows={3}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500">
+                        Example: "Be concise and include next steps"
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setShowInstructions(false)}
+                          className="text-xs text-gray-600 hover:text-gray-800 px-2 py-1 rounded transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => {
+                            console.log('Apply instructions clicked');
+                            setShowInstructions(false);
+                          }}
+                          className="text-xs text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded transition-colors"
+                        >
+                          Apply
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Message Content */}
@@ -3724,7 +3862,15 @@ const EmailThreadViewer = ({
   onStartForward,
   onSendReply,
   onCancelReply,
-  isSending
+  isSending,
+  tapAgentMode,
+  setTapAgentMode,
+  tapAgentInstructions,
+  setTapAgentInstructions,
+  selectedTone,
+  setSelectedTone,
+  isGenerating,
+  setIsGenerating
 }: {
   thread: any;
   merchantData: any;
@@ -3738,6 +3884,14 @@ const EmailThreadViewer = ({
   onSendReply?: (content: string, subject: string, recipients: string[], attachments: File[]) => void;
   onCancelReply?: () => void;
   isSending?: boolean;
+  tapAgentMode?: 'full-response' | 'instructions' | 'tone' | null;
+  setTapAgentMode?: (mode: 'full-response' | 'instructions' | 'tone' | null) => void;
+  tapAgentInstructions?: string;
+  setTapAgentInstructions?: (instructions: string) => void;
+  selectedTone?: string;
+  setSelectedTone?: (tone: string) => void;
+  isGenerating?: boolean;
+  setIsGenerating?: (generating: boolean) => void;
 }) => {
   const [replyContent, setReplyContent] = useState('');
   const [replyQuotedContent, setReplyQuotedContent] = useState('');
@@ -3745,6 +3899,7 @@ const EmailThreadViewer = ({
   const [replyCc, setReplyCc] = useState('');
   const replyEditorRef = useRef<HTMLDivElement>(null);
   const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
+  const [showInstructions, setShowInstructions] = useState(false);
   
   // Track which emails are expanded (most recent is expanded by default)
   const [expandedEmails, setExpandedEmails] = useState<Set<string>>(new Set());
@@ -3959,7 +4114,7 @@ const EmailThreadViewer = ({
                   }
                 }}
                 disabled={!replyRecipients.trim() || isSending}
-                className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-blue-500 hover:bg-blue-600 text-white h-8 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSending ? (
                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
@@ -4017,6 +4172,126 @@ const EmailThreadViewer = ({
                   : `Re: ${replyMode.originalEmail.subject}`
               }
             </div>
+          </div>
+
+          {/* Tap Agent Section */}
+          <div className="bg-gray-50/50 border-b border-gray-100">
+            <div className="px-6 py-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5">
+                    <WandSparkles className="h-4 w-4 text-blue-500" />
+                    <span className="text-xs">
+                      <span className="text-blue-500 font-medium">Tap</span>
+                      <span className="ml-1 bg-gradient-to-r from-orange-500 to-blue-500 bg-clip-text text-transparent font-medium">Agent</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => console.log('Generate Full Response clicked')}
+                      className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                    >
+                      <Sparkles className="h-3 w-3 text-gray-500" />
+                      Generate
+                    </button>
+                    <button
+                      onClick={() => setShowInstructions(!showInstructions)}
+                      className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                    >
+                      <MessageSquare className="h-3 w-3 text-gray-500" />
+                      Instructions
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Tone Buttons on Right */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => console.log('Friendly tone clicked')}
+                    className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                  >
+                    <Lightbulb className="h-3 w-3 text-gray-500" />
+                    Friendly
+                  </button>
+                  <button
+                    onClick={() => console.log('Professional tone clicked')}
+                    className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                  >
+                    <Users className="h-3 w-3 text-gray-500" />
+                    Professional
+                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors">
+                        <Palette className="h-3 w-3 text-gray-500" />
+                        More
+                        <ChevronDown className="h-3 w-3 text-gray-500" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-36">
+                      <DropdownMenuItem onClick={() => console.log('Direct tone clicked')}>
+                        <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
+                        <span className="text-xs">Direct</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => console.log('Casual tone clicked')}>
+                        <Eye className="h-3 w-3 text-gray-500 mr-2" />
+                        <span className="text-xs">Casual</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => console.log('Formal tone clicked')}>
+                        <Shield className="h-3 w-3 text-gray-500 mr-2" />
+                        <span className="text-xs">Formal</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => console.log('Persuasive tone clicked')}>
+                        <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
+                        <span className="text-xs">Persuasive</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            </div>
+            
+            {/* Instructions Dropdown - Now part of normal flow */}
+            {showInstructions && (
+              <div className="border-t border-gray-200 bg-gray-50 animate-in slide-in-from-top-2 duration-200">
+                <div className="p-4">
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Custom Instructions
+                      </label>
+                      <textarea
+                        placeholder="Enter specific instructions for how you'd like the AI to respond..."
+                        className="w-full text-xs border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                        rows={3}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500">
+                        Example: "Be concise and include next steps"
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setShowInstructions(false)}
+                          className="text-xs text-gray-600 hover:text-gray-800 px-2 py-1 rounded transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => {
+                            console.log('Apply instructions clicked');
+                            setShowInstructions(false);
+                          }}
+                          className="text-xs text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded transition-colors"
+                        >
+                          Apply
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Message Content */}

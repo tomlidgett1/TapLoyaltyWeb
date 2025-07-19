@@ -828,62 +828,41 @@ export default function EmailPage() {
 
     setIsGenerating(true);
     
-    // Add magical gradient animation to email responses in reply module only
+    // Show generating text in the compose area
     if (editorRef.current) {
-      console.log('🎨 Applying magical gradient animation to email responses...');
-      
-      // Find the email thread/reply container first
-      const replyContainer = editorRef.current.closest('.flex-1') || 
-                           editorRef.current.closest('.email-viewer') ||
-                           document.querySelector('.flex.flex-col.h-full > div:first-child');
-      
-      if (replyContainer) {
-        // Target email content within the reply module only
-        const emailSelectors = [
-          '.prose',
-          '.whitespace-pre-wrap',
-          '.text-gray-900',
-          '.border-b.border-gray-100 > div',
-          '[data-email-content]'
-        ];
-        
-        emailSelectors.forEach(selector => {
-          const elements = replyContainer.querySelectorAll(selector);
-          console.log(`🔍 Found ${elements.length} email elements with selector: ${selector}`);
+      // Create and show generating indicator in the compose area
+      const generatingDiv = document.createElement('div');
+      generatingDiv.id = 'ai-generating-indicator';
+      generatingDiv.className = 'absolute inset-0 bg-white/98 backdrop-blur-md flex items-center justify-center z-10 rounded-md border-2 border-blue-200';
+      generatingDiv.innerHTML = `
+        <div class="flex flex-col items-center gap-4 px-8 py-6 bg-white rounded-lg shadow-lg border border-gray-200" style="min-width: 280px;">
+          <!-- Pulsing AI Icon -->
+          <div class="relative">
+            <div class="w-8 h-8 rounded-full" style="background: linear-gradient(45deg, #ff6b35, #4079ff); animation: gradient 2s linear infinite;"></div>
+            <div class="absolute inset-0 w-8 h-8 rounded-full animate-ping" style="background: linear-gradient(45deg, #ff6b35, #4079ff); opacity: 0.4;"></div>
+          </div>
           
-          elements.forEach((emailElement: Element) => {
-            const element = emailElement as HTMLElement;
-            
-            // Skip the compose area and any buttons/controls
-            if (element === editorRef.current || 
-                element.closest('.tap-agent') ||
-                element.tagName === 'BUTTON' ||
-                element.closest('button') ||
-                element.closest('.flex.items-center.gap-2')) {
-              return;
-            }
-            
-            // Only animate elements that contain email content (substantial text)
-            if (element.textContent && element.textContent.trim().length > 50) {
-              element.style.transition = 'all 0.5s ease';
-              element.style.background = 'linear-gradient(45deg, #ff6b35, #4079ff, #ff8500, #3b82f6, #ff6b35)';
-              element.style.backgroundSize = '300% 100%';
-              element.style.backgroundClip = 'text';
-              element.style.webkitBackgroundClip = 'text';
-              element.style.color = 'transparent';
-              element.style.animation = 'gradient 3s linear infinite';
-              
-              console.log('✨ Applied gradient to email content:', element.className || element.tagName);
-            }
-          });
-        });
-        
-        // Add subtle glow to just the reply container
-        (replyContainer as HTMLElement).style.boxShadow = '0 0 20px rgba(255, 107, 53, 0.2), 0 0 40px rgba(64, 121, 255, 0.1)';
-        (replyContainer as HTMLElement).style.transition = 'box-shadow 0.5s ease';
-        console.log('🌟 Applied subtle glow to reply container');
-      } else {
-        console.log('⚠️ Could not find reply container');
+          <!-- Animated Text -->
+          <span style="background: linear-gradient(45deg, #ff6b35, #4079ff, #ff8500, #3b82f6, #ff6b35); background-size: 300% 100%; background-clip: text; -webkit-background-clip: text; color: transparent; animation: gradient 3s linear infinite; font-weight: 600; font-size: 16px; letter-spacing: 0.5px;">
+            Generating response...
+          </span>
+          
+          <!-- Skeleton Lines -->
+          <div class="w-full space-y-2 mt-2">
+            <div class="h-3 rounded-md animate-pulse" style="background: linear-gradient(90deg, #f3f4f6, #e5e7eb, #f3f4f6); background-size: 200% 100%; animation: shimmer 2s infinite;"></div>
+            <div class="h-3 rounded-md animate-pulse" style="background: linear-gradient(90deg, #f3f4f6, #e5e7eb, #f3f4f6); background-size: 200% 100%; animation: shimmer 2s infinite; width: 80%;"></div>
+            <div class="h-3 rounded-md animate-pulse" style="background: linear-gradient(90deg, #f3f4f6, #e5e7eb, #f3f4f6); background-size: 200% 100%; animation: shimmer 2s infinite; width: 60%;"></div>
+          </div>
+        </div>
+      `;
+      
+      // Add to the parent container of the editor (so it overlays the compose area)
+      const editorContainer = editorRef.current.parentElement;
+      if (editorContainer) {
+        // Make sure the container has relative positioning for absolute overlay
+        editorContainer.style.position = 'relative';
+        editorContainer.appendChild(generatingDiv);
+        console.log('✨ Showing AI generating indicator in compose area');
       }
     }
 
@@ -961,44 +940,11 @@ export default function EmailPage() {
     } finally {
       setIsGenerating(false);
       
-      // Remove magical effects from email responses only
-      if (editorRef.current) {
-        console.log('🧹 Cleaning up magical gradient animation...');
-        
-        // Find the same reply container we animated
-        const replyContainer = editorRef.current.closest('.flex-1') || 
-                             editorRef.current.closest('.email-viewer') ||
-                             document.querySelector('.flex.flex-col.h-full > div:first-child');
-        
-        if (replyContainer) {
-          // Remove gradient animation from email content elements only
-          const emailSelectors = [
-            '.prose',
-            '.whitespace-pre-wrap',
-            '.text-gray-900',
-            '.border-b.border-gray-100 > div',
-            '[data-email-content]'
-          ];
-          
-          emailSelectors.forEach(selector => {
-            const elements = replyContainer.querySelectorAll(selector);
-            elements.forEach((emailElement: Element) => {
-              const element = emailElement as HTMLElement;
-              element.style.background = '';
-              element.style.backgroundClip = '';
-              element.style.webkitBackgroundClip = '';
-              element.style.color = '';
-              element.style.animation = '';
-              element.style.transition = '';
-            });
-          });
-          
-          // Remove glow from reply container
-          (replyContainer as HTMLElement).style.boxShadow = '';
-          (replyContainer as HTMLElement).style.transition = '';
-        }
-        
-        console.log('✅ Email response animations cleaned up');
+      // Remove generating indicator
+      const generatingIndicator = document.getElementById('ai-generating-indicator');
+      if (generatingIndicator) {
+        generatingIndicator.remove();
+        console.log('✅ Generating indicator removed');
       }
     }
   };
@@ -3489,25 +3435,25 @@ const ComposeEmailView = ({
         </div>
 
         {/* Compose Form */}
-        <div className="space-y-4">
+        <div className="space-y-2">
           {/* To Field */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+            <label className="block text-xs font-medium text-gray-700 mb-0.5">To</label>
             <Input
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              className="w-full border-gray-300 focus:border-gray-400 focus:outline-none focus:ring-0"
+              className="w-full border-gray-300 focus:border-gray-400 focus:outline-none focus:ring-0 h-8 text-xs"
               placeholder="Enter recipient email address"
             />
           </div>
 
           {/* Subject Field */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+            <label className="block text-xs font-medium text-gray-700 mb-0.5">Subject</label>
             <Input
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              className="w-full border-gray-300 focus:border-gray-400 focus:outline-none focus:ring-0"
+              className="w-full border-gray-300 focus:border-gray-400 focus:outline-none focus:ring-0 h-8 text-xs"
               placeholder="Enter subject"
             />
           </div>
@@ -3515,8 +3461,8 @@ const ComposeEmailView = ({
       </div>
 
       {/* Message Content */}
-      <div className="flex-1 p-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Message</label>
+      <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
+        <label className="block text-xs font-medium text-gray-700 mb-1">Message</label>
         <Textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
@@ -3810,9 +3756,9 @@ const EmailViewer = ({
       {replyMode && (
         <div className="flex flex-col h-full bg-white">
           {/* From Field */}
-          <div className="flex items-center py-4 px-6 border-b border-gray-100">
-            <div className="w-16 text-sm text-gray-600 font-medium">From:</div>
-            <div className="flex-1 text-sm text-gray-900">{selectedAccount}</div>
+          <div className="flex items-center py-2 px-4 border-b border-gray-100">
+            <div className="w-12 text-xs text-gray-600 font-medium">From:</div>
+            <div className="flex-1 text-xs text-gray-900">{selectedAccount}</div>
             <div className="flex gap-2">
               <Button
                 onClick={() => {
@@ -3828,19 +3774,19 @@ const EmailViewer = ({
                   }
                 }}
                 disabled={!replyRecipients.trim() || isSending}
-                className="bg-blue-500 hover:bg-blue-600 text-white h-8 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-blue-500 hover:bg-blue-600 text-white h-7 px-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
               >
                 {isSending ? (
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
                 ) : (
-                  <Send className="h-4 w-4 mr-2" />
+                  <Send className="h-3 w-3 mr-1" />
                 )}
                 {isSending ? 'Sending...' : 'Send'}
               </Button>
               <Button
                 variant="ghost"
                 onClick={onCancelReply}
-                className="h-8 px-3 text-gray-600 hover:text-gray-900"
+                className="h-7 px-2 text-gray-600 hover:text-gray-900 text-xs"
               >
                 Cancel
               </Button>
@@ -3848,13 +3794,13 @@ const EmailViewer = ({
           </div>
 
           {/* To Field */}
-          <div className="flex items-center py-4 px-6 border-b border-gray-100">
-            <div className="w-16 text-sm text-gray-600 font-medium">To:</div>
+          <div className="flex items-center py-2 px-4 border-b border-gray-100">
+            <div className="w-12 text-xs text-gray-600 font-medium">To:</div>
             <div className="flex-1">
               <Input
                 value={replyRecipients}
                 onChange={(e) => setReplyRecipients(e.target.value)}
-                className="border-0 p-0 h-auto text-sm focus:ring-0 focus:outline-none shadow-none"
+                className="border-0 p-0 h-auto text-xs focus:ring-0 focus:outline-none shadow-none"
                 placeholder="Enter recipient email addresses"
               />
             </div>
@@ -3862,13 +3808,13 @@ const EmailViewer = ({
 
           {/* CC Field (if populated) */}
           {replyCc !== undefined && (
-            <div className="flex items-center py-4 px-6 border-b border-gray-100">
-              <div className="w-16 text-sm text-gray-600 font-medium">Cc:</div>
+            <div className="flex items-center py-2 px-4 border-b border-gray-100">
+              <div className="w-12 text-xs text-gray-600 font-medium">Cc:</div>
               <div className="flex-1">
                 <Input
                   value={replyCc}
                   onChange={(e) => setReplyCc(e.target.value)}
-                  className="border-0 p-0 h-auto text-sm focus:ring-0 focus:outline-none shadow-none"
+                  className="border-0 p-0 h-auto text-xs focus:ring-0 focus:outline-none shadow-none"
                   placeholder="Enter CC email addresses"
                 />
               </div>
@@ -3876,9 +3822,9 @@ const EmailViewer = ({
           )}
 
           {/* Subject Field */}
-          <div className="flex items-center py-4 px-6 border-b border-gray-100">
-            <div className="w-16 text-sm text-gray-600 font-medium">Subject:</div>
-            <div className="flex-1 text-sm text-gray-900">
+          <div className="flex items-center py-2 px-4 border-b border-gray-100">
+            <div className="w-12 text-xs text-gray-600 font-medium">Subject:</div>
+            <div className="flex-1 text-xs text-gray-900">
               {replyMode.type === 'forward'
                 ? `Fwd: ${replyMode.originalEmail.subject}`
                 : (replyMode.originalEmail.subject.startsWith('Re: ')
@@ -4042,14 +3988,9 @@ const EmailViewer = ({
                           {isGenerating ? (
                             <div className="flex items-center gap-1">
                               <Loader2 className="h-3 w-3 animate-spin" />
-                              <GradientText
-                                colors={["#ff6b35", "#4079ff", "#ff8500", "#3b82f6", "#ff6b35"]}
-                                animationSpeed={2}
-                                showBorder={false}
-                                className="text-xs"
-                              >
-                                Applying magic...
-                              </GradientText>
+                              <span className="text-xs text-white">
+                                Applying...
+                              </span>
                             </div>
                           ) : (
                             'Apply'
@@ -4064,11 +4005,11 @@ const EmailViewer = ({
           </div>
 
           {/* Message Content */}
-          <div className="flex-1 p-6">
+          <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
             <div 
               ref={replyEditorRef}
               contentEditable
-              className="w-full h-full text-sm outline-none"
+              className="w-full min-h-full text-sm outline-none"
               onBlur={() => {
                 if (replyEditorRef.current) {
                   setReplyContent(replyEditorRef.current.innerHTML || '');
@@ -4359,9 +4300,9 @@ const EmailThreadViewer = ({
       {replyMode && (
         <div className="flex flex-col h-full bg-white">
           {/* From Field */}
-          <div className="flex items-center py-4 px-6 border-b border-gray-100">
-            <div className="w-16 text-sm text-gray-600 font-medium">From:</div>
-            <div className="flex-1 text-sm text-gray-900">{selectedAccount}</div>
+          <div className="flex items-center py-2 px-4 border-b border-gray-100">
+            <div className="w-12 text-xs text-gray-600 font-medium">From:</div>
+            <div className="flex-1 text-xs text-gray-900">{selectedAccount}</div>
             <div className="flex gap-2">
               <Button
                 onClick={() => {
@@ -4376,19 +4317,19 @@ const EmailThreadViewer = ({
                   }
                 }}
                 disabled={!replyRecipients.trim() || isSending}
-                className="bg-blue-500 hover:bg-blue-600 text-white h-8 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-blue-500 hover:bg-blue-600 text-white h-7 px-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
               >
                 {isSending ? (
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
                 ) : (
-                  <Send className="h-4 w-4 mr-2" />
+                  <Send className="h-3 w-3 mr-1" />
                 )}
                 {isSending ? 'Sending...' : 'Send'}
               </Button>
               <Button
                 variant="ghost"
                 onClick={onCancelReply}
-                className="h-8 px-3 text-gray-600 hover:text-gray-900"
+                className="h-7 px-2 text-gray-600 hover:text-gray-900 text-xs"
               >
                 Cancel
               </Button>
@@ -4396,13 +4337,13 @@ const EmailThreadViewer = ({
           </div>
 
           {/* To Field */}
-          <div className="flex items-center py-4 px-6 border-b border-gray-100">
-            <div className="w-16 text-sm text-gray-600 font-medium">To:</div>
+          <div className="flex items-center py-2 px-4 border-b border-gray-100">
+            <div className="w-12 text-xs text-gray-600 font-medium">To:</div>
             <div className="flex-1">
               <Input
                 value={replyRecipients}
                 onChange={(e) => setReplyRecipients(e.target.value)}
-                className="border-0 p-0 h-auto text-sm focus:ring-0 focus:outline-none shadow-none"
+                className="border-0 p-0 h-auto text-xs focus:ring-0 focus:outline-none shadow-none"
                 placeholder="Enter recipient email addresses"
               />
             </div>
@@ -4410,13 +4351,13 @@ const EmailThreadViewer = ({
 
           {/* CC Field (if populated) */}
           {replyCc !== undefined && (
-            <div className="flex items-center py-4 px-6 border-b border-gray-100">
-              <div className="w-16 text-sm text-gray-600 font-medium">Cc:</div>
+            <div className="flex items-center py-2 px-4 border-b border-gray-100">
+              <div className="w-12 text-xs text-gray-600 font-medium">Cc:</div>
               <div className="flex-1">
                 <Input
                   value={replyCc}
                   onChange={(e) => setReplyCc(e.target.value)}
-                  className="border-0 p-0 h-auto text-sm focus:ring-0 focus:outline-none shadow-none"
+                  className="border-0 p-0 h-auto text-xs focus:ring-0 focus:outline-none shadow-none"
                   placeholder="Enter CC email addresses"
                 />
               </div>
@@ -4424,9 +4365,9 @@ const EmailThreadViewer = ({
           )}
 
           {/* Subject Field */}
-          <div className="flex items-center py-4 px-6 border-b border-gray-100">
-            <div className="w-16 text-sm text-gray-600 font-medium">Subject:</div>
-            <div className="flex-1 text-sm text-gray-900">
+          <div className="flex items-center py-2 px-4 border-b border-gray-100">
+            <div className="w-12 text-xs text-gray-600 font-medium">Subject:</div>
+            <div className="flex-1 text-xs text-gray-900">
                             {replyMode.type === 'forward'
                 ? `Fwd: ${replyMode.originalEmail.subject}`
                 : replyMode.originalEmail.subject.startsWith('Re: ') 
@@ -4591,14 +4532,9 @@ const EmailThreadViewer = ({
                           {isGenerating ? (
                             <div className="flex items-center gap-1">
                               <Loader2 className="h-3 w-3 animate-spin" />
-                              <GradientText
-                                colors={["#ff6b35", "#4079ff", "#ff8500", "#3b82f6", "#ff6b35"]}
-                                animationSpeed={2}
-                                showBorder={false}
-                                className="text-xs"
-                              >
-                                Applying magic...
-                              </GradientText>
+                              <span className="text-xs text-white">
+                                Applying...
+                              </span>
                             </div>
                           ) : (
                             'Apply'
@@ -4613,11 +4549,11 @@ const EmailThreadViewer = ({
           </div>
 
           {/* Message Content */}
-          <div className="flex-1 p-6">
+          <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
             <div 
               ref={replyEditorRef}
               contentEditable
-              className="w-full h-full text-sm outline-none"
+              className="w-full min-h-full text-sm outline-none"
               onBlur={() => {
                 if (replyEditorRef.current) {
                   setReplyContent(replyEditorRef.current.innerHTML || '');

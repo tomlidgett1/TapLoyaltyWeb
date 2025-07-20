@@ -971,36 +971,68 @@ export default function EmailPage() {
     }
   }, [isDragging])
 
-  // Function to summarize email thread
-  const summarizeThread = async (thread: any) => {
-    if (!thread || !user?.uid) return;
+  // Function to summarize email thread or single email
+  const summarizeThread = async (thread?: any) => {
+    if (!user?.uid) return;
     
     setIsSummarizing(true);
     try {
-      // Prepare thread content for summarization
-      const threadContent = thread.emails.map((email: any) => ({
-        sender: email.sender,
-        to: email.to,
-        subject: email.subject,
-        content: email.content || email.htmlMessage || 'No content',
-        timestamp: email.time || email.receivedAt || email.repliedAt
-      }));
+      let threadContentText = '';
+      
+      if (thread && thread.emails && thread.emails.length > 0) {
+        // Handle thread with multiple emails
+        threadContentText = thread.emails.map((email: any) => {
+          const content = email.content || email.htmlMessage || 'No content';
+          return `From: ${email.sender}
+To: ${email.to || 'Unknown'}
+Subject: ${email.subject || 'No Subject'}
+Date: ${email.time || email.receivedAt || email.repliedAt || 'Unknown time'}
+
+${content}
+
+---`;
+        }).join('\n\n');
+      } else if (selectedEmail) {
+        // Handle single email
+        const content = selectedEmail.content || selectedEmail.htmlMessage || 'No content';
+        threadContentText = `From: ${selectedEmail.sender}
+To: ${selectedEmail.to || 'Unknown'}
+Subject: ${selectedEmail.subject || 'No Subject'}
+Date: ${selectedEmail.time || selectedEmail.receivedAt || selectedEmail.repliedAt || 'Unknown time'}
+
+${content}`;
+      } else {
+        console.error('No email content available for summarization');
+        return;
+      }
 
       const summaryResponse = await generateEmailResponse({
-        requestType: 'summarize',
-        threadContent: threadContent,
-        threadSubject: thread.representative.subject,
-        merchantId: user.uid
-      });
+        merchantId: user.uid,
+        summarise: threadContentText, // Content to summarise
+        email: threadContentText // Required field for summarise mode
+      }) as { data?: { summary?: string } };
 
-      if (summaryResponse.data && typeof summaryResponse.data === 'object' && 'summary' in summaryResponse.data) {
-        setThreadSummary((summaryResponse.data as any).summary);
+      if (summaryResponse.data?.summary) {
+        setThreadSummary(summaryResponse.data.summary);
+        setShowSummaryDropdown(true);
       }
     } catch (error) {
       console.error('Error summarizing thread:', error);
+      // Show error in dropdown
+      setThreadSummary('Error generating summary. Please try again.');
+      setShowSummaryDropdown(true);
     } finally {
       setIsSummarizing(false);
     }
+  };
+  
+  // Helper function to close summary dropdown with animation
+  const closeSummaryDropdownWithAnimation = () => {
+    setSummaryClosing(true);
+    setTimeout(() => {
+      setShowSummaryDropdown(false);
+      setSummaryClosing(false);
+    }, 200);
   };
   const [isSending, setIsSending] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string>('')
@@ -1024,6 +1056,8 @@ export default function EmailPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [showInstructions, setShowInstructions] = useState(false)
   const [instructionsClosing, setInstructionsClosing] = useState(false)
+  const [showSummaryDropdown, setShowSummaryDropdown] = useState(false)
+  const [summaryClosing, setSummaryClosing] = useState(false)
   
   // Local state for dialog
   const [localShowEmailRulesDialog, setLocalShowEmailRulesDialog] = useState(false);
@@ -3049,6 +3083,12 @@ export default function EmailPage() {
               onSummariseThread={() => selectedThread && summarizeThread(selectedThread)}
               selectedThread={selectedThread}
               user={user}
+              showSummaryDropdown={showSummaryDropdown}
+              setSummaryClosing={setSummaryClosing}
+              summaryClosing={summaryClosing}
+              threadSummary={threadSummary}
+              isSummarizing={isSummarizing}
+              closeSummaryDropdownWithAnimation={closeSummaryDropdownWithAnimation}
             />
           ) : (
             <EmptyEmailView />
@@ -3394,7 +3434,13 @@ const EmailViewer = ({
   setTempEmailRules,
   onSummariseThread,
   selectedThread,
-  user
+  user,
+  showSummaryDropdown,
+  setSummaryClosing,
+  summaryClosing,
+  threadSummary,
+  isSummarizing,
+  closeSummaryDropdownWithAnimation
 }: {
   email: any;
   merchantData: any;
@@ -3419,6 +3465,12 @@ const EmailViewer = ({
   onSummariseThread?: () => void;
   selectedThread?: any;
   user?: any;
+  showSummaryDropdown?: boolean;
+  setSummaryClosing?: (closing: boolean) => void;
+  summaryClosing?: boolean;
+  threadSummary?: string;
+  isSummarizing?: boolean;
+  closeSummaryDropdownWithAnimation?: () => void;
 }) => {
   const [htmlContent, setHtmlContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -3764,6 +3816,30 @@ const EmailViewer = ({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            
+            {/* Summarise Button - Show for all emails */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 w-6 p-0 hover:bg-gray-100"
+                    onClick={() => onSummariseThread?.()}
+                    disabled={isSummarizing}
+                  >
+                    {isSummarizing ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <MessageSquare className="h-3 w-3" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{isSummarizing ? 'Generating Summary...' : `Summarise ${selectedThread ? `Thread (${selectedThread.count} message${selectedThread.count > 1 ? 's' : ''})` : 'Email'}`}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
 
@@ -3809,6 +3885,46 @@ const EmailViewer = ({
             </div>
           </div>
         )}
+
+      {/* Summary Dropdown - Shows for both standard and reply view */}
+      {(showSummaryDropdown || summaryClosing) && (
+        <div className={`bg-white transition-all duration-200 ease-out ${
+          summaryClosing 
+            ? 'animate-out slide-out-to-top-2 fade-out-50' 
+            : 'animate-in slide-in-from-top-2 fade-in-50'
+        }`}>
+          <div className="p-4">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-blue-500" />
+                <label className="block text-xs font-medium text-gray-700">
+                  Thread Summary
+                  {selectedThread && ` (${selectedThread.count} message${selectedThread.count > 1 ? 's' : ''})`}
+                </label>
+              </div>
+              <button
+                onClick={closeSummaryDropdownWithAnimation}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            
+            {isSummarizing ? (
+              <div className="flex items-center gap-3 py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                <span className="text-xs text-gray-600">Generating summary...</span>
+              </div>
+            ) : (
+              <div className="bg-gray-50 rounded-md p-3 border border-gray-200">
+                <div className="text-sm text-gray-700 leading-relaxed">
+                  {threadSummary || 'No summary available.'}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Reply Compose Area - Raw in right panel */}
         {replyMode && (

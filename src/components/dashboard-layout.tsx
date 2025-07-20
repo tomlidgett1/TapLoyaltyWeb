@@ -1366,7 +1366,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   }
   
   // Handle quick note input key presses (Enter to save, Escape to cancel)
-  const handleQuickNoteKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleQuickNoteKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       saveQuickNote()
@@ -2186,7 +2186,188 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 transition: 'margin-right 0.4s ease-in-out'
               }}
             >
-
+              {/* Header Section - Only show on non-email pages */}
+              {!pathname?.includes('/email') && (
+                <div className="h-16 px-6 border-b border-gray-200 flex items-center justify-between bg-white">
+                  <div className="flex items-center gap-4">
+                    <h1 className="text-lg font-semibold text-gray-900">{getPageTitle()}</h1>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    {/* Get Started Button */}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-sm"
+                      onClick={() => setShowTapAgentSheet(true)}
+                    >
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Get Started
+                    </Button>
+                    
+                    {/* Quick Note Button */}
+                    <div className="relative" ref={quickNoteContainerRef}>
+                      <DropdownMenu open={quickNoteOpen} onOpenChange={setQuickNoteOpen}>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-sm"
+                          >
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Note
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-80 p-0">
+                          <div className="p-4">
+                            <div className="mb-3">
+                              <h4 className="font-medium text-sm">Quick Note</h4>
+                              <p className="text-xs text-gray-500 mt-1">Jot down something important</p>
+                            </div>
+                            <Textarea
+                              ref={quickNoteInputRef}
+                              value={quickNoteText}
+                              onChange={(e) => setQuickNoteText(e.target.value)}
+                              placeholder="Write your note here..."
+                              className="min-h-[100px] text-sm"
+                              onKeyDown={handleQuickNoteKeyDown}
+                            />
+                            <div className="flex justify-between items-center mt-3">
+                              <div className="text-xs text-gray-400">
+                                Press Cmd+Enter to save
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setQuickNoteText('')
+                                    setQuickNoteOpen(false)
+                                  }}
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  onClick={saveQuickNote}
+                                  disabled={!quickNoteText.trim() || isSavingQuickNote}
+                                >
+                                  {isSavingQuickNote && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                                  Save
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                    
+                    {/* Notifications */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="relative">
+                          <Bell className="h-4 w-4" />
+                          {unreadCount > 0 && (
+                            <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                              {unreadCount}
+                            </span>
+                          )}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-80">
+                        <div className="p-3 border-b">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium text-sm">Notifications</h4>
+                            {unreadCount > 0 && (
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="text-xs h-6 px-2"
+                                onClick={markAllAsRead}
+                              >
+                                Mark all read
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto">
+                          {notifications.length > 0 ? (
+                            notifications.map((notification) => (
+                              <div 
+                                key={notification.id}
+                                className={`p-3 border-b last:border-b-0 hover:bg-gray-50 cursor-pointer transition-colors ${
+                                  !notification.read ? 'bg-blue-50' : ''
+                                }`}
+                                onClick={() => markAsRead(notification.id)}
+                              >
+                                <div className="flex items-start gap-3">
+                                  {/* Customer Avatar or Notification Icon */}
+                                  <div className="flex-shrink-0">
+                                    {notification.customerProfilePictureUrl ? (
+                                      <img 
+                                        src={notification.customerProfilePictureUrl} 
+                                        alt={notification.customerFullName || 'Customer'}
+                                        className="h-8 w-8 rounded-full object-cover border border-gray-200"
+                                      />
+                                    ) : notification.customerFullName ? (
+                                      <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-gray-100 text-gray-600">
+                                        {notification.customerFullName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                                      </div>
+                                    ) : (
+                                      <div className="h-8 w-8 rounded-full flex items-center justify-center border border-gray-200 bg-gray-100">
+                                        {getNotificationIcon(notification.type)}
+                                      </div>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Notification Content */}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      {notification.customerFullName && (
+                                        <p className="text-sm font-medium text-gray-900 truncate">
+                                          {notification.customerFullName}
+                                        </p>
+                                      )}
+                                      {notification.type === "AGENT_ACTION" && (
+                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium bg-gradient-to-r from-blue-500 to-orange-500 text-white">
+                                          <Bot className="h-3 w-3" />
+                                          Agent
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-sm text-gray-800 mb-1">
+                                      {notification.message}
+                                    </p>
+                                    <div className="flex items-center justify-between">
+                                      <p className="text-xs text-gray-500">
+                                        {formatTimeAgo(notification.timestamp)}
+                                      </p>
+                                      {notification.idSuffix && (
+                                        <span className="text-xs text-gray-400">
+                                          #{notification.idSuffix}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Unread Indicator */}
+                                  {!notification.read && (
+                                    <div className="h-2 w-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                                  )}
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="p-6 text-center text-gray-500 text-sm">
+                              No notifications yet
+                            </div>
+                          )}
+                        </div>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              )}
               
               {/* Page content */}
               <div className="flex-1 overflow-auto main-content-scrollbar">

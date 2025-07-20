@@ -924,8 +924,7 @@ export default function EmailPage() {
   // Track which threads are expanded in the left panel to show individual emails
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set())
   
-  // Track if current selectedEmail was selected from dropdown (should highlight) vs auto-selected from thread (should not highlight)
-  const [selectedEmailFromDropdown, setSelectedEmailFromDropdown] = useState<boolean>(false)
+
   const [searchQuery, setSearchQuery] = useState("")
   
   // Panel resizing state
@@ -1064,7 +1063,9 @@ ${content}
 
     const editorRef = replyEditor || { current: null };
     const currentEmailContent = editorRef.current?.innerHTML || '';
-    if (!currentEmailContent.trim()) {
+    
+    // Skip content check for 'createemail' request type since we're generating new content
+    if (requestType !== 'createemail' && !currentEmailContent.trim()) {
       console.error('No email content to improve');
       return;
     }
@@ -1079,24 +1080,8 @@ ${content}
       const originalContent = replyEditor.innerHTML;
       replyEditor.setAttribute('data-original-content', originalContent);
       
-      // Find the separator between compose and quoted content
-      const hrIndex = originalContent.indexOf('<hr');
-      
-      if (hrIndex !== -1) {
-        // Preserve everything from the <hr> onwards (quoted email thread)
-        const quotedContent = originalContent.substring(hrIndex);
-        
-        // Show skeleton only in compose area, preserve quoted content
-        replyEditor.innerHTML = `
-          <div class="space-y-3 animate-pulse mb-4">
-            <div class="h-4 bg-gray-200 rounded-md"></div>
-            <div class="h-4 bg-gray-200 rounded-md w-5/6"></div>
-            <div class="h-4 bg-gray-200 rounded-md w-4/6"></div>
-          </div>
-          ${quotedContent}
-        `;
-      } else {
-        // No quoted content found, safe to show skeleton in entire area
+      // For 'createemail', always show skeleton in entire area since we're generating from scratch
+      if (requestType === 'createemail') {
         replyEditor.innerHTML = `
           <div class="space-y-3 animate-pulse">
             <div class="h-4 bg-gray-200 rounded-md"></div>
@@ -1104,6 +1089,33 @@ ${content}
             <div class="h-4 bg-gray-200 rounded-md w-4/6"></div>
           </div>
         `;
+      } else {
+        // Find the separator between compose and quoted content
+        const hrIndex = originalContent.indexOf('<hr');
+        
+        if (hrIndex !== -1) {
+          // Preserve everything from the <hr> onwards (quoted email thread)
+          const quotedContent = originalContent.substring(hrIndex);
+          
+          // Show skeleton only in compose area, preserve quoted content
+          replyEditor.innerHTML = `
+            <div class="space-y-3 animate-pulse mb-4">
+              <div class="h-4 bg-gray-200 rounded-md"></div>
+              <div class="h-4 bg-gray-200 rounded-md w-5/6"></div>
+              <div class="h-4 bg-gray-200 rounded-md w-4/6"></div>
+            </div>
+            ${quotedContent}
+          `;
+        } else {
+          // No quoted content found, safe to show skeleton in entire area
+          replyEditor.innerHTML = `
+            <div class="space-y-3 animate-pulse">
+              <div class="h-4 bg-gray-200 rounded-md"></div>
+              <div class="h-4 bg-gray-200 rounded-md w-5/6"></div>
+              <div class="h-4 bg-gray-200 rounded-md w-4/6"></div>
+            </div>
+          `;
+        }
       }
     }
 
@@ -1116,7 +1128,7 @@ ${content}
         tone: tone || null,
         customInstructions: customInstructions || null,
         emailRules: emailRules || null,
-        email: currentEmailContent
+        email: requestType === 'createemail' ? '' : currentEmailContent
       }) as { data?: { response?: string } };
 
       console.log('Generated response:', response.data);
@@ -1127,25 +1139,32 @@ ${content}
         
         // Double-check we have the right element (should be contenteditable)
         if (replyEditor.getAttribute('contenteditable') === 'true' || replyEditor.isContentEditable) {
-          console.log('Updating compose area with AI response - preserving email thread');
           
-          // Get current content and find the separator between compose and quoted content
-          const currentHTML = replyEditor.innerHTML;
-          const hrIndex = currentHTML.indexOf('<hr');
-          
-          if (hrIndex !== -1) {
-            // Preserve everything from the <hr> onwards (quoted email thread)
-            const quotedContent = currentHTML.substring(hrIndex);
-            
-            // Create new content with AI response in compose area + preserved quoted content
-            const newContent = `<div>${response.data.response}</div>${quotedContent}`;
-            replyEditor.innerHTML = newContent;
-            
-            console.log('AI response applied to compose area only - quoted emails preserved');
-          } else {
-            // No quoted content found, safe to replace entire content
+          if (requestType === 'createemail') {
+            // For creating new emails, replace entire content with AI response
             replyEditor.innerHTML = `<div>${response.data.response}</div>`;
-            console.log('AI response applied - no quoted content to preserve');
+            console.log('AI response applied for new email creation');
+          } else {
+            console.log('Updating compose area with AI response - preserving email thread');
+            
+            // Get current content and find the separator between compose and quoted content
+            const currentHTML = replyEditor.innerHTML;
+            const hrIndex = currentHTML.indexOf('<hr');
+            
+            if (hrIndex !== -1) {
+              // Preserve everything from the <hr> onwards (quoted email thread)
+              const quotedContent = currentHTML.substring(hrIndex);
+              
+              // Create new content with AI response in compose area + preserved quoted content
+              const newContent = `<div>${response.data.response}</div>${quotedContent}`;
+              replyEditor.innerHTML = newContent;
+              
+              console.log('AI response applied to compose area only - quoted emails preserved');
+            } else {
+              // No quoted content found, safe to replace entire content
+              replyEditor.innerHTML = `<div>${response.data.response}</div>`;
+              console.log('AI response applied - no quoted content to preserve');
+            }
           }
           
           // Focus the editor and position cursor at the end of compose area (before quoted content)
@@ -1429,25 +1448,86 @@ ${content}
         const latestSender = threadData.latestSender || "Unknown Sender"
         const latestReceivedAt = threadData.latestReceivedAt
         
-        // Query the chain subcollection to get actual message count and check for attachments
+        // Query the chain subcollection to get actual message count, attachments, read status, and content
         let messageCount = 1;
         let hasAttachment = false;
+        let mostRecentEmailRead = false;
+        let mostRecentContent = '';
         try {
           const chainRef = collection(db, 'merchants', user.uid, 'fetchedemails', threadId, 'chain')
           const chainSnapshot = await getDocs(chainRef)
           messageCount = chainSnapshot.size || 1
           
-          // Check if any email in the chain has attachments
+          // Check if any email in the chain has attachments and get most recent email's read status and content
           hasAttachment = chainSnapshot.docs.some(doc => {
             const messageData = doc.data();
             return extractAttachments(messageData).length > 0;
           });
           
-          console.log(`📊 Thread ${threadId}: Found ${messageCount} messages in chain subcollection, hasAttachment: ${hasAttachment}`)
+          // Find the most recent email's read status and content
+          if (chainSnapshot.docs.length > 0) {
+            // Sort emails by timestamp to find the most recent one
+            const sortedEmails = chainSnapshot.docs.map(doc => ({
+              id: doc.id,
+              data: doc.data(),
+              timestamp: doc.data().receivedAt || doc.data().repliedAt || doc.data().processedAt
+            })).sort((a, b) => {
+              const getTime = (timestamp: any) => {
+                if (typeof timestamp === 'string') {
+                  return new Date(timestamp).getTime();
+                } else if (timestamp && typeof timestamp.toDate === 'function') {
+                  return timestamp.toDate().getTime();
+                } else if (timestamp instanceof Date) {
+                  return timestamp.getTime();
+                } else {
+                  return 0;
+                }
+              };
+              return getTime(b.timestamp) - getTime(a.timestamp); // Newest first
+            });
+            
+            // Get read status and content from the most recent email
+            const mostRecentEmail = sortedEmails[0];
+            mostRecentEmailRead = mostRecentEmail?.data?.read === true;
+            
+            // Extract content from the most recent email
+            const messageData = mostRecentEmail?.data;
+            if (messageData) {
+              if (messageData.htmlMessage) {
+                mostRecentContent = messageData.htmlMessage;
+              } else if (messageData.payload?.data?.message_text) {
+                mostRecentContent = messageData.payload.data.message_text;
+              } else if (messageData.message_text) {
+                mostRecentContent = messageData.message_text;
+              } else if (messageData.payload) {
+                try {
+                  const parts = messageData.payload?.data?.payload?.parts;
+                  if (parts && Array.isArray(parts) && parts.length > 0) {
+                    const firstPart = parts[0];
+                    if (firstPart?.body?.data) {
+                      mostRecentContent = decodePart(firstPart.body.data);
+                    }
+                  }
+                  if (!mostRecentContent) {
+                    const fallbackContent = messageData.payload?.data?.payload?.body?.data;
+                    if (fallbackContent) {
+                      mostRecentContent = decodePart(fallbackContent);
+                    }
+                  }
+                } catch (error) {
+                  console.warn("Error extracting email content for preview:", error);
+                }
+              }
+            }
+          }
+          
+          console.log(`📊 Thread ${threadId}: Found ${messageCount} messages in chain subcollection, hasAttachment: ${hasAttachment}, mostRecentRead: ${mostRecentEmailRead}`)
         } catch (error) {
           console.error(`Error querying chain for thread ${threadId}:`, error)
           messageCount = 1 // Fallback to 1 if query fails
           hasAttachment = false // Fallback to false if query fails
+          mostRecentEmailRead = false // Fallback to false if query fails
+          mostRecentContent = '' // Fallback to empty if query fails
         }
         
         // Parse latest sender name and email
@@ -1463,6 +1543,9 @@ ${content}
           senderName = latestSender
         }
         
+        // Create preview text from actual message content
+        const previewText = createPreviewText(mostRecentContent);
+        
         // Create thread object for left panel display
         const threadObj = {
           id: threadId,
@@ -1470,17 +1553,30 @@ ${content}
           sender: senderName,
           email: senderEmail,
           subject: subject,
-          preview: `Thread with ${messageCount} message${messageCount > 1 ? 's' : ''}`,
-          content: "Click to view thread messages",
+          preview: previewText,
+          content: mostRecentContent || "Click to view thread messages",
           time: latestReceivedAt,
-          read: false, // All emails start as unread
+          read: mostRecentEmailRead, // Use actual read status from most recent email
           hasAttachment: hasAttachment,
           folder: "inbox",
           isThread: true,
           count: messageCount,
           unreadCount: 0, // Will be calculated when loading chain messages
           hasUnread: false,
-          rawData: threadData
+          rawData: threadData,
+          // Create representative object with all the thread properties
+          representative: {
+            id: threadId, // This will be the representative email's actual ID when thread is loaded
+            threadId: threadId,
+            sender: senderName,
+            email: senderEmail,
+            subject: subject,
+            preview: previewText,
+            content: mostRecentContent || "Click to view thread messages",
+            time: latestReceivedAt,
+            read: mostRecentEmailRead,
+            hasAttachment: hasAttachment
+          }
         }
         
         console.log("📧 Processed thread object:", {
@@ -1792,17 +1888,9 @@ ${content}
     }
 
     try {
-      let emailRef;
-      
-      if (threadId) {
-        // Email is in a thread's chain subcollection
-        emailRef = doc(db, 'merchants', user.uid, 'fetchedemails', threadId, 'chain', emailId)
-        console.log("Marking thread email as read:", emailId, "in thread:", threadId)
-      } else {
-        // Email is in the main fetchedemails collection
-        emailRef = doc(db, 'merchants', user.uid, 'fetchedemails', emailId)
-        console.log("Marking individual email as read:", emailId)
-      }
+      // All emails are now in the chain subcollection structure
+      const emailRef = doc(db, 'merchants', user.uid, 'fetchedemails', threadId || emailId, 'chain', emailId)
+      console.log("Marking email as read:", emailId, "in thread:", threadId || emailId)
       
       await updateDoc(emailRef, {
         read: true
@@ -1810,7 +1898,7 @@ ${content}
       console.log("Successfully marked email as read:", emailId)
     } catch (error) {
       console.error("Error marking email as read:", error)
-      console.error("Email ID:", emailId, "Thread ID:", threadId)
+      console.error("Email ID:", emailId, "Thread ID:", threadId || emailId)
     }
   }
 
@@ -1863,55 +1951,105 @@ ${content}
 
 
 
-  const handleEmailSelect = (email: any, fromDropdown: boolean = false) => {
-    // Clear conflicting states first to prevent flicker
-    if (!fromDropdown) {
-      // Only clear thread selection if this email is NOT part of the current thread
-      // This keeps the dropdown open when clicking emails from the dropdown
-      if (!email.threadId || selectedThread?.threadId !== email.threadId) {
-        // Clear expansion state for the current thread when switching away
-        if (selectedThread) {
-          setExpandedThreads(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(selectedThread.threadId);
-            return newSet;
-          });
-        }
-        setSelectedThread(null)
-        setReplyMode(null) // Also clear reply mode
+  const handleEmailSelect = (email: any) => {
+    console.log("📧 Email selected:", email.id, email.sender)
+    
+    // Set the selected email
+    setSelectedEmail(email)
+    setReplyMode(null)
+    
+    // Mark email as read when clicked
+    if (!email.read) {
+      markEmailAsReadAndUpdateUI(email)
+    }
+  }
+
+  // Helper function to clean HTML and create preview text
+  const createPreviewText = (htmlContent: string, maxLength: number = 80): string => {
+    if (!htmlContent) return 'No preview available';
+    
+    // Strip HTML tags and clean up text for preview
+    const cleanText = htmlContent
+      .replace(/<[^>]+>/g, '') // Remove HTML tags
+      .replace(/&nbsp;/g, ' ') // Replace &nbsp; with spaces
+      .replace(/&amp;/g, '&') // Replace &amp; with &
+      .replace(/&lt;/g, '<') // Replace &lt; with <
+      .replace(/&gt;/g, '>') // Replace &gt; with >
+      .replace(/&quot;/g, '"') // Replace &quot; with "
+      .replace(/&#39;/g, "'") // Replace &#39; with '
+      .replace(/\s+/g, ' ') // Replace multiple whitespace with single space
+      .trim();
+    
+    if (!cleanText) return 'No preview available';
+    
+    return cleanText.length > maxLength 
+      ? cleanText.substring(0, maxLength) + '...'
+      : cleanText;
+  };
+
+  // Helper function to determine if a thread representative should be highlighted
+  const isThreadRepresentativeHighlighted = (thread: any) => {
+    if (!selectedEmail) return false
+    
+    // If this is a single email thread, highlight if the selected email belongs to this thread
+    if (thread.count === 1) {
+      const shouldHighlight = selectedEmail.threadId === thread.threadId || selectedEmail.id === thread.threadId
+      if (shouldHighlight) {
+        console.log("🎯 Highlighting single email thread:", thread.threadId)
       }
+      return shouldHighlight
     }
     
-    // Set the new email after clearing conflicting states
-    setSelectedEmail(email)
-    setSelectedEmailFromDropdown(fromDropdown)
-    // Note: when fromDropdown is true, we keep selectedThread to keep dropdown open
+    // If this is a multi-email thread, highlight only if the selected email is the most recent one
+    if (selectedThread?.threadId === thread.threadId && selectedThread.emails?.length > 0) {
+      const shouldHighlight = selectedEmail.id === selectedThread.emails[0]?.id
+      if (shouldHighlight) {
+        console.log("🎯 Highlighting multi-email thread representative:", thread.threadId, "selectedEmail:", selectedEmail.id, "mostRecent:", selectedThread.emails[0]?.id)
+      }
+      return shouldHighlight
+    }
     
-    // Mark email as read when selected and update local state
+    return false
+  }
+
+  // Simplified function to mark email as read and update all relevant UI state
+  const markEmailAsReadAndUpdateUI = (email: any) => {
+    console.log("📖 Marking email as read:", email.id)
+    
+    // Mark the email object as read immediately
     email.read = true
     
-    // Update local fetchedEmails state to mark this specific email as read
-    setFetchedEmails((prev: any[]) => prev.map(e => 
-      e.id === email.id 
-        ? { ...e, read: true }
-        : e
-    ))
+    // Update thread list: mark thread representative as read if this email is the most recent
+    setFetchedEmails((prev: any[]) => prev.map(thread => {
+      if (thread.threadId === email.threadId || thread.id === email.threadId) {
+        // Update the representative if this email is the most recent one
+        if (thread.representative?.id === email.id) {
+          return {
+            ...thread,
+            read: true,
+            representative: { ...thread.representative, read: true }
+          }
+        }
+      }
+      return thread
+    }))
 
-    // If this email is part of a thread, also update the thread's emails
-    if (selectedThread && email.threadId === selectedThread.threadId) {
+    // Update selected thread state if applicable
+    if (selectedThread && selectedThread.threadId === email.threadId) {
       setSelectedThread((prev: any) => ({
         ...prev,
         emails: prev.emails.map((e: any) => 
-          e.id === email.id 
-            ? { ...e, read: true }
-            : e
+          e.id === email.id ? { ...e, read: true } : e
         ),
+        representative: prev.representative?.id === email.id 
+          ? { ...prev.representative, read: true }
+          : prev.representative,
         unreadCount: prev.emails.filter((e: any) => e.id === email.id ? false : !e.read).length,
         hasUnread: prev.emails.some((e: any) => e.id === email.id ? false : !e.read)
       }))
     }
 
-    // Mark as read in Firestore - pass threadId if this email is from a thread
+    // Mark as read in Firestore
     markEmailAsRead(email.id, email.threadId)
   }
 
@@ -1920,6 +2058,17 @@ ${content}
     
     console.log("Thread selected:", thread)
     console.log("Thread has", thread.count, "messages")
+    
+    // Check if this thread is already selected and expanded - if so, collapse it
+    if (selectedThread?.threadId === thread.threadId && expandedThreads.has(thread.threadId)) {
+      console.log("🔽 Collapsing already expanded thread:", thread.threadId)
+      setExpandedThreads(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(thread.threadId);
+        return newSet;
+      });
+      return; // Exit early to just collapse, don't reload
+    }
     
     try {
       // Clear both states immediately to prevent flicker
@@ -1941,45 +2090,16 @@ ${content}
       console.log("🧵 Path:", `merchants/${user.uid}/fetchedemails/${thread.threadId}/chain`)
       
       const chainRef = collection(db, 'merchants', user.uid, 'fetchedemails', thread.threadId, 'chain')
-      // Remove server-side ordering to handle both receivedAt and repliedAt timestamps client-side
       const chainQuery = query(chainRef)
       
       const chainSnapshot = await getDocs(chainQuery)
       
-      console.log(`🧵 Thread query results: ${chainSnapshot.size} messages in chain`)
-      console.log("🧵 Chain messages in thread:", chainSnapshot.docs.map(doc => {
-        const data = doc.data() as any;
-        return {
-          id: doc.id, 
-          messageId: data.messageId,
-          subject: data.subject,
-          sender: data.sender,
-          to: data.to,
-          receivedAt: data.receivedAt,
-          hasPayload: !!data.payload,
-          hasMessageText: !!data.payload?.data?.message_text,
-          messageTextLength: data.payload?.data?.message_text?.length || 0
-        };
-      }))
+      console.log(`🧵 Found ${chainSnapshot.size} messages in chain`)
       
       if (chainSnapshot.size === 0) {
         console.warn("No chain messages found for threadId:", thread.threadId)
-        // Fallback to thread view without messages
-        setSelectedThread({
-          threadId: thread.threadId,
-          representative: thread,
-          count: 0,
-          emails: [],
-          hasUnread: false
-        })
         return
       }
-      
-      console.log(`Found ${chainSnapshot.size} messages in thread ${thread.threadId}`)
-      console.log("🔍 Raw chain documents:", chainSnapshot.docs.map(doc => ({
-        id: doc.id,
-        data: doc.data()
-      })))
       
       // Transform all chain messages in the thread
       const chainThreadEmails = chainSnapshot.docs.map((doc) => {
@@ -1989,19 +2109,6 @@ ${content}
         const senderInfo = messageData.sender || "Unknown Sender"
         const toInfo = messageData.to || "Unknown Recipient"
         const subject = messageData.subject || "No Subject"
-        const receivedAt = messageData.receivedAt || messageData.processedAt
-        const messageText = messageData.message_text || ""
-        
-        console.log("📧 Chain message data:", {
-          messageId: doc.id,
-          sender: senderInfo,
-          to: toInfo,
-          subject: subject.substring(0, 50),
-          hasPayload: !!messageData.payload,
-          htmlMessageLength: messageData.htmlMessage?.length || 0,
-          payloadMessageText: messageData.payload?.data?.message_text?.length || 0,
-          directMessageText: messageText.length || 0
-        })
         
         // Parse sender name and email from sender field
         let senderName = "Unknown"
@@ -2022,225 +2129,122 @@ ${content}
           senderName = "Unknown"
         }
         
-        // Get content from htmlMessage (priority) or fallback to other sources
+        // Get content from various sources
         let content = ""
-        
-        // Priority 1: htmlMessage field
         if (messageData.htmlMessage) {
           content = messageData.htmlMessage
-          console.log("📝 Using content from htmlMessage field, length:", content.length)
-        }
-        // Priority 2: payload.data.message_text
-        else if (messageData.payload?.data?.message_text) {
+        } else if (messageData.payload?.data?.message_text) {
           content = messageData.payload.data.message_text
-          console.log("📝 Using content from payload.data.message_text, length:", content.length)
-        }
-        // Priority 3: direct message_text field
-        else if (messageText) {
-          content = messageText
-          console.log("📝 Using content from message_text field, length:", content.length)
-        }
-        // Priority 4: Extract from payload parts (existing logic)
-        else if (messageData.payload) {
+        } else if (messageData.message_text) {
+          content = messageData.message_text
+        } else if (messageData.payload) {
           try {
             const parts = messageData.payload?.data?.payload?.parts
             if (parts && Array.isArray(parts) && parts.length > 0) {
               const firstPart = parts[0]
               if (firstPart?.body?.data) {
-                content = firstPart.body.data
-                try {
-                  content = decodePart(content)
-                  console.log("📝 Using decoded content from payload parts, length:", content.length)
-                } catch (error) {
-                  console.warn("Failed to decode email content from part 1:", error)
-                }
+                content = decodePart(firstPart.body.data)
               }
             }
-            
-            // Fallback to payload.data.payload.body.data if no part 1 content
             if (!content) {
               const fallbackContent = messageData.payload?.data?.payload?.body?.data
               if (fallbackContent) {
-                content = fallbackContent
-                try {
-                  content = decodePart(content)
-                  console.log("📝 Using decoded content from payload body, length:", content.length)
-                } catch (error) {
-                  console.warn("Failed to decode email content from fallback:", error)
-                }
+                content = decodePart(fallbackContent)
               }
             }
           } catch (error) {
             console.warn("Error extracting email content:", error)
           }
         }
-        
-        // Handle both repliedAt and receivedAt timestamps properly
-        const repliedAtField = messageData.repliedAt;
-        const receivedAtField = messageData.receivedAt || messageData.processedAt;
-        
-        console.log(`🕐 Timestamp processing for message ${doc.id}:`, {
-          rawRepliedAt: repliedAtField,
-          rawReceivedAt: receivedAtField,
-          repliedAtType: typeof repliedAtField,
-          receivedAtType: typeof receivedAtField,
-          hasToDateMethod: repliedAtField && typeof repliedAtField.toDate === 'function'
-        });
 
         return {
           id: doc.id,
           threadId: thread.threadId,
           sender: senderName,
           email: senderEmail,
-          to: toInfo, // Store recipient information
+          to: toInfo,
           subject: subject,
           content: content || "No content available",
-          time: receivedAtField,
-          receivedAt: receivedAtField, // Store receivedAt explicitly for sorting
-          repliedAt: repliedAtField, // Store repliedAt as-is (could be Firestore Timestamp or null)
-          read: false, // All emails start as unread
+          receivedAt: messageData.receivedAt,
+          repliedAt: messageData.repliedAt,
+          time: messageData.receivedAt || messageData.repliedAt || messageData.processedAt,
+          read: messageData.read === true, // Explicitly check for true, default to false (unread)
           hasAttachment: extractAttachments(messageData).length > 0,
           folder: "inbox",
           rawData: messageData
         }
       })
       
-      console.log("📧 Transformed chain emails:", chainThreadEmails.map(email => ({
-        id: email.id,
-        sender: email.sender,
-        to: email.to,
-        subject: email.subject.substring(0, 30),
-        contentLength: email.content?.length || 0,
-        hasContent: !!email.content
-      })))
-      
-      // Sort chain emails by timestamp (most recent first) - prioritize repliedAt or receivedAt
+      // Sort emails by timestamp - consider both receivedAt and repliedAt
       const threadEmails = chainThreadEmails.sort((a, b) => {
-        // Get the appropriate date field for each email - prioritize repliedAt or receivedAt
         const getEmailDate = (email: any) => {
-          // Priority 1: repliedAt (for reply emails)
-          // Priority 2: receivedAt (for original emails) 
-          // Priority 3: time (fallback)
+          // Use repliedAt if available, otherwise use receivedAt, fallback to time
           const dateField = email.repliedAt || email.receivedAt || email.time;
-          
-          console.log(`📅 Email ${email.id} date extraction:`, {
-            repliedAt: email.repliedAt,
-            receivedAt: email.receivedAt,
-            time: email.time,
-            selectedField: dateField
-          });
           
           if (typeof dateField === 'string') {
             return new Date(dateField);
           } else if (dateField && typeof dateField.toDate === 'function') {
-            // Handle Firestore Timestamp objects
             return dateField.toDate();
           } else if (dateField instanceof Date) {
             return dateField;
           } else {
-            console.warn(`Invalid date field for email ${email.id}:`, dateField);
-            return new Date(0); // Default to epoch if invalid
+            return new Date(0);
           }
         };
         
         const timeA = getEmailDate(a);
         const timeB = getEmailDate(b);
         
-        console.log(`📊 Sorting comparison:`, {
-          emailA: a.id,
-          emailB: b.id,
-          timeA: timeA.toISOString(),
-          timeB: timeB.toISOString(),
-          result: timeB.getTime() - timeA.getTime()
-        });
-        
-        // Sort newest first (descending order) - most recent at the top
+        // Sort newest first (most recent at top)
         return timeB.getTime() - timeA.getTime();
       })
       
       console.log("📊 Sorted thread emails:", threadEmails.map(email => ({
         id: email.id,
         sender: email.sender,
-        time: email.time,
+        read: email.read,
         receivedAt: email.receivedAt,
         repliedAt: email.repliedAt
       })))
       
-      // Create complete thread object with all emails
+      // IMPORTANT: Check if there's only 1 email in chain
+      if (threadEmails.length === 1) {
+        // Single email - no dropdown needed, just show the email
+        console.log("📧 Single email in chain - no dropdown needed")
+        const singleEmail = threadEmails[0]
+        handleEmailSelect(singleEmail)
+        
+        // Don't set selectedThread for single emails
+        return
+      }
+      
+      // Multiple emails - create thread with dropdown
       const completeThread = {
-          threadId: thread.threadId,
-        representative: threadEmails[0], // Most recent email as representative
+        threadId: thread.threadId,
+        representative: threadEmails[0], // Most recent email as main button
         count: threadEmails.length,
         unreadCount: threadEmails.filter((email: any) => !email.read).length,
         emails: threadEmails,
         hasUnread: threadEmails.some((email: any) => !email.read)
       }
       
-      console.log("✅ Setting complete thread with", threadEmails.length, "emails")
-      console.log("✅ Complete thread object:", {
-        threadId: completeThread.threadId,
-        count: completeThread.count,
-        emailIds: completeThread.emails.map((e: any) => e.id)
-      })
+      console.log("✅ Multiple emails in thread - setting up dropdown with", threadEmails.length, "emails")
       
       // Set the thread for dropdown functionality
       setSelectedThread(completeThread)
-      console.log("🎯 Selected thread set:", {
-        threadId: completeThread.threadId,
-        emailCount: completeThread.emails.length,
-        threadCount: completeThread.count,
-        willAutoExpand: threadEmails.length > 1,
-        shouldShowDropdown: completeThread.emails.length > 1
-      });
       
-      // Automatically expand the thread dropdown if it has multiple emails
-      if (threadEmails.length > 1) {
-        setExpandedThreads(prev => {
-          const newSet = new Set([...prev, thread.threadId]);
-          console.log("📂 Auto-expanding thread:", thread.threadId, "Expanded threads now:", [...newSet]);
-          return newSet;
-        });
-      }
+      // Automatically expand the dropdown for multiple emails
+      setExpandedThreads(prev => new Set([...prev, thread.threadId]))
       
-      // Set the most recent email to show in the right panel
-      const mostRecentEmail = threadEmails[0]; // Most recent is first after sorting
-      setSelectedEmail(mostRecentEmail)
-      setSelectedEmailFromDropdown(false) // This email was auto-selected, not clicked from dropdown
-      
-      // Don't automatically mark emails as read when viewing thread
-      // They will be marked as read individually when clicked
+      // Set the most recent email (main button) to show in the right panel
+      const mostRecentEmail = threadEmails[0]
+      handleEmailSelect(mostRecentEmail)
       
     } catch (error) {
       console.error("❌ Error in handleThreadSelect:", error)
-      console.error("❌ Error stack:", error instanceof Error ? error.stack : 'No stack trace')
-      console.error("❌ Thread data:", thread)
-      console.error("❌ This error is causing fallback to single email view instead of thread view!")
-      console.error("❌ Error message:", error instanceof Error ? error.message : String(error))
       
-      // Create a minimal thread object instead of falling back to single email
-      const fallbackThread = {
-        threadId: thread.threadId,
-        representative: thread.representative || thread,
-        count: 1,
-        unreadCount: 0,
-        emails: [thread.representative || thread],
-        hasUnread: false
-      }
-      
-      console.log("🔄 Using fallback thread object:", fallbackThread)
-      setSelectedThread(fallbackThread)
-      
-      // Automatically expand the thread dropdown if it has multiple emails (fallback shouldn't, but for consistency)
-      if (fallbackThread.count > 1) {
-        setExpandedThreads(prev => new Set([...prev, thread.threadId]))
-      }
-      
-      // Set the representative email to show in the right panel
-      setSelectedEmail(fallbackThread.representative)
-      setSelectedEmailFromDropdown(false) // This email was auto-selected, not clicked from dropdown
-      
-      // Don't automatically mark fallback emails as read
-      // They will be marked as read individually when clicked
+      // Fallback - treat as single email
+      setSelectedEmail(thread.representative || thread)
     }
   }
 
@@ -2685,17 +2689,18 @@ ${content}
             <div className="divide-y divide-gray-200">
               {emailThreads.map((thread) => (
                 <div key={thread.threadId}>
-                  {/* Thread header */}
+                  {/* Main email button - always shown */}
                   <div
-                    className={`flex items-center gap-1.5 py-2 pr-2 pl-1.5 transition-all duration-200 ${
-                      selectedThread?.threadId === thread.threadId
+                    className={`flex items-center gap-1.5 py-2 pr-2 pl-1.5 transition-all duration-200 cursor-pointer ${
+                      isThreadRepresentativeHighlighted(thread)
                         ? 'bg-blue-100' 
-                        : !thread.representative.read 
-                          ? 'bg-gray-100 hover:bg-gray-200' 
-                          : 'bg-white hover:bg-gray-50'
+                        : thread.representative?.read === true
+                          ? 'bg-white hover:bg-gray-50'
+                          : 'bg-gray-100 hover:bg-gray-200' 
                     }`}
+                    onClick={() => handleThreadSelect(thread)}
                   >
-                    {/* Expand/Collapse Chevron - show when thread has 2+ documents in chain */}
+                    {/* Dropdown chevron - only show for multiple emails */}
                     <div className="w-5 flex justify-center items-center flex-shrink-0">
                       {thread.count > 1 ? (
                         <button
@@ -2713,7 +2718,6 @@ ${content}
                           />
                         </button>
                       ) : (
-                        /* Placeholder space for single emails to maintain alignment */
                         <div className="w-4 h-4"></div>
                       )}
                     </div>
@@ -2721,7 +2725,7 @@ ${content}
                     {/* Avatar */}
                     <Avatar className="h-6 w-6 flex-shrink-0">
                       <AvatarFallback className="bg-gray-200 text-gray-700 text-xs font-medium">
-                        {thread.representative.sender.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2)}
+                        {thread.representative?.sender ? thread.representative.sender.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2) : '??'}
                       </AvatarFallback>
                     </Avatar>
 
@@ -2731,8 +2735,8 @@ ${content}
                       onClick={() => handleThreadSelect(thread)}
                     >
                         <div className="flex items-center gap-1.5">
-                          <span className={`text-sm truncate ${!thread.representative.read ? 'font-bold text-gray-900' : 'font-normal text-gray-600'}`}>
-                          {thread.representative.sender}
+                          <span className={`text-sm truncate ${!thread.representative?.read ? 'font-bold text-gray-900' : 'font-normal text-gray-600'}`}>
+                          {thread.representative?.sender || 'Unknown Sender'}
                         </span>
                         
                         {/* Thread count badge */}
@@ -2752,50 +2756,35 @@ ${content}
                         )}
                         
 
-                        {thread.representative.hasAttachment && (
+                        {thread.representative?.hasAttachment && (
                           <Paperclip className="h-3 w-3 text-gray-400 flex-shrink-0" />
                         )}
-                          <span className={`text-xs ml-auto ${!thread.representative.read ? 'text-blue-600 font-semibold' : 'text-gray-500'}`}>{formatPreviewTime(thread.representative.time)}</span>
+                          <span className={`text-xs ml-auto ${!thread.representative?.read ? 'text-blue-600 font-semibold' : 'text-gray-500'}`}>{formatPreviewTime(thread.representative?.time)}</span>
                       </div>
-                        <div className={`text-sm truncate ${!thread.representative.read ? 'font-bold text-gray-900' : 'font-normal text-gray-700'}`}>
-                        {thread.representative.subject}
+                        <div className={`text-sm truncate ${!thread.representative?.read ? 'font-bold text-gray-900' : 'font-normal text-gray-700'}`}>
+                        {thread.representative?.subject || 'No Subject'}
                       </div>
-                        <div className={`text-xs truncate ${!thread.representative.read ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
-                        {thread.representative.preview}
+                        <div className={`text-xs truncate ${!thread.representative?.read ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
+                        {thread.representative?.preview || 'No preview available'}
                       </div>
                     </div>
 
                     {/* Unread indicator */}
-                    {!thread.representative.read && (
+                    {!thread.representative?.read && (
                       <div className="h-2 w-2 bg-blue-500 rounded-full flex-shrink-0 shadow-sm unread-indicator"></div>
                     )}
                   </div>
 
                   {/* Thread dropdown - show individual emails when expanded (only when 2+ documents in chain) */}
-                  {(() => {
-                    const hasMultipleEmails = selectedThread?.emails?.length > 1;
-                    const isExpanded = expandedThreads.has(thread.threadId);
-                    const isCurrentThread = selectedThread?.threadId === thread.threadId;
-                    const shouldShow = hasMultipleEmails && isExpanded && isCurrentThread;
-                    
-                    if (isCurrentThread) {
-                      console.log("🔽 Dropdown check for thread:", thread.threadId, {
-                        emailsInSelectedThread: selectedThread?.emails?.length,
-                        threadCount: thread.count,
-                        hasMultipleEmails,
-                        isExpanded,
-                        isCurrentThread,
-                        shouldShow
-                      });
-                    }
-                    
-                    return shouldShow;
-                  })() && (
+                  {/* Dropdown - only show for multiple emails when expanded */}
+                  {selectedThread?.threadId === thread.threadId && 
+                   selectedThread?.emails?.length > 1 && 
+                   expandedThreads.has(thread.threadId) && (
                     <div className="border-l-4 border-l-gray-200 bg-gray-50">
                       {selectedThread.emails
-                        .slice()
+                        .slice(1) // Skip the first email (it's shown as the main button)
                         .sort((a: any, b: any) => {
-                          // Sort newest first for dropdown
+                          // Sort newest first for dropdown (after main email)
                           const getEmailDate = (email: any) => {
                             const dateField = email.repliedAt || email.receivedAt || email.time;
                             if (typeof dateField === 'string') {
@@ -2810,19 +2799,19 @@ ${content}
                           };
                           const timeA = getEmailDate(a);
                           const timeB = getEmailDate(b);
-                          return timeB.getTime() - timeA.getTime(); // Newest first
+                          return timeB.getTime() - timeA.getTime();
                         })
                         .map((email: any, index: number) => (
                         <div
                           key={email.id}
                                                        className={`flex items-center gap-1.5 p-2 pl-16 cursor-pointer transition-all duration-200 border-t border-t-gray-200 ${
-                            selectedEmail?.id === email.id && selectedEmailFromDropdown
+                            selectedEmail?.id === email.id
                               ? 'bg-blue-100'
-                              : !email.read 
-                                ? 'bg-gray-100 hover:bg-gray-200'
-                                : 'bg-white hover:bg-gray-50'
+                              : email.read === true
+                                ? 'bg-white hover:bg-gray-50'
+                                : 'bg-gray-100 hover:bg-gray-200'
                           }`}
-                          onClick={() => handleEmailSelect(email, true)}
+                          onClick={() => handleEmailSelect(email)}
                         >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
@@ -3372,8 +3361,11 @@ const ComposeEmailView = ({
       if (requestType === 'instruct') {
         const textarea = document.getElementById('instructions-textarea-compose') as HTMLTextAreaElement;
         customInstructions = textarea?.value || '';
+        // Use 'createemail' request type for compose instructions
+        await callGenerateEmailResponse('createemail', undefined, customInstructions, composeEditorRef);
+      } else {
+        await callGenerateEmailResponse(requestType, tone, undefined, composeEditorRef);
       }
-      await callGenerateEmailResponse(requestType, tone, customInstructions, composeEditorRef);
       
       // Update content state after AI generation
       if (composeEditorRef.current) {
@@ -3465,7 +3457,7 @@ const ComposeEmailView = ({
                     onClick={() => setShowInstructions(!showInstructions)}
                     className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
                   >
-                    <MessageSquare className="h-3 w-3 text-gray-500" />
+                    <MessageSquare className="h-3 w-3 text-gray-500" strokeWidth="2" />
                     Instruct
                   </button>
                 </div>
@@ -3476,34 +3468,34 @@ const ComposeEmailView = ({
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors">
-                      <Palette className="h-3 w-3 text-gray-500" />
+                      <Palette className="h-3 w-3 text-gray-500" strokeWidth="2" />
                       Change Tone
-                      <ChevronDown className="h-3 w-3 text-gray-500" />
+                      <ChevronDown className="h-3 w-3 text-gray-500" strokeWidth="2" />
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-36">
                     <DropdownMenuItem onClick={() => handleComposeAI('tone', 'friendly')}>
-                      <Lightbulb className="h-3 w-3 text-gray-500 mr-2" />
+                      <Lightbulb className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
                       <span className="text-xs">Friendly</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleComposeAI('tone', 'professional')}>
-                      <Users className="h-3 w-3 text-gray-500 mr-2" />
+                      <Users className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
                       <span className="text-xs">Professional</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleComposeAI('tone', 'direct')}>
-                      <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
+                      <ArrowRight className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
                       <span className="text-xs">Direct</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleComposeAI('tone', 'casual')}>
-                      <Eye className="h-3 w-3 text-gray-500 mr-2" />
+                      <Eye className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
                       <span className="text-xs">Casual</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleComposeAI('tone', 'formal')}>
-                      <Shield className="h-3 w-3 text-gray-500 mr-2" />
+                      <Shield className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
                       <span className="text-xs">Formal</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleComposeAI('tone', 'persuasive')}>
-                      <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
+                      <Wand2 className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
                       <span className="text-xs">Persuasive</span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -3519,7 +3511,7 @@ const ComposeEmailView = ({
                 ? 'animate-out slide-out-to-top-2' 
                 : 'animate-in slide-in-from-top-2'
             }`}>
-              <div className="p-4">
+              <div className="pl-3 pr-4 pt-4 pb-4">
                 <div className="flex items-start justify-between mb-3">
                   <label className="block text-xs font-medium text-gray-700">
                     Custom Instructions
@@ -3533,11 +3525,22 @@ const ComposeEmailView = ({
                     </button>
                     <button
                       disabled={isGenerating}
-                      onClick={() => {
+                      onClick={async () => {
                         const textarea = document.getElementById('instructions-textarea-compose') as HTMLTextAreaElement;
                         const customInstructions = textarea?.value || '';
                         if (customInstructions.trim()) {
-                          handleComposeAI('instruct');
+                          setIsGenerating(true);
+                          try {
+                            await callGenerateEmailResponse?.('createemail', undefined, customInstructions, composeEditorRef);
+                            // Update content state after AI generation
+                            if (composeEditorRef.current) {
+                              setContent(composeEditorRef.current.innerHTML || '');
+                            }
+                          } catch (error) {
+                            console.error('Error in compose AI generation:', error);
+                          } finally {
+                            setIsGenerating(false);
+                          }
                         }
                         closeInstructionsWithAnimation();
                       }}
@@ -4061,7 +4064,7 @@ const EmailViewer = ({
           <div className="flex items-center gap-2 mb-0">
             <Avatar className="h-6 w-6">
               <AvatarFallback className="bg-blue-100 text-blue-600 font-semibold text-xs">
-                {email.sender.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
+                {email.sender ? email.sender.split(' ').map((n: string) => n[0]).join('').toUpperCase() : '??'}
               </AvatarFallback>
             </Avatar>
             
@@ -4204,34 +4207,34 @@ const EmailViewer = ({
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors">
-                          <Sparkles className="h-3 w-3 text-gray-500" />
+                          <Sparkles className="h-3 w-3 text-gray-500" strokeWidth="2" />
                           Generate
-                          <ChevronDown className="h-3 w-3 text-gray-500" />
+                          <ChevronDown className="h-3 w-3 text-gray-500" strokeWidth="2" />
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="w-40">
                         <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)}>
-                          <Lightbulb className="h-3 w-3 text-gray-500 mr-2" />
+                          <Lightbulb className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
                           <span className="text-xs">Friendly tone</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)}>
-                          <Users className="h-3 w-3 text-gray-500 mr-2" />
+                          <Users className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
                           <span className="text-xs">Professional tone</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'direct', undefined, replyEditorRef)}>
-                          <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
+                          <ArrowRight className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
                           <span className="text-xs">Direct tone</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'casual', undefined, replyEditorRef)}>
-                          <Eye className="h-3 w-3 text-gray-500 mr-2" />
+                          <Eye className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
                           <span className="text-xs">Casual tone</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'formal', undefined, replyEditorRef)}>
-                          <Shield className="h-3 w-3 text-gray-500 mr-2" />
+                          <Shield className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
                           <span className="text-xs">Formal tone</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'persuasive', undefined, replyEditorRef)}>
-                          <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
+                          <Wand2 className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
                           <span className="text-xs">Persuasive tone</span>
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -4240,7 +4243,7 @@ const EmailViewer = ({
                       onClick={() => setShowInstructions(!showInstructions)}
                       className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
                     >
-                      <MessageSquare className="h-3 w-3 text-gray-500" />
+                      <MessageSquare className="h-3 w-3 text-gray-500" strokeWidth="2" />
                       Instructions
                     </button>
                   </div>
@@ -4252,39 +4255,39 @@ const EmailViewer = ({
                     onClick={() => callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)}
                     className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
                   >
-                    <Lightbulb className="h-3 w-3 text-gray-500" />
+                    <Lightbulb className="h-3 w-3 text-gray-500" strokeWidth="2" />
                     Friendly
                   </button>
                   <button
                     onClick={() => callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)}
                     className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
                   >
-                    <Users className="h-3 w-3 text-gray-500" />
+                    <Users className="h-3 w-3 text-gray-500" strokeWidth="2" />
                     Professional
                   </button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors">
-                        <Palette className="h-3 w-3 text-gray-500" />
+                        <Palette className="h-3 w-3 text-gray-500" strokeWidth="2" />
                         More
-                        <ChevronDown className="h-3 w-3 text-gray-500" />
+                        <ChevronDown className="h-3 w-3 text-gray-500" strokeWidth="2" />
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-36">
                       <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'direct', undefined, replyEditorRef)}>
-                        <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
+                        <ArrowRight className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
                         <span className="text-xs">Direct</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'casual', undefined, replyEditorRef)}>
-                        <Eye className="h-3 w-3 text-gray-500 mr-2" />
+                        <Eye className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
                         <span className="text-xs">Casual</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'formal', undefined, replyEditorRef)}>
-                        <Shield className="h-3 w-3 text-gray-500 mr-2" />
+                        <Shield className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
                         <span className="text-xs">Formal</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'persuasive', undefined, replyEditorRef)}>
-                        <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
+                        <Wand2 className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
                         <span className="text-xs">Persuasive</span>
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -4295,9 +4298,9 @@ const EmailViewer = ({
                     <DropdownMenuTrigger asChild>
                       <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-2 py-1.5 rounded-md transition-colors">
                         {isSummarizing ? (
-                          <Loader2 className="h-3 w-3 text-blue-500 animate-spin" />
+                          <Loader2 className="h-3 w-3 text-blue-500 animate-spin" strokeWidth="2" />
                         ) : (
-                          <MoreHorizontal className="h-3 w-3 text-gray-500" />
+                          <MoreHorizontal className="h-3 w-3 text-gray-500" strokeWidth="2" />
                         )}
                       </button>
                     </DropdownMenuTrigger>
@@ -4306,11 +4309,11 @@ const EmailViewer = ({
                         actualSetTempEmailRules(emailRules || '');
                         actualSetShowEmailRulesDialog(true);
                       }}>
-                        <Shield className="h-3 w-3 text-gray-500 mr-2" />
+                        <Shield className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
                         <span className="text-xs">Email Rules</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => onSummariseThread?.()}>
-                        <MessageSquare className="h-3 w-3 text-gray-500 mr-2" />
+                        <MessageSquare className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
                         <span className="text-xs">Summarise {selectedThread && selectedThread.count > 1 ? `Thread (${selectedThread.count})` : 'Email'}</span>
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -4326,7 +4329,7 @@ const EmailViewer = ({
                   ? 'animate-out slide-out-to-top-2' 
                   : 'animate-in slide-in-from-top-2'
               }`}>
-                <div className="p-4">
+                <div className="pl-3 pr-4 pt-4 pb-4">
                   <div className="flex items-start justify-between mb-3">
                     <label className="block text-xs font-medium text-gray-700">
                       Custom Instructions

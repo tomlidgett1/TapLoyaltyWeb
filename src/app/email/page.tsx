@@ -69,7 +69,13 @@ import {
   Lightbulb,
   Palette,
   WandSparkles,
-  Loader2
+  Loader2,
+  File,
+  FileText,
+  Image as ImageIcon,
+  FileVideo,
+  FileAudio,
+  Download
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import Image from "next/image"
@@ -82,6 +88,122 @@ import { functions } from "@/lib/firebase"
 import { formatMelbourneTime } from "@/lib/date-utils"
 import { formatDistanceToNow } from "date-fns"
 import { cn } from "@/lib/utils"
+
+// Extract attachments from email data
+const extractAttachments = (email: any): any[] => {
+  try {
+    // Check for attachments in rawData.payload.data.attachment_list
+    if (email.rawData?.payload?.data?.attachment_list) {
+      return email.rawData.payload.data.attachment_list;
+    }
+    
+    // Check for attachments in payload.data.attachment_list (alternative structure)
+    if (email.payload?.data?.attachment_list) {
+      return email.payload.data.attachment_list;
+    }
+    
+    // Check for attachments in direct attachment_list field
+    if (email.attachment_list) {
+      return email.attachment_list;
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('Error extracting attachments:', error);
+    return [];
+  }
+};
+
+// Get appropriate icon for file type
+const getFileIcon = (mimeType: string, filename: string) => {
+  const lowerMimeType = mimeType.toLowerCase();
+  const lowerFilename = filename.toLowerCase();
+  
+  // Image files
+  if (lowerMimeType.startsWith('image/')) {
+    return <ImageIcon className="h-4 w-4 text-gray-500" />;
+  }
+  
+  // Video files
+  if (lowerMimeType.startsWith('video/')) {
+    return <FileVideo className="h-4 w-4 text-gray-500" />;
+  }
+  
+  // Audio files
+  if (lowerMimeType.startsWith('audio/')) {
+    return <FileAudio className="h-4 w-4 text-gray-500" />;
+  }
+  
+  // Document files (PDF, Word, etc.)
+  if (lowerMimeType.includes('pdf') || 
+      lowerMimeType.includes('word') || 
+      lowerMimeType.includes('document') ||
+      lowerFilename.endsWith('.pdf') ||
+      lowerFilename.endsWith('.doc') ||
+      lowerFilename.endsWith('.docx')) {
+    return <FileText className="h-4 w-4 text-gray-500" />;
+  }
+  
+  // Text files
+  if (lowerMimeType.startsWith('text/') || 
+      lowerFilename.endsWith('.txt') ||
+      lowerFilename.endsWith('.csv')) {
+    return <FileText className="h-4 w-4 text-gray-500" />;
+  }
+  
+  // Default file icon
+  return <File className="h-4 w-4 text-gray-500" />;
+};
+
+// Format file size
+const formatFileSize = (sizeInBytes: number): string => {
+  if (!sizeInBytes) return '';
+  
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let size = sizeInBytes;
+  let unitIndex = 0;
+  
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex++;
+  }
+  
+  return `${size.toFixed(1)} ${units[unitIndex]}`;
+};
+
+// Simple Attachment Display for header
+const CompactAttachmentList = ({ attachments }: { attachments: any[] }) => {
+  if (!attachments || attachments.length === 0) {
+    return null;
+  }
+
+  const handleAttachmentClick = (attachment: any) => {
+    if (attachment.s3url) {
+      // Open the s3url in a new tab
+      window.open(attachment.s3url, '_blank');
+    } else {
+      console.warn('No s3url found for attachment:', attachment);
+    }
+  };
+  
+  return (
+    <div className="mt-2 ml-4">
+      {attachments.map((attachment, index) => (
+        <button
+          key={attachment.attachmentId || index}
+          onClick={() => handleAttachmentClick(attachment)}
+          className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-xs text-gray-600 transition-colors cursor-pointer mr-1"
+          title={`Open ${attachment.filename || 'attachment'}`}
+        >
+          <Paperclip className="h-3 w-3" />
+          <span>{attachment.filename || 'Unknown file'}</span>
+        </button>
+      ))}
+    </div>
+  );
+};
+
+
 
 // Add custom CSS for discreet scrollbar
 const customScrollbarStyles = `
@@ -1179,16 +1301,25 @@ export default function EmailPage() {
         const latestSender = threadData.latestSender || "Unknown Sender"
         const latestReceivedAt = threadData.latestReceivedAt
         
-        // Query the chain subcollection to get actual message count
+        // Query the chain subcollection to get actual message count and check for attachments
         let messageCount = 1;
+        let hasAttachment = false;
         try {
           const chainRef = collection(db, 'merchants', user.uid, 'fetchedemails', threadId, 'chain')
           const chainSnapshot = await getDocs(chainRef)
           messageCount = chainSnapshot.size || 1
-          console.log(`📊 Thread ${threadId}: Found ${messageCount} messages in chain subcollection`)
+          
+          // Check if any email in the chain has attachments
+          hasAttachment = chainSnapshot.docs.some(doc => {
+            const messageData = doc.data();
+            return extractAttachments(messageData).length > 0;
+          });
+          
+          console.log(`📊 Thread ${threadId}: Found ${messageCount} messages in chain subcollection, hasAttachment: ${hasAttachment}`)
         } catch (error) {
           console.error(`Error querying chain for thread ${threadId}:`, error)
           messageCount = 1 // Fallback to 1 if query fails
+          hasAttachment = false // Fallback to false if query fails
         }
         
         // Parse latest sender name and email
@@ -1215,7 +1346,7 @@ export default function EmailPage() {
           content: "Click to view thread messages",
           time: latestReceivedAt,
           read: false, // All emails start as unread
-          hasAttachment: false, // Can be updated based on chain messages if needed
+          hasAttachment: hasAttachment,
           folder: "inbox",
           isThread: true,
           count: messageCount,
@@ -1834,7 +1965,7 @@ export default function EmailPage() {
           receivedAt: receivedAtField, // Store receivedAt explicitly for sorting
           repliedAt: repliedAtField, // Store repliedAt as-is (could be Firestore Timestamp or null)
           read: false, // All emails start as unread
-          hasAttachment: false, // Can be updated if attachment info is available
+          hasAttachment: extractAttachments(messageData).length > 0,
           folder: "inbox",
           rawData: messageData
         }
@@ -2857,7 +2988,7 @@ export default function EmailPage() {
                     time: new Date().toISOString(),
                     messageTimestamp: new Date().toISOString(),
                     read: true,
-                    hasAttachment: false,
+                    hasAttachment: attachments.length > 0,
                     folder: "sent",
                     rawData: null
                   };
@@ -3004,7 +3135,7 @@ export default function EmailPage() {
                     time: new Date().toISOString(),
                     messageTimestamp: new Date().toISOString(),
                     read: true,
-                    hasAttachment: false,
+                    hasAttachment: attachments.length > 0,
                     folder: "sent",
                     rawData: null
                   };
@@ -3748,6 +3879,11 @@ const EmailViewer = ({
                 })()}</span>
               </div>
             </div>
+          </div>
+          
+          {/* Compact Attachments - Right after header */}
+          <div className="px-4 pb-1">
+            <CompactAttachmentList attachments={extractAttachments(email)} />
           </div>
         </div>
       )}
@@ -4828,6 +4964,11 @@ const EmailInThread = ({
       {/* Email Content - Only show when expanded */}
       {isExpanded && (
         <div className="ml-13">
+          {/* Compact Attachments - Right after header in thread */}
+          <div className="mb-1">
+            <CompactAttachmentList attachments={extractAttachments(email)} />
+          </div>
+          
           {loading ? (
             <div className="flex items-center py-8">
               <RefreshCw className="h-4 w-4 animate-spin mr-2 text-gray-400" />

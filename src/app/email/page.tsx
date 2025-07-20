@@ -17,6 +17,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -38,8 +39,11 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {
   Search, 
-  Archive, 
-  Trash2, 
+  Mail, 
+  Plus, 
+  User, 
+  Settings, 
+  ChevronLeft, 
   Reply, 
   Forward, 
   MoreHorizontal,
@@ -51,7 +55,6 @@ import {
   Edit3,
   Shield,
   Check,
-  Plus,
   Send,
   RefreshCw,
   Bug,
@@ -63,21 +66,27 @@ import {
   X,
   Eye,
   AlertCircle,
-  Sparkles,
-  Wand2,
-  MessageSquare,
-  Lightbulb,
   Palette,
-  WandSparkles,
-  Loader2,
-  File,
+  Lightbulb,
+  Wand2,
+  Sparkles,
+  UploadCloud,
+  Download,
+  FilePlus,
   FileText,
+  FileImage,
+  Loader2,
+  MessageSquare,
+  WandSparkles,
+  Info,
+  Archive,
+  Trash2,
+  File,
   Image as ImageIcon,
   FileVideo,
-  FileAudio,
-  Download
+  FileAudio
 } from "lucide-react"
-import { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
 import GradientText from "@/components/GradientText"
@@ -917,6 +926,81 @@ export default function EmailPage() {
   // Track if current selectedEmail was selected from dropdown (should highlight) vs auto-selected from thread (should not highlight)
   const [selectedEmailFromDropdown, setSelectedEmailFromDropdown] = useState<boolean>(false)
   const [searchQuery, setSearchQuery] = useState("")
+  
+  // Panel resizing state
+  const [leftPanelWidth, setLeftPanelWidth] = useState(35) // Percentage
+  const [isDragging, setIsDragging] = useState(false)
+  
+  // Panel resize handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true)
+    e.preventDefault()
+  }
+  
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging) return
+    
+    const container = document.querySelector('.main-panels-container')
+    if (!container) return
+    
+    const containerRect = container.getBoundingClientRect()
+    const newLeftWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100
+    
+    // Constrain between 20% and 80%
+    const constrainedWidth = Math.min(Math.max(newLeftWidth, 20), 80)
+    setLeftPanelWidth(constrainedWidth)
+  }
+  
+  const handleMouseUp = () => {
+    setIsDragging(false)
+  }
+  
+  // Add mouse event listeners
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+      document.body.style.userSelect = 'none'
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove)
+        document.removeEventListener('mouseup', handleMouseUp)
+        document.body.style.userSelect = ''
+      }
+    }
+  }, [isDragging])
+
+  // Function to summarize email thread
+  const summarizeThread = async (thread: any) => {
+    if (!thread || !user?.uid) return;
+    
+    setIsSummarizing(true);
+    try {
+      // Prepare thread content for summarization
+      const threadContent = thread.emails.map((email: any) => ({
+        sender: email.sender,
+        to: email.to,
+        subject: email.subject,
+        content: email.content || email.htmlMessage || 'No content',
+        timestamp: email.time || email.receivedAt || email.repliedAt
+      }));
+
+      const summaryResponse = await generateEmailResponse({
+        requestType: 'summarize',
+        threadContent: threadContent,
+        threadSubject: thread.representative.subject,
+        merchantId: user.uid
+      });
+
+      if (summaryResponse.data && typeof summaryResponse.data === 'object' && 'summary' in summaryResponse.data) {
+        setThreadSummary((summaryResponse.data as any).summary);
+      }
+    } catch (error) {
+      console.error('Error summarizing thread:', error);
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
   const [isSending, setIsSending] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string>('')
   const [isComposing, setIsComposing] = useState(false)
@@ -930,6 +1014,11 @@ export default function EmailPage() {
   // Tap Agent state
   const [tapAgentMode, setTapAgentMode] = useState<'full-response' | 'instructions' | 'tone' | null>(null)
   const [tapAgentInstructions, setTapAgentInstructions] = useState('')
+  const [emailRules, setEmailRules] = useState('')
+  const [threadSummary, setThreadSummary] = useState('')
+  const [isSummarizing, setIsSummarizing] = useState(false)
+  const [showEmailRulesDialog, setShowEmailRulesDialog] = useState(false)
+  const [tempEmailRules, setTempEmailRules] = useState('')
   const [selectedTone, setSelectedTone] = useState('professional')
   const [isGenerating, setIsGenerating] = useState(false)
   const [showInstructions, setShowInstructions] = useState(false)
@@ -996,6 +1085,7 @@ export default function EmailPage() {
         requestType,
         tone: tone || null,
         customInstructions: customInstructions || null,
+        emailRules: emailRules || null,
         email: currentEmailContent
       }) as { data?: { response?: string } };
 
@@ -2152,7 +2242,7 @@ export default function EmailPage() {
       prev.map(notification => ({ ...notification, read: true }))
     )
     setUnreadCount(0)
-  }
+      }
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-[#F5F5F5]">
@@ -2576,9 +2666,14 @@ export default function EmailPage() {
                 </div>
 
         {/* Main Content */}
-        <div className="flex flex-1 min-h-0 gap-3 px-3 pb-3">
+        <div className="flex flex-1 min-h-0 px-3 pb-3 main-panels-container">
           {/* Left Panel - Email List Card */}
-          <div className="w-2/5 bg-white rounded-xl shadow-lg border border-gray-100 flex flex-col h-full">
+          <div 
+            className="bg-white rounded-xl shadow-lg border border-gray-100 flex flex-col h-full mr-1"
+            style={{ width: `${leftPanelWidth}%` }}
+          >
+          
+          {/* Rest of left panel content... */}
           {/* Search Bar - Fixed at top */}
           <div className="flex-shrink-0 p-4 border-b border-gray-200 bg-white rounded-t-xl">
               <div className="relative">
@@ -2810,8 +2905,20 @@ export default function EmailPage() {
           </div>
         </div>
 
+        {/* Draggable Divider */}
+        <div 
+          className={`w-1 bg-transparent hover:bg-gray-200 cursor-col-resize transition-colors relative ${
+            isDragging ? 'bg-blue-300' : ''
+          }`}
+          onMouseDown={handleMouseDown}
+        >
+        </div>
+
         {/* Right Panel - Email Content Card */}
-        <div className="flex-1 bg-white rounded-xl shadow-lg border border-gray-100 flex flex-col h-full overflow-hidden">
+        <div 
+          className="bg-white rounded-xl shadow-lg border border-gray-100 flex flex-col h-full overflow-hidden ml-1"
+          style={{ width: `${100 - leftPanelWidth}%` }}
+        >
           {/* Success Message */}
           {successMessage && (
             <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-md mx-6 mt-4 mb-2 animate-in slide-in-from-top-2 duration-200 ease-out">
@@ -3028,6 +3135,12 @@ export default function EmailPage() {
               }}
               onCancelReply={() => setReplyMode(null)}
               callGenerateEmailResponse={callGenerateEmailResponse}
+              emailRules={emailRules}
+              setEmailRules={setEmailRules}
+              showEmailRulesDialog={showEmailRulesDialog}
+              setShowEmailRulesDialog={setShowEmailRulesDialog}
+              tempEmailRules={tempEmailRules}
+              setTempEmailRules={setTempEmailRules}
             />
           ) : selectedEmail ? (
             <EmailViewer 
@@ -3039,6 +3152,7 @@ export default function EmailPage() {
               replyMode={replyMode}
               isSending={isSending}
               isGenerating={isGenerating}
+              callGenerateEmailResponse={callGenerateEmailResponse}
               onStartReply={(email: any) => setReplyMode({ type: 'reply', originalEmail: email })}
               onStartReplyAll={(email: any) => setReplyMode({ type: 'replyAll', originalEmail: email })}
               onStartForward={(email: any) => setReplyMode({ type: 'forward', originalEmail: email })}
@@ -3195,6 +3309,11 @@ export default function EmailPage() {
               setSelectedTone={setSelectedTone}
               isGenerating={isGenerating}
               setIsGenerating={setIsGenerating}
+              emailRules={emailRules}
+              setEmailRules={setEmailRules}
+              threadSummary={threadSummary}
+              isSummarizing={isSummarizing}
+              onSummarizeThread={() => summarizeThread(selectedThread)}
               onStartReply={(email: any) => setReplyMode({ type: 'reply', originalEmail: email, thread: selectedThread })}
               onStartReplyAll={(email: any) => setReplyMode({ type: 'replyAll', originalEmail: email, thread: selectedThread })}
               onStartForward={(email: any) => setReplyMode({ type: 'forward', originalEmail: email, thread: selectedThread })}
@@ -3321,7 +3440,6 @@ export default function EmailPage() {
                 }
               }}
               onCancelReply={() => setReplyMode(null)}
-              callGenerateEmailResponse={callGenerateEmailResponse}
             />
           ) : (
             <EmptyEmailView />
@@ -3637,7 +3755,13 @@ const EmailViewer = ({
   onCancelReply,
   isSending,
   isGenerating,
-  callGenerateEmailResponse
+  callGenerateEmailResponse,
+  emailRules,
+  setEmailRules,
+  showEmailRulesDialog,
+  setShowEmailRulesDialog,
+  tempEmailRules,
+  setTempEmailRules
 }: {
   email: any;
   merchantData: any;
@@ -3653,6 +3777,12 @@ const EmailViewer = ({
   isSending?: boolean;
   isGenerating?: boolean;
   callGenerateEmailResponse?: (requestType: string, tone?: string, customInstructions?: string, replyEditor?: React.RefObject<HTMLDivElement | null>) => Promise<any>;
+  emailRules?: string;
+  setEmailRules?: (rules: string) => void;
+  showEmailRulesDialog?: boolean;
+  setShowEmailRulesDialog?: (show: boolean) => void;
+  tempEmailRules?: string;
+  setTempEmailRules?: (rules: string) => void;
 }) => {
   const [htmlContent, setHtmlContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -3664,6 +3794,16 @@ const EmailViewer = ({
   const replyEditorRef = useRef<HTMLDivElement>(null);
   const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
   const [showInstructions, setShowInstructions] = useState(false);
+  
+  // Local state for dialog
+  const [localShowEmailRulesDialog, setLocalShowEmailRulesDialog] = useState(false);
+  const [localTempEmailRules, setLocalTempEmailRules] = useState('');
+  
+  // Use passed props or fallback to local state
+  const actualShowEmailRulesDialog = showEmailRulesDialog ?? localShowEmailRulesDialog;
+  const actualSetShowEmailRulesDialog = setShowEmailRulesDialog ?? setLocalShowEmailRulesDialog;
+  const actualTempEmailRules = tempEmailRules ?? localTempEmailRules;
+  const actualSetTempEmailRules = setTempEmailRules ?? setLocalTempEmailRules;
 
   useEffect(() => {
     const loadEmailContent = async () => {
@@ -3766,7 +3906,7 @@ const EmailViewer = ({
           }
           setReplyQuotedContent('');
         }
-              } else {
+      } else {
         setReplyContent('');
         if (replyEditorRef.current) {
           replyEditorRef.current.innerHTML = '';
@@ -3788,62 +3928,62 @@ const EmailViewer = ({
         <div className="px-4 py-3 bg-white border-b border-gray-200">
           <div className="flex items-center justify-between mb-2">
             <h1 className="text-sm font-medium text-gray-900">{email.subject}</h1>
-            <div className="flex items-center gap-2">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
+          <div className="flex items-center gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
                       className="h-6 w-6 p-0 hover:bg-gray-100"
-                      onClick={() => onStartReply?.(email)}
-                    >
+                    onClick={() => onStartReply?.(email)}
+                  >
                       <Reply className="h-3 w-3" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Reply</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Reply</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
                       className="h-6 w-6 p-0 hover:bg-gray-100"
-                      onClick={() => onStartReplyAll?.(email)}
-                    >
+                    onClick={() => onStartReplyAll?.(email)}
+                  >
                       <ReplyAll className="h-3 w-3" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Reply All</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Reply All</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
                       className="h-6 w-6 p-0 hover:bg-gray-100"
-                      onClick={() => onStartForward?.(email)}
-                    >
+                    onClick={() => onStartForward?.(email)}
+                  >
                       <Forward className="h-3 w-3" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Forward</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Forward</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
+        </div>
 
           {/* From Section */}
           <div className="flex items-center gap-2 mb-0">
@@ -3882,16 +4022,16 @@ const EmailViewer = ({
           </div>
           
           {/* Compact Attachments - Right after header */}
-          <div className="px-4 pb-1">
+          <div className="px-3 pb-1">
             <CompactAttachmentList attachments={extractAttachments(email)} />
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Reply Compose Area - Raw in right panel */}
-      {replyMode && (
+        {replyMode && (
         <div className="flex flex-col h-full bg-white">
-          {/* From Field */}
+            {/* From Field */}
           <div className="flex items-center py-2 px-4 border-b border-gray-100">
             <div className="w-12 text-xs text-gray-600 font-medium">From:</div>
             <div className="flex-1 text-xs text-gray-900">{selectedAccount}</div>
@@ -3925,53 +4065,54 @@ const EmailViewer = ({
                 className="h-7 px-2 text-gray-600 hover:text-gray-900 text-xs"
               >
                 Cancel
-              </Button>
+                </Button>
+              </div>
             </div>
-          </div>
 
-          {/* To Field */}
+            {/* To Field */}
           <div className="flex items-center py-2 px-4 border-b border-gray-100">
             <div className="w-12 text-xs text-gray-600 font-medium">To:</div>
-            <div className="flex-1">
-              <Input
-                value={replyRecipients}
-                onChange={(e) => setReplyRecipients(e.target.value)}
-                className="border-0 p-0 h-auto text-xs focus:ring-0 focus:outline-none shadow-none"
-                placeholder="Enter recipient email addresses"
-              />
-            </div>
-          </div>
-
-          {/* CC Field (if populated) */}
-          {replyCc !== undefined && (
-            <div className="flex items-center py-2 px-4 border-b border-gray-100">
-              <div className="w-12 text-xs text-gray-600 font-medium">Cc:</div>
               <div className="flex-1">
                 <Input
-                  value={replyCc}
-                  onChange={(e) => setReplyCc(e.target.value)}
-                  className="border-0 p-0 h-auto text-xs focus:ring-0 focus:outline-none shadow-none"
-                  placeholder="Enter CC email addresses"
+                  value={replyRecipients}
+                  onChange={(e) => setReplyRecipients(e.target.value)}
+                className="border-0 p-0 h-auto text-xs focus:ring-0 focus:outline-none shadow-none"
+                  placeholder="Enter recipient email addresses"
                 />
               </div>
             </div>
-          )}
 
-          {/* Subject Field */}
+          {/* CC Field (if populated) */}
+            {replyCc !== undefined && (
+            <div className="flex items-center py-2 px-4 border-b border-gray-100">
+              <div className="w-12 text-xs text-gray-600 font-medium">Cc:</div>
+                <div className="flex-1">
+                  <Input
+                    value={replyCc}
+                    onChange={(e) => setReplyCc(e.target.value)}
+                  className="border-0 p-0 h-auto text-xs focus:ring-0 focus:outline-none shadow-none"
+                    placeholder="Enter CC email addresses"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Subject Field */}
           <div className="flex items-center py-2 px-4 border-b border-gray-100">
             <div className="w-12 text-xs text-gray-600 font-medium">Subject:</div>
             <div className="flex-1 text-xs text-gray-900">
-              {replyMode.type === 'forward'
-                ? `Fwd: ${replyMode.originalEmail.subject}`
+                {replyMode.type === 'forward' 
+                  ? `Fwd: ${replyMode.originalEmail.subject}`
                 : (replyMode.originalEmail.subject.startsWith('Re: ')
-                  ? replyMode.originalEmail.subject
+                    ? replyMode.originalEmail.subject 
                   : `Re: ${replyMode.originalEmail.subject}`)}
+              </div>
             </div>
-          </div>
 
           {/* Tap Agent Section */}
-          <div className="bg-gray-50/50 border-b border-gray-100">
-            <div className="px-6 py-2">
+          <div className="mx-3 my-2">
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3">
+            <div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-1.5">
@@ -3981,10 +4122,10 @@ const EmailViewer = ({
                       animationSpeed={3}
                       showBorder={false}
                       className="text-xs font-medium"
-                    >
+                        >
                       Tap Agent
                     </GradientText>
-                  </div>
+                        </div>
                   <div className="flex items-center gap-2">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -4074,15 +4215,33 @@ const EmailViewer = ({
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                </div>
+                  
+                  {/* Three-dot Options Menu */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-2 py-1.5 rounded-md transition-colors">
+                        <MoreHorizontal className="h-3 w-3 text-gray-500" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuItem onClick={() => {
+                        actualSetTempEmailRules(emailRules || '');
+                        actualSetShowEmailRulesDialog(true);
+                      }}>
+                        <Shield className="h-3 w-3 text-gray-500 mr-2" />
+                        <span className="text-xs">Email Rules</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                    </div>
               </div>
             </div>
             
             {/* Instructions Dropdown - Now part of normal flow */}
             {showInstructions && (
               <div className="border-t border-gray-200 bg-gray-50 animate-in slide-in-from-top-2 duration-200">
-                <div className="p-4">
-                  <div className="space-y-3">
+                <div className="p-3">
+                  <div className="space-y-2">
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">
                         Custom Instructions
@@ -4095,9 +4254,7 @@ const EmailViewer = ({
                       />
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-500">
-                        Example: "Be concise and include next steps"
-                      </span>
+                    
                       <div className="flex gap-2">
                         <button
                           onClick={() => setShowInstructions(false)}
@@ -4107,7 +4264,7 @@ const EmailViewer = ({
                         </button>
                         <button
                           disabled={isGenerating}
-                          onClick={() => {
+                onClick={() => {
                             const textarea = document.getElementById('instructions-textarea-1') as HTMLTextAreaElement;
                             const customInstructions = textarea?.value || '';
                             if (customInstructions.trim()) {
@@ -4138,13 +4295,14 @@ const EmailViewer = ({
                 </div>
               </div>
             )}
-          </div>
+            </div>
+            </div>
 
-          {/* Message Content */}
-          <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
-            <div 
+            {/* Message Content */}
+          <div className="flex-1 px-3 py-6 overflow-y-auto custom-scrollbar">
+              <div 
               ref={replyEditorRef}
-              contentEditable
+                contentEditable
               className="w-full min-h-full text-sm outline-none"
               onBlur={() => {
                 if (replyEditorRef.current) {
@@ -4153,33 +4311,120 @@ const EmailViewer = ({
               }}
               suppressContentEditableWarning={true}
             />
-          </div>
-        </div>
-      )}
+                  </div>
+                </div>
+              )}
 
       {/* Email Content - Hidden when replying */}
       {!replyMode && (
-        <div className="flex-1 overflow-auto p-6 bg-white custom-scrollbar">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <RefreshCw className="h-6 w-6 animate-spin text-gray-400 mr-3" />
-              <span className="text-gray-600">Loading email content...</span>
+        <div className="flex-1 overflow-auto px-3 py-6 bg-white custom-scrollbar">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <RefreshCw className="h-6 w-6 animate-spin text-gray-400 mr-3" />
+            <span className="text-gray-600">Loading email content...</span>
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="w-12 h-12 mx-auto mb-4 rounded-md bg-red-100 flex items-center justify-center">
+                <AlertCircle className="h-6 w-6 text-red-500" />
+              </div>
+              <h3 className="font-medium text-gray-900 mb-2">Error Loading Content</h3>
+              <p className="text-gray-500 text-sm">{error}</p>
             </div>
-          ) : error ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-center">
-                <div className="w-12 h-12 mx-auto mb-4 rounded-md bg-red-100 flex items-center justify-center">
-                  <AlertCircle className="h-6 w-6 text-red-500" />
+          </div>
+        ) : (
+            <div className="prose max-w-none email-content" data-email-content>
+            <IframeEmail html={htmlContent} />
+          </div>
+        )}
+      </div>
+      )}
+      
+      {/* Email Rules Modal */}
+      {actualShowEmailRulesDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/50" 
+            onClick={() => actualSetShowEmailRulesDialog(false)}
+          />
+          
+          {/* Modal Content */}
+          <div className="relative bg-white rounded-lg shadow-lg max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-blue-500" />
+                  <h2 className="text-lg font-semibold">Email Rules</h2>
                 </div>
-                <h3 className="font-medium text-gray-900 mb-2">Error Loading Content</h3>
-                <p className="text-gray-500 text-sm">{error}</p>
+                <button 
+                  onClick={() => actualSetShowEmailRulesDialog(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              
+              <p className="text-sm text-gray-600 mb-4">
+                Set rules that the AI will follow when generating email responses. These rules will be applied to all AI-generated replies.
+              </p>
+              
+              {/* Content */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Rules for AI Responses
+                  </label>
+                  <textarea
+                    value={actualTempEmailRules}
+                    onChange={(e) => actualSetTempEmailRules(e.target.value)}
+                    placeholder="Enter rules for AI to follow when replying (e.g., 'Always be concise', 'Include next steps', 'Use professional tone', 'Ask clarifying questions when needed')..."
+                    className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    rows={4}
+                  />
+                </div>
+                
+                <div className="text-xs text-gray-500 bg-blue-50 p-3 rounded-md">
+                  <div className="flex items-start gap-2">
+                    <Info className="h-3 w-3 text-blue-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-blue-900 mb-1">Example Rules:</p>
+                      <ul className="space-y-1 text-blue-800">
+                        <li>• Keep responses under 100 words</li>
+                        <li>• Always include a clear next step</li>
+                        <li>• Use a friendly but professional tone</li>
+                        <li>• Ask questions to clarify requirements</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Footer */}
+              <div className="flex justify-end gap-3 mt-6">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    actualSetTempEmailRules(emailRules || '');
+                    actualSetShowEmailRulesDialog(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={() => {
+                    setEmailRules?.(actualTempEmailRules);
+                    actualSetShowEmailRulesDialog(false);
+                  }}
+                  className="bg-blue-500 hover:bg-blue-600"
+                >
+                  Save Rules
+                </Button>
               </div>
             </div>
-          ) : (
-            <div className="prose max-w-none email-content" data-email-content>
-              <IframeEmail html={htmlContent} />
-            </div>
-          )}
+          </div>
         </div>
       )}
     </div>
@@ -4208,7 +4453,16 @@ const EmailThreadViewer = ({
   setSelectedTone,
   isGenerating,
   setIsGenerating,
-  callGenerateEmailResponse
+  callGenerateEmailResponse,
+  emailRules,
+  setEmailRules,
+  threadSummary,
+  isSummarizing,
+  onSummarizeThread,
+  showEmailRulesDialog,
+  setShowEmailRulesDialog,
+  tempEmailRules,
+  setTempEmailRules
 }: {
   thread: any;
   merchantData: any;
@@ -4231,6 +4485,15 @@ const EmailThreadViewer = ({
   isGenerating?: boolean;
   setIsGenerating?: (generating: boolean) => void;
   callGenerateEmailResponse?: (requestType: string, tone?: string, customInstructions?: string, replyEditor?: React.RefObject<HTMLDivElement | null>) => Promise<any>;
+  emailRules?: string;
+  setEmailRules?: (rules: string) => void;
+  threadSummary?: string;
+  isSummarizing?: boolean;
+  onSummarizeThread?: () => void;
+  showEmailRulesDialog?: boolean;
+  setShowEmailRulesDialog?: (show: boolean) => void;
+  tempEmailRules?: string;
+  setTempEmailRules?: (rules: string) => void;
 }) => {
   const [replyContent, setReplyContent] = useState('');
   const [replyQuotedContent, setReplyQuotedContent] = useState('');
@@ -4238,10 +4501,18 @@ const EmailThreadViewer = ({
   const [replyCc, setReplyCc] = useState('');
   const replyEditorRef = useRef<HTMLDivElement>(null);
   const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
+  const [expandedEmails, setExpandedEmails] = useState<Set<string>>(new Set());
   const [showInstructions, setShowInstructions] = useState(false);
   
-  // Track which emails are expanded (most recent is expanded by default)
-  const [expandedEmails, setExpandedEmails] = useState<Set<string>>(new Set());
+  // Local state for dialog
+  const [localShowEmailRulesDialog, setLocalShowEmailRulesDialog] = useState(false);
+  const [localTempEmailRules, setLocalTempEmailRules] = useState('');
+  
+  // Use passed props or fallback to local state
+  const actualShowEmailRulesDialog = showEmailRulesDialog ?? localShowEmailRulesDialog;
+  const actualSetShowEmailRulesDialog = setShowEmailRulesDialog ?? setLocalShowEmailRulesDialog;
+  const actualTempEmailRules = tempEmailRules ?? localTempEmailRules;
+  const actualSetTempEmailRules = setTempEmailRules ?? setLocalTempEmailRules;
 
   // Initialize expanded emails when thread changes - most recent email should be expanded
   useEffect(() => {
@@ -4362,35 +4633,54 @@ const EmailThreadViewer = ({
     <div className="flex flex-col h-full email-thread-container">
       {/* Thread Header - Hidden when replying */}
       {!replyMode && (
-        <div className="border-b border-gray-200 p-6 bg-white">
-          <div className="flex items-center justify-between mb-2">
-            <h1 className="text-xl font-semibold text-gray-900">{thread.representative.subject}</h1>
-            <div className="flex items-center gap-3">
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                <Users className="h-3 w-3" />
-                {thread.count} messages
-              </span>
+      <div className="border-b border-gray-200 p-6 bg-white">
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-xl font-semibold text-gray-900">{thread.representative.subject}</h1>
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+              <Users className="h-3 w-3" />
+              {thread.count} messages
+            </span>
+            
+            {/* Thread Reply Actions */}
+            <div className="flex items-center gap-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 w-8 p-0 hover:bg-gray-100"
+                      onClick={() => onStartReply?.(mostRecentEmail)}
+                    >
+                      <Reply className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Reply</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               
-              {/* Thread Reply Actions */}
-              <div className="flex items-center gap-2">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 w-8 p-0 hover:bg-gray-100"
-                        onClick={() => onStartReply?.(mostRecentEmail)}
-                      >
-                        <Reply className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Reply</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 w-8 p-0 hover:bg-gray-100"
+                      onClick={() => onStartReplyAll?.(mostRecentEmail)}
+                    >
+                      <ReplyAll className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Reply All</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
                 
+                {/* Summarize Thread Button */}
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -4398,124 +4688,143 @@ const EmailThreadViewer = ({
                         variant="ghost" 
                         size="sm" 
                         className="h-8 w-8 p-0 hover:bg-gray-100"
-                        onClick={() => onStartReplyAll?.(mostRecentEmail)}
+                        onClick={onSummarizeThread}
+                        disabled={isSummarizing}
                       >
-                        <ReplyAll className="h-4 w-4" />
+                        {isSummarizing ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <MessageSquare className="h-4 w-4" />
+                        )}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Reply All</p>
+                      <p>{isSummarizing ? 'Summarising...' : 'Summarise Thread'}</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 w-8 p-0 hover:bg-gray-100"
-                        onClick={() => onStartForward?.(mostRecentEmail)}
-                      >
-                        <Forward className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Forward</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+              
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 w-8 p-0 hover:bg-gray-100"
+                      onClick={() => onStartForward?.(mostRecentEmail)}
+                    >
+                      <Forward className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Forward</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               </div>
             </div>
+            
+            {/* Thread Summary Display */}
+            {threadSummary && (
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="flex items-start gap-2">
+                  <MessageSquare className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-sm font-medium text-blue-900 mb-1">Thread Summary</h4>
+                    <p className="text-sm text-blue-800 leading-relaxed">{threadSummary}</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {/* Reply Compose Area - Raw in right panel */}
-      {replyMode && (
+              {replyMode && (
         <div className="flex flex-col h-full bg-white">
           {/* From Field */}
           <div className="flex items-center py-2 px-4 border-b border-gray-100">
             <div className="w-12 text-xs text-gray-600 font-medium">From:</div>
             <div className="flex-1 text-xs text-gray-900">{selectedAccount}</div>
             <div className="flex gap-2">
-              <Button
-                onClick={() => {
+                <Button
+                  onClick={() => {
                   const currentReplyContent = replyEditorRef.current?.innerHTML || '';
                   if (currentReplyContent.trim() && replyRecipients.trim()) {
-                    const subject = replyMode.originalEmail.subject.startsWith('Re: ') ? replyMode.originalEmail.subject : `Re: ${replyMode.originalEmail.subject}`;
-                    const recipients = [
-                      ...replyRecipients.split(',').map(email => email.trim()).filter(Boolean),
-                      ...replyCc.split(',').map(email => email.trim()).filter(Boolean)
-                    ];
+                      const subject = replyMode.originalEmail.subject.startsWith('Re: ') ? replyMode.originalEmail.subject : `Re: ${replyMode.originalEmail.subject}`;
+                      const recipients = [
+                        ...replyRecipients.split(',').map(email => email.trim()).filter(Boolean),
+                        ...replyCc.split(',').map(email => email.trim()).filter(Boolean)
+                      ];
                     onSendReply?.(currentReplyContent, subject, recipients, replyAttachments);
-                  }
-                }}
-                disabled={!replyRecipients.trim() || isSending}
+                    }
+                  }}
+                  disabled={!replyRecipients.trim() || isSending}
                 className="bg-blue-500 hover:bg-blue-600 text-white h-7 px-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
-              >
-                {isSending ? (
+                >
+                  {isSending ? (
                   <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                ) : (
+                  ) : (
                   <Send className="h-3 w-3 mr-1" />
-                )}
-                {isSending ? 'Sending...' : 'Send'}
-              </Button>
-              <Button
+                  )}
+                  {isSending ? 'Sending...' : 'Send'}
+                </Button>
+                <Button
                 variant="ghost"
-                onClick={onCancelReply}
+                  onClick={onCancelReply}
                 className="h-7 px-2 text-gray-600 hover:text-gray-900 text-xs"
-              >
-                Cancel
-              </Button>
+                >
+                  Cancel
+                </Button>
+              </div>
             </div>
-          </div>
 
-          {/* To Field */}
+            {/* To Field */}
           <div className="flex items-center py-2 px-4 border-b border-gray-100">
             <div className="w-12 text-xs text-gray-600 font-medium">To:</div>
-            <div className="flex-1">
-              <Input
-                value={replyRecipients}
-                onChange={(e) => setReplyRecipients(e.target.value)}
-                className="border-0 p-0 h-auto text-xs focus:ring-0 focus:outline-none shadow-none"
-                placeholder="Enter recipient email addresses"
-              />
-            </div>
-          </div>
-
-          {/* CC Field (if populated) */}
-          {replyCc !== undefined && (
-            <div className="flex items-center py-2 px-4 border-b border-gray-100">
-              <div className="w-12 text-xs text-gray-600 font-medium">Cc:</div>
               <div className="flex-1">
                 <Input
-                  value={replyCc}
-                  onChange={(e) => setReplyCc(e.target.value)}
-                  className="border-0 p-0 h-auto text-xs focus:ring-0 focus:outline-none shadow-none"
-                  placeholder="Enter CC email addresses"
+                  value={replyRecipients}
+                  onChange={(e) => setReplyRecipients(e.target.value)}
+                className="border-0 p-0 h-auto text-xs focus:ring-0 focus:outline-none shadow-none"
+                  placeholder="Enter recipient email addresses"
                 />
               </div>
             </div>
-          )}
 
-          {/* Subject Field */}
+          {/* CC Field (if populated) */}
+            {replyCc !== undefined && (
+            <div className="flex items-center py-2 px-4 border-b border-gray-100">
+              <div className="w-12 text-xs text-gray-600 font-medium">Cc:</div>
+                <div className="flex-1">
+                  <Input
+                    value={replyCc}
+                    onChange={(e) => setReplyCc(e.target.value)}
+                  className="border-0 p-0 h-auto text-xs focus:ring-0 focus:outline-none shadow-none"
+                    placeholder="Enter CC email addresses"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Subject Field */}
           <div className="flex items-center py-2 px-4 border-b border-gray-100">
             <div className="w-12 text-xs text-gray-600 font-medium">Subject:</div>
             <div className="flex-1 text-xs text-gray-900">
-                            {replyMode.type === 'forward'
-                ? `Fwd: ${replyMode.originalEmail.subject}`
-                : replyMode.originalEmail.subject.startsWith('Re: ') 
-                  ? replyMode.originalEmail.subject 
-                  : `Re: ${replyMode.originalEmail.subject}`
-              }
+                {replyMode.type === 'forward' 
+                  ? `Fwd: ${replyMode.originalEmail.subject}`
+                  : replyMode.originalEmail.subject.startsWith('Re: ') 
+                    ? replyMode.originalEmail.subject 
+                    : `Re: ${replyMode.originalEmail.subject}`
+                }
+              </div>
             </div>
-          </div>
 
           {/* Tap Agent Section */}
-          <div className="bg-gray-50/50 border-b border-gray-100">
-            <div className="px-6 py-2">
+          <div className="mx-3 my-2">
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3">
+            <div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-1.5">
@@ -4525,10 +4834,10 @@ const EmailThreadViewer = ({
                       animationSpeed={3}
                       showBorder={false}
                       className="text-xs font-medium"
-                    >
+                        >
                       Tap Agent
                     </GradientText>
-                  </div>
+                </div>
                   <div className="flex items-center gap-2">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -4572,8 +4881,8 @@ const EmailThreadViewer = ({
                       <MessageSquare className="h-3 w-3 text-gray-500" />
                       Instructions
                     </button>
-                  </div>
-                </div>
+            </div>
+          </div>
                 
                 {/* Tone Buttons on Right */}
                 <div className="flex items-center gap-2">
@@ -4618,15 +4927,41 @@ const EmailThreadViewer = ({
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                </div>
+                  
+                  {/* Three-dot Options Menu */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-2 py-1.5 rounded-md transition-colors">
+                        <MoreHorizontal className="h-3 w-3 text-gray-500" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuItem onClick={() => {
+                        actualSetTempEmailRules(emailRules || '');
+                        actualSetShowEmailRulesDialog(true);
+                      }}>
+                        <Shield className="h-3 w-3 text-gray-500 mr-2" />
+                        <span className="text-xs">Email Rules</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={onSummarizeThread} disabled={isSummarizing}>
+                        {isSummarizing ? (
+                          <Loader2 className="h-3 w-3 animate-spin text-gray-500 mr-2" />
+                        ) : (
+                          <MessageSquare className="h-3 w-3 text-gray-500 mr-2" />
+                        )}
+                        <span className="text-xs">{isSummarizing ? 'Summarising...' : 'Summarise Thread'}</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+              </div>
               </div>
             </div>
             
             {/* Instructions Dropdown - Now part of normal flow */}
             {showInstructions && (
               <div className="border-t border-gray-200 bg-gray-50 animate-in slide-in-from-top-2 duration-200">
-                <div className="p-4">
-                  <div className="space-y-3">
+                <div className="p-3">
+                  <div className="space-y-2">
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">
                         Custom Instructions
@@ -4639,9 +4974,7 @@ const EmailThreadViewer = ({
                       />
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-500">
-                        Example: "Be concise and include next steps"
-                      </span>
+                     
                       <div className="flex gap-2">
                         <button
                           onClick={() => setShowInstructions(false)}
@@ -4651,7 +4984,7 @@ const EmailThreadViewer = ({
                         </button>
                         <button
                           disabled={isGenerating}
-                          onClick={() => {
+                onClick={() => {
                             const textarea = document.getElementById('instructions-textarea-2') as HTMLTextAreaElement;
                             const customInstructions = textarea?.value || '';
                             if (customInstructions.trim()) {
@@ -4682,47 +5015,74 @@ const EmailThreadViewer = ({
                 </div>
               </div>
             )}
-          </div>
+            
+            {/* Three-dot Options Menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-2 py-1.5 rounded-md transition-colors">
+                  <MoreHorizontal className="h-3 w-3 text-gray-500" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => {
+                  actualSetTempEmailRules(emailRules || '');
+                  actualSetShowEmailRulesDialog(true);
+                }}>
+                  <Shield className="h-3 w-3 text-gray-500 mr-2" />
+                  <span className="text-xs">Email Rules</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onSummarizeThread} disabled={isSummarizing}>
+                  {isSummarizing ? (
+                    <Loader2 className="h-3 w-3 animate-spin text-gray-500 mr-2" />
+                  ) : (
+                    <MessageSquare className="h-3 w-3 text-gray-500 mr-2" />
+                  )}
+                  <span className="text-xs">{isSummarizing ? 'Summarising...' : 'Summarise Thread'}</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            </div>
+            </div>
 
-          {/* Message Content */}
-          <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
-            <div 
+            {/* Message Content */}
+          <div className="flex-1 px-3 py-6 overflow-y-auto custom-scrollbar">
+              <div 
               ref={replyEditorRef}
-              contentEditable
+                contentEditable
               className="w-full min-h-full text-sm outline-none"
               onBlur={() => {
                 if (replyEditorRef.current) {
                   setReplyContent(replyEditorRef.current.innerHTML || '');
                 }
-              }}
-              suppressContentEditableWarning={true}
+                }}
+                suppressContentEditableWarning={true}
             />
-          </div>
-        </div>
-      )}
+                  </div>
+                </div>
+              )}
 
       {/* Thread Messages - Hidden when replying */}
       {!replyMode && (
-        <div className="flex-1 overflow-auto custom-scrollbar thread-messages-container">
-          <div className="space-y-6 pb-8 px-6">
-            {(() => {
-              console.log("🎬 EmailThreadViewer rendering thread emails:", {
-                totalEmails: thread.emails.length,
-                threadId: thread.threadId,
-                emailDetails: thread.emails.map((e: any) => ({ 
-                  id: e.id, 
-                  sender: e.sender, 
-                  to: e.to,
-                  subject: e.subject?.substring(0, 30),
-                  contentLength: e.content?.length || 0
-                }))
-              });
-              return thread.emails.slice();
-            })()
-              .sort((a: any, b: any) => {
-                // Get the appropriate date field for each email - prioritize repliedAt or receivedAt
-                const getEmailDate = (email: any) => {
-                  // Priority 1: repliedAt (for reply emails)
+      <div className="flex-1 overflow-auto custom-scrollbar thread-messages-container">
+          <div className="space-y-6 pb-8 px-3">
+          {(() => {
+            console.log("🎬 EmailThreadViewer rendering thread emails:", {
+              totalEmails: thread.emails.length,
+              threadId: thread.threadId,
+              emailDetails: thread.emails.map((e: any) => ({ 
+                id: e.id, 
+                sender: e.sender, 
+                to: e.to,
+                subject: e.subject?.substring(0, 30),
+                contentLength: e.content?.length || 0
+              }))
+            });
+            return thread.emails.slice();
+          })()
+            .sort((a: any, b: any) => {
+              // Get the appropriate date field for each email - prioritize repliedAt or receivedAt
+              const getEmailDate = (email: any) => {
+                // Priority 1: repliedAt (for reply emails)
                   if (email.repliedAt) {
                     if (typeof email.repliedAt.toDate === 'function') {
                       return email.repliedAt.toDate();
@@ -4748,29 +5108,29 @@ const EmailThreadViewer = ({
                   
                   // Fallback to epoch time if nothing available
                   return new Date(0);
-                };
-
-                const dateA = getEmailDate(a);
-                const dateB = getEmailDate(b);
-                
+              };
+              
+              const dateA = getEmailDate(a);
+              const dateB = getEmailDate(b);
+              
                 // Sort chronologically (oldest first)
                 return dateA.getTime() - dateB.getTime();
-              })
-              .map((email: any, index: number, filteredArray: any[]) => (
-                <EmailInThread
-                  key={email.id}
-                  email={email}
-                  merchantData={merchantData}
-                  userEmail={userEmail}
-                  merchantEmail={merchantEmail}
-                  isFirst={index === 0}
-                  isLast={index === filteredArray.length - 1}
-                  isExpanded={expandedEmails.has(email.id)}
-                  onToggleExpansion={() => toggleEmailExpansion(email.id)}
-                />
-              ))}
-          </div>
+            })
+            .map((email: any, index: number, filteredArray: any[]) => (
+            <EmailInThread
+              key={email.id}
+              email={email}
+              merchantData={merchantData}
+              userEmail={userEmail}
+              merchantEmail={merchantEmail}
+              isFirst={index === 0}
+              isLast={index === filteredArray.length - 1}
+              isExpanded={expandedEmails.has(email.id)}
+              onToggleExpansion={() => toggleEmailExpansion(email.id)}
+            />
+          ))}
         </div>
+      </div>
       )}
     </div>
   );
@@ -5000,7 +5360,7 @@ const EmailInThread = ({
               ) : (
                 // For all messages with HTML content (including thread replies), display HTML
                 <div className="email-content" data-email-content>
-                  <IframeEmail html={htmlContent || email.content || 'No content available'} className="text-sm" />
+                <IframeEmail html={htmlContent || email.content || 'No content available'} className="text-sm" />
                 </div>
               )}
             </div>

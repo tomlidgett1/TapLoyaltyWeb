@@ -84,14 +84,15 @@ import {
   File,
   Image as ImageIcon,
   FileVideo,
-  FileAudio
+  FileAudio,
+  MailPlus
 } from "lucide-react"
 import React, { useState, useEffect, useRef } from "react"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
 import GradientText from "@/components/GradientText"
 import { db } from "@/lib/firebase"
-import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore"
+import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnapshot, updateDoc, setDoc } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
 import { functions } from "@/lib/firebase"
 import { formatMelbourneTime } from "@/lib/date-utils"
@@ -319,7 +320,7 @@ const createQuotedReplyContent = (originalEmail: any, replyType: 'reply' | 'repl
   
   // Create HTML quoted content with Outlook-style header (4 lines)
   const quotedContent = `<div style="margin-top: 20px;">
-<div style="padding-left: 15px; margin: 10px 0; color: #666;">
+<div style="padding-left: 0px; margin: 10px 0; color: #666;">
 <div style="font-size: 16px; color: #888; margin-bottom: 15px; line-height: 1.4;">
 <strong>From:</strong> ${originalEmail.sender} &lt;${originalEmail.email}&gt;<br>
 <strong>Date:</strong> ${dateStr}<br>
@@ -1022,6 +1023,19 @@ export default function EmailPage() {
   const [selectedTone, setSelectedTone] = useState('professional')
   const [isGenerating, setIsGenerating] = useState(false)
   const [showInstructions, setShowInstructions] = useState(false)
+  const [instructionsClosing, setInstructionsClosing] = useState(false)
+  
+  // Local state for dialog
+  const [localShowEmailRulesDialog, setLocalShowEmailRulesDialog] = useState(false);
+  const [localTempEmailRules, setLocalTempEmailRules] = useState('');
+  
+  // Use passed props or fallback to local state
+  const actualShowEmailRulesDialog = showEmailRulesDialog ?? localShowEmailRulesDialog;
+  const actualSetShowEmailRulesDialog = setShowEmailRulesDialog ?? setLocalShowEmailRulesDialog;
+  const actualTempEmailRules = tempEmailRules ?? localTempEmailRules;
+  const actualSetTempEmailRules = setTempEmailRules ?? setLocalTempEmailRules;
+
+
 
   // Helper function to call generateEmailResponse with proper error handling
   const callGenerateEmailResponse = async (requestType: string, tone?: string, customInstructions?: string, replyEditor?: React.RefObject<HTMLDivElement | null>) => {
@@ -1039,41 +1053,39 @@ export default function EmailPage() {
 
     setIsGenerating(true);
     
-    // Show generating text in the compose area
+    // Show skeleton loading in the compose area
     if (editorRef.current) {
-      // Create and show generating indicator in the compose area
-      const generatingDiv = document.createElement('div');
-      generatingDiv.id = 'ai-generating-indicator';
-      generatingDiv.className = 'absolute inset-0 bg-white/98 backdrop-blur-md flex items-center justify-center z-10 rounded-md border-2 border-blue-200';
-      generatingDiv.innerHTML = `
-        <div class="flex flex-col items-center gap-4 px-8 py-6 bg-white rounded-lg shadow-lg border border-gray-200" style="min-width: 280px;">
-          <!-- Pulsing AI Icon -->
-          <div class="relative">
-            <div class="w-8 h-8 rounded-full" style="background: linear-gradient(45deg, #ff6b35, #4079ff); animation: gradient 2s linear infinite;"></div>
-            <div class="absolute inset-0 w-8 h-8 rounded-full animate-ping" style="background: linear-gradient(45deg, #ff6b35, #4079ff); opacity: 0.4;"></div>
-          </div>
-          
-          <!-- Animated Text -->
-          <span style="background: linear-gradient(45deg, #ff6b35, #4079ff, #ff8500, #3b82f6, #ff6b35); background-size: 300% 100%; background-clip: text; -webkit-background-clip: text; color: transparent; animation: gradient 3s linear infinite; font-weight: 600; font-size: 16px; letter-spacing: 0.5px;">
-            Generating response...
-          </span>
-          
-          <!-- Skeleton Lines -->
-          <div class="w-full space-y-2 mt-2">
-            <div class="h-3 rounded-md animate-pulse" style="background: linear-gradient(90deg, #f3f4f6, #e5e7eb, #f3f4f6); background-size: 200% 100%; animation: shimmer 2s infinite;"></div>
-            <div class="h-3 rounded-md animate-pulse" style="background: linear-gradient(90deg, #f3f4f6, #e5e7eb, #f3f4f6); background-size: 200% 100%; animation: shimmer 2s infinite; width: 80%;"></div>
-            <div class="h-3 rounded-md animate-pulse" style="background: linear-gradient(90deg, #f3f4f6, #e5e7eb, #f3f4f6); background-size: 200% 100%; animation: shimmer 2s infinite; width: 60%;"></div>
-          </div>
-        </div>
-      `;
+      const replyEditor = editorRef.current;
       
-      // Add to the parent container of the editor (so it overlays the compose area)
-      const editorContainer = editorRef.current.parentElement;
-      if (editorContainer) {
-        // Make sure the container has relative positioning for absolute overlay
-        editorContainer.style.position = 'relative';
-        editorContainer.appendChild(generatingDiv);
-        console.log('✨ Showing AI generating indicator in compose area');
+      // Store original content
+      const originalContent = replyEditor.innerHTML;
+      replyEditor.setAttribute('data-original-content', originalContent);
+      
+      // Find the separator between compose and quoted content
+      const hrIndex = originalContent.indexOf('<hr');
+      
+      if (hrIndex !== -1) {
+        // Preserve everything from the <hr> onwards (quoted email thread)
+        const quotedContent = originalContent.substring(hrIndex);
+        
+        // Show skeleton only in compose area, preserve quoted content
+        replyEditor.innerHTML = `
+          <div class="space-y-3 animate-pulse mb-4">
+            <div class="h-4 bg-gray-200 rounded-md"></div>
+            <div class="h-4 bg-gray-200 rounded-md w-5/6"></div>
+            <div class="h-4 bg-gray-200 rounded-md w-4/6"></div>
+          </div>
+          ${quotedContent}
+        `;
+      } else {
+        // No quoted content found, safe to show skeleton in entire area
+        replyEditor.innerHTML = `
+          <div class="space-y-3 animate-pulse">
+            <div class="h-4 bg-gray-200 rounded-md"></div>
+            <div class="h-4 bg-gray-200 rounded-md w-5/6"></div>
+            <div class="h-4 bg-gray-200 rounded-md w-4/6"></div>
+          </div>
+        `;
       }
     }
 
@@ -1148,15 +1160,23 @@ export default function EmailPage() {
       return response.data;
     } catch (error) {
       console.error('Error generating email response:', error);
+      
+      // Restore original content if there was an error
+      if (editorRef.current) {
+        const originalContent = editorRef.current.getAttribute('data-original-content');
+        if (originalContent) {
+          editorRef.current.innerHTML = originalContent;
+          editorRef.current.removeAttribute('data-original-content');
+        }
+      }
+      
       // You might want to show a user-friendly error message here
     } finally {
       setIsGenerating(false);
       
-      // Remove generating indicator
-      const generatingIndicator = document.getElementById('ai-generating-indicator');
-      if (generatingIndicator) {
-        generatingIndicator.remove();
-        console.log('✅ Generating indicator removed');
+      // Clean up stored original content
+      if (editorRef.current) {
+        editorRef.current.removeAttribute('data-original-content');
       }
     }
   };
@@ -1826,9 +1846,7 @@ export default function EmailPage() {
 
 
   const handleEmailSelect = (email: any, fromDropdown: boolean = false) => {
-    setSelectedEmail(email)
-    setSelectedEmailFromDropdown(fromDropdown)
-    
+    // Clear conflicting states first to prevent flicker
     if (!fromDropdown) {
       // Only clear thread selection if this email is NOT part of the current thread
       // This keeps the dropdown open when clicking emails from the dropdown
@@ -1842,8 +1860,13 @@ export default function EmailPage() {
           });
         }
         setSelectedThread(null)
+        setReplyMode(null) // Also clear reply mode
       }
     }
+    
+    // Set the new email after clearing conflicting states
+    setSelectedEmail(email)
+    setSelectedEmailFromDropdown(fromDropdown)
     // Note: when fromDropdown is true, we keep selectedThread to keep dropdown open
     
     // Mark email as read when selected and update local state
@@ -1881,7 +1904,10 @@ export default function EmailPage() {
     console.log("Thread has", thread.count, "messages")
     
     try {
-      setSelectedEmail(null) // Clear any selected email
+      // Clear both states immediately to prevent flicker
+      setSelectedEmail(null)
+      setSelectedThread(null)
+      setReplyMode(null) // Also clear reply mode
       
       // Clear expansion state for previously selected threads
       if (selectedThread && selectedThread.threadId !== thread.threadId) {
@@ -2244,6 +2270,15 @@ export default function EmailPage() {
     setUnreadCount(0)
       }
 
+  // Helper function to close instructions with animation
+  const closeInstructionsWithAnimation = () => {
+    setInstructionsClosing(true);
+    setTimeout(() => {
+      setShowInstructions(false);
+      setInstructionsClosing(false);
+    }, 200); // Match the animation duration
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden bg-[#F5F5F5]">
       <style dangerouslySetInnerHTML={{ 
@@ -2293,11 +2328,27 @@ export default function EmailPage() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button onClick={handleComposeNew} size="sm" className="bg-blue-500 hover:bg-blue-600 text-white">
-                    <Edit3 className="h-4 w-4" />
+                    <MailPlus className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>New Email</p>
+                </TooltipContent>
+              </Tooltip>
+              
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setShowEmailRulesDialog(true)}
+                    className="text-gray-700 hover:bg-gray-200"
+                  >
+                    <Shield className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Email Rules</p>
                 </TooltipContent>
               </Tooltip>
               
@@ -2362,156 +2413,9 @@ export default function EmailPage() {
                   <p>{isEnablingTrigger ? 'Enabling...' : 'Enable Gmail Trigger'}</p>
                 </TooltipContent>
               </Tooltip>
-              
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="sm" onClick={handleDecodeTest} className="text-gray-700 hover:bg-gray-200">
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Decode Test</p>
-                </TooltipContent>
-              </Tooltip>
-              
-              <div className="h-6 w-px bg-gray-300 mx-1"></div>
-              
-              <Dialog open={debugDialogOpen} onOpenChange={setDebugDialogOpen}>
-                <DialogTrigger asChild>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="sm" className="text-gray-700 hover:bg-gray-200">
-                        <Bug className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Debug Response</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </DialogTrigger>
-                <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto animate-in fade-in duration-200 slide-in-from-bottom-4 zoom-in-95 ease-out">
-                  <DialogHeader>
-                    <DialogTitle>Gmail Email Fetch Debug</DialogTitle>
-                    <DialogDescription>
-                      Debug information from Gmail email fetching (Firestore + Firebase function)
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="mt-4">
-                    {debugResponse ? (
-                      <div className="space-y-4">
-                        <div className="bg-gray-50 rounded-md p-4">
-                          <h4 className="font-semibold mb-2 text-sm">Fetch Summary:</h4>
-                          <div className="text-sm space-y-1">
-                            <p><strong>Success:</strong> {debugResponse.success ? 'Yes' : 'No'}</p>
-                            <p><strong>Email Count:</strong> {debugResponse.emailsFetched || 'Unknown'}</p>
-                            <p><strong>Source:</strong> {debugResponse.source || 'Unknown'}</p>
-                            <p><strong>Merchant ID:</strong> {debugResponse.merchantId || 'N/A'}</p>
-                            {debugResponse.error && (
-                              <p><strong>Error:</strong> <span className="text-red-600">{debugResponse.error}</span></p>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div className="bg-gray-900 text-gray-100 rounded-md p-4 overflow-auto">
-                          <h4 className="font-semibold mb-2 text-sm text-white">Debug Data JSON:</h4>
-                          <pre className="text-xs whitespace-pre-wrap overflow-auto max-h-96">
-                            {JSON.stringify(debugResponse, null, 2)}
-                          </pre>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-gray-500">
-                        <Bug className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                        <p>No debug data available</p>
-                        <p className="text-sm">Load or sync Gmail emails to see debug information</p>
-                      </div>
-                    )}
-                  </div>
-                </DialogContent>
-              </Dialog>
-
-              {/* Decode Test Results Dialog */}
-              <Dialog open={showDecodeResults} onOpenChange={setShowDecodeResults}>
-                <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Decode Test Results</DialogTitle>
-                    <DialogDescription>
-                      Base64 decoding test results for payload.parts.body.data
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    {decodeTestResults ? (
-                      <div>
-                        <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-                          <p><strong>Email ID:</strong> {decodeTestResults.emailId}</p>
-                          <p><strong>Subject:</strong> {decodeTestResults.emailSubject}</p>
-                          <p><strong>Total Parts:</strong> {decodeTestResults.totalParts}</p>
-                          <p><strong>Emails Checked:</strong> {decodeTestResults.emailsChecked}</p>
-                        </div>
-
-                        {decodeTestResults.error ? (
-                          <div className="text-red-600 p-4 bg-red-50 rounded">
-                            <strong>Error:</strong> {decodeTestResults.error}
-                          </div>
-                        ) : (
-                          <div className="space-y-4">
-                            {decodeTestResults.decodedParts?.map((part: any, index: number) => (
-                              <div key={index} className="border rounded p-4">
-                                <div className="flex justify-between items-center mb-2">
-                                  <h4 className="font-semibold">Part {part.index}</h4>
-                                  <span className="text-sm text-gray-500">{part.mimeType}</span>
-                                </div>
-                                
-                                {part.error ? (
-                                  <div className="text-red-600">
-                                    <strong>Error:</strong> {part.error}
-                                  </div>
-                                ) : part.warning ? (
-                                  <div className="text-yellow-600">
-                                    <strong>Warning:</strong> {part.warning}
-                                  </div>
-                                ) : (
-                                  <div>
-                                    <div className="grid grid-cols-2 gap-4 mb-2 text-sm">
-                                      <p><strong>Original Length:</strong> {part.originalLength} chars</p>
-                                      <p><strong>Decoded Length:</strong> {part.decodedLength} chars</p>
-                                    </div>
-                                    
-                                    <div className="space-y-2">
-                                      <h5 className="font-medium">Preview (first 300 chars):</h5>
-                                      <div className="bg-gray-50 p-3 rounded text-sm font-mono whitespace-pre-wrap break-all">
-                                        {part.preview}
-                                      </div>
-                                      
-                                      <details className="space-y-2">
-                                        <summary className="cursor-pointer font-medium text-blue-600 hover:text-blue-800">
-                                          Show Full Content
-                                        </summary>
-                                        <div className="bg-gray-50 p-3 rounded text-sm font-mono whitespace-pre-wrap break-all max-h-96 overflow-y-auto">
-                                          {part.fullContent}
-                                        </div>
-                                      </details>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-gray-500">
-                        <Eye className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                        <p>No decode test results available</p>
-                        <p className="text-sm">Click the decode test button to test email content decoding</p>
-                      </div>
-                    )}
-                  </div>
-                </DialogContent>
-              </Dialog>
             </div>
           </TooltipProvider>
-              </div>
+        </div>
 
         <div className="flex items-center gap-2">
           {/* Connected Account Selector */}
@@ -2943,6 +2847,7 @@ export default function EmailPage() {
             <ComposeEmailView
               isSending={isSending}
               onCancel={() => setIsComposing(false)}
+              selectedAccount={selectedAccount}
               onSend={async (to: string, subject: string, content: string) => {
                 try {
                   setIsSending(true);
@@ -3141,305 +3046,9 @@ export default function EmailPage() {
               setShowEmailRulesDialog={setShowEmailRulesDialog}
               tempEmailRules={tempEmailRules}
               setTempEmailRules={setTempEmailRules}
-            />
-          ) : selectedEmail ? (
-            <EmailViewer 
-              email={selectedEmail} 
-              merchantData={merchantData}
-              userEmail={user?.email || ''}
-              merchantEmail={merchantEmail}
-              selectedAccount={selectedAccount}
-              replyMode={replyMode}
-              isSending={isSending}
-              isGenerating={isGenerating}
-              callGenerateEmailResponse={callGenerateEmailResponse}
-              onStartReply={(email: any) => setReplyMode({ type: 'reply', originalEmail: email })}
-              onStartReplyAll={(email: any) => setReplyMode({ type: 'replyAll', originalEmail: email })}
-              onStartForward={(email: any) => setReplyMode({ type: 'forward', originalEmail: email })}
-              onSendReply={async (content: string, subject: string, recipients: string[], attachments: File[]) => {
-                try {
-                  setIsSending(true);
-                  console.log('Handling reply/forward:', { type: replyMode?.type, content, subject, recipients, attachments: attachments.length });
-                  
-                  if (!user?.uid) {
-                    throw new Error('User not authenticated');
-                  }
-                  
-                  // Check if this is a forward operation
-                  if (replyMode?.type === 'forward') {
-                    // For forwarding, use the sendGmailEmail function with message history
-                    const sendGmailEmail = httpsCallable(functions, 'sendGmailEmail');
-                    
-                    // Include original message history in the content
-                    const originalEmail = replyMode.originalEmail;
-                    const forwardContent = `
-                      ${content}
-                      
-                      ---------- Forwarded message ----------
-                      From: ${originalEmail.sender} <${originalEmail.email}>
-                      Date: ${formatMelbourneTime(originalEmail.time, 'Unknown time')}
-                      Subject: ${originalEmail.subject}
-                      To: ${user?.email || merchantEmail}
-                      
-                      ${originalEmail.content}
-                    `;
-                    
-                    const emailData: any = {
-                      merchantId: user.uid,
-                      body: forwardContent,
-                      recipient_email: recipients[0], // Primary recipient
-                      subject: subject,
-                      is_html: true,
-                      cc: recipients.length > 1 ? recipients.slice(1) : [], // Additional recipients as CC
-                    };
-                    
-                    // Note: Attachments require S3 upload workflow (not yet implemented)
-                    if (attachments.length > 0) {
-                      throw new Error('Attachments are not yet supported. The Composio API requires files to be uploaded to S3 first.');
-                    }
-                    
-                    const response = await sendGmailEmail(emailData);
-                    
-                    console.log('Email forwarded successfully:', response.data);
-                    
-                    // Show success message
-                    const recipientList = recipients.join(', ');
-                    setSuccessMessage(`Email forwarded successfully to: ${recipientList}`);
-                    
-                  } else {
-                    // For reply/replyAll, use the replyToGmailThread function
-                    const replyToGmailThread = httpsCallable(functions, 'replyToGmailThread');
-                    
-                    const replyData: any = {
-                      merchantId: user.uid,
-                      message_body: content,
-                      html_message_body: content, // HTML format of the message body
-                      recipient_email: recipients[0], // Primary recipient
-                      thread_id: selectedEmail.threadId || selectedEmail.id,
-                      is_html: true,
-                    };
-                    
-                    // Add CC recipients if present
-                    if (recipients.length > 1) {
-                      replyData.cc = recipients.slice(1);
-                    }
-                    
-                    // Note: Attachments require S3 upload workflow (not yet implemented)
-                    if (attachments.length > 0) {
-                      throw new Error('Attachments are not yet supported. The Composio API requires files to be uploaded to S3 first.');
-                    }
-                    
-                    const response = await replyToGmailThread(replyData);
-                    
-                    console.log('Reply sent successfully:', response.data);
-                    
-                    // Show success message
-                    const recipientList = recipients.join(', ');
-                    setSuccessMessage(`Reply sent successfully to: ${recipientList}`);
-                  }
-                  
-                  // Create the sent message object for UI
-                  const sentMessage = {
-                    id: `sent-${Date.now()}`,
-                    threadId: selectedEmail.threadId || selectedEmail.id,
-                    sender: merchantData?.businessName || user?.displayName || 'You',
-                    email: user?.email || merchantEmail,
-                    subject: subject,
-                    content: content,
-                    time: new Date().toISOString(),
-                    messageTimestamp: new Date().toISOString(),
-                    read: true,
-                    hasAttachment: attachments.length > 0,
-                    folder: "sent",
-                    rawData: null
-                  };
-                  
-                  // Convert single email to thread with the reply
-                  const newThread = {
-                    threadId: selectedEmail.threadId || selectedEmail.id,
-                    representative: selectedEmail,
-                    count: 2,
-                    unreadCount: 0,
-                    emails: [selectedEmail, sentMessage]
-                  };
-                  
-                  // Switch to thread view
-                  setSelectedThread(newThread);
-                  setSelectedEmail(null);
-                  
-                  // Close reply mode
-                  setReplyMode(null);
-                  
-                } catch (error) {
-                  console.error('Error sending email:', error);
-                  
-                  // Show specific error message if available
-                  let errorMessage = 'Failed to send email';
-                  if (error instanceof Error) {
-                    if (error.message.includes('Gmail connection')) {
-                      errorMessage = 'Please check your Gmail connection in Settings > Integrations';
-                    } else if (error.message.includes('authentication')) {
-                      errorMessage = 'Authentication error. Please try signing in again.';
-                    } else {
-                      errorMessage = error.message;
-                    }
-                  }
-                  
-                  alert(errorMessage);
-                } finally {
-                  setIsSending(false);
-                }
-              }}
-              onCancelReply={() => setReplyMode(null)}
-            />
-          ) : selectedThread ? (
-            <EmailThreadViewer 
-              thread={selectedThread} 
-              merchantData={merchantData}
-              userEmail={user?.email || ''}
-              merchantEmail={merchantEmail}
-              selectedAccount={selectedAccount}
-              replyMode={replyMode}
-              isSending={isSending}
-              tapAgentMode={tapAgentMode}
-              setTapAgentMode={setTapAgentMode}
-              tapAgentInstructions={tapAgentInstructions}
-              setTapAgentInstructions={setTapAgentInstructions}
-              selectedTone={selectedTone}
-              setSelectedTone={setSelectedTone}
-              isGenerating={isGenerating}
-              setIsGenerating={setIsGenerating}
-              emailRules={emailRules}
-              setEmailRules={setEmailRules}
-              threadSummary={threadSummary}
-              isSummarizing={isSummarizing}
-              onSummarizeThread={() => summarizeThread(selectedThread)}
-              onStartReply={(email: any) => setReplyMode({ type: 'reply', originalEmail: email, thread: selectedThread })}
-              onStartReplyAll={(email: any) => setReplyMode({ type: 'replyAll', originalEmail: email, thread: selectedThread })}
-              onStartForward={(email: any) => setReplyMode({ type: 'forward', originalEmail: email, thread: selectedThread })}
-              onSendReply={async (content: string, subject: string, recipients: string[], attachments: File[]) => {
-                try {
-                  setIsSending(true);
-                  console.log('Handling reply/forward:', { type: replyMode?.type, content, subject, recipients, attachments: attachments.length });
-                  
-                  if (!user?.uid) {
-                    throw new Error('User not authenticated');
-                  }
-                  
-                  // Check if this is a forward operation
-                  if (replyMode?.type === 'forward') {
-                    // For forwarding, use the sendGmailEmail function with message history
-                    const sendGmailEmail = httpsCallable(functions, 'sendGmailEmail');
-                    
-                    // Include original message history in the content
-                    const originalEmail = replyMode.originalEmail;
-                    const forwardContent = `
-                      ${content}
-                      
-                      ---------- Forwarded message ----------
-                      From: ${originalEmail.sender} <${originalEmail.email}>
-                      Date: ${formatMelbourneTime(originalEmail.time, 'Unknown time')}
-                      Subject: ${originalEmail.subject}
-                      To: ${user?.email || merchantEmail}
-                      
-                      ${originalEmail.content}
-                    `;
-                    
-                    const emailData: any = {
-                      merchantId: user.uid,
-                      body: forwardContent,
-                      recipient_email: recipients[0], // Primary recipient
-                      subject: subject,
-                      is_html: true,
-                      cc: recipients.length > 1 ? recipients.slice(1) : [], // Additional recipients as CC
-                    };
-                    
-                    // Note: Attachments require S3 upload workflow (not yet implemented)
-                    if (attachments.length > 0) {
-                      throw new Error('Attachments are not yet supported. The Composio API requires files to be uploaded to S3 first.');
-                    }
-                    
-                    const response = await sendGmailEmail(emailData);
-                    console.log('Forward sent successfully:', response.data);
-                    
-                    // Show success message
-                    setSuccessMessage(`Email forwarded successfully to: ${recipients.join(', ')}`);
-                    
-                  } else {
-                    // For thread replies, use the thread reply function
-                    const sendThreadReply = httpsCallable(functions, 'sendThreadReply');
-                    
-                    const replyData: any = {
-                      merchantId: user.uid,
-                      body: content,
-                      recipient_email: recipients[0], // Primary recipient
-                      thread_id: selectedThread.threadId,
-                      subject: subject,
-                      is_html: true,
-                      cc: recipients.length > 1 ? recipients.slice(1) : [], // Additional recipients as CC
-                    };
-                    
-                    // Note: Attachments require S3 upload workflow (not yet implemented)
-                    if (attachments.length > 0) {
-                      throw new Error('Attachments are not yet supported. The Composio API requires files to be uploaded to S3 first.');
-                    }
-                    
-                    const response = await sendThreadReply(replyData);
-                    console.log('Thread reply sent successfully:', response.data);
-                    
-                    // Show success message
-                    setSuccessMessage(`Reply sent successfully to: ${recipients.join(', ')}`);
-                    
-                    // Create a sent message object for immediate UI update
-                    const sentMessage = {
-                      id: `sent-${Date.now()}`,
-                      threadId: selectedThread.threadId,
-                      sender: user?.email || merchantEmail,
-                      email: user?.email || merchantEmail,
-                      to: recipients[0],
-                      subject: subject,
-                      content: content,
-                      time: new Date(),
-                      read: true,
-                      hasAttachment: attachments.length > 0,
-                      folder: "sent",
-                      repliedAt: new Date()
-                    };
-                    
-                    // Update the thread with the new message
-                    const updatedThread = {
-                      ...selectedThread,
-                      emails: [sentMessage, ...selectedThread.emails],
-                      count: selectedThread.count + 1
-                    };
-                    
-                    setSelectedThread(updatedThread);
-                  }
-                  
-                  // Close reply mode
-                  setReplyMode(null);
-                  
-                } catch (error) {
-                  console.error('Error sending email:', error);
-                  
-                  // Show specific error message if available
-                  let errorMessage = 'Failed to send email';
-                  if (error instanceof Error) {
-                    if (error.message.includes('Gmail connection')) {
-                      errorMessage = 'Please check your Gmail connection in Settings > Integrations';
-                    } else if (error.message.includes('authentication')) {
-                      errorMessage = 'Authentication error. Please try signing in again.';
-                    } else {
-                      errorMessage = error.message;
-                    }
-                  }
-                  
-                  alert(errorMessage);
-                } finally {
-                  setIsSending(false);
-                }
-              }}
-              onCancelReply={() => setReplyMode(null)}
+              onSummariseThread={() => selectedThread && summarizeThread(selectedThread)}
+              selectedThread={selectedThread}
+              user={user}
             />
           ) : (
             <EmptyEmailView />
@@ -3639,84 +3248,105 @@ const sanitiseAndRenderHtml = (htmlContent: string): string => {
 const ComposeEmailView = ({ 
   onSend, 
   onCancel, 
-  isSending 
+  isSending,
+  selectedAccount 
 }: { 
   onSend: (to: string, subject: string, content: string) => void;
   onCancel: () => void;
   isSending: boolean;
+  selectedAccount?: string;
 }) => {
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
+  const composeEditorRef = useRef<HTMLDivElement>(null);
+
+  // Update content when the contentEditable div changes
+  const handleContentChange = () => {
+    if (composeEditorRef.current) {
+      // Get HTML content for rich text support
+      setContent(composeEditorRef.current.innerHTML || '');
+    }
+  };
 
   return (
     <div className="flex flex-col h-full bg-white">
-      {/* Compose Header */}
-      <div className="border-b border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-xl font-semibold text-gray-900">New Email</h1>
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={() => {
-                if (to.trim() && content.trim()) {
-                  onSend(to, subject, content);
-                }
-              }}
-              disabled={!to.trim() || !content.trim() || isSending}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSending ? (
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4 mr-2" />
-              )}
-              {isSending ? 'Sending...' : 'Send'}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={onCancel}
-              disabled={isSending}
-              className="px-4 py-2"
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-
-        {/* Compose Form */}
-        <div className="space-y-2">
-          {/* To Field */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-0.5">To</label>
-            <Input
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="w-full border-gray-300 focus:border-gray-400 focus:outline-none focus:ring-0 h-8 text-xs"
-              placeholder="Enter recipient email address"
-            />
-          </div>
-
-          {/* Subject Field */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-0.5">Subject</label>
-            <Input
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              className="w-full border-gray-300 focus:border-gray-400 focus:outline-none focus:ring-0 h-8 text-xs"
-              placeholder="Enter subject"
-            />
-          </div>
+      {/* From Field - matches reply module design */}
+      <div className="flex items-center py-2 px-4 border-b border-gray-100">
+        <div className="w-12 text-xs text-gray-600 font-medium">From:</div>
+        <div className="flex-1 text-xs text-gray-900">{selectedAccount || 'Your Account'}</div>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => {
+              if (to.trim() && content.trim()) {
+                onSend(to, subject, content);
+              }
+            }}
+            disabled={!to.trim() || !content.trim() || isSending}
+            className="bg-blue-500 hover:bg-blue-600 text-white h-7 px-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+          >
+            {isSending ? (
+              <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+            ) : (
+              <Send className="h-3 w-3 mr-1" />
+            )}
+            {isSending ? 'Sending...' : 'Send'}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={onCancel}
+            className="h-7 px-2 text-gray-600 hover:text-gray-900 text-xs"
+          >
+            Cancel
+          </Button>
         </div>
       </div>
 
-      {/* Message Content */}
-      <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
-        <label className="block text-xs font-medium text-gray-700 mb-1">Message</label>
-        <Textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          className="w-full h-full min-h-[300px] resize-none border-gray-300 focus:border-gray-400 focus:outline-none focus:ring-0"
-          placeholder="Type your message..."
+      {/* To Field */}
+      <div className="flex items-center py-2 px-4 border-b border-gray-100">
+        <div className="w-12 text-xs text-gray-600 font-medium">To:</div>
+        <input
+          type="text"
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          className="flex-1 text-xs bg-transparent border-none outline-none focus:ring-0 text-gray-900"
+          placeholder="Enter recipient email address"
+        />
+      </div>
+
+      {/* Subject Field */}
+      <div className="flex items-center py-2 px-4 border-b border-gray-100">
+        <div className="w-12 text-xs text-gray-600 font-medium">Subject:</div>
+        <input
+          type="text"
+          value={subject}
+          onChange={(e) => setSubject(e.target.value)}
+          className="flex-1 text-xs bg-transparent border-none outline-none focus:ring-0 text-gray-900"
+          placeholder="Enter subject"
+        />
+      </div>
+
+      {/* Message Content - matches reply module */}
+      <div className="flex-1 px-3 py-6 overflow-y-auto custom-scrollbar">
+        <style dangerouslySetInnerHTML={{
+          __html: `
+            [contenteditable][data-placeholder]:empty:before {
+              content: attr(data-placeholder);
+              color: #9CA3AF;
+              pointer-events: none;
+              display: block;
+            }
+          `
+        }} />
+        <div 
+          ref={composeEditorRef}
+          contentEditable
+          className="w-full min-h-full text-sm outline-none"
+          onBlur={handleContentChange}
+          onInput={handleContentChange}
+          suppressContentEditableWarning={true}
+          style={{ minHeight: '200px' }}
+          data-placeholder="Type your message..."
         />
       </div>
     </div>
@@ -3761,7 +3391,10 @@ const EmailViewer = ({
   showEmailRulesDialog,
   setShowEmailRulesDialog,
   tempEmailRules,
-  setTempEmailRules
+  setTempEmailRules,
+  onSummariseThread,
+  selectedThread,
+  user
 }: {
   email: any;
   merchantData: any;
@@ -3783,6 +3416,9 @@ const EmailViewer = ({
   setShowEmailRulesDialog?: (show: boolean) => void;
   tempEmailRules?: string;
   setTempEmailRules?: (rules: string) => void;
+  onSummariseThread?: () => void;
+  selectedThread?: any;
+  user?: any;
 }) => {
   const [htmlContent, setHtmlContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -3794,6 +3430,7 @@ const EmailViewer = ({
   const replyEditorRef = useRef<HTMLDivElement>(null);
   const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [instructionsClosing, setInstructionsClosing] = useState(false);
   
   // Local state for dialog
   const [localShowEmailRulesDialog, setLocalShowEmailRulesDialog] = useState(false);
@@ -3804,6 +3441,151 @@ const EmailViewer = ({
   const actualSetShowEmailRulesDialog = setShowEmailRulesDialog ?? setLocalShowEmailRulesDialog;
   const actualTempEmailRules = tempEmailRules ?? localTempEmailRules;
   const actualSetTempEmailRules = setTempEmailRules ?? setLocalTempEmailRules;
+
+  // Email rules management state and functions (for the modal)
+  const [emailRulesList, setEmailRulesList] = useState<Array<{id: string, title: string, content: string}>>([]);
+  const [newRuleText, setNewRuleText] = useState('');
+  const [expandedRules, setExpandedRules] = useState<Set<string>>(new Set());
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [editingRuleText, setEditingRuleText] = useState('');
+  const [rulesDialogClosing, setRulesDialogClosing] = useState(false);
+
+  const addNewRule = () => {
+    if (newRuleText.trim()) {
+      const newRule = {
+        id: Date.now().toString(),
+        title: newRuleText.length > 50 ? newRuleText.substring(0, 50) + '...' : newRuleText,
+        content: newRuleText.trim()
+      };
+      setEmailRulesList(prev => [...prev, newRule]);
+      setNewRuleText('');
+    }
+  };
+
+  const removeRule = (ruleId: string) => {
+    setEmailRulesList(prev => prev.filter(rule => rule.id !== ruleId));
+    setExpandedRules(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(ruleId);
+      return newSet;
+    });
+  };
+
+  const toggleRuleExpansion = (ruleId: string) => {
+    setExpandedRules(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(ruleId)) {
+        newSet.delete(ruleId);
+      } else {
+        newSet.add(ruleId);
+      }
+      return newSet;
+    });
+  };
+
+  const startEditingRule = (rule: {id: string, title: string, content: string}) => {
+    setEditingRuleId(rule.id);
+    setEditingRuleText(rule.content);
+  };
+
+  const saveEditingRule = () => {
+    if (editingRuleId && editingRuleText.trim()) {
+      setEmailRulesList(prev => prev.map(rule => 
+        rule.id === editingRuleId 
+          ? {
+              ...rule,
+              content: editingRuleText.trim(),
+              title: editingRuleText.trim().length > 50 ? editingRuleText.trim().substring(0, 50) + '...' : editingRuleText.trim()
+            }
+          : rule
+      ));
+      setEditingRuleId(null);
+      setEditingRuleText('');
+    }
+  };
+
+  const cancelEditingRule = () => {
+    setEditingRuleId(null);
+    setEditingRuleText('');
+  };
+
+  const closeRulesDialogWithAnimation = () => {
+    setRulesDialogClosing(true);
+    setTimeout(() => {
+      actualSetShowEmailRulesDialog(false);
+      setRulesDialogClosing(false);
+    }, 300);
+  };
+
+  const rulesToString = (rules: Array<{id: string, title: string, content: string}>) => {
+    return rules.map(rule => rule.content).join('\n\n');
+  };
+
+  const stringToRules = (rulesString: string) => {
+    if (!rulesString.trim()) return [];
+    return rulesString.split('\n\n').filter(rule => rule.trim()).map((rule, index) => ({
+      id: `rule-${index}-${Date.now()}`,
+      title: rule.length > 50 ? rule.substring(0, 50) + '...' : rule,
+      content: rule.trim()
+    }));
+  };
+
+  // Initialize rules list when dialog opens
+  useEffect(() => {
+    if (actualShowEmailRulesDialog && emailRules) {
+      const parsedRules = stringToRules(emailRules);
+      setEmailRulesList(parsedRules);
+    }
+  }, [actualShowEmailRulesDialog, emailRules]);
+
+  // Load rules from Firestore when dialog opens
+  useEffect(() => {
+    const loadRulesFromFirestore = async () => {
+      if (actualShowEmailRulesDialog && user?.uid) {
+        try {
+          const instructionsRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions');
+          const instructionsSnap = await getDoc(instructionsRef);
+          
+          if (instructionsSnap.exists()) {
+            const data = instructionsSnap.data();
+            if (data.rules && Array.isArray(data.rules)) {
+              setEmailRulesList(data.rules);
+            }
+          }
+        } catch (error) {
+          console.error('Error loading rules from Firestore:', error);
+        }
+      }
+    };
+
+    loadRulesFromFirestore();
+  }, [actualShowEmailRulesDialog, user?.uid]);
+
+  // Save rules to Firestore
+  const saveRulesToFirestore = async (rules: Array<{id: string, title: string, content: string}>) => {
+    if (!user?.uid) return;
+    
+    try {
+      const instructionsRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions');
+      await updateDoc(instructionsRef, {
+        rules: rules,
+        updatedAt: new Date()
+      });
+         } catch (error) {
+       console.error('Error saving rules to Firestore:', error);
+       // If document doesn't exist, create it
+       try {
+         const instructionsRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions');
+         await setDoc(instructionsRef, {
+           rules: rules,
+           createdAt: new Date(),
+           updatedAt: new Date()
+         });
+       } catch (createError) {
+         console.error('Error creating rules document:', createError);
+       }
+     }
+  };
 
   useEffect(() => {
     const loadEmailContent = async () => {
@@ -4231,6 +4013,16 @@ const EmailViewer = ({
                         <Shield className="h-3 w-3 text-gray-500 mr-2" />
                         <span className="text-xs">Email Rules</span>
                       </DropdownMenuItem>
+                      {/* Debug: Always show for testing */}
+                      <DropdownMenuItem onClick={() => {
+                        console.log('Debug - selectedThread:', selectedThread);
+                        console.log('Debug - selectedThread.count:', selectedThread?.count);
+                        console.log('Debug - condition result:', selectedThread && selectedThread.count > 1);
+                        onSummariseThread?.();
+                      }}>
+                        <MessageSquare className="h-3 w-3 text-gray-500 mr-2" />
+                        <span className="text-xs">Summarise Thread{selectedThread ? ` (${selectedThread.count})` : ' (No Thread)'}</span>
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                     </div>
@@ -4238,60 +4030,69 @@ const EmailViewer = ({
             </div>
             
             {/* Instructions Dropdown - Now part of normal flow */}
-            {showInstructions && (
-              <div className="border-t border-gray-200 bg-gray-50 animate-in slide-in-from-top-2 duration-200">
-                <div className="p-3">
-                  <div className="space-y-2">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Custom Instructions
-                      </label>
-                      <textarea
-                        ref={(el) => { if (el) el.id = 'instructions-textarea-1'; }}
-                        placeholder="Enter specific instructions for how you'd like the AI to respond..."
-                        className="w-full text-xs border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                        rows={3}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                    
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setShowInstructions(false)}
-                          className="text-xs text-gray-600 hover:text-gray-800 px-2 py-1 rounded transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          disabled={isGenerating}
-                onClick={() => {
-                            const textarea = document.getElementById('instructions-textarea-1') as HTMLTextAreaElement;
-                            const customInstructions = textarea?.value || '';
-                            if (customInstructions.trim()) {
-                              callGenerateEmailResponse?.('custom', undefined, customInstructions, replyEditorRef);
-                            }
+            {(showInstructions || instructionsClosing) && (
+              <div className={`bg-white transition-all duration-200 ease-out ${
+                instructionsClosing 
+                  ? 'animate-out slide-out-to-top-2' 
+                  : 'animate-in slide-in-from-top-2'
+              }`}>
+                <div className="p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <label className="block text-xs font-medium text-gray-700">
+                      Custom Instructions
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setInstructionsClosing(true);
+                          setTimeout(() => {
                             setShowInstructions(false);
-                          }}
-                          className={`text-xs px-3 py-1 rounded transition-all duration-300 ${
-                            isGenerating 
-                              ? 'text-white bg-blue-600 button-pulse cursor-not-allowed' 
-                              : 'text-white bg-blue-500 hover:bg-blue-600 hover:shadow-md'
-                          }`}
-                        >
-                          {isGenerating ? (
-                            <div className="flex items-center gap-1">
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                              <span className="text-xs text-white">
-                                Applying...
-                              </span>
-                            </div>
-                          ) : (
-                            'Apply'
-                          )}
-                        </button>
-                      </div>
+                            setInstructionsClosing(false);
+                          }, 200);
+                        }}
+                        className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded-md hover:bg-gray-100 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        disabled={isGenerating}
+                        onClick={() => {
+                          const textarea = document.getElementById('instructions-textarea-1') as HTMLTextAreaElement;
+                          const customInstructions = textarea?.value || '';
+                          if (customInstructions.trim()) {
+                            callGenerateEmailResponse?.('custom', undefined, customInstructions, replyEditorRef);
+                          }
+                          setInstructionsClosing(true);
+                          setTimeout(() => {
+                            setShowInstructions(false);
+                            setInstructionsClosing(false);
+                          }, 200);
+                        }}
+                        className={`text-xs px-3 py-1 rounded-md transition-all duration-300 ${
+                          isGenerating 
+                            ? 'text-white bg-blue-600 button-pulse cursor-not-allowed' 
+                            : 'text-white bg-blue-500 hover:bg-blue-600 hover:shadow-md'
+                        }`}
+                      >
+                        {isGenerating ? (
+                          <div className="flex items-center gap-1">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            <span className="text-xs text-white">
+                              Applying...
+                            </span>
+                          </div>
+                        ) : (
+                          'Apply'
+                        )}
+                      </button>
                     </div>
                   </div>
+                  <textarea
+                    ref={(el) => { if (el) el.id = 'instructions-textarea-1'; }}
+                    placeholder="Enter specific instructions for how you'd like the AI to respond..."
+                    className="w-full text-xs bg-gray-50 border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder-gray-500"
+                    rows={3}
+                  />
                 </div>
               </div>
             )}
@@ -4299,7 +4100,7 @@ const EmailViewer = ({
             </div>
 
             {/* Message Content */}
-          <div className="flex-1 px-3 py-6 overflow-y-auto custom-scrollbar">
+          <div className="flex-1 px-5 py-6 overflow-y-auto custom-scrollbar">
               <div 
               ref={replyEditorRef}
                 contentEditable
@@ -4317,7 +4118,7 @@ const EmailViewer = ({
 
       {/* Email Content - Hidden when replying */}
       {!replyMode && (
-        <div className="flex-1 overflow-auto px-3 py-6 bg-white custom-scrollbar">
+        <div className="flex-1 overflow-auto px-1 py-2 bg-white custom-scrollbar">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <RefreshCw className="h-6 w-6 animate-spin text-gray-400 mr-3" />
@@ -4342,16 +4143,28 @@ const EmailViewer = ({
       )}
       
       {/* Email Rules Modal */}
-      {actualShowEmailRulesDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {(actualShowEmailRulesDialog || rulesDialogClosing) && (
+        <div className={`fixed inset-0 z-50 flex items-center justify-center ${
+          rulesDialogClosing 
+            ? 'animate-out fade-out duration-300' 
+            : 'animate-in fade-in duration-200'
+        }`}>
           {/* Backdrop */}
           <div 
-            className="absolute inset-0 bg-black/50" 
-            onClick={() => actualSetShowEmailRulesDialog(false)}
+            className={`absolute inset-0 bg-black/50 ${
+              rulesDialogClosing 
+                ? 'animate-out fade-out duration-300' 
+                : 'animate-in fade-in duration-200'
+            }`} 
+            onClick={closeRulesDialogWithAnimation}
           />
           
           {/* Modal Content */}
-          <div className="relative bg-white rounded-lg shadow-lg max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+          <div className={`relative bg-white rounded-lg shadow-lg max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto ${
+            rulesDialogClosing 
+              ? 'animate-out slide-out-to-bottom-4 zoom-out-95 duration-300 ease-in' 
+              : 'animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out'
+          }`}>
             <div className="p-6">
               {/* Header */}
               <div className="flex items-center justify-between mb-4">
@@ -4360,7 +4173,7 @@ const EmailViewer = ({
                   <h2 className="text-lg font-semibold">Email Rules</h2>
                 </div>
                 <button 
-                  onClick={() => actualSetShowEmailRulesDialog(false)}
+                  onClick={closeRulesDialogWithAnimation}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   <X className="h-4 w-4" />
@@ -4368,38 +4181,134 @@ const EmailViewer = ({
               </div>
               
               <p className="text-sm text-gray-600 mb-4">
-                Set rules that the AI will follow when generating email responses. These rules will be applied to all AI-generated replies.
+                Create and manage rules that the AI will follow when generating email responses.
               </p>
               
-              {/* Content */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Rules for AI Responses
-                  </label>
-                  <textarea
-                    value={actualTempEmailRules}
-                    onChange={(e) => actualSetTempEmailRules(e.target.value)}
-                    placeholder="Enter rules for AI to follow when replying (e.g., 'Always be concise', 'Include next steps', 'Use professional tone', 'Ask clarifying questions when needed')..."
-                    className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                    rows={4}
+              {/* Add New Rule Section */}
+              <div className="space-y-3 mb-6">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newRuleText}
+                    onChange={(e) => setNewRuleText(e.target.value)}
+                    placeholder="Add a new rule (e.g., Always be concise and professional)"
+                    className="flex-1 text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        addNewRule();
+                      }
+                    }}
                   />
+                  <Button
+                    onClick={addNewRule}
+                    disabled={!newRuleText.trim()}
+                    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 disabled:opacity-50"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
                 </div>
+              </div>
+
+              {/* Rules List */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">
+                  Current Rules ({emailRulesList.length})
+                </h3>
                 
-                <div className="text-xs text-gray-500 bg-blue-50 p-3 rounded-md">
-                  <div className="flex items-start gap-2">
-                    <Info className="h-3 w-3 text-blue-500 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-blue-900 mb-1">Example Rules:</p>
-                      <ul className="space-y-1 text-blue-800">
-                        <li>• Keep responses under 100 words</li>
-                        <li>• Always include a clear next step</li>
-                        <li>• Use a friendly but professional tone</li>
-                        <li>• Ask questions to clarify requirements</li>
-                      </ul>
-                    </div>
+                {emailRulesList.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Shield className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                    <p className="text-sm">No rules yet</p>
+                    <p className="text-xs">Add your first rule above</p>
                   </div>
-                </div>
+                ) : (
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {emailRulesList.map((rule) => (
+                      <div key={rule.id} className="border border-gray-200 rounded-md">
+                        <div 
+                          className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50"
+                          onClick={() => !editingRuleId && toggleRuleExpansion(rule.id)}
+                        >
+                          <div className="flex items-center gap-2 flex-1">
+                            <ChevronRight 
+                              className={`h-4 w-4 text-gray-400 transition-transform ${
+                                expandedRules.has(rule.id) ? 'rotate-90' : ''
+                              }`} 
+                            />
+                            <span className="text-sm font-medium text-gray-900 truncate">
+                              {rule.title}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (editingRuleId === rule.id) {
+                                  cancelEditingRule();
+                                } else {
+                                  startEditingRule(rule);
+                                }
+                              }}
+                              className="text-gray-400 hover:text-blue-500 p-1 rounded-md hover:bg-blue-50"
+                              title={editingRuleId === rule.id ? "Cancel editing" : "Edit rule"}
+                            >
+                              {editingRuleId === rule.id ? (
+                                <X className="h-3 w-3" />
+                              ) : (
+                                <Edit3 className="h-3 w-3" />
+                              )}
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeRule(rule.id);
+                              }}
+                              className="text-gray-400 hover:text-red-500 p-1 rounded-md hover:bg-red-50"
+                              title="Delete rule"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                        
+                        {expandedRules.has(rule.id) && (
+                          <div className="px-3 pb-3 border-t border-gray-100">
+                            {editingRuleId === rule.id ? (
+                              <div className="mt-2 space-y-2">
+                                <textarea
+                                  value={editingRuleText}
+                                  onChange={(e) => setEditingRuleText(e.target.value)}
+                                  className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                  rows={3}
+                                  placeholder="Edit your rule..."
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={cancelEditingRule}
+                                    className="text-xs px-2 py-1 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={saveEditingRule}
+                                    disabled={!editingRuleText.trim()}
+                                    className="text-xs px-2 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    Save
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-600 mt-2">
+                                {rule.content}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               
               {/* Footer */}
@@ -4407,16 +4316,44 @@ const EmailViewer = ({
                 <Button 
                   variant="outline" 
                   onClick={() => {
-                    actualSetTempEmailRules(emailRules || '');
-                    actualSetShowEmailRulesDialog(false);
+                    // Reset to original state from Firestore
+                    if (user?.uid) {
+                      const loadOriginalRules = async () => {
+                        try {
+                          const instructionsRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions');
+                          const instructionsSnap = await getDoc(instructionsRef);
+                          
+                          if (instructionsSnap.exists()) {
+                            const data = instructionsSnap.data();
+                            if (data.rules && Array.isArray(data.rules)) {
+                              setEmailRulesList(data.rules);
+                            }
+                          } else {
+                            setEmailRulesList([]);
+                          }
+                        } catch (error) {
+                          setEmailRulesList([]);
+                        }
+                      };
+                      loadOriginalRules();
+                    } else {
+                      setEmailRulesList([]);
+                    }
+                    setNewRuleText('');
+                    setExpandedRules(new Set());
+                    setEditingRuleId(null);
+                    setEditingRuleText('');
+                    closeRulesDialogWithAnimation();
                   }}
                 >
                   Cancel
                 </Button>
                 <Button 
-                  onClick={() => {
-                    setEmailRules?.(actualTempEmailRules);
-                    actualSetShowEmailRulesDialog(false);
+                  onClick={async () => {
+                    await saveRulesToFirestore(emailRulesList);
+                    const rulesString = rulesToString(emailRulesList);
+                    setEmailRules?.(rulesString);
+                    closeRulesDialogWithAnimation();
                   }}
                   className="bg-blue-500 hover:bg-blue-600"
                 >
@@ -4430,943 +4367,4 @@ const EmailViewer = ({
     </div>
   );
 };
-
-// Thread viewer component with integrated reply
-const EmailThreadViewer = ({ 
-  thread, 
-  merchantData, 
-  userEmail, 
-  merchantEmail, 
-  selectedAccount,
-  replyMode,
-  onStartReply, 
-  onStartReplyAll, 
-  onStartForward,
-  onSendReply,
-  onCancelReply,
-  isSending,
-  tapAgentMode,
-  setTapAgentMode,
-  tapAgentInstructions,
-  setTapAgentInstructions,
-  selectedTone,
-  setSelectedTone,
-  isGenerating,
-  setIsGenerating,
-  callGenerateEmailResponse,
-  emailRules,
-  setEmailRules,
-  threadSummary,
-  isSummarizing,
-  onSummarizeThread,
-  showEmailRulesDialog,
-  setShowEmailRulesDialog,
-  tempEmailRules,
-  setTempEmailRules
-}: {
-  thread: any;
-  merchantData: any;
-  userEmail: string;
-  merchantEmail: string;
-  selectedAccount: string;
-  replyMode?: { type: 'reply' | 'replyAll' | 'forward', originalEmail: any, thread?: any } | null;
-  onStartReply?: (email: any) => void;
-  onStartReplyAll?: (email: any) => void;
-  onStartForward?: (email: any) => void;
-  onSendReply?: (content: string, subject: string, recipients: string[], attachments: File[]) => void;
-  onCancelReply?: () => void;
-  isSending?: boolean;
-  tapAgentMode?: 'full-response' | 'instructions' | 'tone' | null;
-  setTapAgentMode?: (mode: 'full-response' | 'instructions' | 'tone' | null) => void;
-  tapAgentInstructions?: string;
-  setTapAgentInstructions?: (instructions: string) => void;
-  selectedTone?: string;
-  setSelectedTone?: (tone: string) => void;
-  isGenerating?: boolean;
-  setIsGenerating?: (generating: boolean) => void;
-  callGenerateEmailResponse?: (requestType: string, tone?: string, customInstructions?: string, replyEditor?: React.RefObject<HTMLDivElement | null>) => Promise<any>;
-  emailRules?: string;
-  setEmailRules?: (rules: string) => void;
-  threadSummary?: string;
-  isSummarizing?: boolean;
-  onSummarizeThread?: () => void;
-  showEmailRulesDialog?: boolean;
-  setShowEmailRulesDialog?: (show: boolean) => void;
-  tempEmailRules?: string;
-  setTempEmailRules?: (rules: string) => void;
-}) => {
-  const [replyContent, setReplyContent] = useState('');
-  const [replyQuotedContent, setReplyQuotedContent] = useState('');
-  const [replyRecipients, setReplyRecipients] = useState('');
-  const [replyCc, setReplyCc] = useState('');
-  const replyEditorRef = useRef<HTMLDivElement>(null);
-  const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
-  const [expandedEmails, setExpandedEmails] = useState<Set<string>>(new Set());
-  const [showInstructions, setShowInstructions] = useState(false);
   
-  // Local state for dialog
-  const [localShowEmailRulesDialog, setLocalShowEmailRulesDialog] = useState(false);
-  const [localTempEmailRules, setLocalTempEmailRules] = useState('');
-  
-  // Use passed props or fallback to local state
-  const actualShowEmailRulesDialog = showEmailRulesDialog ?? localShowEmailRulesDialog;
-  const actualSetShowEmailRulesDialog = setShowEmailRulesDialog ?? setLocalShowEmailRulesDialog;
-  const actualTempEmailRules = tempEmailRules ?? localTempEmailRules;
-  const actualSetTempEmailRules = setTempEmailRules ?? setLocalTempEmailRules;
-
-  // Initialize expanded emails when thread changes - most recent email should be expanded
-  useEffect(() => {
-    if (thread.emails && thread.emails.length > 0) {
-      // Most recent email is at index 0 (sorted newest first)
-      const mostRecentEmailId = thread.emails[0]?.id;
-      if (mostRecentEmailId) {
-        setExpandedEmails(new Set([mostRecentEmailId]));
-      }
-    }
-  }, [thread.threadId]); // Re-run when thread changes
-
-  const toggleEmailExpansion = (emailId: string) => {
-    setExpandedEmails(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(emailId)) {
-        newSet.delete(emailId);
-      } else {
-        newSet.add(emailId);
-      }
-      return newSet;
-    });
-  };
-
-  // Auto-scroll to the bottom to show new messages
-  useEffect(() => {
-    if (thread.emails.length > 0) {
-      const latestEmail = thread.emails[thread.emails.length - 1];
-      if (latestEmail.folder === 'sent' || latestEmail.id?.startsWith('sent-')) {
-        // Scroll to the bottom to show the new message
-        setTimeout(() => {
-          const threadMessagesContainer = document.querySelector('.thread-messages-container');
-          if (threadMessagesContainer) {
-            threadMessagesContainer.scrollTop = threadMessagesContainer.scrollHeight;
-          }
-        }, 100);
-      }
-    }
-  }, [thread.emails]);
-
-  // Reset reply content when reply mode changes (only on mode change, not on every render)
-  const [replyModeKey, setReplyModeKey] = useState<string>('');
-  
-  useEffect(() => {
-    const newKey = replyMode ? `${replyMode.type}-${replyMode.originalEmail.id}` : '';
-    
-    // Only update if the mode actually changed (not just a re-render)
-    if (newKey !== replyModeKey) {
-      setReplyModeKey(newKey);
-      
-      if (replyMode) {
-        // Auto-populate recipients based on reply type
-        const mostRecentEmail = thread.emails[thread.emails.length - 1];
-        if (replyMode.type === 'reply') {
-          setReplyRecipients(mostRecentEmail.email);
-          setReplyCc('');
-          // Pre-populate the editor with quoted content
-          const quotedContent = createQuotedReplyContent(replyMode.originalEmail, replyMode.type);
-          const fullContent = `<div><br><br></div><hr style="border: none; border-top: 1px solid #ccc; margin: 20px 0;">${quotedContent}`;
-          setReplyQuotedContent('');
-          setReplyContent('');
-          if (replyEditorRef.current) {
-            replyEditorRef.current.innerHTML = fullContent;
-            // Position cursor at the beginning
-            const range = document.createRange();
-            const selection = window.getSelection();
-            range.setStart(replyEditorRef.current.firstChild!, 0);
-            range.collapse(true);
-            selection?.removeAllRanges();
-            selection?.addRange(range);
-            replyEditorRef.current.focus();
-          }
-        } else if (replyMode.type === 'replyAll') {
-          setReplyRecipients(mostRecentEmail.email);
-          setReplyCc('');
-          // Pre-populate the editor with quoted content
-          const quotedContent = createQuotedReplyContent(replyMode.originalEmail, replyMode.type);
-          const fullContent = `<div><br><br></div><hr style="border: none; border-top: 1px solid #ccc; margin: 20px 0;">${quotedContent}`;
-          setReplyQuotedContent('');
-          setReplyContent('');
-          if (replyEditorRef.current) {
-            replyEditorRef.current.innerHTML = fullContent;
-            // Position cursor at the beginning
-            const range = document.createRange();
-            const selection = window.getSelection();
-            range.setStart(replyEditorRef.current.firstChild!, 0);
-            range.collapse(true);
-            selection?.removeAllRanges();
-            selection?.addRange(range);
-            replyEditorRef.current.focus();
-          }
-        } else if (replyMode.type === 'forward') {
-          setReplyRecipients('');
-          setReplyCc('');
-          setReplyContent('');
-          if (replyEditorRef.current) {
-            replyEditorRef.current.innerHTML = '';
-          }
-          setReplyQuotedContent('');
-        }
-      } else {
-        setReplyContent('');
-        if (replyEditorRef.current) {
-          replyEditorRef.current.innerHTML = '';
-        }
-        setReplyQuotedContent('');
-        setReplyRecipients('');
-        setReplyCc('');
-        setReplyAttachments([]);
-      }
-    }
-  }, [replyMode, replyModeKey, thread.emails]);
-
-  // Get the most recent email for replying
-  const mostRecentEmail = thread.emails[thread.emails.length - 1];
-
-  return (
-    <div className="flex flex-col h-full email-thread-container">
-      {/* Thread Header - Hidden when replying */}
-      {!replyMode && (
-      <div className="border-b border-gray-200 p-6 bg-white">
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="text-xl font-semibold text-gray-900">{thread.representative.subject}</h1>
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-              <Users className="h-3 w-3" />
-              {thread.count} messages
-            </span>
-            
-            {/* Thread Reply Actions */}
-            <div className="flex items-center gap-2">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-8 w-8 p-0 hover:bg-gray-100"
-                      onClick={() => onStartReply?.(mostRecentEmail)}
-                    >
-                      <Reply className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Reply</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-8 w-8 p-0 hover:bg-gray-100"
-                      onClick={() => onStartReplyAll?.(mostRecentEmail)}
-                    >
-                      <ReplyAll className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Reply All</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-                
-                {/* Summarize Thread Button */}
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 w-8 p-0 hover:bg-gray-100"
-                        onClick={onSummarizeThread}
-                        disabled={isSummarizing}
-                      >
-                        {isSummarizing ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <MessageSquare className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>{isSummarizing ? 'Summarising...' : 'Summarise Thread'}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-8 w-8 p-0 hover:bg-gray-100"
-                      onClick={() => onStartForward?.(mostRecentEmail)}
-                    >
-                      <Forward className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Forward</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              </div>
-            </div>
-            
-            {/* Thread Summary Display */}
-            {threadSummary && (
-              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                <div className="flex items-start gap-2">
-                  <MessageSquare className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="text-sm font-medium text-blue-900 mb-1">Thread Summary</h4>
-                    <p className="text-sm text-blue-800 leading-relaxed">{threadSummary}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Reply Compose Area - Raw in right panel */}
-              {replyMode && (
-        <div className="flex flex-col h-full bg-white">
-          {/* From Field */}
-          <div className="flex items-center py-2 px-4 border-b border-gray-100">
-            <div className="w-12 text-xs text-gray-600 font-medium">From:</div>
-            <div className="flex-1 text-xs text-gray-900">{selectedAccount}</div>
-            <div className="flex gap-2">
-                <Button
-                  onClick={() => {
-                  const currentReplyContent = replyEditorRef.current?.innerHTML || '';
-                  if (currentReplyContent.trim() && replyRecipients.trim()) {
-                      const subject = replyMode.originalEmail.subject.startsWith('Re: ') ? replyMode.originalEmail.subject : `Re: ${replyMode.originalEmail.subject}`;
-                      const recipients = [
-                        ...replyRecipients.split(',').map(email => email.trim()).filter(Boolean),
-                        ...replyCc.split(',').map(email => email.trim()).filter(Boolean)
-                      ];
-                    onSendReply?.(currentReplyContent, subject, recipients, replyAttachments);
-                    }
-                  }}
-                  disabled={!replyRecipients.trim() || isSending}
-                className="bg-blue-500 hover:bg-blue-600 text-white h-7 px-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
-                >
-                  {isSending ? (
-                  <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                  ) : (
-                  <Send className="h-3 w-3 mr-1" />
-                  )}
-                  {isSending ? 'Sending...' : 'Send'}
-                </Button>
-                <Button
-                variant="ghost"
-                  onClick={onCancelReply}
-                className="h-7 px-2 text-gray-600 hover:text-gray-900 text-xs"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-
-            {/* To Field */}
-          <div className="flex items-center py-2 px-4 border-b border-gray-100">
-            <div className="w-12 text-xs text-gray-600 font-medium">To:</div>
-              <div className="flex-1">
-                <Input
-                  value={replyRecipients}
-                  onChange={(e) => setReplyRecipients(e.target.value)}
-                className="border-0 p-0 h-auto text-xs focus:ring-0 focus:outline-none shadow-none"
-                  placeholder="Enter recipient email addresses"
-                />
-              </div>
-            </div>
-
-          {/* CC Field (if populated) */}
-            {replyCc !== undefined && (
-            <div className="flex items-center py-2 px-4 border-b border-gray-100">
-              <div className="w-12 text-xs text-gray-600 font-medium">Cc:</div>
-                <div className="flex-1">
-                  <Input
-                    value={replyCc}
-                    onChange={(e) => setReplyCc(e.target.value)}
-                  className="border-0 p-0 h-auto text-xs focus:ring-0 focus:outline-none shadow-none"
-                    placeholder="Enter CC email addresses"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Subject Field */}
-          <div className="flex items-center py-2 px-4 border-b border-gray-100">
-            <div className="w-12 text-xs text-gray-600 font-medium">Subject:</div>
-            <div className="flex-1 text-xs text-gray-900">
-                {replyMode.type === 'forward' 
-                  ? `Fwd: ${replyMode.originalEmail.subject}`
-                  : replyMode.originalEmail.subject.startsWith('Re: ') 
-                    ? replyMode.originalEmail.subject 
-                    : `Re: ${replyMode.originalEmail.subject}`
-                }
-              </div>
-            </div>
-
-          {/* Tap Agent Section */}
-          <div className="mx-3 my-2">
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3">
-            <div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5">
-                    <WandSparkles className="h-4 w-4 text-blue-500" />
-                    <GradientText
-                      colors={["#ff6b35", "#4079ff", "#ff8500", "#3b82f6", "#ff6b35"]}
-                      animationSpeed={3}
-                      showBorder={false}
-                      className="text-xs font-medium"
-                        >
-                      Tap Agent
-                    </GradientText>
-                </div>
-                  <div className="flex items-center gap-2">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors">
-                          <Sparkles className="h-3 w-3 text-gray-500" />
-                          Generate
-                          <ChevronDown className="h-3 w-3 text-gray-500" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-40">
-                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)}>
-                          <Lightbulb className="h-3 w-3 text-gray-500 mr-2" />
-                          <span className="text-xs">Friendly tone</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)}>
-                          <Users className="h-3 w-3 text-gray-500 mr-2" />
-                          <span className="text-xs">Professional tone</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'direct', undefined, replyEditorRef)}>
-                          <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
-                          <span className="text-xs">Direct tone</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'casual', undefined, replyEditorRef)}>
-                          <Eye className="h-3 w-3 text-gray-500 mr-2" />
-                          <span className="text-xs">Casual tone</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'formal', undefined, replyEditorRef)}>
-                          <Shield className="h-3 w-3 text-gray-500 mr-2" />
-                          <span className="text-xs">Formal tone</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'persuasive', undefined, replyEditorRef)}>
-                          <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
-                          <span className="text-xs">Persuasive tone</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <button
-                      onClick={() => setShowInstructions(!showInstructions)}
-                      className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                    >
-                      <MessageSquare className="h-3 w-3 text-gray-500" />
-                      Instructions
-                    </button>
-            </div>
-          </div>
-                
-                {/* Tone Buttons on Right */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)}
-                    className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                  >
-                    <Lightbulb className="h-3 w-3 text-gray-500" />
-                    Friendly
-                  </button>
-                  <button
-                    onClick={() => callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)}
-                    className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                  >
-                    <Users className="h-3 w-3 text-gray-500" />
-                    Professional
-                  </button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors">
-                        <Palette className="h-3 w-3 text-gray-500" />
-                        More
-                        <ChevronDown className="h-3 w-3 text-gray-500" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-36">
-                      <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'direct', undefined, replyEditorRef)}>
-                        <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
-                        <span className="text-xs">Direct</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'casual', undefined, replyEditorRef)}>
-                        <Eye className="h-3 w-3 text-gray-500 mr-2" />
-                        <span className="text-xs">Casual</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'formal', undefined, replyEditorRef)}>
-                        <Shield className="h-3 w-3 text-gray-500 mr-2" />
-                        <span className="text-xs">Formal</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'persuasive', undefined, replyEditorRef)}>
-                        <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
-                        <span className="text-xs">Persuasive</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  
-                  {/* Three-dot Options Menu */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-2 py-1.5 rounded-md transition-colors">
-                        <MoreHorizontal className="h-3 w-3 text-gray-500" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onClick={() => {
-                        actualSetTempEmailRules(emailRules || '');
-                        actualSetShowEmailRulesDialog(true);
-                      }}>
-                        <Shield className="h-3 w-3 text-gray-500 mr-2" />
-                        <span className="text-xs">Email Rules</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={onSummarizeThread} disabled={isSummarizing}>
-                        {isSummarizing ? (
-                          <Loader2 className="h-3 w-3 animate-spin text-gray-500 mr-2" />
-                        ) : (
-                          <MessageSquare className="h-3 w-3 text-gray-500 mr-2" />
-                        )}
-                        <span className="text-xs">{isSummarizing ? 'Summarising...' : 'Summarise Thread'}</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-              </div>
-              </div>
-            </div>
-            
-            {/* Instructions Dropdown - Now part of normal flow */}
-            {showInstructions && (
-              <div className="border-t border-gray-200 bg-gray-50 animate-in slide-in-from-top-2 duration-200">
-                <div className="p-3">
-                  <div className="space-y-2">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Custom Instructions
-                      </label>
-                      <textarea
-                        ref={(el) => { if (el) el.id = 'instructions-textarea-2'; }}
-                        placeholder="Enter specific instructions for how you'd like the AI to respond..."
-                        className="w-full text-xs border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                        rows={3}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                     
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setShowInstructions(false)}
-                          className="text-xs text-gray-600 hover:text-gray-800 px-2 py-1 rounded transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          disabled={isGenerating}
-                onClick={() => {
-                            const textarea = document.getElementById('instructions-textarea-2') as HTMLTextAreaElement;
-                            const customInstructions = textarea?.value || '';
-                            if (customInstructions.trim()) {
-                              callGenerateEmailResponse?.('custom', undefined, customInstructions, replyEditorRef);
-                            }
-                            setShowInstructions(false);
-                          }}
-                          className={`text-xs px-3 py-1 rounded transition-all duration-300 ${
-                            isGenerating 
-                              ? 'text-white bg-blue-600 button-pulse cursor-not-allowed' 
-                              : 'text-white bg-blue-500 hover:bg-blue-600 hover:shadow-md'
-                          }`}
-                        >
-                          {isGenerating ? (
-                            <div className="flex items-center gap-1">
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                              <span className="text-xs text-white">
-                                Applying...
-                              </span>
-                            </div>
-                          ) : (
-                            'Apply'
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {/* Three-dot Options Menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-2 py-1.5 rounded-md transition-colors">
-                  <MoreHorizontal className="h-3 w-3 text-gray-500" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={() => {
-                  actualSetTempEmailRules(emailRules || '');
-                  actualSetShowEmailRulesDialog(true);
-                }}>
-                  <Shield className="h-3 w-3 text-gray-500 mr-2" />
-                  <span className="text-xs">Email Rules</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={onSummarizeThread} disabled={isSummarizing}>
-                  {isSummarizing ? (
-                    <Loader2 className="h-3 w-3 animate-spin text-gray-500 mr-2" />
-                  ) : (
-                    <MessageSquare className="h-3 w-3 text-gray-500 mr-2" />
-                  )}
-                  <span className="text-xs">{isSummarizing ? 'Summarising...' : 'Summarise Thread'}</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            </div>
-            </div>
-
-            {/* Message Content */}
-          <div className="flex-1 px-3 py-6 overflow-y-auto custom-scrollbar">
-              <div 
-              ref={replyEditorRef}
-                contentEditable
-              className="w-full min-h-full text-sm outline-none"
-              onBlur={() => {
-                if (replyEditorRef.current) {
-                  setReplyContent(replyEditorRef.current.innerHTML || '');
-                }
-                }}
-                suppressContentEditableWarning={true}
-            />
-                  </div>
-                </div>
-              )}
-
-      {/* Thread Messages - Hidden when replying */}
-      {!replyMode && (
-      <div className="flex-1 overflow-auto custom-scrollbar thread-messages-container">
-          <div className="space-y-6 pb-8 px-3">
-          {(() => {
-            console.log("🎬 EmailThreadViewer rendering thread emails:", {
-              totalEmails: thread.emails.length,
-              threadId: thread.threadId,
-              emailDetails: thread.emails.map((e: any) => ({ 
-                id: e.id, 
-                sender: e.sender, 
-                to: e.to,
-                subject: e.subject?.substring(0, 30),
-                contentLength: e.content?.length || 0
-              }))
-            });
-            return thread.emails.slice();
-          })()
-            .sort((a: any, b: any) => {
-              // Get the appropriate date field for each email - prioritize repliedAt or receivedAt
-              const getEmailDate = (email: any) => {
-                // Priority 1: repliedAt (for reply emails)
-                  if (email.repliedAt) {
-                    if (typeof email.repliedAt.toDate === 'function') {
-                      return email.repliedAt.toDate();
-                    }
-                    return new Date(email.repliedAt);
-                  }
-                  
-                  // Priority 2: receivedAt (for received emails)
-                  if (email.receivedAt) {
-                    if (typeof email.receivedAt.toDate === 'function') {
-                      return email.receivedAt.toDate();
-                    }
-                    return new Date(email.receivedAt);
-                  }
-                  
-                  // Priority 3: time (fallback)
-                  if (email.time) {
-                    if (typeof email.time.toDate === 'function') {
-                      return email.time.toDate();
-                    }
-                    return new Date(email.time);
-                  }
-                  
-                  // Fallback to epoch time if nothing available
-                  return new Date(0);
-              };
-              
-              const dateA = getEmailDate(a);
-              const dateB = getEmailDate(b);
-              
-                // Sort chronologically (oldest first)
-                return dateA.getTime() - dateB.getTime();
-            })
-            .map((email: any, index: number, filteredArray: any[]) => (
-            <EmailInThread
-              key={email.id}
-              email={email}
-              merchantData={merchantData}
-              userEmail={userEmail}
-              merchantEmail={merchantEmail}
-              isFirst={index === 0}
-              isLast={index === filteredArray.length - 1}
-              isExpanded={expandedEmails.has(email.id)}
-              onToggleExpansion={() => toggleEmailExpansion(email.id)}
-            />
-          ))}
-        </div>
-      </div>
-      )}
-    </div>
-  );
-};
-
-// Individual email in thread component - traditional email style
-const EmailInThread = ({ 
-  email, 
-  merchantData, 
-  userEmail, 
-  merchantEmail, 
-  isFirst, 
-  isLast, 
-  isExpanded, 
-  onToggleExpansion 
-}: {
-  email: any;
-  merchantData: any;
-  userEmail: string;
-  merchantEmail: string;
-  isFirst: boolean;
-  isLast: boolean;
-  isExpanded: boolean;
-  onToggleExpansion: () => void;
-}) => {
-  const [htmlContent, setHtmlContent] = useState<string>('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string>('');
-
-  const isFromCurrentUser = isEmailFromCurrentUser(email.email, userEmail, merchantEmail);
-  const isSentMessage = email.folder === 'sent' || email.id?.startsWith('sent-');
-
-  console.log("🎨 Rendering EmailInThread:", {
-    id: email.id,
-    sender: email.sender,
-    to: email.to,
-    contentLength: email.content?.length || 0,
-    htmlMessageLength: email.htmlMessage?.length || 0,
-    hasRawData: !!email.rawData,
-    isFirst,
-    isLast
-  });
-
-  useEffect(() => {
-    const loadEmailContent = async () => {
-      try {
-        setLoading(true);
-        setError('');
-        
-        // Priority 1: Use htmlMessage if available
-        if (email.htmlMessage) {
-          const sanitisedHtml = sanitiseAndRenderHtml(email.htmlMessage);
-          setHtmlContent(sanitisedHtml);
-        }
-        // Priority 2: Extract from raw data
-        else if (email.rawData) {
-          // Extract and decode HTML content from raw email data
-          const extractedHtml = extractHtmlContent(email.rawData);
-          if (extractedHtml) {
-            const sanitisedHtml = sanitiseAndRenderHtml(extractedHtml);
-            setHtmlContent(sanitisedHtml);
-          } else {
-            // Fallback to existing content
-            setHtmlContent(email.content || 'No content available');
-          }
-        } 
-        // Priority 3: Use content field
-        else if (email.content) {
-          // Check if content contains HTML tags (for thread replies with HTML content)
-          const containsHtml = /<[^>]*>/g.test(email.content);
-          if (containsHtml) {
-            // Sanitise HTML content for thread replies
-            const sanitisedHtml = sanitiseAndRenderHtml(email.content);
-            setHtmlContent(sanitisedHtml);
-          } else {
-            // Plain text content
-            setHtmlContent(email.content);
-          }
-        } else {
-          setHtmlContent('No content available');
-        }
-      } catch (error) {
-        console.error('Error loading email content:', error);
-        setError('Failed to load email content');
-        setHtmlContent(email.htmlMessage || email.content || 'Error loading content');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadEmailContent();
-  }, [email]);
-
-  // Only show merchant logo if the email sender matches the current user's email
-  const shouldShowMerchantLogo = email.email === userEmail || email.email === merchantEmail;
-
-  // Create a preview of the email content for collapsed state
-  const getEmailPreview = () => {
-    // Use htmlMessage first, fallback to content
-    const htmlContent = email.htmlMessage || email.content || '';
-    if (htmlContent) {
-      // Strip HTML tags and clean up text for preview
-      const textContent = htmlContent
-        .replace(/<[^>]+>/g, '') // Remove HTML tags
-        .replace(/&nbsp;/g, ' ') // Replace &nbsp; with spaces
-        .replace(/&amp;/g, '&') // Replace &amp; with &
-        .replace(/&lt;/g, '<') // Replace &lt; with <
-        .replace(/&gt;/g, '>') // Replace &gt; with >
-        .replace(/\s+/g, ' ') // Replace multiple whitespace with single space
-        .trim();
-      return textContent.length > 100 ? textContent.substring(0, 100) + '...' : textContent;
-    }
-    return 'No content available';
-  };
-
-  return (
-    <div className={`border-b border-gray-100 pb-6 last:border-b-0 ${isFirst ? 'pt-4' : ''}`}>
-      {/* Email Header - Clickable for collapsed emails */}
-      <div 
-        className={`flex items-start gap-3 mb-4 ${!isExpanded ? 'cursor-pointer hover:bg-gray-50 -mx-2 px-2 py-2 rounded-md' : ''}`}
-        onClick={!isExpanded ? onToggleExpansion : undefined}
-      >
-        <Avatar className="h-10 w-10 flex-shrink-0">
-          {shouldShowMerchantLogo && <AvatarImage src={merchantData?.logoUrl} />}
-          <AvatarFallback className={`font-semibold text-sm ${
-            isSentMessage ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
-          }`}>
-            {email.sender.split(' ').map((n: string) => n[0]).join('').toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-        
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="font-semibold text-gray-900">{email.sender}</span>
-            <span className="text-sm text-gray-600">&lt;{email.email}&gt;</span>
-            {isSentMessage && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
-                Sent
-              </span>
-            )}
-          </div>
-          
-          <div className="flex items-center gap-4 text-sm text-gray-600 mb-1">
-            <span><span className="font-bold">To:</span> {email.to || "Unknown Recipient"}</span>
-            <span>{(() => {
-              // Get the appropriate timestamp with proper Firestore handling
-              const timestamp = email.repliedAt || email.receivedAt || email.time;
-              if (!timestamp) return 'Unknown time';
-              
-              // Handle Firestore Timestamp objects
-              if (timestamp && typeof timestamp.toDate === 'function') {
-                return formatPreviewTime(timestamp.toDate());
-              }
-              
-              // Handle string or Date objects
-              return formatPreviewTime(timestamp);
-            })()}</span>
-            {email.hasAttachment && (
-              <div className="flex items-center gap-1">
-                <Paperclip className="h-3 w-3" />
-                <span>Attachment</span>
-              </div>
-            )}
-          </div>
-          
-          {/* Content Preview for Collapsed State */}
-          {!isExpanded && (
-            <div className="text-sm text-gray-600 mt-2 line-clamp-2">
-              {getEmailPreview()}
-            </div>
-          )}
-        </div>
-        
-        {/* Expand/Collapse Icon */}
-        <div className="flex-shrink-0 ml-2">
-          {isExpanded ? (
-            <button
-              onClick={onToggleExpansion}
-              className="p-1 hover:bg-gray-100 rounded-md transition-colors"
-              title="Collapse email"
-            >
-              <ChevronUp className="h-4 w-4 text-gray-400" />
-            </button>
-          ) : (
-            <ChevronDown className="h-4 w-4 text-gray-400" />
-          )}
-        </div>
-      </div>
-      
-      {/* Email Content - Only show when expanded */}
-      {isExpanded && (
-        <div className="ml-13">
-          {/* Compact Attachments - Right after header in thread */}
-          <div className="mb-1">
-            <CompactAttachmentList attachments={extractAttachments(email)} />
-          </div>
-          
-          {loading ? (
-            <div className="flex items-center py-8">
-              <RefreshCw className="h-4 w-4 animate-spin mr-2 text-gray-400" />
-              <span className="text-gray-600">Loading content...</span>
-            </div>
-          ) : error ? (
-            <div className="py-8">
-              <div className="flex items-center mb-2">
-                <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
-                <span className="text-red-600">{error}</span>
-              </div>
-            </div>
-          ) : (
-            <div className="prose max-w-none">
-              {isSentMessage && !htmlContent ? (
-                // For sent messages with no HTML content, display plain text
-                <div 
-                  className="email-content whitespace-pre-wrap text-gray-900"
-                  style={{
-                    lineHeight: '1.6',
-                    fontFamily: 'system-ui, -apple-system, sans-serif',
-                    wordWrap: 'break-word',
-                    overflowWrap: 'break-word',
-                    fontSize: '14px'
-                  }}
-                >
-                  {email.content}
-                </div>
-              ) : (
-                // For all messages with HTML content (including thread replies), display HTML
-                <div className="email-content" data-email-content>
-                <IframeEmail html={htmlContent || email.content || 'No content available'} className="text-sm" />
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}; 

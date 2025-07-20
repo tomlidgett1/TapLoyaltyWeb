@@ -2920,6 +2920,7 @@ ${content}
               isSending={isSending}
               onCancel={() => setIsComposing(false)}
               selectedAccount={selectedAccount}
+              callGenerateEmailResponse={callGenerateEmailResponse}
               onSend={async (to: string, subject: string, content: string) => {
                 try {
                   setIsSending(true);
@@ -3327,16 +3328,21 @@ const ComposeEmailView = ({
   onSend, 
   onCancel, 
   isSending,
-  selectedAccount 
+  selectedAccount,
+  callGenerateEmailResponse 
 }: { 
   onSend: (to: string, subject: string, content: string) => void;
   onCancel: () => void;
   isSending: boolean;
   selectedAccount?: string;
+  callGenerateEmailResponse?: (requestType: string, tone?: string, customInstructions?: string, replyEditor?: React.RefObject<HTMLDivElement | null>) => Promise<any>;
 }) => {
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
+  const [showInstructions, setShowInstructions] = useState(false);
+  const [instructionsClosing, setInstructionsClosing] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const composeEditorRef = useRef<HTMLDivElement>(null);
 
   // Update content when the contentEditable div changes
@@ -3344,6 +3350,39 @@ const ComposeEmailView = ({
     if (composeEditorRef.current) {
       // Get HTML content for rich text support
       setContent(composeEditorRef.current.innerHTML || '');
+    }
+  };
+
+  // Close instructions with animation
+  const closeInstructionsWithAnimation = () => {
+    setInstructionsClosing(true);
+    setTimeout(() => {
+      setShowInstructions(false);
+      setInstructionsClosing(false);
+    }, 200);
+  };
+
+  // Handle compose AI generation
+  const handleComposeAI = async (requestType: string, tone?: string) => {
+    if (!callGenerateEmailResponse || !composeEditorRef.current) return;
+    
+    setIsGenerating(true);
+    try {
+      let customInstructions;
+      if (requestType === 'instruct') {
+        const textarea = document.getElementById('instructions-textarea-compose') as HTMLTextAreaElement;
+        customInstructions = textarea?.value || '';
+      }
+      await callGenerateEmailResponse(requestType, tone, customInstructions, composeEditorRef);
+      
+      // Update content state after AI generation
+      if (composeEditorRef.current) {
+        setContent(composeEditorRef.current.innerHTML || '');
+      }
+    } catch (error) {
+      console.error('Error in compose AI generation:', error);
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -3402,6 +3441,135 @@ const ComposeEmailView = ({
           className="flex-1 text-xs bg-transparent border-none outline-none focus:ring-0 text-gray-900"
           placeholder="Enter subject"
         />
+      </div>
+
+      {/* Tap Agent Bar for Compose */}
+      <div className="px-3 py-2">
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3">
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <WandSparkles className="h-4 w-4 text-blue-500" />
+                  <GradientText
+                    colors={["#ff6b35", "#4079ff", "#ff8500", "#3b82f6", "#ff6b35"]}
+                    animationSpeed={3}
+                    showBorder={false}
+                    className="text-xs font-medium"
+                  >
+                    Tap Agent
+                  </GradientText>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowInstructions(!showInstructions)}
+                    className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                  >
+                    <MessageSquare className="h-3 w-3 text-gray-500" />
+                    Instruct
+                  </button>
+                </div>
+              </div>
+              
+              {/* Change Tone Dropdown */}
+              <div className="flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors">
+                      <Palette className="h-3 w-3 text-gray-500" />
+                      Change Tone
+                      <ChevronDown className="h-3 w-3 text-gray-500" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-36">
+                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'friendly')}>
+                      <Lightbulb className="h-3 w-3 text-gray-500 mr-2" />
+                      <span className="text-xs">Friendly</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'professional')}>
+                      <Users className="h-3 w-3 text-gray-500 mr-2" />
+                      <span className="text-xs">Professional</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'direct')}>
+                      <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
+                      <span className="text-xs">Direct</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'casual')}>
+                      <Eye className="h-3 w-3 text-gray-500 mr-2" />
+                      <span className="text-xs">Casual</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'formal')}>
+                      <Shield className="h-3 w-3 text-gray-500 mr-2" />
+                      <span className="text-xs">Formal</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'persuasive')}>
+                      <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
+                      <span className="text-xs">Persuasive</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+          </div>
+          
+          {/* Instructions Dropdown */}
+          {(showInstructions || instructionsClosing) && (
+            <div className={`bg-white transition-all duration-200 ease-out ${
+              instructionsClosing 
+                ? 'animate-out slide-out-to-top-2' 
+                : 'animate-in slide-in-from-top-2'
+            }`}>
+              <div className="p-4">
+                <div className="flex items-start justify-between mb-3">
+                  <label className="block text-xs font-medium text-gray-700">
+                    Custom Instructions
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={closeInstructionsWithAnimation}
+                      className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded-md hover:bg-gray-100 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      disabled={isGenerating}
+                      onClick={() => {
+                        const textarea = document.getElementById('instructions-textarea-compose') as HTMLTextAreaElement;
+                        const customInstructions = textarea?.value || '';
+                        if (customInstructions.trim()) {
+                          handleComposeAI('instruct');
+                        }
+                        closeInstructionsWithAnimation();
+                      }}
+                      className={`text-xs px-3 py-1 rounded-md transition-all duration-300 ${
+                        isGenerating 
+                          ? 'text-white bg-blue-600 button-pulse cursor-not-allowed' 
+                          : 'text-white bg-blue-500 hover:bg-blue-600 hover:shadow-md'
+                      }`}
+                    >
+                      {isGenerating ? (
+                        <div className="flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <span className="text-xs text-white">
+                            Applying...
+                          </span>
+                        </div>
+                      ) : (
+                        'Apply'
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  ref={(el) => { if (el) el.id = 'instructions-textarea-compose'; }}
+                  placeholder="Enter specific instructions for how you'd like the AI to respond..."
+                  className="w-full text-xs bg-gray-50 border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder-gray-500"
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Message Content - matches reply module */}

@@ -1078,6 +1078,7 @@ ${content}
   const [threadSummary, setThreadSummary] = useState('')
   const [isSummarizing, setIsSummarizing] = useState(false)
   const [showEmailRulesDialog, setShowEmailRulesDialog] = useState(false)
+  const [rulesDialogClosing, setRulesDialogClosing] = useState(false)
   const [tempEmailRules, setTempEmailRules] = useState('')
   const [selectedTone, setSelectedTone] = useState('professional')
   const [isGenerating, setIsGenerating] = useState(false)
@@ -1086,6 +1087,15 @@ ${content}
   const [showSummaryDropdown, setShowSummaryDropdown] = useState(false)
   const [summaryClosing, setSummaryClosing] = useState(false)
   const [isFullHeight, setIsFullHeight] = useState(false)
+  
+  // Email Rules state
+  const [emailRulesList, setEmailRulesList] = useState<Array<{id: string, title: string, content: string, type: 'reply' | 'new' | 'both'}>>([]); // Added type field
+  const [newRuleText, setNewRuleText] = useState('');
+  const [newRuleType, setNewRuleType] = useState<'reply' | 'new' | 'both'>('both'); // New state for rule type
+  const [expandedRules, setExpandedRules] = useState<Set<string>>(new Set());
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [editingRuleText, setEditingRuleText] = useState('');
+  const [editingRuleType, setEditingRuleType] = useState<'reply' | 'new' | 'both'>('both'); // New state for editing rule type
   
   // Local state for dialog
   const [localShowEmailRulesDialog, setLocalShowEmailRulesDialog] = useState(false);
@@ -1962,6 +1972,82 @@ ${content}
     }
   }, [user?.uid])
 
+  // Load email rules from Firestore
+  useEffect(() => {
+    const loadRulesFromFirestore = async () => {
+      if (!user?.uid) return;
+      
+      try {
+        // Load reply rules from instructions
+        const replyRulesRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions');
+        const replyRulesSnap = await getDoc(replyRulesRef);
+        
+        // Load new email rules from instructions-new
+        const newEmailRulesRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions-new');
+        const newEmailRulesSnap = await getDoc(newEmailRulesRef);
+        
+        // Combine rules from both locations
+        let combinedRules: Array<{id: string, title: string, content: string, type: 'reply' | 'new' | 'both'}> = [];
+        
+        // Add reply rules
+        if (replyRulesSnap.exists()) {
+          const replyData = replyRulesSnap.data();
+          if (replyData.rules && Array.isArray(replyData.rules)) {
+            // Mark rules from instructions as 'reply' or 'both'
+            const replyRules = replyData.rules.map((rule: any) => {
+              // If rule already has a type, keep it, otherwise set to 'reply'
+              return {
+                ...rule,
+                type: rule.type || 'reply'
+              };
+            });
+            combinedRules = [...combinedRules, ...replyRules];
+          }
+        }
+        
+        // Add new email rules
+        if (newEmailRulesSnap.exists()) {
+          const newEmailData = newEmailRulesSnap.data();
+          if (newEmailData.rules && Array.isArray(newEmailData.rules)) {
+            // Mark rules from instructions-new as 'new' or 'both'
+            const newEmailRules = newEmailData.rules.map((rule: any) => {
+              // If rule already has a type, keep it, otherwise set to 'new'
+              return {
+                ...rule,
+                type: rule.type || 'new'
+              };
+            });
+            
+            // Merge with existing rules - avoid duplicates for 'both' type rules
+            newEmailRules.forEach((newRule: any) => {
+              // Check if this rule is already in combinedRules (for 'both' type rules)
+              const existingRuleIndex = combinedRules.findIndex(r => 
+                r.content === newRule.content && (r.type === 'both' || newRule.type === 'both')
+              );
+              
+              if (existingRuleIndex >= 0) {
+                // Rule exists and one is 'both' - mark as 'both'
+                combinedRules[existingRuleIndex].type = 'both';
+              } else {
+                // New rule - add to list
+                combinedRules.push(newRule);
+              }
+            });
+          }
+        }
+        
+        setEmailRulesList(combinedRules);
+      } catch (error) {
+        console.error('Error loading rules from Firestore:', error);
+        setEmailRulesList([]);
+      }
+    };
+
+    if (user?.uid) {
+      loadRulesFromFirestore();
+    }
+  }, [user?.uid]);
+
   // Get current selected account details
   const getCurrentAccount = () => {
     return connectedAccounts.find(account => account.emailAddress === selectedAccount)
@@ -2434,6 +2520,172 @@ ${content}
       setShowInstructions(false);
       setInstructionsClosing(false);
     }, 200); // Match the animation duration
+  };
+
+  // Helper function to close rules dialog with animation
+  const closeRulesDialogWithAnimation = () => {
+    setRulesDialogClosing(true);
+    setTimeout(() => {
+      setShowEmailRulesDialog(false);
+      setRulesDialogClosing(false);
+    }, 300); // Match the animation duration
+  };
+
+  // Email Rules Functions
+  const addNewRule = () => {
+    if (newRuleText.trim()) {
+      const newRule = {
+        id: Date.now().toString(),
+        title: newRuleText.length > 50 ? newRuleText.substring(0, 50) + '...' : newRuleText,
+        content: newRuleText.trim(),
+        type: newRuleType // Include the selected rule type
+      };
+      setEmailRulesList(prev => [...prev, newRule]);
+      setNewRuleText('');
+    }
+  };
+
+  const removeRule = (ruleId: string) => {
+    const ruleToRemove = emailRulesList.find(rule => rule.id === ruleId);
+    if (ruleToRemove) {
+      console.log('Removing rule:', ruleToRemove.title);
+      setEmailRulesList(prev => prev.filter(rule => rule.id !== ruleId));
+    }
+    
+    // Close expanded rule if it's being removed
+    setExpandedRules(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(ruleId);
+      return newSet;
+    });
+  };
+
+  // Note: Rules will be automatically saved to separate Firestore locations when saveRulesToFirestore is called on Save button click
+  const toggleRuleExpansion = (ruleId: string) => {
+    setExpandedRules(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(ruleId)) {
+        newSet.delete(ruleId);
+      } else {
+        newSet.add(ruleId);
+      }
+      return newSet;
+    });
+  };
+
+  const startEditingRule = (rule: {id: string, title: string, content: string, type: 'reply' | 'new' | 'both'}) => {
+    setEditingRuleId(rule.id);
+    setEditingRuleText(rule.content);
+    setEditingRuleType(rule.type);
+  };
+
+  const saveEditingRule = () => {
+    if (editingRuleId && editingRuleText.trim()) {
+      setEmailRulesList(prev => prev.map(rule =>
+        rule.id === editingRuleId
+          ? {
+              ...rule,
+              content: editingRuleText.trim(),
+              title: editingRuleText.trim().length > 50 ? editingRuleText.trim().substring(0, 50) + '...' : editingRuleText.trim(),
+              type: editingRuleType // Update rule type
+            }
+          : rule
+      ));
+      setEditingRuleId(null);
+      setEditingRuleText('');
+      setEditingRuleType('both'); // Reset editing type
+    }
+  };
+
+  const cancelEditingRule = () => {
+    setEditingRuleId(null);
+    setEditingRuleText('');
+    setEditingRuleType('both'); // Reset editing type
+  };
+
+  const rulesToString = (rules: Array<{id: string, title: string, content: string, type: 'reply' | 'new' | 'both'}>) => {
+    if (rules.length === 0) return '';
+    
+    // Group rules by type
+    const replyRules = rules.filter(rule => rule.type === 'reply' || rule.type === 'both').map(rule => rule.content);
+    const newEmailRules = rules.filter(rule => rule.type === 'new' || rule.type === 'both').map(rule => rule.content);
+    
+    let result = '';
+    if (replyRules.length > 0) {
+      result += 'Reply Rules:\n' + replyRules.map(rule => `- ${rule}`).join('\n');
+    }
+    if (newEmailRules.length > 0) {
+      if (result) result += '\n\n';
+      result += 'New Email Rules:\n' + newEmailRules.map(rule => `- ${rule}`).join('\n');
+    }
+    
+    return result;
+  };
+
+  const stringToRules = (rulesString: string) => {
+    if (!rulesString.trim()) return [];
+    
+    const rules: Array<{id: string, title: string, content: string, type: 'reply' | 'new' | 'both'}> = [];
+    
+    // Split by sections
+    const lines = rulesString.split('\n');
+    let currentType: 'reply' | 'new' | 'both' = 'both';
+    let ruleCounter = 1;
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      
+      if (trimmedLine.toLowerCase().includes('reply rules:')) {
+        currentType = 'reply';
+        continue;
+      } else if (trimmedLine.toLowerCase().includes('new email rules:')) {
+        currentType = 'new';
+        continue;
+      }
+      
+      if (trimmedLine.startsWith('- ')) {
+        const content = trimmedLine.substring(2).trim();
+        if (content) {
+          const rule = {
+            id: `imported-${ruleCounter++}`,
+            title: content.length > 50 ? content.substring(0, 50) + '...' : content,
+            content: content,
+            type: currentType
+          };
+          rules.push(rule);
+        }
+      }
+    }
+    
+    return rules;
+  };
+
+  const saveRulesToFirestore = async (rules: Array<{id: string, title: string, content: string, type: 'reply' | 'new' | 'both'}>) => {
+    if (!user?.uid) return;
+    
+    try {
+      // Group rules by type
+      const replyRules = rules.filter(rule => rule.type === 'reply' || rule.type === 'both');
+      const newEmailRules = rules.filter(rule => rule.type === 'new' || rule.type === 'both');
+      
+      // Save reply rules to instructions document
+      const replyRulesRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions');
+      await setDoc(replyRulesRef, { 
+        rules: replyRules,
+        lastUpdated: new Date()
+      }, { merge: true });
+      
+      // Save new email rules to instructions-new document
+      const newEmailRulesRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions-new');
+      await setDoc(newEmailRulesRef, { 
+        rules: newEmailRules,
+        lastUpdated: new Date()
+      }, { merge: true });
+      
+      console.log('Rules saved successfully to Firestore');
+    } catch (error) {
+      console.error('Error saving rules to Firestore:', error);
+    }
   };
 
   return (
@@ -3043,7 +3295,7 @@ ${content}
         >
           {/* Success Message */}
           {successMessage && (
-            <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-md mx-6 mt-4 mb-2 animate-in slide-in-from-top-2 duration-200 ease-out">
+            <div className="fixed top-4 right-4 z-50 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-md shadow-md animate-in slide-in-from-top-2 duration-200 ease-out">
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <Check className="h-4 w-4 mr-2" />
@@ -3067,6 +3319,7 @@ ${content}
               onCancel={() => setIsComposing(false)}
               selectedAccount={selectedAccount}
               callGenerateEmailResponse={callGenerateEmailResponse}
+              setShowEmailRulesDialog={setShowEmailRulesDialog}
               onSend={async (to: string, subject: string, content: string, cc?: string, bcc?: string) => {
                 try {
                   setIsSending(true);
@@ -3293,6 +3546,375 @@ ${content}
           )}
         </div>
       </div>
+
+      {/* Email Rules Modal */}
+      {(showEmailRulesDialog || rulesDialogClosing) && (
+        <div className={`fixed inset-0 z-50 flex items-center justify-center ${
+          rulesDialogClosing 
+            ? 'animate-out fade-out duration-300' 
+            : 'animate-in fade-in duration-200'
+        }`}>
+          {/* Backdrop */}
+          <div 
+            className={`absolute inset-0 bg-black/50 ${
+              rulesDialogClosing 
+                ? 'animate-out fade-out duration-300' 
+                : 'animate-in fade-in duration-200'
+            }`} 
+            onClick={closeRulesDialogWithAnimation}
+          />
+          
+          {/* Modal Content */}
+          <div className={`relative bg-white rounded-md shadow-lg max-w-lg w-full mx-4 h-[700px] overflow-hidden ${
+            rulesDialogClosing 
+              ? 'animate-out slide-out-to-bottom-4 zoom-out-95 duration-300 ease-in' 
+              : 'animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out'
+          }`}>
+            <div className="flex flex-col h-full">
+              {/* Header with full-width line */}
+              <div className="p-6 pb-0">
+                <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+                  <h2 className="text-lg font-semibold">Email Rules</h2>
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-blue-500" />
+                    <button 
+                      onClick={closeRulesDialogWithAnimation}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-6 pt-4 flex flex-col h-full overflow-hidden">
+                <p className="text-sm text-gray-600 mb-4">
+                  Create and manage rules that the AI will follow when generating email responses. You can specify if a rule applies to new emails, replies, or both.
+                </p>
+                
+                {/* Add New Rule Section */}
+                <div className="space-y-3 mb-6">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newRuleText}
+                        onChange={(e) => setNewRuleText(e.target.value)}
+                        placeholder="Add a new rule (e.g., Always be concise and professional)"
+                        className="flex-1 text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            addNewRule();
+                          }
+                        }}
+                      />
+                      <Button
+                        onClick={addNewRule}
+                        disabled={!newRuleText.trim()}
+                        className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 disabled:opacity-50"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    
+                    {/* Rule Type Selector */}
+                    <div className="flex items-center justify-start gap-4 text-sm">
+                      <p className="text-xs font-medium text-gray-700">Apply this rule to:</p>
+                      <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="ruleType"
+                            checked={newRuleType === 'both'}
+                            onChange={() => setNewRuleType('both')}
+                            className="h-3.5 w-3.5 text-blue-500 focus:ring-blue-500"
+                          />
+                          <span className="text-xs">Both</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="ruleType"
+                            checked={newRuleType === 'reply'}
+                            onChange={() => setNewRuleType('reply')}
+                            className="h-3.5 w-3.5 text-blue-500 focus:ring-blue-500"
+                          />
+                          <span className="text-xs">Replies Only</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="ruleType"
+                            checked={newRuleType === 'new'}
+                            onChange={() => setNewRuleType('new')}
+                            className="h-3.5 w-3.5 text-blue-500 focus:ring-blue-500"
+                          />
+                          <span className="text-xs">New Emails Only</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Rules List */}
+                <div className="flex-1 flex flex-col min-h-0">
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">
+                    Current Rules ({emailRulesList.length})
+                  </h3>
+                  
+                  {emailRulesList.length === 0 ? (
+                    <div className="flex-1 flex items-center justify-center text-center py-8 text-gray-500">
+                      <div>
+                        <Shield className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                        <p className="text-sm">No rules yet</p>
+                        <p className="text-xs">Add your first rule above</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2">
+                      {emailRulesList.map((rule) => (
+                        <div key={rule.id} className="border border-gray-200 rounded-md">
+                          <div 
+                            className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50"
+                            onClick={() => !editingRuleId && toggleRuleExpansion(rule.id)}
+                          >
+                            <div className="flex items-center gap-2 flex-1">
+                              <ChevronRight 
+                                className={`h-4 w-4 text-gray-400 transition-transform ${
+                                  expandedRules.has(rule.id) ? 'rotate-90' : ''
+                                }`} 
+                              />
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-gray-900 truncate">
+                                  {rule.title}
+                                </span>
+                                <span className={`text-xs px-1.5 py-0.5 rounded-md ${
+                                  rule.type === 'reply' ? 'bg-blue-100 text-blue-700' :
+                                  rule.type === 'new' ? 'bg-green-100 text-green-700' :
+                                  'bg-gray-100 text-gray-700'
+                                }`}>
+                                  {rule.type === 'reply' ? 'Reply' : 
+                                   rule.type === 'new' ? 'New' : 'Both'}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (editingRuleId === rule.id) {
+                                    cancelEditingRule();
+                                  } else {
+                                    startEditingRule(rule);
+                                  }
+                                }}
+                                className="text-gray-400 hover:text-blue-500 p-1 rounded-md hover:bg-blue-50"
+                                title={editingRuleId === rule.id ? "Cancel editing" : "Edit rule"}
+                              >
+                                {editingRuleId === rule.id ? (
+                                  <X className="h-3 w-3" />
+                                ) : (
+                                  <Edit3 className="h-3 w-3" />
+                                )}
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeRule(rule.id);
+                                }}
+                                className="text-gray-400 hover:text-red-500 p-1 rounded-md hover:bg-red-50"
+                                title="Delete rule"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
+                          
+                          {expandedRules.has(rule.id) && (
+                            <div className="px-3 pb-3 border-t border-gray-100">
+                              {editingRuleId === rule.id ? (
+                                <div className="mt-2 space-y-2">
+                                  <textarea
+                                    value={editingRuleText}
+                                    onChange={(e) => setEditingRuleText(e.target.value)}
+                                    className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                    rows={3}
+                                    placeholder="Edit your rule..."
+                                  />
+                                  
+                                  {/* Rule Type Selector for Editing */}
+                                  <div className="flex items-center justify-start gap-4 text-sm">
+                                    <p className="text-xs font-medium text-gray-700">Apply this rule to:</p>
+                                    <div className="flex items-center gap-4">
+                                      <label className="flex items-center gap-1.5 cursor-pointer">
+                                        <input
+                                          type="radio"
+                                          name="editRuleType"
+                                          checked={editingRuleType === 'both'}
+                                          onChange={() => setEditingRuleType('both')}
+                                          className="h-3.5 w-3.5 text-blue-500 focus:ring-blue-500"
+                                        />
+                                        <span className="text-xs">Both</span>
+                                      </label>
+                                      <label className="flex items-center gap-1.5 cursor-pointer">
+                                        <input
+                                          type="radio"
+                                          name="editRuleType"
+                                          checked={editingRuleType === 'reply'}
+                                          onChange={() => setEditingRuleType('reply')}
+                                          className="h-3.5 w-3.5 text-blue-500 focus:ring-blue-500"
+                                        />
+                                        <span className="text-xs">Replies Only</span>
+                                      </label>
+                                      <label className="flex items-center gap-1.5 cursor-pointer">
+                                        <input
+                                          type="radio"
+                                          name="editRuleType"
+                                          checked={editingRuleType === 'new'}
+                                          onChange={() => setEditingRuleType('new')}
+                                          className="h-3.5 w-3.5 text-blue-500 focus:ring-blue-500"
+                                        />
+                                        <span className="text-xs">New Emails Only</span>
+                                      </label>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex justify-end gap-2">
+                                    <button
+                                      onClick={cancelEditingRule}
+                                      className="text-xs px-2 py-1 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50"
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      onClick={saveEditingRule}
+                                      disabled={!editingRuleText.trim()}
+                                      className="text-xs px-2 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      Save
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="text-sm text-gray-600 mt-2">
+                                  {rule.content}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Footer */}
+                <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      // Reset to original state from Firestore
+                      if (user?.uid) {
+                        const loadOriginalRules = async () => {
+                          try {
+                            // Load reply rules from instructions
+                            const replyRulesRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions');
+                            const replyRulesSnap = await getDoc(replyRulesRef);
+                            
+                            // Load new email rules from instructions-new
+                            const newEmailRulesRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions-new');
+                            const newEmailRulesSnap = await getDoc(newEmailRulesRef);
+                            
+                            // Combine rules from both locations
+                            let combinedRules: Array<{id: string, title: string, content: string, type: 'reply' | 'new' | 'both'}> = [];
+                            
+                            // Add reply rules
+                            if (replyRulesSnap.exists()) {
+                              const replyData = replyRulesSnap.data();
+                              if (replyData.rules && Array.isArray(replyData.rules)) {
+                                // Mark rules from instructions as 'reply' or 'both'
+                                const replyRules = replyData.rules.map((rule: any) => {
+                                  // If rule already has a type, keep it, otherwise set to 'reply'
+                                  return {
+                                    ...rule,
+                                    type: rule.type || 'reply'
+                                  };
+                                });
+                                combinedRules = [...combinedRules, ...replyRules];
+                              }
+                            }
+                            
+                            // Add new email rules
+                            if (newEmailRulesSnap.exists()) {
+                              const newEmailData = newEmailRulesSnap.data();
+                              if (newEmailData.rules && Array.isArray(newEmailData.rules)) {
+                                // Mark rules from instructions-new as 'new' or 'both'
+                                const newEmailRules = newEmailData.rules.map((rule: any) => {
+                                  // If rule already has a type, keep it, otherwise set to 'new'
+                                  return {
+                                    ...rule,
+                                    type: rule.type || 'new'
+                                  };
+                                });
+                                
+                                // Merge with existing rules - avoid duplicates for 'both' type rules
+                                newEmailRules.forEach((newRule: any) => {
+                                  // Check if this rule is already in combinedRules (for 'both' type rules)
+                                  const existingRuleIndex = combinedRules.findIndex(r => 
+                                    r.content === newRule.content && (r.type === 'both' || newRule.type === 'both')
+                                  );
+                                  
+                                  if (existingRuleIndex >= 0) {
+                                    // Rule exists and one is 'both' - mark as 'both'
+                                    combinedRules[existingRuleIndex].type = 'both';
+                                  } else {
+                                    // New rule - add to list
+                                    combinedRules.push(newRule);
+                                  }
+                                });
+                              }
+                            }
+                            
+                            setEmailRulesList(combinedRules);
+                          } catch (error) {
+                            console.error('Error loading original rules:', error);
+                            setEmailRulesList([]);
+                          }
+                        };
+                        loadOriginalRules();
+                      } else {
+                        setEmailRulesList([]);
+                      }
+                      setNewRuleText('');
+                      setNewRuleType('both');
+                      setExpandedRules(new Set());
+                      setEditingRuleId(null);
+                      setEditingRuleText('');
+                      setEditingRuleType('both');
+                      closeRulesDialogWithAnimation();
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={async () => {
+                      await saveRulesToFirestore(emailRulesList);
+                      const rulesString = rulesToString(emailRulesList);
+                      if (setEmailRules) {
+                        setEmailRules(rulesString);
+                      }
+                      closeRulesDialogWithAnimation();
+                    }}
+                    className="bg-blue-500 hover:bg-blue-600"
+                  >
+                    Save Rules
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 } 
@@ -3488,13 +4110,15 @@ const ComposeEmailView = ({
   onCancel, 
   isSending,
   selectedAccount,
-  callGenerateEmailResponse 
+  callGenerateEmailResponse,
+  setShowEmailRulesDialog
 }: { 
   onSend: (to: string, subject: string, content: string, cc?: string, bcc?: string) => void;
   onCancel: () => void;
   isSending: boolean;
   selectedAccount?: string;
   callGenerateEmailResponse?: (requestType: string, tone?: string, customInstructions?: string, replyEditor?: React.RefObject<HTMLDivElement | null>) => Promise<any>;
+  setShowEmailRulesDialog?: (show: boolean) => void;
 }) => {
   const [to, setTo] = useState('');
   const [cc, setCc] = useState('');
@@ -3689,6 +4313,15 @@ const ComposeEmailView = ({
               
               {/* Change Tone Dropdown */}
               <div className="flex items-center gap-2">
+                {/* Rules Button */}
+                <button
+                  onClick={() => setShowEmailRulesDialog && setShowEmailRulesDialog(true)}
+                  className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                >
+                  <Shield className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                  Rules
+                </button>
+                
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors">
@@ -3927,267 +4560,7 @@ const EmailViewer = ({
   const actualTempEmailRules = tempEmailRules ?? localTempEmailRules;
   const actualSetTempEmailRules = setTempEmailRules ?? setLocalTempEmailRules;
 
-  // Email rules management state and functions (for the modal)
-  const [emailRulesList, setEmailRulesList] = useState<Array<{id: string, title: string, content: string, type: 'reply' | 'new' | 'both'}>>([]); // Added type field
-  const [newRuleText, setNewRuleText] = useState('');
-  const [newRuleType, setNewRuleType] = useState<'reply' | 'new' | 'both'>('both'); // New state for rule type
-  const [expandedRules, setExpandedRules] = useState<Set<string>>(new Set());
-  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
-  const [editingRuleText, setEditingRuleText] = useState('');
-  const [editingRuleType, setEditingRuleType] = useState<'reply' | 'new' | 'both'>('both'); // New state for editing rule type
-  const [rulesDialogClosing, setRulesDialogClosing] = useState(false);
 
-  const addNewRule = () => {
-    if (newRuleText.trim()) {
-      const newRule = {
-        id: Date.now().toString(),
-        title: newRuleText.length > 50 ? newRuleText.substring(0, 50) + '...' : newRuleText,
-        content: newRuleText.trim(),
-        type: newRuleType // Include the selected rule type
-      };
-      setEmailRulesList(prev => [...prev, newRule]);
-      setNewRuleText('');
-    }
-  };
-
-  const removeRule = (ruleId: string) => {
-    // Get the rule before removing it to check its type
-    const ruleToRemove = emailRulesList.find(rule => rule.id === ruleId);
-    
-    // Remove the rule from the UI list
-    setEmailRulesList(prev => prev.filter(rule => rule.id !== ruleId));
-    
-    // Remove from expanded rules set
-    setExpandedRules(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(ruleId);
-      return newSet;
-    });
-    
-    // If the user has saved changes, the rule will be properly removed from the appropriate 
-    // Firestore locations when saveRulesToFirestore is called on Save button click
-  };
-
-  const toggleRuleExpansion = (ruleId: string) => {
-    setExpandedRules(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(ruleId)) {
-        newSet.delete(ruleId);
-      } else {
-        newSet.add(ruleId);
-      }
-      return newSet;
-    });
-  };
-
-  const startEditingRule = (rule: {id: string, title: string, content: string, type: 'reply' | 'new' | 'both'}) => {
-    setEditingRuleId(rule.id);
-    setEditingRuleText(rule.content);
-    setEditingRuleType(rule.type);
-  };
-
-  const saveEditingRule = () => {
-    if (editingRuleId && editingRuleText.trim()) {
-      setEmailRulesList(prev => prev.map(rule => 
-        rule.id === editingRuleId 
-          ? {
-              ...rule,
-              content: editingRuleText.trim(),
-              title: editingRuleText.trim().length > 50 ? editingRuleText.trim().substring(0, 50) + '...' : editingRuleText.trim(),
-              type: editingRuleType // Update rule type
-            }
-          : rule
-      ));
-      setEditingRuleId(null);
-      setEditingRuleText('');
-      setEditingRuleType('both'); // Reset editing type
-    }
-  };
-
-  const cancelEditingRule = () => {
-    setEditingRuleId(null);
-    setEditingRuleText('');
-    setEditingRuleType('both'); // Reset editing type
-  };
-
-  const closeRulesDialogWithAnimation = () => {
-    setRulesDialogClosing(true);
-    setTimeout(() => {
-      actualSetShowEmailRulesDialog(false);
-      setRulesDialogClosing(false);
-    }, 300);
-  };
-
-  const rulesToString = (rules: Array<{id: string, title: string, content: string, type: 'reply' | 'new' | 'both'}>) => {
-    return rules.map(rule => {
-      // Add type prefix to the content
-      if (rule.type === 'reply') {
-        return `[REPLY] ${rule.content}`;
-      } else if (rule.type === 'new') {
-        return `[NEW] ${rule.content}`;
-      } else {
-        return `[BOTH] ${rule.content}`;
-      }
-    }).join('\n\n');
-  };
-
-  const stringToRules = (rulesString: string) => {
-    if (!rulesString.trim()) return [];
-    return rulesString.split('\n\n').filter(rule => rule.trim()).map((rule, index) => {
-      // Check if the rule has a type prefix [REPLY], [NEW], or [BOTH]
-      let type: 'reply' | 'new' | 'both' = 'both';
-      let content = rule.trim();
-      
-      if (content.startsWith('[REPLY]')) {
-        type = 'reply';
-        content = content.substring(7).trim();
-      } else if (content.startsWith('[NEW]')) {
-        type = 'new';
-        content = content.substring(5).trim();
-      } else if (content.startsWith('[BOTH]')) {
-        type = 'both';
-        content = content.substring(6).trim();
-      }
-      
-      return {
-        id: `rule-${index}-${Date.now()}`,
-        title: content.length > 50 ? content.substring(0, 50) + '...' : content,
-        content: content,
-        type: type
-      };
-    });
-  };
-
-  // Initialize rules list when dialog opens
-  useEffect(() => {
-    if (actualShowEmailRulesDialog && emailRules) {
-      const parsedRules = stringToRules(emailRules);
-      setEmailRulesList(parsedRules);
-    }
-  }, [actualShowEmailRulesDialog, emailRules]);
-
-  // Load rules from Firestore when dialog opens - from both locations
-  useEffect(() => {
-    const loadRulesFromFirestore = async () => {
-      if (actualShowEmailRulesDialog && user?.uid) {
-        try {
-          // Load reply rules from instructions
-          const replyRulesRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions');
-          const replyRulesSnap = await getDoc(replyRulesRef);
-          
-          // Load new email rules from instructions-new
-          const newEmailRulesRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions-new');
-          const newEmailRulesSnap = await getDoc(newEmailRulesRef);
-          
-          // Combine rules from both locations
-          let combinedRules: Array<{id: string, title: string, content: string, type: 'reply' | 'new' | 'both'}> = [];
-          
-          // Add reply rules
-          if (replyRulesSnap.exists()) {
-            const replyData = replyRulesSnap.data();
-            if (replyData.rules && Array.isArray(replyData.rules)) {
-              // Mark rules from instructions as 'reply' or 'both'
-              const replyRules = replyData.rules.map((rule: any) => {
-                // If rule already has a type, keep it, otherwise set to 'reply'
-                return {
-                  ...rule,
-                  type: rule.type || 'reply'
-                };
-              });
-              combinedRules = [...combinedRules, ...replyRules];
-            }
-          }
-          
-          // Add new email rules
-          if (newEmailRulesSnap.exists()) {
-            const newEmailData = newEmailRulesSnap.data();
-            if (newEmailData.rules && Array.isArray(newEmailData.rules)) {
-              // Mark rules from instructions-new as 'new' or 'both'
-              const newEmailRules = newEmailData.rules.map((rule: any) => {
-                // If rule already has a type, keep it, otherwise set to 'new'
-                return {
-                  ...rule,
-                  type: rule.type || 'new'
-                };
-              });
-              
-              // Merge with existing rules - avoid duplicates for 'both' type rules
-              newEmailRules.forEach((newRule: any) => {
-                // Check if this rule is already in combinedRules (for 'both' type rules)
-                const existingRuleIndex = combinedRules.findIndex(r => 
-                  r.content === newRule.content && (r.type === 'both' || newRule.type === 'both')
-                );
-                
-                if (existingRuleIndex >= 0) {
-                  // Rule exists and one is 'both' - mark as 'both'
-                  combinedRules[existingRuleIndex].type = 'both';
-                } else {
-                  // New rule - add to list
-                  combinedRules.push(newRule);
-                }
-              });
-            }
-          }
-          
-          console.log(`Loaded ${combinedRules.length} total rules from Firestore`);
-          setEmailRulesList(combinedRules);
-        } catch (error) {
-          console.error('Error loading rules from Firestore:', error);
-        }
-      }
-    };
-
-    loadRulesFromFirestore();
-  }, [actualShowEmailRulesDialog, user?.uid]);
-
-  // Save rules to Firestore - separating by rule type
-  const saveRulesToFirestore = async (rules: Array<{id: string, title: string, content: string, type: 'reply' | 'new' | 'both'}>) => {
-    if (!user?.uid) return;
-    
-    // Separate rules by type
-    const replyRules = rules.filter(rule => rule.type === 'reply' || rule.type === 'both');
-    const newEmailRules = rules.filter(rule => rule.type === 'new' || rule.type === 'both');
-    
-    console.log(`Saving ${replyRules.length} reply rules and ${newEmailRules.length} new email rules`);
-    
-    try {
-      // Save reply rules to instructions document
-      const replyInstructionsRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions');
-      try {
-        await updateDoc(replyInstructionsRef, {
-          rules: replyRules,
-          updatedAt: new Date()
-        });
-      } catch (error) {
-        // If document doesn't exist, create it
-        await setDoc(replyInstructionsRef, {
-          rules: replyRules,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        });
-      }
-      
-      // Save new email rules to instructions-new document
-      const newEmailInstructionsRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions-new');
-      try {
-        await updateDoc(newEmailInstructionsRef, {
-          rules: newEmailRules,
-          updatedAt: new Date()
-        });
-      } catch (error) {
-        // If document doesn't exist, create it
-        await setDoc(newEmailInstructionsRef, {
-          rules: newEmailRules,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        });
-      }
-      
-      console.log('Successfully saved rules to both locations');
-    } catch (error) {
-      console.error('Error saving rules to Firestore:', error);
-    }
-  };
 
   useEffect(() => {
     const loadEmailContent = async () => {
@@ -4807,373 +5180,6 @@ const EmailViewer = ({
           </div>
         )}
       </div>
-      )}
-      
-      {/* Email Rules Modal */}
-      {(actualShowEmailRulesDialog || rulesDialogClosing) && (
-        <div className={`fixed inset-0 z-50 flex items-center justify-center ${
-          rulesDialogClosing 
-            ? 'animate-out fade-out duration-300' 
-            : 'animate-in fade-in duration-200'
-        }`}>
-          {/* Backdrop */}
-          <div 
-            className={`absolute inset-0 bg-black/50 ${
-              rulesDialogClosing 
-                ? 'animate-out fade-out duration-300' 
-                : 'animate-in fade-in duration-200'
-            }`} 
-            onClick={closeRulesDialogWithAnimation}
-          />
-          
-          {/* Modal Content */}
-          <div className={`relative bg-white rounded-md shadow-lg max-w-lg w-full mx-4 h-[600px] overflow-hidden ${
-            rulesDialogClosing 
-              ? 'animate-out slide-out-to-bottom-4 zoom-out-95 duration-300 ease-in' 
-              : 'animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out'
-          }`}>
-            <div className="flex flex-col h-full">
-              {/* Header with full-width line */}
-              <div className="p-6 pb-0">
-                <div className="flex items-center justify-between pb-3 border-b border-gray-200">
-                  <h2 className="text-lg font-semibold">Email Rules</h2>
-                  <div className="flex items-center gap-2">
-                    <Shield className="h-4 w-4 text-blue-500" />
-                    <button 
-                      onClick={closeRulesDialogWithAnimation}
-                      className="text-gray-400 hover:text-gray-600"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="p-6 pt-4 flex flex-col h-full overflow-hidden">
-                <p className="text-sm text-gray-600 mb-4">
-                  Create and manage rules that the AI will follow when generating email responses. You can specify if a rule applies to new emails, replies, or both.
-                </p>
-                
-                {/* Add New Rule Section */}
-                <div className="space-y-3 mb-6">
-                  <div className="flex flex-col gap-2">
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={newRuleText}
-                        onChange={(e) => setNewRuleText(e.target.value)}
-                        placeholder="Add a new rule (e.g., Always be concise and professional)"
-                        className="flex-1 text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') {
-                            addNewRule();
-                          }
-                        }}
-                      />
-                      <Button
-                        onClick={addNewRule}
-                        disabled={!newRuleText.trim()}
-                        className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 disabled:opacity-50"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    
-                    {/* Rule Type Selector */}
-                    <div className="flex items-center justify-start gap-4 text-sm">
-                      <p className="text-xs font-medium text-gray-700">Apply this rule to:</p>
-                      <div className="flex items-center gap-4">
-                        <label className="flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="ruleType"
-                            checked={newRuleType === 'both'}
-                            onChange={() => setNewRuleType('both')}
-                            className="h-3.5 w-3.5 text-blue-500 focus:ring-blue-500"
-                          />
-                          <span className="text-xs">Both</span>
-                        </label>
-                        <label className="flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="ruleType"
-                            checked={newRuleType === 'reply'}
-                            onChange={() => setNewRuleType('reply')}
-                            className="h-3.5 w-3.5 text-blue-500 focus:ring-blue-500"
-                          />
-                          <span className="text-xs">Replies Only</span>
-                        </label>
-                        <label className="flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="ruleType"
-                            checked={newRuleType === 'new'}
-                            onChange={() => setNewRuleType('new')}
-                            className="h-3.5 w-3.5 text-blue-500 focus:ring-blue-500"
-                          />
-                          <span className="text-xs">New Emails Only</span>
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Rules List */}
-                <div className="flex-1 flex flex-col min-h-0">
-                  <h3 className="text-sm font-medium text-gray-700 mb-3">
-                    Current Rules ({emailRulesList.length})
-                  </h3>
-                  
-                  {emailRulesList.length === 0 ? (
-                    <div className="flex-1 flex items-center justify-center text-center py-8 text-gray-500">
-                      <div>
-                        <Shield className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                        <p className="text-sm">No rules yet</p>
-                        <p className="text-xs">Add your first rule above</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2">
-                      {emailRulesList.map((rule) => (
-                        <div key={rule.id} className="border border-gray-200 rounded-md">
-                          <div 
-                            className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50"
-                            onClick={() => !editingRuleId && toggleRuleExpansion(rule.id)}
-                          >
-                            <div className="flex items-center gap-2 flex-1">
-                              <ChevronRight 
-                                className={`h-4 w-4 text-gray-400 transition-transform ${
-                                  expandedRules.has(rule.id) ? 'rotate-90' : ''
-                                }`} 
-                              />
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-gray-900 truncate">
-                                  {rule.title}
-                                </span>
-                                <span className={`text-xs px-1.5 py-0.5 rounded-md ${
-                                  rule.type === 'reply' ? 'bg-blue-100 text-blue-700' :
-                                  rule.type === 'new' ? 'bg-green-100 text-green-700' :
-                                  'bg-gray-100 text-gray-700'
-                                }`}>
-                                  {rule.type === 'reply' ? 'Reply' : 
-                                   rule.type === 'new' ? 'New' : 'Both'}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (editingRuleId === rule.id) {
-                                    cancelEditingRule();
-                                  } else {
-                                    startEditingRule(rule);
-                                  }
-                                }}
-                                className="text-gray-400 hover:text-blue-500 p-1 rounded-md hover:bg-blue-50"
-                                title={editingRuleId === rule.id ? "Cancel editing" : "Edit rule"}
-                              >
-                                {editingRuleId === rule.id ? (
-                                  <X className="h-3 w-3" />
-                                ) : (
-                                  <Edit3 className="h-3 w-3" />
-                                )}
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  removeRule(rule.id);
-                                }}
-                                className="text-gray-400 hover:text-red-500 p-1 rounded-md hover:bg-red-50"
-                                title="Delete rule"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </button>
-                            </div>
-                          </div>
-                          
-                          {expandedRules.has(rule.id) && (
-                            <div className="px-3 pb-3 border-t border-gray-100">
-                              {editingRuleId === rule.id ? (
-                                <div className="mt-2 space-y-2">
-                                  <textarea
-                                    value={editingRuleText}
-                                    onChange={(e) => setEditingRuleText(e.target.value)}
-                                    className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                                    rows={3}
-                                    placeholder="Edit your rule..."
-                                  />
-                                  
-                                  {/* Rule Type Selector for Editing */}
-                                  <div className="flex items-center justify-start gap-4 text-sm">
-                                    <p className="text-xs font-medium text-gray-700">Apply this rule to:</p>
-                                    <div className="flex items-center gap-4">
-                                      <label className="flex items-center gap-1.5 cursor-pointer">
-                                        <input
-                                          type="radio"
-                                          name="editRuleType"
-                                          checked={editingRuleType === 'both'}
-                                          onChange={() => setEditingRuleType('both')}
-                                          className="h-3.5 w-3.5 text-blue-500 focus:ring-blue-500"
-                                        />
-                                        <span className="text-xs">Both</span>
-                                      </label>
-                                      <label className="flex items-center gap-1.5 cursor-pointer">
-                                        <input
-                                          type="radio"
-                                          name="editRuleType"
-                                          checked={editingRuleType === 'reply'}
-                                          onChange={() => setEditingRuleType('reply')}
-                                          className="h-3.5 w-3.5 text-blue-500 focus:ring-blue-500"
-                                        />
-                                        <span className="text-xs">Replies Only</span>
-                                      </label>
-                                      <label className="flex items-center gap-1.5 cursor-pointer">
-                                        <input
-                                          type="radio"
-                                          name="editRuleType"
-                                          checked={editingRuleType === 'new'}
-                                          onChange={() => setEditingRuleType('new')}
-                                          className="h-3.5 w-3.5 text-blue-500 focus:ring-blue-500"
-                                        />
-                                        <span className="text-xs">New Emails Only</span>
-                                      </label>
-                                    </div>
-                                  </div>
-                                  
-                                  <div className="flex justify-end gap-2">
-                                    <button
-                                      onClick={cancelEditingRule}
-                                      className="text-xs px-2 py-1 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50"
-                                    >
-                                      Cancel
-                                    </button>
-                                    <button
-                                      onClick={saveEditingRule}
-                                      disabled={!editingRuleText.trim()}
-                                      className="text-xs px-2 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                      Save
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <p className="text-sm text-gray-600 mt-2">
-                                  {rule.content}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                
-                {/* Footer */}
-                <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
-                  <Button 
-                    variant="outline" 
-                    onClick={() => {
-                      // Reset to original state from Firestore
-                      if (user?.uid) {
-                        const loadOriginalRules = async () => {
-                          try {
-                            // Load reply rules from instructions
-                            const replyRulesRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions');
-                            const replyRulesSnap = await getDoc(replyRulesRef);
-                            
-                            // Load new email rules from instructions-new
-                            const newEmailRulesRef = doc(db, 'merchants', user.uid, 'customer-service-agent', 'instructions-new');
-                            const newEmailRulesSnap = await getDoc(newEmailRulesRef);
-                            
-                            // Combine rules from both locations
-                            let combinedRules: Array<{id: string, title: string, content: string, type: 'reply' | 'new' | 'both'}> = [];
-                            
-                            // Add reply rules
-                            if (replyRulesSnap.exists()) {
-                              const replyData = replyRulesSnap.data();
-                              if (replyData.rules && Array.isArray(replyData.rules)) {
-                                // Mark rules from instructions as 'reply' or 'both'
-                                const replyRules = replyData.rules.map((rule: any) => {
-                                  // If rule already has a type, keep it, otherwise set to 'reply'
-                                  return {
-                                    ...rule,
-                                    type: rule.type || 'reply'
-                                  };
-                                });
-                                combinedRules = [...combinedRules, ...replyRules];
-                              }
-                            }
-                            
-                            // Add new email rules
-                            if (newEmailRulesSnap.exists()) {
-                              const newEmailData = newEmailRulesSnap.data();
-                              if (newEmailData.rules && Array.isArray(newEmailData.rules)) {
-                                // Mark rules from instructions-new as 'new' or 'both'
-                                const newEmailRules = newEmailData.rules.map((rule: any) => {
-                                  // If rule already has a type, keep it, otherwise set to 'new'
-                                  return {
-                                    ...rule,
-                                    type: rule.type || 'new'
-                                  };
-                                });
-                                
-                                // Merge with existing rules - avoid duplicates for 'both' type rules
-                                newEmailRules.forEach((newRule: any) => {
-                                  // Check if this rule is already in combinedRules (for 'both' type rules)
-                                  const existingRuleIndex = combinedRules.findIndex(r => 
-                                    r.content === newRule.content && (r.type === 'both' || newRule.type === 'both')
-                                  );
-                                  
-                                  if (existingRuleIndex >= 0) {
-                                    // Rule exists and one is 'both' - mark as 'both'
-                                    combinedRules[existingRuleIndex].type = 'both';
-                                  } else {
-                                    // New rule - add to list
-                                    combinedRules.push(newRule);
-                                  }
-                                });
-                              }
-                            }
-                            
-                            setEmailRulesList(combinedRules);
-                          } catch (error) {
-                            console.error('Error loading original rules:', error);
-                            setEmailRulesList([]);
-                          }
-                        };
-                        loadOriginalRules();
-                      } else {
-                        setEmailRulesList([]);
-                      }
-                      setNewRuleText('');
-                      setNewRuleType('both');
-                      setExpandedRules(new Set());
-                      setEditingRuleId(null);
-                      setEditingRuleText('');
-                      setEditingRuleType('both');
-                      closeRulesDialogWithAnimation();
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button 
-                    onClick={async () => {
-                      await saveRulesToFirestore(emailRulesList);
-                      const rulesString = rulesToString(emailRulesList);
-                      setEmailRules?.(rulesString);
-                      closeRulesDialogWithAnimation();
-                    }}
-                    className="bg-blue-500 hover:bg-blue-600"
-                  >
-                    Save Rules
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );

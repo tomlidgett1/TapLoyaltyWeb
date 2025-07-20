@@ -971,19 +971,16 @@ export default function EmailPage() {
     }
   }, [isDragging])
 
-  // Function to summarize email thread or single email
-  const summarizeThread = async (thread?: any) => {
-    if (!user?.uid) return;
+  // Function to summarize email thread
+  const summarizeThread = async (thread: any) => {
+    if (!thread || !user?.uid) return;
     
     setIsSummarizing(true);
     try {
-      let threadContentText = '';
-      
-      if (thread && thread.emails && thread.emails.length > 0) {
-        // Handle thread with multiple emails
-        threadContentText = thread.emails.map((email: any) => {
-          const content = email.content || email.htmlMessage || 'No content';
-          return `From: ${email.sender}
+      // Prepare thread content for summarization - combine all emails into one content string
+      const threadContentText = thread.emails.map((email: any) => {
+        const content = email.content || email.htmlMessage || 'No content';
+        return `From: ${email.sender}
 To: ${email.to || 'Unknown'}
 Subject: ${email.subject || 'No Subject'}
 Date: ${email.time || email.receivedAt || email.repliedAt || 'Unknown time'}
@@ -991,20 +988,7 @@ Date: ${email.time || email.receivedAt || email.repliedAt || 'Unknown time'}
 ${content}
 
 ---`;
-        }).join('\n\n');
-      } else if (selectedEmail) {
-        // Handle single email
-        const content = selectedEmail.content || selectedEmail.htmlMessage || 'No content';
-        threadContentText = `From: ${selectedEmail.sender}
-To: ${selectedEmail.to || 'Unknown'}
-Subject: ${selectedEmail.subject || 'No Subject'}
-Date: ${selectedEmail.time || selectedEmail.receivedAt || selectedEmail.repliedAt || 'Unknown time'}
-
-${content}`;
-      } else {
-        console.error('No email content available for summarization');
-        return;
-      }
+      }).join('\n\n');
 
       const summaryResponse = await generateEmailResponse({
         merchantId: user.uid,
@@ -2320,6 +2304,15 @@ ${content}`;
           ${customScrollbarStyles}
         `
       }} />
+      {/* Hidden SVG for gradient definitions */}
+      <svg width="0" height="0" style={{ position: 'absolute' }}>
+        <defs>
+          <linearGradient id="orange-blue-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#f97316" />
+            <stop offset="100%" stopColor="#3b82f6" />
+          </linearGradient>
+        </defs>
+      </svg>
       {/* Top Bar - Combined Header with folder dropdown, toolbar, and connected account */}
       <div className="mx-3 mt-3 mb-3 bg-white rounded-xl shadow-lg border border-gray-100 flex items-center justify-between px-4 py-3 flex-shrink-0">
         <div className="flex items-center gap-4">
@@ -2613,7 +2606,7 @@ ${content}`;
           
           {/* Rest of left panel content... */}
           {/* Search Bar - Fixed at top */}
-          <div className="flex-shrink-0 p-4 border-b border-gray-200 bg-white rounded-t-xl">
+          <div className="flex-shrink-0 p-3 border-b border-gray-200 bg-white rounded-t-xl">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
@@ -2633,11 +2626,56 @@ ${content}`;
               </div>
             </div>
 
+          {/* Summary Panel - Shows at top of left panel */}
+          {(showSummaryDropdown || summaryClosing) && (
+            <div className={`flex-shrink-0 border-b border-gray-200 bg-gray-50 transition-all duration-200 ease-out ${
+              summaryClosing 
+                ? 'animate-out slide-out-to-top-2 fade-out-50' 
+                : 'animate-in slide-in-from-top-2 fade-in-50'
+            }`}>
+              <div className="p-3">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-gray-600" />
+                    <label className="block text-xs font-medium bg-gradient-to-r from-orange-500 to-blue-500 bg-clip-text text-transparent">
+                      Thread Summary
+                      {selectedThread && ` (${selectedThread.count} message${selectedThread.count > 1 ? 's' : ''})`}
+                    </label>
+                  </div>
+                  <button
+                    onClick={closeSummaryDropdownWithAnimation}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                
+                {isSummarizing ? (
+                  <div className="flex items-center gap-2 py-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-gray-600" />
+                    <span className="text-xs text-gray-600">Generating summary...</span>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-md p-3 border border-gray-200 shadow-sm max-h-[24.75rem] overflow-y-auto">
+                    <div 
+                      className="text-sm text-gray-700 leading-relaxed"
+                      dangerouslySetInnerHTML={{
+                        __html: threadSummary ? DOMPurify.sanitize(threadSummary) : 'No summary available.'
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Email list - Scrollable middle section */}
-          <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar">
+          <div className={`flex-1 overflow-y-auto min-h-0 custom-scrollbar transition-opacity duration-200 ${
+            (showSummaryDropdown && !summaryClosing) ? 'opacity-40 pointer-events-auto' : 'opacity-100'
+          }`} style={{ height: 'auto' }}>
             {emailsLoading && (
-              <div className="p-4 border-b border-gray-200 bg-blue-50">
-                <div className="flex items-center gap-3 text-sm text-blue-600">
+              <div className="p-3 border-b border-gray-200 bg-blue-50">
+                <div className="flex items-center gap-2 text-sm text-blue-600">
                   <RefreshCw className="h-4 w-4 animate-spin" />
                   <span>Fetching Gmail emails...</span>
                 </div>
@@ -2649,7 +2687,7 @@ ${content}`;
                 <div key={thread.threadId}>
                   {/* Thread header */}
                   <div
-                    className={`flex items-center gap-2 py-3 pr-3 pl-2 transition-all duration-200 ${
+                    className={`flex items-center gap-1.5 py-2 pr-2 pl-1.5 transition-all duration-200 ${
                       selectedThread?.threadId === thread.threadId
                         ? 'bg-blue-100' 
                         : !thread.representative.read 
@@ -2658,7 +2696,7 @@ ${content}`;
                     }`}
                   >
                     {/* Expand/Collapse Chevron - show when thread has 2+ documents in chain */}
-                    <div className="w-6 flex justify-center items-center flex-shrink-0">
+                    <div className="w-5 flex justify-center items-center flex-shrink-0">
                       {thread.count > 1 ? (
                         <button
                           onClick={(e) => {
@@ -2676,12 +2714,12 @@ ${content}`;
                         </button>
                       ) : (
                         /* Placeholder space for single emails to maintain alignment */
-                        <div className="w-5 h-5"></div>
+                        <div className="w-4 h-4"></div>
                       )}
                     </div>
 
                     {/* Avatar */}
-                    <Avatar className="h-8 w-8 flex-shrink-0">
+                    <Avatar className="h-6 w-6 flex-shrink-0">
                       <AvatarFallback className="bg-gray-200 text-gray-700 text-xs font-medium">
                         {thread.representative.sender.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2)}
                       </AvatarFallback>
@@ -2777,7 +2815,7 @@ ${content}`;
                         .map((email: any, index: number) => (
                         <div
                           key={email.id}
-                                                       className={`flex items-center gap-2 p-3 pl-20 cursor-pointer transition-all duration-200 border-t border-t-gray-200 ${
+                                                       className={`flex items-center gap-1.5 p-2 pl-16 cursor-pointer transition-all duration-200 border-t border-t-gray-200 ${
                             selectedEmail?.id === email.id && selectedEmailFromDropdown
                               ? 'bg-blue-100'
                               : !email.read 
@@ -3817,29 +3855,37 @@ const EmailViewer = ({
               </Tooltip>
             </TooltipProvider>
             
-            {/* Summarise Button - Show for all emails */}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-6 w-6 p-0 hover:bg-gray-100"
-                    onClick={() => onSummariseThread?.()}
-                    disabled={isSummarizing}
-                  >
-                    {isSummarizing ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <MessageSquare className="h-3 w-3" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{isSummarizing ? 'Generating Summary...' : `Summarise ${selectedThread ? `Thread (${selectedThread.count} message${selectedThread.count > 1 ? 's' : ''})` : 'Email'}`}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            {/* Summarise Button - Available for all emails */}
+            {selectedThread && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 w-6 p-0 hover:bg-gray-100"
+                      onClick={() => onSummariseThread?.()}
+                      disabled={isSummarizing}
+                    >
+                      {isSummarizing ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <MessageSquare 
+                          className="h-3 w-3" 
+                          style={{
+                            stroke: 'url(#orange-blue-gradient)',
+                            fill: 'none'
+                          }}
+                        />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{isSummarizing ? 'Generating Summary...' : `Summarise ${selectedThread.count > 1 ? `Thread (${selectedThread.count} messages)` : 'Email'}`}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
         </div>
 
@@ -3886,45 +3932,7 @@ const EmailViewer = ({
           </div>
         )}
 
-      {/* Summary Dropdown - Shows for both standard and reply view */}
-      {(showSummaryDropdown || summaryClosing) && (
-        <div className={`bg-white transition-all duration-200 ease-out ${
-          summaryClosing 
-            ? 'animate-out slide-out-to-top-2 fade-out-50' 
-            : 'animate-in slide-in-from-top-2 fade-in-50'
-        }`}>
-          <div className="p-4">
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-blue-500" />
-                <label className="block text-xs font-medium text-gray-700">
-                  Thread Summary
-                  {selectedThread && ` (${selectedThread.count} message${selectedThread.count > 1 ? 's' : ''})`}
-                </label>
-              </div>
-              <button
-                onClick={closeSummaryDropdownWithAnimation}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            
-            {isSummarizing ? (
-              <div className="flex items-center gap-3 py-4">
-                <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-                <span className="text-xs text-gray-600">Generating summary...</span>
-              </div>
-            ) : (
-              <div className="bg-gray-50 rounded-md p-3 border border-gray-200">
-                <div className="text-sm text-gray-700 leading-relaxed">
-                  {threadSummary || 'No summary available.'}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+
 
       {/* Reply Compose Area - Raw in right panel */}
         {replyMode && (
@@ -4118,7 +4126,11 @@ const EmailViewer = ({
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-2 py-1.5 rounded-md transition-colors">
-                        <MoreHorizontal className="h-3 w-3 text-gray-500" />
+                        {isSummarizing ? (
+                          <Loader2 className="h-3 w-3 text-blue-500 animate-spin" />
+                        ) : (
+                          <MoreHorizontal className="h-3 w-3 text-gray-500" />
+                        )}
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
@@ -4129,15 +4141,9 @@ const EmailViewer = ({
                         <Shield className="h-3 w-3 text-gray-500 mr-2" />
                         <span className="text-xs">Email Rules</span>
                       </DropdownMenuItem>
-                      {/* Debug: Always show for testing */}
-                      <DropdownMenuItem onClick={() => {
-                        console.log('Debug - selectedThread:', selectedThread);
-                        console.log('Debug - selectedThread.count:', selectedThread?.count);
-                        console.log('Debug - condition result:', selectedThread && selectedThread.count > 1);
-                        onSummariseThread?.();
-                      }}>
+                      <DropdownMenuItem onClick={() => onSummariseThread?.()}>
                         <MessageSquare className="h-3 w-3 text-gray-500 mr-2" />
-                        <span className="text-xs">Summarise Thread{selectedThread ? ` (${selectedThread.count})` : ' (No Thread)'}</span>
+                        <span className="text-xs">Summarise {selectedThread && selectedThread.count > 1 ? `Thread (${selectedThread.count})` : 'Email'}</span>
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

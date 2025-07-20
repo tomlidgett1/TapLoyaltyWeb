@@ -85,7 +85,8 @@ import {
   Image as ImageIcon,
   FileVideo,
   FileAudio,
-  MailPlus
+  MailPlus,
+  Maximize2
 } from "lucide-react"
 import React, { useState, useEffect, useRef } from "react"
 import Image from "next/image"
@@ -318,14 +319,17 @@ const createQuotedReplyContent = (originalEmail: any, replyType: 'reply' | 'repl
     htmlContent = htmlContent.split('\n').filter((line: string) => line.trim()).map((line: string) => `<p>${line.trim()}</p>`).join('');
   }
   
-  // Create HTML quoted content with Outlook-style header (4 lines)
+  // Create HTML quoted content with Outlook-style header (4-5 lines including CC if present)
+  const ccRecipients = extractCcRecipients(originalEmail);
+  const ccLine = ccRecipients ? `<strong>Cc:</strong> ${ccRecipients}<br>` : '';
+  
   const quotedContent = `<div style="margin-top: 20px;">
 <div style="padding-left: 0px; margin: 10px 0; color: #666;">
 <div style="font-size: 16px; color: #888; margin-bottom: 15px; line-height: 1.4;">
 <strong>From:</strong> ${originalEmail.sender} &lt;${originalEmail.email}&gt;<br>
 <strong>Date:</strong> ${dateStr}<br>
 <strong>To:</strong> ${originalEmail.to || 'Unknown Recipient'}<br>
-<strong>Subject:</strong> ${originalEmail.subject || 'No Subject'}
+${ccLine}<strong>Subject:</strong> ${originalEmail.subject || 'No Subject'}
 </div>
 ${htmlContent}
 </div>
@@ -584,6 +588,46 @@ const isEmailFromCurrentUser = (emailAddress: string, userEmail: string, merchan
   });
   
   return isMatch;
+};
+
+// Helper function to extract CC recipients from email payload
+const extractCcRecipients = (emailData: any): string => {
+  console.log("🔍 Extracting CC recipients from Firestore email document");
+  
+  try {
+    // Look in rawData (Firestore document) at payload.data.payload.headers
+    const headers = emailData.rawData?.payload?.data?.payload?.headers;
+    
+    if (headers && Array.isArray(headers)) {
+      console.log("📋 Found headers in rawData, length:", headers.length);
+      console.log("📋 All header names:", headers.map(h => h.name));
+      
+      const ccHeader = headers.find((header: any) => 
+        header.name === 'Cc'
+      );
+      
+      if (ccHeader && ccHeader.value) {
+        console.log("✅ Found CC header in Firestore document:", ccHeader.value);
+        return ccHeader.value;
+      } else {
+        console.log("ℹ️ No CC header found in Firestore headers array");
+      }
+    } else {
+      console.log("❌ No headers array found at rawData.payload.data.payload.headers");
+      console.log("📊 Firestore document structure:", {
+        hasRawData: !!emailData.rawData,
+        hasPayload: !!emailData.rawData?.payload,
+        hasPayloadData: !!emailData.rawData?.payload?.data,
+        hasPayloadDataPayload: !!emailData.rawData?.payload?.data?.payload,
+        payloadDataPayloadKeys: emailData.rawData?.payload?.data?.payload ? Object.keys(emailData.rawData.payload.data.payload) : []
+      });
+    }
+    
+    return '';
+  } catch (error) {
+    console.error("❌ Error extracting CC recipients from Firestore document:", error);
+    return '';
+  }
 };
 
 const isHtmlContent = (content: string): boolean => {
@@ -1041,6 +1085,7 @@ ${content}
   const [instructionsClosing, setInstructionsClosing] = useState(false)
   const [showSummaryDropdown, setShowSummaryDropdown] = useState(false)
   const [summaryClosing, setSummaryClosing] = useState(false)
+  const [isFullHeight, setIsFullHeight] = useState(false)
   
   // Local state for dialog
   const [localShowEmailRulesDialog, setLocalShowEmailRulesDialog] = useState(false);
@@ -1309,6 +1354,7 @@ ${content}
     else if (selectedFolder === "spam") folderMatch = email.folder === "spam"
     else if (selectedFolder === "trash") folderMatch = email.folder === "trash"
     else if (selectedFolder === "drafts") folderMatch = email.folder === "drafts"
+    else if (selectedFolder === "sent") folderMatch = email.folder === "sent"
     
     if (!folderMatch) return false
     
@@ -1413,13 +1459,91 @@ ${content}
     setComposeTo("")
   }
 
+  // Fetch sent emails from Firestore
+  const fetchSentEmails = async () => {
+    if (!user?.uid) return []
+
+    try {
+      console.log("Fetching sent emails from Firestore for merchant:", user.uid)
+      
+      // Query sentemails collection
+      const sentEmailsRef = collection(db, 'merchants', user.uid, 'sentemails')
+      const sentSnapshot = await getDocs(sentEmailsRef)
+      
+      console.log("📤 Found", sentSnapshot.size, "sent emails")
+      
+      if (sentSnapshot.size === 0) {
+        console.log("No sent emails found")
+        return []
+      }
+      
+      const sentEmails = sentSnapshot.docs.map((doc) => {
+        const sentData = doc.data()
+        console.log("📤 Processing sent email:", doc.id, sentData)
+        
+        // Transform sent email to match inbox email format
+        return {
+          id: doc.id,
+          threadId: sentData.threadId || doc.id,
+          sender: merchantData?.businessName || user?.displayName || "You",
+          email: user?.email || merchantEmail,
+          to: sentData.recipient_email || "Unknown Recipient",
+          cc: sentData.cc || "",
+          bcc: sentData.bcc || "",
+          subject: sentData.subject || "No Subject",
+          content: sentData.body || "No content available",
+          time: sentData.sentAt || new Date().toISOString(),
+          sentAt: sentData.sentAt,
+          read: true, // Sent emails are always "read"
+          hasAttachment: false, // TODO: Add attachment support for sent emails
+          folder: "sent",
+          isThread: false,
+          count: 1,
+          rawData: sentData,
+          // Create representative object for consistency
+          representative: {
+            id: doc.id,
+            threadId: sentData.threadId || doc.id,
+            sender: merchantData?.businessName || user?.displayName || "You",
+            email: user?.email || merchantEmail,
+            to: sentData.recipient_email || "Unknown Recipient",
+            subject: sentData.subject || "No Subject",
+            content: sentData.body || "No content available",
+            time: sentData.sentAt || new Date().toISOString(),
+            read: true,
+            hasAttachment: false
+          }
+        }
+      })
+      
+      // Sort by sentAt timestamp, newest first
+      return sentEmails.sort((a, b) => {
+        const timeA = new Date(a.sentAt || 0).getTime()
+        const timeB = new Date(b.sentAt || 0).getTime()
+        return timeB - timeA
+      })
+      
+    } catch (error) {
+      console.error("Error fetching sent emails:", error)
+      return []
+    }
+  }
+
   // Fetch Gmail threads from the new Firestore structure
   const fetchGmailEmails = async () => {
     if (!user?.uid) return
 
     try {
       setEmailsLoading(true)
-      console.log("Fetching Gmail threads from new Firestore structure for merchant:", user.uid)
+      console.log("Fetching emails from Firestore for merchant:", user.uid, "folder:", selectedFolder)
+      
+      if (selectedFolder === "sent") {
+        // Fetch sent emails
+        const sentEmails = await fetchSentEmails()
+        setFetchedEmails(sentEmails)
+        setEmailsLoading(false)
+        return
+      }
       
       // Query the thread documents from merchants/merchantId/fetchedemails/
       const threadsRef = collection(db, 'merchants', user.uid, 'fetchedemails')
@@ -1740,43 +1864,45 @@ ${content}
       fetchConnectedAccounts()
       
       // Initial fetch of emails
-      console.log("🚀 Initial fetch of Gmail threads on component mount")
+      console.log("🚀 Initial fetch of emails on component mount or folder change")
       fetchGmailEmails()
       
-      // Set up Firestore listener for real-time thread updates
-      const threadsRef = collection(db, 'merchants', user.uid, 'fetchedemails')
-      const threadsQuery = query(
-        threadsRef,
-        orderBy('updatedAt', 'desc'),
-        limit(50)
-      )
-      
-      console.log("📡 Setting up Firestore listener for real-time thread updates")
-      console.log("📡 Listener path:", `merchants/${user.uid}/fetchedemails`)
-      const unsubscribe = onSnapshot(threadsQuery, (snapshot) => {
-        console.log(`📡 Firestore listener: ${snapshot.size} threads found, ${snapshot.docChanges().length} changes`)
+      // Set up Firestore listener for real-time thread updates (only for inbox)
+      if (selectedFolder !== "sent") {
+        const threadsRef = collection(db, 'merchants', user.uid, 'fetchedemails')
+        const threadsQuery = query(
+          threadsRef,
+          orderBy('updatedAt', 'desc'),
+          limit(50)
+        )
         
-        // Log the changes for debugging
-        snapshot.docChanges().forEach((change) => {
-          console.log(`📡 Change type: ${change.type}, doc: ${change.doc.id}`)
+        console.log("📡 Setting up Firestore listener for real-time thread updates")
+        console.log("📡 Listener path:", `merchants/${user.uid}/fetchedemails`)
+        const unsubscribe = onSnapshot(threadsQuery, (snapshot) => {
+          console.log(`📡 Firestore listener: ${snapshot.size} threads found, ${snapshot.docChanges().length} changes`)
+          
+          // Log the changes for debugging
+          snapshot.docChanges().forEach((change) => {
+            console.log(`📡 Change type: ${change.type}, doc: ${change.doc.id}`)
+          })
+          
+          // Only refresh if there are actual changes (new threads, modifications, etc.)
+          if (snapshot.docChanges().length > 0 && selectedFolder !== "sent") {
+            console.log("📡 Thread changes detected, refreshing thread list")
+            fetchGmailEmails()
+          }
+        }, (error) => {
+          console.error("❌ Error in Firestore listener:", error)
         })
         
-        // Only refresh if there are actual changes (new threads, modifications, etc.)
-        if (snapshot.docChanges().length > 0) {
-          console.log("📡 Thread changes detected, refreshing thread list")
-          fetchGmailEmails()
+        // Cleanup function
+        return () => {
+          console.log("🧹 Cleaning up Firestore listener")
+          unsubscribe()
         }
-      }, (error) => {
-        console.error("❌ Error in Firestore listener:", error)
-      })
-      
-      // Cleanup function
-      return () => {
-        console.log("🧹 Cleaning up Firestore listener")
-        unsubscribe()
       }
     }
-  }, [user?.uid])
+  }, [user?.uid, selectedFolder])
 
   // Fetch notifications from Firestore
   useEffect(() => {
@@ -1953,8 +2079,10 @@ ${content}
 
   const handleEmailSelect = (email: any) => {
     console.log("📧 Email selected:", email.id, email.sender)
+    console.log("🎯 Previous selectedEmail:", selectedEmail?.id)
+    console.log("🎯 Setting selectedEmail to:", email.id)
     
-    // Set the selected email
+    // Set the selected email - this will trigger re-render and update highlighting
     setSelectedEmail(email)
     setReplyMode(null)
     
@@ -2000,11 +2128,18 @@ ${content}
       return shouldHighlight
     }
     
-    // If this is a multi-email thread, highlight only if the selected email is the most recent one
+    // For multi-email threads, only highlight the representative if:
+    // 1. The selected email is the thread representative (most recent email)
+    // 2. AND the dropdown is not expanded (so we don't double-highlight)
     if (selectedThread?.threadId === thread.threadId && selectedThread.emails?.length > 0) {
-      const shouldHighlight = selectedEmail.id === selectedThread.emails[0]?.id
+      const isRepresentativeSelected = selectedEmail.id === selectedThread.emails[0]?.id
+      const isDropdownExpanded = expandedThreads.has(thread.threadId)
+      
+      // Only highlight if representative is selected AND dropdown is collapsed
+      const shouldHighlight = isRepresentativeSelected && !isDropdownExpanded
+      
       if (shouldHighlight) {
-        console.log("🎯 Highlighting multi-email thread representative:", thread.threadId, "selectedEmail:", selectedEmail.id, "mostRecent:", selectedThread.emails[0]?.id)
+        console.log("🎯 Highlighting thread representative:", thread.threadId, "selectedEmail:", selectedEmail.id)
       }
       return shouldHighlight
     }
@@ -2348,7 +2483,13 @@ ${content}
                 <div className="flex items-center gap-2">
                   <Edit3 className="h-4 w-4" />
                   <span>Drafts</span>
-        </div>
+                </div>
+              </SelectItem>
+              <SelectItem value="sent">
+                <div className="flex items-center gap-2">
+                  <Send className="h-4 w-4" />
+                  <span>Sent</span>
+                </div>
               </SelectItem>
             </SelectContent>
           </Select>
@@ -2609,27 +2750,28 @@ ${content}
           >
           
           {/* Rest of left panel content... */}
-          {/* Search Bar - Fixed at top */}
-          <div className="flex-shrink-0 p-3 border-b border-gray-200 bg-white rounded-t-xl">
+          {/* Search Bar - Fixed at top, hidden when summary panel is visible */}
+          {(!showSummaryDropdown || summaryClosing) && (
+            <div className="flex-shrink-0 p-3 border-b border-gray-200 bg-white rounded-t-xl">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
                   placeholder="Search emails..."
-                className="pl-10 pr-8"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
+                  className="pl-10 pr-8"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </div>
-
+          )}
           {/* Summary Panel - Shows at top of left panel */}
           {(showSummaryDropdown || summaryClosing) && (
             <div className={`flex-shrink-0 border-b border-gray-200 bg-gray-50 transition-all duration-200 ease-out ${
@@ -2640,18 +2782,26 @@ ${content}
               <div className="p-3">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4 text-gray-600" />
                     <label className="block text-xs font-medium bg-gradient-to-r from-orange-500 to-blue-500 bg-clip-text text-transparent">
                       Thread Summary
                       {selectedThread && ` (${selectedThread.count} message${selectedThread.count > 1 ? 's' : ''})`}
                     </label>
                   </div>
-                  <button
-                    onClick={closeSummaryDropdownWithAnimation}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setIsFullHeight(prev => !prev)}
+                      className="text-gray-400 hover:text-gray-600"
+                      title="Toggle full height view"
+                    >
+                      <Maximize2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={closeSummaryDropdownWithAnimation}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
                 
                 {isSummarizing ? (
@@ -2660,7 +2810,9 @@ ${content}
                     <span className="text-xs text-gray-600">Generating summary...</span>
                   </div>
                 ) : (
-                  <div className="bg-white rounded-md p-3 border border-gray-200 shadow-sm max-h-[24.75rem] overflow-y-auto">
+                  <div className={`bg-white rounded-md p-3 border border-gray-200 shadow-sm overflow-y-auto ${
+                    isFullHeight ? 'h-[calc(100vh-220px)]' : 'max-h-[24.75rem]'
+                  }`}>
                     <div 
                       className="text-sm text-gray-700 leading-relaxed"
                       dangerouslySetInnerHTML={{
@@ -2801,18 +2953,22 @@ ${content}
                           const timeB = getEmailDate(b);
                           return timeB.getTime() - timeA.getTime();
                         })
-                        .map((email: any, index: number) => (
-                        <div
-                          key={email.id}
-                                                       className={`flex items-center gap-1.5 p-2 pl-16 cursor-pointer transition-all duration-200 border-t border-t-gray-200 ${
-                            selectedEmail?.id === email.id
-                              ? 'bg-blue-100'
-                              : email.read === true
-                                ? 'bg-white hover:bg-gray-50'
-                                : 'bg-gray-100 hover:bg-gray-200'
-                          }`}
-                          onClick={() => handleEmailSelect(email)}
-                        >
+                        .map((email: any, index: number) => {
+                          // Only highlight dropdown emails if the dropdown is expanded and this specific email is selected
+                          const isDropdownEmailHighlighted = selectedEmail?.id === email.id && expandedThreads.has(thread.threadId)
+                          
+                          return (
+                            <div
+                              key={email.id}
+                              className={`flex items-center gap-1.5 p-2 pl-16 cursor-pointer transition-all duration-200 border-t border-t-gray-200 ${
+                                isDropdownEmailHighlighted
+                                  ? 'bg-blue-100'
+                                  : email.read === true
+                                    ? 'bg-white hover:bg-gray-50'
+                                    : 'bg-gray-100 hover:bg-gray-200'
+                              }`}
+                              onClick={() => handleEmailSelect(email)}
+                            >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
                               <span className={`text-xs ${!email.read ? 'font-bold text-gray-900' : 'font-normal text-gray-600'}`}>
@@ -2861,7 +3017,8 @@ ${content}
                             <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
                           )}
                         </div>
-                      ))}
+                          )
+                        })}
                     </div>
                   )}
                 </div>
@@ -2910,7 +3067,7 @@ ${content}
               onCancel={() => setIsComposing(false)}
               selectedAccount={selectedAccount}
               callGenerateEmailResponse={callGenerateEmailResponse}
-              onSend={async (to: string, subject: string, content: string) => {
+              onSend={async (to: string, subject: string, content: string, cc?: string, bcc?: string) => {
                 try {
                   setIsSending(true);
                   
@@ -2920,7 +3077,7 @@ ${content}
                   
                   // Use sendGmailEmail for new emails
                   const sendGmailEmail = httpsCallable(functions, 'sendGmailEmail');
-                  const emailData = {
+                  const emailData: any = {
                     merchantId: user.uid,
                     body: content,
                     recipient_email: to,
@@ -2928,11 +3085,22 @@ ${content}
                     is_html: true,
                   };
                   
+                  // Add CC and BCC if provided
+                  if (cc && cc.trim()) {
+                    emailData.cc = cc.split(',').map(email => email.trim()).filter(Boolean);
+                  }
+                  if (bcc && bcc.trim()) {
+                    emailData.bcc = bcc.split(',').map(email => email.trim()).filter(Boolean);
+                  }
+                  
                   const response = await sendGmailEmail(emailData);
                   console.log('Email sent successfully:', response.data);
                   
-                  // Show success message
-                  setSuccessMessage(`Email sent successfully to: ${to}`);
+                  // Show success message with all recipients
+                  let recipients = [to];
+                  if (cc && cc.trim()) recipients.push(...cc.split(',').map(email => email.trim()).filter(Boolean));
+                  if (bcc && bcc.trim()) recipients.push(...bcc.split(',').map(email => email.trim()).filter(Boolean));
+                  setSuccessMessage(`Email sent successfully to: ${recipients.join(', ')}`);
                   
                   // Exit compose mode
                   setIsComposing(false);
@@ -3028,7 +3196,7 @@ ${content}
                       message_body: content,
                       html_message_body: content, // HTML format of the message body
                       recipient_email: recipients[0], // Primary recipient
-                      thread_id: selectedThread.threadId,
+                      thread_id: selectedThread?.threadId || replyMode?.originalEmail.threadId || replyMode?.originalEmail.id,
                       is_html: true,
                     };
                     
@@ -3054,7 +3222,7 @@ ${content}
                   // Create the sent message object for UI
                   const sentMessage = {
                     id: `sent-${Date.now()}`,
-                    threadId: selectedThread.threadId,
+                    threadId: selectedThread?.threadId || replyMode?.originalEmail.threadId || replyMode?.originalEmail.id,
                     sender: merchantData?.businessName || user?.displayName || 'You',
                     email: user?.email || merchantEmail,
                     subject: subject,
@@ -3067,15 +3235,17 @@ ${content}
                     rawData: null
                   };
                   
-                  // Add the sent message to the thread
-                  const updatedThread = {
-                    ...selectedThread,
-                    emails: [...selectedThread.emails, sentMessage],
-                    count: selectedThread.count + 1
-                  };
-                  
-                  // Update the selected thread
-                  setSelectedThread(updatedThread);
+                  // Add the sent message to the thread (only if selectedThread exists)
+                  if (selectedThread) {
+                    const updatedThread = {
+                      ...selectedThread,
+                      emails: [...selectedThread.emails, sentMessage],
+                      count: selectedThread.count + 1
+                    };
+                    
+                    // Update the selected thread
+                    setSelectedThread(updatedThread);
+                  }
                   
                   // Close reply mode
                   setReplyMode(null);
@@ -3320,15 +3490,19 @@ const ComposeEmailView = ({
   selectedAccount,
   callGenerateEmailResponse 
 }: { 
-  onSend: (to: string, subject: string, content: string) => void;
+  onSend: (to: string, subject: string, content: string, cc?: string, bcc?: string) => void;
   onCancel: () => void;
   isSending: boolean;
   selectedAccount?: string;
   callGenerateEmailResponse?: (requestType: string, tone?: string, customInstructions?: string, replyEditor?: React.RefObject<HTMLDivElement | null>) => Promise<any>;
 }) => {
   const [to, setTo] = useState('');
+  const [cc, setCc] = useState('');
+  const [bcc, setBcc] = useState('');
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
+  const [showCc, setShowCc] = useState(false);
+  const [showBcc, setShowBcc] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [instructionsClosing, setInstructionsClosing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -3388,7 +3562,7 @@ const ComposeEmailView = ({
           <Button
             onClick={() => {
               if (to.trim() && content.trim()) {
-                onSend(to, subject, content);
+                onSend(to, subject, content, cc, bcc);
               }
             }}
             disabled={!to.trim() || !content.trim() || isSending}
@@ -3421,7 +3595,57 @@ const ComposeEmailView = ({
           className="flex-1 text-xs bg-transparent border-none outline-none focus:ring-0 text-gray-900"
           placeholder="Enter recipient email address"
         />
+        <div className="flex items-center gap-2 ml-2">
+          <button
+            onClick={() => setShowCc(!showCc)}
+            className={`text-xs px-2 py-1 rounded transition-colors ${
+              showCc 
+                ? 'text-blue-600 bg-blue-50' 
+                : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50'
+            }`}
+          >
+            Cc
+          </button>
+          <button
+            onClick={() => setShowBcc(!showBcc)}
+            className={`text-xs px-2 py-1 rounded transition-colors ${
+              showBcc 
+                ? 'text-blue-600 bg-blue-50' 
+                : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50'
+            }`}
+          >
+            Bcc
+          </button>
+        </div>
       </div>
+
+      {/* CC Field */}
+      {showCc && (
+        <div className="flex items-center py-2 px-4 border-b border-gray-100">
+          <div className="w-12 text-xs text-gray-600 font-medium">Cc:</div>
+          <input
+            type="text"
+            value={cc}
+            onChange={(e) => setCc(e.target.value)}
+            className="flex-1 text-xs bg-transparent border-none outline-none focus:ring-0 text-gray-900"
+            placeholder="Enter CC email addresses"
+          />
+        </div>
+      )}
+
+      {/* BCC Field */}
+      {showBcc && (
+        <div className="flex items-center py-2 px-4 border-b border-gray-100">
+          <div className="w-12 text-xs text-gray-600 font-medium">Bcc:</div>
+          <input
+            type="text"
+            value={bcc}
+            onChange={(e) => setBcc(e.target.value)}
+            className="flex-1 text-xs bg-transparent border-none outline-none focus:ring-0 text-gray-900"
+            placeholder="Enter BCC email addresses"
+          />
+        </div>
+      )}
 
       {/* Subject Field */}
       <div className="flex items-center py-2 px-4 border-b border-gray-100">
@@ -3941,13 +4165,27 @@ const EmailViewer = ({
             replyEditorRef.current.focus();
           }
         } else if (replyMode.type === 'forward') {
+          // For forward, leave the recipients field empty
           setReplyRecipients('');
           setReplyCc('');
-          setReplyContent('');
-          if (replyEditorRef.current) {
-            replyEditorRef.current.innerHTML = '';
-          }
+          
+          // Pre-populate the editor with quoted content (same as reply)
+          const quotedContent = createQuotedReplyContent(replyMode.originalEmail, replyMode.type);
+          const fullContent = `<div><br><br></div><hr style="border: none; border-top: 1px solid #ccc; margin: 20px 0;">${quotedContent}`;
           setReplyQuotedContent('');
+          setReplyContent('');
+          
+          if (replyEditorRef.current) {
+            replyEditorRef.current.innerHTML = fullContent;
+            // Position cursor at the beginning
+            const range = document.createRange();
+            const selection = window.getSelection();
+            range.setStart(replyEditorRef.current.firstChild!, 0);
+            range.collapse(true);
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+            replyEditorRef.current.focus();
+          }
         }
       } else {
         setReplyContent('');
@@ -4078,6 +4316,18 @@ const EmailViewer = ({
               </div>
               <div className="flex items-center gap-1 text-xs text-gray-600">
                 <span><span className="font-bold">To:</span> {email.to}</span>
+                {(() => {
+                  const ccRecipients = extractCcRecipients(email);
+                  if (ccRecipients) {
+                    return (
+                      <>
+                        <span>•</span>
+                        <span><span className="font-bold">Cc:</span> {ccRecipients}</span>
+                      </>
+                    );
+                  }
+                  return null;
+                })()}
                 <span>•</span>
                 <span>{(() => {
                   // Get the appropriate timestamp with proper Firestore handling
@@ -4116,8 +4366,15 @@ const EmailViewer = ({
               <Button
                 onClick={() => {
                   const currentReplyContent = replyEditorRef.current?.innerHTML || '';
-                  if (currentReplyContent.trim() && replyRecipients.trim()) {
-                    const subject = replyMode.originalEmail.subject.startsWith('Re: ') ? replyMode.originalEmail.subject : `Re: ${replyMode.originalEmail.subject}`;
+                  if (currentReplyContent.trim() && (replyMode.type === 'forward' || replyRecipients.trim())) {
+                    // For reply/replyAll, add "Re:" prefix; for forward, add "Fwd:" prefix
+                    let subject;
+                    if (replyMode.type === 'forward') {
+                      subject = replyMode.originalEmail.subject.startsWith('Fwd: ') ? replyMode.originalEmail.subject : `Fwd: ${replyMode.originalEmail.subject}`;
+                    } else {
+                      subject = replyMode.originalEmail.subject.startsWith('Re: ') ? replyMode.originalEmail.subject : `Re: ${replyMode.originalEmail.subject}`;
+                    }
+                    
                     const recipients = [
                       ...replyRecipients.split(',').map(email => email.trim()).filter(Boolean),
                       ...replyCc.split(',').map(email => email.trim()).filter(Boolean)
@@ -4126,7 +4383,7 @@ const EmailViewer = ({
                     onSendReply?.(currentReplyContent, subject, recipients, replyAttachments);
                   }
                 }}
-                disabled={!replyRecipients.trim() || isSending}
+                disabled={(replyMode.type !== 'forward' && !replyRecipients.trim()) || isSending}
                 className="bg-blue-500 hover:bg-blue-600 text-white h-7 px-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
               >
                 {isSending ? (

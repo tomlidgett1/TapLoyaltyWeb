@@ -259,6 +259,7 @@ export default function DashboardPage() {
   const [isTimeframePanelOpen, setIsTimeframePanelOpen] = useState(false)
   const [isAdvancedActivity, setIsAdvancedActivity] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
+  const [pageVisible, setPageVisible] = useState(false)
 
 
   const [metricsLoading, setMetricsLoading] = useState(false)
@@ -4509,6 +4510,16 @@ export default function DashboardPage() {
     }
   }, [user?.uid, chartPeriod])
 
+  // Trigger fade-in animation after initial loading
+  useEffect(() => {
+    if (!initialLoading) {
+      const timer = setTimeout(() => {
+        setPageVisible(true)
+      }, 100) // Small delay for smooth transition
+      return () => clearTimeout(timer)
+    }
+  }, [initialLoading])
+
   if (initialLoading) {
     return (
       <div className="container mx-auto p-4">
@@ -4522,7 +4533,12 @@ export default function DashboardPage() {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: customAnimationStyles }} />
-      <div className="flex flex-col h-full max-w-full">
+      <div className={cn(
+        "flex flex-col h-full max-w-full transition-all duration-700 ease-out",
+        pageVisible 
+          ? "opacity-100 translate-y-0" 
+          : "opacity-0 translate-y-4"
+      )}>
         {/* Header Section */}
         <div className="px-6 py-5">
           <div className="flex justify-between items-center">

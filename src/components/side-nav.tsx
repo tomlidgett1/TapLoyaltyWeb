@@ -614,7 +614,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
       </div>
       
       {/* Create Button */}
-      <div className="px-3 mb-2">
+      <div className="px-4 mb-2">
         <NavCreate
           isCollapsed={isCollapsed}
           onCreateReward={() => setCreateRewardPopupOpen(true)}

@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, setDoc, updateDoc, DocumentData, deleteDoc } from "firebase/firestore"
+import { httpsCallable } from "firebase/functions"
+import { functions } from "@/lib/firebase"
 import { toast } from "@/components/ui/use-toast"
 import Link from "next/link"
 import { PageTransition } from "@/components/page-transition"
@@ -625,6 +627,13 @@ export default function IntegrationsPage() {
     if (!user) return
     
     try {
+      // Call the deleteConnectedAccounts Firebase function
+      const deleteConnectedAccounts = httpsCallable(functions, 'deleteConnectedAccounts');
+      await deleteConnectedAccounts({
+        merchantId: user.uid,
+        slug: 'gmail'
+      });
+      
       // Delete the integration from Firestore
       const integrationRef = doc(db, `merchants/${user.uid}/integrations/gmail`);
       await deleteDoc(integrationRef);

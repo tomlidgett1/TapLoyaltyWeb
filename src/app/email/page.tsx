@@ -96,9 +96,98 @@ import { db } from "@/lib/firebase"
 import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnapshot, updateDoc, setDoc } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
 import { functions } from "@/lib/firebase"
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"
 import { formatMelbourneTime } from "@/lib/date-utils"
 import { formatDistanceToNow } from "date-fns"
 import { cn } from "@/lib/utils"
+
+// Email Chip Component for displaying email addresses with light box
+const EmailChip = ({ email, onRemove }: { email: string; onRemove?: (email: string) => void }) => {
+  return (
+    <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 shadow-sm">
+      <span className="truncate max-w-32">{email}</span>
+      {onRemove && (
+        <button
+          onClick={() => onRemove(email)}
+          className="ml-1 p-0.5 hover:bg-blue-100 rounded-full transition-colors"
+        >
+          <X className="h-3 w-3 text-blue-600" />
+        </button>
+      )}
+    </div>
+  );
+};
+
+// Email Input Component with chips
+const EmailInputWithChips = ({ 
+  value, 
+  onChange, 
+  placeholder, 
+  className = "" 
+}: { 
+  value: string; 
+  onChange: (value: string) => void; 
+  placeholder: string; 
+  className?: string;
+}) => {
+  const [inputValue, setInputValue] = useState('');
+  const emails = value.split(',').map(e => e.trim()).filter(Boolean);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value);
+  };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const newEmail = inputValue.trim();
+      if (newEmail && !emails.includes(newEmail)) {
+        const newEmails = [...emails, newEmail];
+        onChange(newEmails.join(', '));
+        setInputValue('');
+      }
+    } else if (e.key === 'Backspace' && inputValue === '' && emails.length > 0) {
+      // Remove last email on backspace when input is empty
+      const newEmails = emails.slice(0, -1);
+      onChange(newEmails.join(', '));
+    }
+  };
+
+  const handleRemoveEmail = (emailToRemove: string) => {
+    const newEmails = emails.filter(email => email !== emailToRemove);
+    onChange(newEmails.join(', '));
+  };
+
+  const handleBlur = () => {
+    const newEmail = inputValue.trim();
+    if (newEmail && !emails.includes(newEmail)) {
+      const newEmails = [...emails, newEmail];
+      onChange(newEmails.join(', '));
+      setInputValue('');
+    }
+  };
+
+  return (
+    <div className={`flex flex-wrap items-center gap-1.5 min-h-8 px-2 py-1 bg-transparent border-none outline-none focus:ring-0 text-gray-900 ${className}`}>
+      {emails.map((email, index) => (
+        <EmailChip 
+          key={index} 
+          email={email} 
+          onRemove={handleRemoveEmail}
+        />
+      ))}
+      <input
+        type="text"
+        value={inputValue}
+        onChange={handleInputChange}
+        onKeyDown={handleInputKeyDown}
+        onBlur={handleBlur}
+        className="flex-1 min-w-32 text-xs bg-transparent border-none outline-none focus:ring-0 text-gray-900 placeholder-gray-500"
+        placeholder={emails.length === 0 ? placeholder : ''}
+      />
+    </div>
+  );
+};
 
 // Extract attachments from email data
 const extractAttachments = (email: any): any[] => {
@@ -1505,6 +1594,45 @@ ${content}
     setDecodeTestResults(results);
     setShowDecodeResults(true);
   }
+
+  // Upload file to Firebase Storage
+  const uploadFileToStorage = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      if (!user?.uid) {
+        reject(new Error('User not authenticated'));
+        return;
+      }
+      
+      const storage = getStorage();
+      const timestamp = Date.now();
+      const fileName = `${timestamp}_${file.name}`;
+      // Use the same path structure as notes page for proper permissions
+      const storageRef = ref(storage, `merchants/${user.uid}/email-attachments/${fileName}`);
+      
+      const uploadTask = uploadBytesResumable(storageRef, file);
+      
+      uploadTask.on('state_changed',
+        (snapshot) => {
+          // Handle progress if needed
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          console.log(`Upload progress: ${progress}%`);
+        },
+        (error) => {
+          console.error('Upload error:', error);
+          reject(error);
+        },
+        async () => {
+          try {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            resolve(downloadURL);
+          } catch (error) {
+            console.error('Error getting download URL:', error);
+            reject(error);
+          }
+        }
+      );
+    });
+  };
 
   const handleSend = () => {
     // Here you would typically send the email to your backend
@@ -3280,7 +3408,7 @@ ${content}
                 <div key={thread.threadId}>
                   {/* Main email button - always shown */}
                   <div
-                    className={`flex items-center gap-1.5 py-2 pr-2 pl-1.5 transition-all duration-200 cursor-pointer ${
+                    className={`flex items-start gap-1.5 py-2 pr-2 pl-1.5 transition-all duration-200 cursor-pointer ${
                       isThreadRepresentativeHighlighted(thread)
                         ? 'bg-blue-100' 
                         : thread.representative?.read === true
@@ -3290,7 +3418,7 @@ ${content}
                     onClick={() => handleThreadSelect(thread)}
                   >
                     {/* Dropdown chevron - only show for multiple emails */}
-                    <div className="w-5 flex justify-center items-center flex-shrink-0">
+                    <div className="w-5 flex justify-center items-start flex-shrink-0 pt-0.5">
                       {thread.count > 1 ? (
                         <button
                           onClick={(e) => {
@@ -3312,8 +3440,8 @@ ${content}
                     </div>
 
                     {/* Avatar */}
-                    <Avatar className="h-6 w-6 flex-shrink-0">
-                      <AvatarFallback className="bg-gray-200 text-gray-700 text-xs font-medium">
+                    <Avatar className="h-8 w-8 flex-shrink-0 mt-0.5">
+                      <AvatarFallback className="bg-gray-200 text-gray-700 text-sm font-medium">
                         {thread.representative?.sender ? thread.representative.sender.split(' ').map((n: string) => n[0]).join('').toUpperCase().substring(0, 2) : '??'}
                       </AvatarFallback>
                     </Avatar>
@@ -3505,12 +3633,27 @@ ${content}
               selectedAccount={selectedAccount}
               callGenerateEmailResponse={callGenerateEmailResponse}
               setShowEmailRulesDialog={setShowEmailRulesDialog}
-              onSend={async (to: string, subject: string, content: string, cc?: string, bcc?: string) => {
+              onSend={async (to: string, subject: string, content: string, cc?: string, bcc?: string, attachments?: File[]) => {
                 try {
                   setIsSending(true);
                   
                   if (!user?.uid) {
                     throw new Error('User not authenticated');
+                  }
+                  
+                  // Handle attachments if provided
+                  let attachmentUrls: string[] = [];
+                  if (attachments && attachments.length > 0) {
+                    try {
+                      // Upload all attachments to Firebase Storage
+                      const uploadPromises = attachments.map(file => uploadFileToStorage(file));
+                      attachmentUrls = await Promise.all(uploadPromises);
+                      console.log('Attachments uploaded successfully:', attachmentUrls);
+                    } catch (uploadError: any) {
+                      console.error('Error uploading attachments:', uploadError);
+                      const errorMessage = uploadError?.message || 'Unknown upload error';
+                      throw new Error(`Failed to upload attachments: ${errorMessage}`);
+                    }
                   }
                   
                   // Use sendGmailEmail for new emails
@@ -3521,6 +3664,7 @@ ${content}
                     recipient_email: to,
                     subject: subject || '(No Subject)',
                     is_html: true,
+                    attachmentUrls: attachmentUrls, // Add attachment URLs
                   };
                   
                   // Add CC and BCC if provided
@@ -3612,9 +3756,20 @@ ${content}
                       cc: recipients.length > 1 ? recipients.slice(1) : [], // Additional recipients as CC
                     };
                     
-                    // Note: Attachments require S3 upload workflow (not yet implemented)
+                    // Handle attachments if provided
+                    let attachmentUrls: string[] = [];
                     if (attachments.length > 0) {
-                      throw new Error('Attachments are not yet supported. The Composio API requires files to be uploaded to S3 first.');
+                      try {
+                        // Upload all attachments to Firebase Storage
+                        const uploadPromises = attachments.map(file => uploadFileToStorage(file));
+                        attachmentUrls = await Promise.all(uploadPromises);
+                        console.log('Forward attachments uploaded successfully:', attachmentUrls);
+                        emailData.attachmentUrls = attachmentUrls;
+                      } catch (uploadError: any) {
+                        console.error('Error uploading forward attachments:', uploadError);
+                        const errorMessage = uploadError?.message || 'Unknown upload error';
+                        throw new Error(`Failed to upload attachments: ${errorMessage}`);
+                      }
                     }
                     
                     const response = await sendGmailEmail(emailData);
@@ -3643,9 +3798,20 @@ ${content}
                       replyData.cc = recipients.slice(1);
                     }
                     
-                    // Note: Attachments require S3 upload workflow (not yet implemented)
+                    // Handle attachments if provided
+                    let attachmentUrls: string[] = [];
                     if (attachments.length > 0) {
-                      throw new Error('Attachments are not yet supported. The Composio API requires files to be uploaded to S3 first.');
+                      try {
+                        // Upload all attachments to Firebase Storage
+                        const uploadPromises = attachments.map(file => uploadFileToStorage(file));
+                        attachmentUrls = await Promise.all(uploadPromises);
+                        console.log('Reply attachments uploaded successfully:', attachmentUrls);
+                        replyData.attachmentUrls = attachmentUrls;
+                      } catch (uploadError: any) {
+                        console.error('Error uploading reply attachments:', uploadError);
+                        const errorMessage = uploadError?.message || 'Unknown upload error';
+                        throw new Error(`Failed to upload attachments: ${errorMessage}`);
+                      }
                     }
                     
                     const response = await replyToGmailThread(replyData);
@@ -4431,7 +4597,7 @@ const ComposeEmailView = ({
   callGenerateEmailResponse,
   setShowEmailRulesDialog
 }: { 
-  onSend: (to: string, subject: string, content: string, cc?: string, bcc?: string) => void;
+  onSend: (to: string, subject: string, content: string, cc?: string, bcc?: string, attachments?: File[]) => void;
   onCancel: () => void;
   isSending: boolean;
   selectedAccount?: string;
@@ -4449,7 +4615,25 @@ const ComposeEmailView = ({
   const [instructionsClosing, setInstructionsClosing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [instructionTone, setInstructionTone] = useState('professional');
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const composeEditorRef = useRef<HTMLDivElement>(null);
+
+  // Check if content is truly empty (ignoring HTML tags and whitespace)
+  const isContentEmpty = (htmlContent: string) => {
+    if (!htmlContent) return true;
+    // Remove HTML tags and check if there's actual text content
+    const textOnly = htmlContent.replace(/<[^>]*>/g, '').trim();
+    return textOnly === '';
+  };
+
+  // Check if reply content is truly empty (ignoring HTML tags and whitespace)
+  const isReplyContentEmpty = (htmlContent: string) => {
+    if (!htmlContent) return true;
+    // Remove HTML tags and check if there's actual text content
+    const textOnly = htmlContent.replace(/<[^>]*>/g, '').trim();
+    return textOnly === '';
+  };
 
   // Update content when the contentEditable div changes
   const handleContentChange = () => {
@@ -4466,6 +4650,21 @@ const ComposeEmailView = ({
       setShowInstructions(false);
       setInstructionsClosing(false);
     }, 200);
+  };
+
+  // Handle file selection
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    setAttachments(prev => [...prev, ...files]);
+    // Reset the input value to allow selecting the same file again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Remove attachment
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
   // Handle compose AI generation
@@ -4505,7 +4704,7 @@ const ComposeEmailView = ({
           <Button
             onClick={() => {
               if (to.trim() && content.trim()) {
-                onSend(to, subject, content, cc, bcc);
+                onSend(to, subject, content, cc, bcc, attachments);
               }
             }}
             disabled={!to.trim() || !content.trim() || isSending}
@@ -4531,12 +4730,11 @@ const ComposeEmailView = ({
       {/* To Field */}
       <div className="flex items-center py-2 px-4 border-b border-gray-100">
         <div className="w-12 text-xs text-gray-600 font-medium">To:</div>
-        <input
-          type="text"
+        <EmailInputWithChips
           value={to}
-          onChange={(e) => setTo(e.target.value)}
-          className="flex-1 text-xs bg-transparent border-none outline-none focus:ring-0 text-gray-900"
+          onChange={setTo}
           placeholder="Enter recipient email address"
+          className="flex-1"
         />
         <div className="flex items-center gap-2 ml-2">
           <button
@@ -4566,12 +4764,11 @@ const ComposeEmailView = ({
       {showCc && (
         <div className="flex items-center py-2 px-4 border-b border-gray-100">
           <div className="w-12 text-xs text-gray-600 font-medium">Cc:</div>
-          <input
-            type="text"
+          <EmailInputWithChips
             value={cc}
-            onChange={(e) => setCc(e.target.value)}
-            className="flex-1 text-xs bg-transparent border-none outline-none focus:ring-0 text-gray-900"
+            onChange={setCc}
             placeholder="Enter CC email addresses"
+            className="flex-1"
           />
         </div>
       )}
@@ -4580,12 +4777,11 @@ const ComposeEmailView = ({
       {showBcc && (
         <div className="flex items-center py-2 px-4 border-b border-gray-100">
           <div className="w-12 text-xs text-gray-600 font-medium">Bcc:</div>
-          <input
-            type="text"
+          <EmailInputWithChips
             value={bcc}
-            onChange={(e) => setBcc(e.target.value)}
-            className="flex-1 text-xs bg-transparent border-none outline-none focus:ring-0 text-gray-900"
+            onChange={setBcc}
             placeholder="Enter BCC email addresses"
+            className="flex-1"
           />
         </div>
       )}
@@ -4600,6 +4796,55 @@ const ComposeEmailView = ({
           className="flex-1 text-xs bg-transparent border-none outline-none focus:ring-0 text-gray-900"
           placeholder="Enter subject"
         />
+      </div>
+
+      {/* Attachments Section */}
+      <div className="px-4 py-2 border-b border-gray-100">
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            onChange={handleFileSelect}
+            className="hidden"
+            accept="*/*"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+          >
+            <Paperclip className="h-3 w-3 text-gray-500" strokeWidth="2" />
+            Attach Files
+          </button>
+          {attachments.length > 0 && (
+            <span className="text-xs text-gray-500">
+              {attachments.length} file{attachments.length !== 1 ? 's' : ''} attached
+            </span>
+          )}
+        </div>
+        
+        {/* Attachment List */}
+        {attachments.length > 0 && (
+          <div className="mt-2 space-y-1">
+            {attachments.map((file, index) => (
+              <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <File className="h-3 w-3 text-gray-500 flex-shrink-0" />
+                  <span className="text-xs text-gray-700 truncate">{file.name}</span>
+                  <span className="text-xs text-gray-500 flex-shrink-0">
+                    ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                  </span>
+                </div>
+                <button
+                  onClick={() => removeAttachment(index)}
+                  className="p-1 hover:bg-gray-200 rounded transition-colors"
+                >
+                  <X className="h-3 w-3 text-gray-500" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Tap Agent Bar for Compose */}
@@ -4631,12 +4876,35 @@ const ComposeEmailView = ({
                   </div>
                 ) : !showInstructions && (
                   <div className="flex items-center gap-2">
+                    <div className={`flex items-center transition-all duration-500 ease-in-out ${
+                      !isContentEmpty(content) 
+                        ? 'opacity-100 scale-100 w-auto' 
+                        : 'opacity-0 scale-95 w-0 overflow-hidden'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleComposeAI('tone', 'friendly')}
+                          className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors whitespace-nowrap"
+                        >
+                          <Lightbulb className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                          Friendly
+                        </button>
+                        <button
+                          onClick={() => handleComposeAI('tone', 'professional')}
+                          className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors whitespace-nowrap"
+                        >
+                          <Users className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                          Professional
+                        </button>
+                      </div>
+                      <div className="h-4 w-px bg-gray-300 mx-2"></div>
+                    </div>
                     <button
                       onClick={() => setShowInstructions(!showInstructions)}
                       className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
                     >
                       <MessageSquare className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                      Instruct
+                      Instructions
                     </button>
                   </div>
                 )}
@@ -4799,6 +5067,7 @@ const ComposeEmailView = ({
           className="w-full min-h-full text-sm outline-none"
           onBlur={handleContentChange}
           onInput={handleContentChange}
+          onKeyUp={handleContentChange}
           suppressContentEditableWarning={true}
           style={{ minHeight: '200px' }}
           data-placeholder="Type your message..."
@@ -4910,6 +5179,23 @@ const EmailViewer = ({
   const actualSetShowEmailRulesDialog = setShowEmailRulesDialog ?? setLocalShowEmailRulesDialog;
   const actualTempEmailRules = tempEmailRules ?? localTempEmailRules;
   const actualSetTempEmailRules = setTempEmailRules ?? setLocalTempEmailRules;
+  
+  // Combine local and passed generating states
+  const actualIsGenerating = localIsGenerating || isGenerating;
+
+  // Check if reply content is truly empty (ignoring HTML tags and whitespace)
+  const isReplyContentEmpty = (htmlContent: string) => {
+    if (!htmlContent) return true;
+    
+    // For reply mode, we need to check only the new content, not the quoted email chain
+    // The quoted content is separated by an <hr> tag
+    const parts = htmlContent.split('<hr');
+    const newContent = parts[0]; // Everything before the <hr (the new reply)
+    
+    // Remove HTML tags and check if there's actual text content in the new reply
+    const textOnly = newContent.replace(/<[^>]*>/g, '').trim();
+    return textOnly === '';
+  };
 
   // Close instructions with animation
   const closeInstructionsWithAnimation = () => {
@@ -5254,29 +5540,25 @@ const EmailViewer = ({
             {/* To Field */}
           <div className="flex items-center py-2 px-4 border-b border-gray-100">
             <div className="w-12 text-xs text-gray-600 font-medium">To:</div>
-              <div className="flex-1">
-                <Input
-                  value={replyRecipients}
-                  onChange={(e) => setReplyRecipients(e.target.value)}
-                className="border-0 p-0 h-auto text-xs focus:ring-0 focus:outline-none shadow-none"
-                  placeholder="Enter recipient email addresses"
-                />
-              </div>
-            </div>
+            <EmailInputWithChips
+              value={replyRecipients}
+              onChange={setReplyRecipients}
+              placeholder="Enter recipient email addresses"
+              className="flex-1"
+            />
+          </div>
 
           {/* CC Field (if populated) */}
             {replyCc !== undefined && (
             <div className="flex items-center py-2 px-4 border-b border-gray-100">
               <div className="w-12 text-xs text-gray-600 font-medium">Cc:</div>
-                <div className="flex-1">
-                  <Input
-                    value={replyCc}
-                    onChange={(e) => setReplyCc(e.target.value)}
-                  className="border-0 p-0 h-auto text-xs focus:ring-0 focus:outline-none shadow-none"
-                    placeholder="Enter CC email addresses"
-                  />
-                </div>
-              </div>
+              <EmailInputWithChips
+                value={replyCc}
+                onChange={setReplyCc}
+                placeholder="Enter CC email addresses"
+                className="flex-1"
+              />
+            </div>
             )}
 
             {/* Subject Field */}
@@ -5308,31 +5590,54 @@ const EmailViewer = ({
                       Tap Agent
                     </GradientText>
                   </div>
-                  {(showInstructions || instructionsClosing) && !isGenerating && (
+                  {(showInstructions || instructionsClosing) && !actualIsGenerating && (
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs font-medium text-gray-700">Custom Instructions</span>
                     </div>
                   )}
-                  {isGenerating ? (
+                                    {actualIsGenerating ? (
                     <div className="flex items-center gap-2">
                       <Loader2 className="h-3 w-3 text-blue-500 animate-spin" />
                       <span className="text-xs text-gray-600">Thinking...</span>
                     </div>
                   ) : !showInstructions && (
                     <div className="flex items-center gap-2">
+                      <div className={`flex items-center transition-all duration-500 ease-in-out ${
+                        !isReplyContentEmpty(replyContent) 
+                          ? 'opacity-100 scale-100 w-auto' 
+                          : 'opacity-0 scale-95 w-0 overflow-hidden'
+                      }`}>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)}
+                            className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                          >
+                            <Lightbulb className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                            Friendly
+                          </button>
+                          <button
+                            onClick={() => callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)}
+                            className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                          >
+                            <Users className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                            Professional
+                          </button>
+                        </div>
+                        <div className="h-4 w-px bg-gray-300 mx-2"></div>
+                      </div>
                       <button
                         onClick={() => setShowInstructions(!showInstructions)}
                         className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
                       >
                         <MessageSquare className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                        Instruct
+                        Instructions
                       </button>
                     </div>
                   )}
                 </div>
                 
                 {/* Buttons section - show rules when not in instructions, show all buttons when in instructions */}
-                {!isGenerating && (
+                {!actualIsGenerating && (
                   <div className="flex items-center gap-2">
                     {(showInstructions || instructionsClosing) ? (
                       <>
@@ -5354,7 +5659,7 @@ const EmailViewer = ({
                           Cancel
                         </button>
                         <button
-                          disabled={isGenerating}
+                          disabled={actualIsGenerating}
                           onClick={async () => {
                             const textarea = document.getElementById('instructions-textarea-reply') as HTMLTextAreaElement;
                             const customInstructions = textarea?.value || '';
@@ -5362,16 +5667,23 @@ const EmailViewer = ({
                               // Immediately close instructions without animation for Apply
                               setShowInstructions(false);
                               setInstructionsClosing(false);
-                              await callGenerateEmailResponse?.('custom', instructionTone, customInstructions, replyEditorRef);
+                              setLocalIsGenerating(true);
+                              try {
+                                await callGenerateEmailResponse?.('custom', instructionTone, customInstructions, replyEditorRef);
+                              } catch (error) {
+                                console.error('Error in reply AI generation:', error);
+                              } finally {
+                                setLocalIsGenerating(false);
+                              }
                             }
                           }}
                           className={`flex items-center gap-1.5 text-xs font-normal px-3 py-1.5 rounded-md transition-colors ${
-                            isGenerating 
+                            actualIsGenerating 
                               ? 'text-white bg-blue-600 cursor-not-allowed' 
                               : 'text-white bg-blue-500 hover:bg-blue-600'
                           }`}
                         >
-                          {isGenerating ? (
+                          {actualIsGenerating ? (
                             <>
                               <Loader2 className="h-3 w-3 text-white animate-spin" strokeWidth="2" />
                               <span className="text-xs font-normal text-white">
@@ -5423,7 +5735,7 @@ const EmailViewer = ({
             </div>
             
             {/* Instructions Dropdown */}
-            {!isGenerating && (showInstructions || instructionsClosing) && (
+            {!actualIsGenerating && (showInstructions || instructionsClosing) && (
               <div className={`bg-white transition-all duration-200 ease-out ${
                 instructionsClosing 
                   ? 'animate-out slide-out-to-top-2' 
@@ -5491,6 +5803,16 @@ const EmailViewer = ({
                 contentEditable
               className="w-full min-h-full text-sm outline-none"
               onBlur={() => {
+                if (replyEditorRef.current) {
+                  setReplyContent(replyEditorRef.current.innerHTML || '');
+                }
+              }}
+              onInput={() => {
+                if (replyEditorRef.current) {
+                  setReplyContent(replyEditorRef.current.innerHTML || '');
+                }
+              }}
+              onKeyUp={() => {
                 if (replyEditorRef.current) {
                   setReplyContent(replyEditorRef.current.innerHTML || '');
                 }

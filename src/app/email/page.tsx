@@ -970,6 +970,15 @@ export default function EmailPage() {
   
 
   const [searchQuery, setSearchQuery] = useState("")
+  const [selectedFilter, setSelectedFilter] = useState<string>('all')
+  
+  // Custom filters state
+  const [customFilters, setCustomFilters] = useState<Array<{id: string, name: string, keywords: string, color: string}>>([])
+  const [showAddCustomDialog, setShowAddCustomDialog] = useState(false)
+  const [customDialogClosing, setCustomDialogClosing] = useState(false)
+  const [newCustomName, setNewCustomName] = useState("")
+  const [newCustomKeywords, setNewCustomKeywords] = useState("")
+  const [newCustomColor, setNewCustomColor] = useState("blue")
   
   // Panel resizing state
   const [leftPanelWidth, setLeftPanelWidth] = useState(35) // Percentage
@@ -1357,6 +1366,39 @@ ${content}
     })
   }
   
+  // Function to categorize emails based on content
+  const categorizeEmail = (email: any): string => {
+    const subject = (email.subject || '').toLowerCase()
+    const content = (email.content || '').toLowerCase()
+    const preview = (email.preview || '').toLowerCase()
+    const combined = `${subject} ${content} ${preview}`
+    
+    // Check custom filters first
+    for (const filter of customFilters) {
+      const keywords = filter.keywords.toLowerCase().split(',').map(k => k.trim()).filter(Boolean)
+      if (keywords.some(keyword => combined.includes(keyword))) {
+        return filter.id
+      }
+    }
+    
+    // Customer Service keywords
+    if (combined.match(/\b(support|help|issue|problem|complaint|refund|return|cancel|dispute|inquiry|assistance|service|ticket)\b/)) {
+      return 'customer-service'
+    }
+    
+    // Invoice keywords
+    if (combined.match(/\b(invoice|bill|payment|receipt|charge|due|outstanding|account|statement)\b/)) {
+      return 'invoices'
+    }
+    
+    // Promo keywords
+    if (combined.match(/\b(sale|discount|offer|promo|deal|coupon|special|limited|save|free|bonus|gift)\b/)) {
+      return 'promo'
+    }
+    
+    return 'general'
+  }
+
   const filteredEmails = allEmails.filter(email => {
     // First filter by folder
     let folderMatch = true
@@ -1368,7 +1410,13 @@ ${content}
     
     if (!folderMatch) return false
     
-    // Then filter by search query
+    // Then filter by category
+    if (selectedFilter !== 'all') {
+      const emailCategory = categorizeEmail(email)
+      if (emailCategory !== selectedFilter) return false
+    }
+    
+    // Finally filter by search query
     if (!searchQuery.trim()) return true
     
     const query = searchQuery.toLowerCase().trim()
@@ -2048,6 +2096,27 @@ ${content}
     }
   }, [user?.uid]);
 
+  // Load custom filters from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('emailCustomFilters')
+      if (saved) {
+        setCustomFilters(JSON.parse(saved))
+      }
+    } catch (error) {
+      console.error('Error loading custom filters:', error)
+    }
+  }, [])
+
+  // Save custom filters to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('emailCustomFilters', JSON.stringify(customFilters))
+    } catch (error) {
+      console.error('Error saving custom filters:', error)
+    }
+  }, [customFilters])
+
   // Get current selected account details
   const getCurrentAccount = () => {
     return connectedAccounts.find(account => account.emailAddress === selectedAccount)
@@ -2531,6 +2600,18 @@ ${content}
     }, 300); // Match the animation duration
   };
 
+  // Helper function to close custom dialog with animation
+  const closeCustomDialogWithAnimation = () => {
+    setCustomDialogClosing(true);
+    setTimeout(() => {
+      setShowAddCustomDialog(false);
+      setCustomDialogClosing(false);
+      setNewCustomName('');
+      setNewCustomKeywords('');
+      setNewCustomColor('blue');
+    }, 300); // Match the animation duration
+  };
+
   // Email Rules Functions
   const addNewRule = () => {
     if (newRuleText.trim()) {
@@ -3005,7 +3086,7 @@ ${content}
           {/* Search Bar - Fixed at top, hidden when summary panel is visible */}
           {(!showSummaryDropdown || summaryClosing) && (
             <div className="flex-shrink-0 p-3 border-b border-gray-200 bg-white rounded-t-xl">
-              <div className="relative">
+              <div className="relative mb-3">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
                   placeholder="Search emails..."
@@ -3021,6 +3102,110 @@ ${content}
                     <X className="h-4 w-4" />
                   </button>
                 )}
+              </div>
+              
+              {/* Filter Pills */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => setSelectedFilter('all')}
+                  className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors w-fit ${
+                    selectedFilter === 'all'
+                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                      : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setSelectedFilter('customer-service')}
+                  className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors w-fit ${
+                    selectedFilter === 'customer-service'
+                      ? 'bg-green-50 text-green-700 border-green-200'
+                      : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+                    selectedFilter === 'customer-service' ? 'bg-green-500' : 'bg-green-500'
+                  }`}></div>
+                  Customer Service
+                </button>
+                <button
+                  onClick={() => setSelectedFilter('invoices')}
+                  className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors w-fit ${
+                    selectedFilter === 'invoices'
+                      ? 'bg-purple-50 text-purple-700 border-purple-200'
+                      : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+                    selectedFilter === 'invoices' ? 'bg-purple-500' : 'bg-purple-500'
+                  }`}></div>
+                  Invoices
+                </button>
+                <button
+                  onClick={() => setSelectedFilter('promo')}
+                  className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors w-fit ${
+                    selectedFilter === 'promo'
+                      ? 'bg-orange-50 text-orange-700 border-orange-200'
+                      : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+                    selectedFilter === 'promo' ? 'bg-orange-500' : 'bg-orange-500'
+                  }`}></div>
+                  Promo
+                </button>
+                
+                {/* Custom Filters */}
+                {customFilters.map((filter) => {
+                  const colorMap: Record<string, {bg: string, text: string, border: string, dot: string}> = {
+                    blue: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500' },
+                    green: { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', dot: 'bg-green-500' },
+                    purple: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', dot: 'bg-purple-500' },
+                    orange: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
+                    red: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', dot: 'bg-red-500' },
+                    pink: { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200', dot: 'bg-pink-500' },
+                    yellow: { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200', dot: 'bg-yellow-500' },
+                    indigo: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', dot: 'bg-indigo-500' }
+                  }
+                  const colors = colorMap[filter.color] || colorMap.blue
+                  
+                  return (
+                    <button
+                      key={filter.id}
+                      onClick={() => setSelectedFilter(filter.id)}
+                      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors w-fit ${
+                        selectedFilter === filter.id
+                          ? `${colors.bg} ${colors.text} ${colors.border}`
+                          : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className={`h-1.5 w-1.5 ${colors.dot} rounded-full flex-shrink-0`}></div>
+                      {filter.name}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setCustomFilters(prev => prev.filter(f => f.id !== filter.id))
+                          if (selectedFilter === filter.id) {
+                            setSelectedFilter('all')
+                          }
+                        }}
+                        className="ml-1 text-gray-400 hover:text-red-500"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </button>
+                  )
+                })}
+                
+                {/* Add Custom Button */}
+                <button
+                  onClick={() => setShowAddCustomDialog(true)}
+                  className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border border-gray-300 border-dashed text-gray-600 hover:text-gray-800 hover:border-gray-400 transition-colors w-fit"
+                >
+                  <Plus className="h-3 w-3" />
+                  Add Custom
+                </button>
               </div>
             </div>
           )}
@@ -3915,6 +4100,139 @@ ${content}
           </div>
         </div>
       )}
+
+      {/* Add Custom Filter Dialog */}
+      {(showAddCustomDialog || customDialogClosing) && (
+        <div className={`fixed inset-0 z-50 flex items-center justify-center ${
+          customDialogClosing 
+            ? 'animate-out fade-out duration-300' 
+            : 'animate-in fade-in duration-200'
+        }`}>
+          {/* Backdrop */}
+          <div 
+            className={`absolute inset-0 bg-black/50 ${
+              customDialogClosing 
+                ? 'animate-out fade-out duration-300' 
+                : 'animate-in fade-in duration-200'
+            }`} 
+            onClick={closeCustomDialogWithAnimation}
+          />
+          
+          {/* Modal Content */}
+          <div className={`relative bg-white rounded-md shadow-lg max-w-md w-full mx-4 ${
+            customDialogClosing 
+              ? 'animate-out slide-out-to-bottom-4 zoom-out-95 duration-300 ease-in' 
+              : 'animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out'
+          }`}>
+            <div className="flex flex-col">
+              {/* Header */}
+              <div className="p-6 pb-0">
+                <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+                  <h2 className="text-lg font-semibold">Add Custom Filter</h2>
+                  <button 
+                    onClick={closeCustomDialogWithAnimation}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              
+              <div className="p-6 pt-4">
+                <div className="space-y-4">
+                  {/* Filter Name */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Filter Name
+                    </label>
+                    <input
+                      type="text"
+                      value={newCustomName}
+                      onChange={(e) => setNewCustomName(e.target.value)}
+                      placeholder="e.g., Shipping Updates"
+                      className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  
+                  {/* Keywords */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Keywords (comma separated)
+                    </label>
+                    <textarea
+                      value={newCustomKeywords}
+                      onChange={(e) => setNewCustomKeywords(e.target.value)}
+                      placeholder="e.g., shipped, tracking, delivery, package, fedex, ups"
+                      className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                      rows={3}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Emails containing any of these keywords will be categorised into this filter
+                    </p>
+                  </div>
+                  
+                  {/* Color Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Badge Color
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {[
+                        { name: 'blue', bg: 'bg-blue-500' },
+                        { name: 'green', bg: 'bg-green-500' },
+                        { name: 'purple', bg: 'bg-purple-500' },
+                        { name: 'orange', bg: 'bg-orange-500' },
+                        { name: 'red', bg: 'bg-red-500' },
+                        { name: 'pink', bg: 'bg-pink-500' },
+                        { name: 'yellow', bg: 'bg-yellow-500' },
+                        { name: 'indigo', bg: 'bg-indigo-500' }
+                      ].map((color) => (
+                        <button
+                          key={color.name}
+                          onClick={() => setNewCustomColor(color.name)}
+                          className={`w-6 h-6 rounded-full border-2 transition-all ${color.bg} ${
+                            newCustomColor === color.name 
+                              ? 'border-gray-400 scale-110' 
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Footer */}
+                <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
+                  <Button 
+                    variant="outline" 
+                    onClick={closeCustomDialogWithAnimation}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      if (newCustomName.trim() && newCustomKeywords.trim()) {
+                        const newFilter = {
+                          id: `custom-${Date.now()}`,
+                          name: newCustomName.trim(),
+                          keywords: newCustomKeywords.trim(),
+                          color: newCustomColor
+                        }
+                        setCustomFilters(prev => [...prev, newFilter])
+                        closeCustomDialogWithAnimation()
+                      }
+                    }}
+                    disabled={!newCustomName.trim() || !newCustomKeywords.trim()}
+                    className="bg-blue-500 hover:bg-blue-600"
+                  >
+                    Add Filter
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 } 
@@ -4130,6 +4448,7 @@ const ComposeEmailView = ({
   const [showInstructions, setShowInstructions] = useState(false);
   const [instructionsClosing, setInstructionsClosing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [instructionTone, setInstructionTone] = useState('professional');
   const composeEditorRef = useRef<HTMLDivElement>(null);
 
   // Update content when the contentEditable div changes
@@ -4300,132 +4619,162 @@ const ComposeEmailView = ({
                     Tap Agent
                   </GradientText>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setShowInstructions(!showInstructions)}
-                    className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                  >
-                    <MessageSquare className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                    Instruct
-                  </button>
-                </div>
+                {(showInstructions || instructionsClosing) && !isGenerating && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-medium text-gray-700">Custom Instructions</span>
+                  </div>
+                )}
+                {isGenerating ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-3 w-3 text-blue-500 animate-spin" />
+                    <span className="text-xs text-gray-600">Thinking...</span>
+                  </div>
+                ) : !showInstructions && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowInstructions(!showInstructions)}
+                      className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                    >
+                      <MessageSquare className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                      Instruct
+                    </button>
+                  </div>
+                )}
               </div>
               
-              {/* Change Tone Dropdown */}
-              <div className="flex items-center gap-2">
-                {/* Rules Button */}
-                <button
-                  onClick={() => setShowEmailRulesDialog && setShowEmailRulesDialog(true)}
-                  className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                >
-                  <Shield className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                  Rules
-                </button>
-                
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors">
-                      <Palette className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                      Change Tone
-                      <ChevronDown className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-36">
-                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'friendly')}>
-                      <Lightbulb className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                      <span className="text-xs">Friendly</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'professional')}>
-                      <Users className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                      <span className="text-xs">Professional</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'direct')}>
-                      <ArrowRight className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                      <span className="text-xs">Direct</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'casual')}>
-                      <Eye className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                      <span className="text-xs">Casual</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'formal')}>
-                      <Shield className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                      <span className="text-xs">Formal</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'persuasive')}>
-                      <Wand2 className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                      <span className="text-xs">Persuasive</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+              {/* Buttons section - show rules when not in instructions, show all buttons when in instructions */}
+              {!isGenerating && (
+                <div className="flex items-center gap-2">
+                  {(showInstructions || instructionsClosing) ? (
+                    <>
+                      <button
+                        onClick={() => setShowEmailRulesDialog && setShowEmailRulesDialog(true)}
+                        className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                      >
+                        <Shield className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                        Rules
+                      </button>
+                      <button
+                        onClick={closeInstructionsWithAnimation}
+                        className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                      >
+                        <X className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                        Cancel
+                      </button>
+                      <button
+                        disabled={isGenerating}
+                        onClick={async () => {
+                          const textarea = document.getElementById('instructions-textarea-compose') as HTMLTextAreaElement;
+                          const customInstructions = textarea?.value || '';
+                          if (customInstructions.trim()) {
+                            // Immediately close instructions without animation for Apply
+                            setShowInstructions(false);
+                            setInstructionsClosing(false);
+                            setIsGenerating(true);
+                            try {
+                              await callGenerateEmailResponse?.('createemail', instructionTone, customInstructions, composeEditorRef);
+                              // Update content state after AI generation
+                              if (composeEditorRef.current) {
+                                setContent(composeEditorRef.current.innerHTML || '');
+                              }
+                            } catch (error) {
+                              console.error('Error in compose AI generation:', error);
+                            } finally {
+                              setIsGenerating(false);
+                            }
+                          }
+                        }}
+                        className={`flex items-center gap-1.5 text-xs font-normal px-3 py-1.5 rounded-md transition-colors ${
+                          isGenerating 
+                            ? 'text-white bg-blue-600 cursor-not-allowed' 
+                            : 'text-white bg-blue-500 hover:bg-blue-600'
+                        }`}
+                      >
+                        {isGenerating ? (
+                          <>
+                            <Loader2 className="h-3 w-3 text-white animate-spin" strokeWidth="2" />
+                            <span className="text-xs font-normal text-white">
+                              Applying...
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <Check className="h-3 w-3 text-white" strokeWidth="2" />
+                            Apply
+                          </>
+                        )}
+                      </button>
+                    </>
+                  ) : (
+                                         <button
+                       onClick={() => setShowEmailRulesDialog && setShowEmailRulesDialog(true)}
+                       className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                     >
+                       <Shield className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                       Rules
+                     </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           
           {/* Instructions Dropdown */}
-          {(showInstructions || instructionsClosing) && (
+          {!isGenerating && (showInstructions || instructionsClosing) && (
             <div className={`bg-white transition-all duration-200 ease-out ${
               instructionsClosing 
                 ? 'animate-out slide-out-to-top-2' 
                 : 'animate-in slide-in-from-top-2'
             }`}>
               <div className="pt-4">
-                <div className="flex items-start justify-between mb-3">
-                  <label className="block text-xs font-medium text-gray-700">
-                    Custom Instructions
-                  </label>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={closeInstructionsWithAnimation}
-                      className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded-md hover:bg-gray-100 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      disabled={isGenerating}
-                      onClick={async () => {
-                        const textarea = document.getElementById('instructions-textarea-compose') as HTMLTextAreaElement;
-                        const customInstructions = textarea?.value || '';
-                        if (customInstructions.trim()) {
-                          setIsGenerating(true);
-                          try {
-                            await callGenerateEmailResponse?.('createemail', undefined, customInstructions, composeEditorRef);
-                            // Update content state after AI generation
-                            if (composeEditorRef.current) {
-                              setContent(composeEditorRef.current.innerHTML || '');
-                            }
-                          } catch (error) {
-                            console.error('Error in compose AI generation:', error);
-                          } finally {
-                            setIsGenerating(false);
-                          }
-                        }
-                        closeInstructionsWithAnimation();
-                      }}
-                      className={`text-xs px-3 py-1 rounded-md transition-all duration-300 ${
-                        isGenerating 
-                          ? 'text-white bg-blue-600 button-pulse cursor-not-allowed' 
-                          : 'text-white bg-blue-500 hover:bg-blue-600 hover:shadow-md'
-                      }`}
-                    >
-                      {isGenerating ? (
-                        <div className="flex items-center gap-1">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          <span className="text-xs text-white">
-                            Applying...
-                          </span>
-                        </div>
-                      ) : (
-                        'Apply'
-                      )}
-                    </button>
+                <div className="space-y-3">
+                  <div className="relative">
+                    <textarea
+                      ref={(el) => { if (el) el.id = 'instructions-textarea-compose'; }}
+                      placeholder="Enter specific instructions for how you'd like the AI to respond..."
+                      className="w-full text-xs bg-gray-50 border border-gray-200 rounded-md px-3 py-2 pr-20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder-gray-500"
+                      rows={3}
+                    />
+                    {/* Tone Dropdown positioned on the right */}
+                    <div className="absolute top-2 right-2">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-2 py-1 rounded-md transition-colors">
+                            <Palette className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                            <span className="capitalize">{instructionTone}</span>
+                            <ChevronDown className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-32">
+                          <DropdownMenuItem onClick={() => setInstructionTone('friendly')}>
+                            <Lightbulb className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
+                            <span className="text-xs">Friendly</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setInstructionTone('professional')}>
+                            <Users className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
+                            <span className="text-xs">Professional</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setInstructionTone('direct')}>
+                            <ArrowRight className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
+                            <span className="text-xs">Direct</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setInstructionTone('casual')}>
+                            <Eye className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
+                            <span className="text-xs">Casual</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setInstructionTone('formal')}>
+                            <Shield className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
+                            <span className="text-xs">Formal</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setInstructionTone('persuasive')}>
+                            <Wand2 className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
+                            <span className="text-xs">Persuasive</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 </div>
-                <textarea
-                  ref={(el) => { if (el) el.id = 'instructions-textarea-compose'; }}
-                  placeholder="Enter specific instructions for how you'd like the AI to respond..."
-                  className="w-full text-xs bg-gray-50 border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder-gray-500"
-                  rows={3}
-                />
               </div>
             </div>
           )}
@@ -4549,6 +4898,8 @@ const EmailViewer = ({
   const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
   const [showInstructions, setShowInstructions] = useState(false);
   const [instructionsClosing, setInstructionsClosing] = useState(false);
+  const [instructionTone, setInstructionTone] = useState('professional');
+  const [localIsGenerating, setLocalIsGenerating] = useState(false);
   
   // Local state for dialog
   const [localShowEmailRulesDialog, setLocalShowEmailRulesDialog] = useState(false);
@@ -4560,7 +4911,14 @@ const EmailViewer = ({
   const actualTempEmailRules = tempEmailRules ?? localTempEmailRules;
   const actualSetTempEmailRules = setTempEmailRules ?? setLocalTempEmailRules;
 
-
+  // Close instructions with animation
+  const closeInstructionsWithAnimation = () => {
+    setInstructionsClosing(true);
+    setTimeout(() => {
+      setShowInstructions(false);
+      setInstructionsClosing(false);
+    }, 200);
+  };
 
   useEffect(() => {
     const loadEmailContent = async () => {
@@ -4946,193 +5304,180 @@ const EmailViewer = ({
                       animationSpeed={3}
                       showBorder={false}
                       className="text-xs font-medium"
-                        >
+                    >
                       Tap Agent
                     </GradientText>
-                        </div>
-                  <div className="flex items-center gap-2">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors">
-                          <Sparkles className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                          Generate
-                          <ChevronDown className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-40">
-                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)}>
-                          <Lightbulb className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                          <span className="text-xs">Friendly tone</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)}>
-                          <Users className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                          <span className="text-xs">Professional tone</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'direct', undefined, replyEditorRef)}>
-                          <ArrowRight className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                          <span className="text-xs">Direct tone</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'casual', undefined, replyEditorRef)}>
-                          <Eye className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                          <span className="text-xs">Casual tone</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'formal', undefined, replyEditorRef)}>
-                          <Shield className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                          <span className="text-xs">Formal tone</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'persuasive', undefined, replyEditorRef)}>
-                          <Wand2 className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                          <span className="text-xs">Persuasive tone</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <button
-                      onClick={() => setShowInstructions(!showInstructions)}
-                      className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                    >
-                      <MessageSquare className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                      Instructions
-                    </button>
                   </div>
+                  {(showInstructions || instructionsClosing) && !isGenerating && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-medium text-gray-700">Custom Instructions</span>
+                    </div>
+                  )}
+                  {isGenerating ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-3 w-3 text-blue-500 animate-spin" />
+                      <span className="text-xs text-gray-600">Thinking...</span>
+                    </div>
+                  ) : !showInstructions && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowInstructions(!showInstructions)}
+                        className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                      >
+                        <MessageSquare className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                        Instruct
+                      </button>
+                    </div>
+                  )}
                 </div>
                 
-                {/* Tone Buttons on Right */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)}
-                    className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                  >
-                    <Lightbulb className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                    Friendly
-                  </button>
-                  <button
-                    onClick={() => callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)}
-                    className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                  >
-                    <Users className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                    Professional
-                  </button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors">
-                        <Palette className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                        More
-                        <ChevronDown className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-36">
-                      <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'direct', undefined, replyEditorRef)}>
-                        <ArrowRight className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                        <span className="text-xs">Direct</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'casual', undefined, replyEditorRef)}>
-                        <Eye className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                        <span className="text-xs">Casual</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'formal', undefined, replyEditorRef)}>
-                        <Shield className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                        <span className="text-xs">Formal</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'persuasive', undefined, replyEditorRef)}>
-                        <Wand2 className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                        <span className="text-xs">Persuasive</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  
-                  {/* Three-dot Options Menu */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-2 py-1.5 rounded-md transition-colors">
-                        {isSummarizing ? (
-                          <Loader2 className="h-3 w-3 text-blue-500 animate-spin" strokeWidth="2" />
-                        ) : (
-                          <MoreHorizontal className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                        )}
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onClick={() => {
-                        actualSetTempEmailRules(emailRules || '');
-                        actualSetShowEmailRulesDialog(true);
-                      }}>
-                        <Shield className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                        <span className="text-xs">Email Rules</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => onSummariseThread?.()}>
-                        <MessageSquare className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                        <span className="text-xs">Summarise {selectedThread && selectedThread.count > 1 ? `Thread (${selectedThread.count})` : 'Email'}</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                    </div>
+                {/* Buttons section - show rules when not in instructions, show all buttons when in instructions */}
+                {!isGenerating && (
+                  <div className="flex items-center gap-2">
+                    {(showInstructions || instructionsClosing) ? (
+                      <>
+                        <button
+                          onClick={() => {
+                            actualSetTempEmailRules(emailRules || '');
+                            actualSetShowEmailRulesDialog(true);
+                          }}
+                          className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                        >
+                          <Shield className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                          Rules
+                        </button>
+                        <button
+                          onClick={closeInstructionsWithAnimation}
+                          className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                        >
+                          <X className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                          Cancel
+                        </button>
+                        <button
+                          disabled={isGenerating}
+                          onClick={async () => {
+                            const textarea = document.getElementById('instructions-textarea-reply') as HTMLTextAreaElement;
+                            const customInstructions = textarea?.value || '';
+                            if (customInstructions.trim()) {
+                              // Immediately close instructions without animation for Apply
+                              setShowInstructions(false);
+                              setInstructionsClosing(false);
+                              await callGenerateEmailResponse?.('custom', instructionTone, customInstructions, replyEditorRef);
+                            }
+                          }}
+                          className={`flex items-center gap-1.5 text-xs font-normal px-3 py-1.5 rounded-md transition-colors ${
+                            isGenerating 
+                              ? 'text-white bg-blue-600 cursor-not-allowed' 
+                              : 'text-white bg-blue-500 hover:bg-blue-600'
+                          }`}
+                        >
+                          {isGenerating ? (
+                            <>
+                              <Loader2 className="h-3 w-3 text-white animate-spin" strokeWidth="2" />
+                              <span className="text-xs font-normal text-white">
+                                Applying...
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <Check className="h-3 w-3 text-white" strokeWidth="2" />
+                              Apply
+                            </>
+                          )}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => {
+                            actualSetTempEmailRules(emailRules || '');
+                            actualSetShowEmailRulesDialog(true);
+                          }}
+                          className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                        >
+                          <Shield className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                          Rules
+                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-2 py-1.5 rounded-md transition-colors">
+                              {isSummarizing ? (
+                                <Loader2 className="h-3 w-3 text-blue-500 animate-spin" strokeWidth="2" />
+                              ) : (
+                                <MoreHorizontal className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                              )}
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem onClick={() => onSummariseThread?.()}>
+                              <MessageSquare className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
+                              <span className="text-xs">Summarise {selectedThread && selectedThread.count > 1 ? `Thread (${selectedThread.count})` : 'Email'}</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
             
-            {/* Instructions Dropdown - Now part of normal flow */}
-            {(showInstructions || instructionsClosing) && (
+            {/* Instructions Dropdown */}
+            {!isGenerating && (showInstructions || instructionsClosing) && (
               <div className={`bg-white transition-all duration-200 ease-out ${
                 instructionsClosing 
                   ? 'animate-out slide-out-to-top-2' 
                   : 'animate-in slide-in-from-top-2'
               }`}>
                 <div className="pt-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <label className="block text-xs font-medium text-gray-700">
-                      Custom Instructions
-                    </label>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          setInstructionsClosing(true);
-                          setTimeout(() => {
-                            setShowInstructions(false);
-                            setInstructionsClosing(false);
-                          }, 200);
-                        }}
-                        className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded-md hover:bg-gray-100 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        disabled={isGenerating}
-                        onClick={() => {
-                          const textarea = document.getElementById('instructions-textarea-1') as HTMLTextAreaElement;
-                          const customInstructions = textarea?.value || '';
-                          if (customInstructions.trim()) {
-                            callGenerateEmailResponse?.('custom', undefined, customInstructions, replyEditorRef);
-                          }
-                          setInstructionsClosing(true);
-                          setTimeout(() => {
-                            setShowInstructions(false);
-                            setInstructionsClosing(false);
-                          }, 200);
-                        }}
-                        className={`text-xs px-3 py-1 rounded-md transition-all duration-300 ${
-                          isGenerating 
-                            ? 'text-white bg-blue-600 button-pulse cursor-not-allowed' 
-                            : 'text-white bg-blue-500 hover:bg-blue-600 hover:shadow-md'
-                        }`}
-                      >
-                        {isGenerating ? (
-                          <div className="flex items-center gap-1">
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            <span className="text-xs text-white">
-                              Applying...
-                            </span>
-                          </div>
-                        ) : (
-                          'Apply'
-                        )}
-                      </button>
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <textarea
+                        ref={(el) => { if (el) el.id = 'instructions-textarea-reply'; }}
+                        placeholder="Enter specific instructions for how you'd like the AI to respond..."
+                        className="w-full text-xs bg-gray-50 border border-gray-200 rounded-md px-3 py-2 pr-20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder-gray-500"
+                        rows={3}
+                      />
+                      {/* Tone Dropdown positioned on the right */}
+                      <div className="absolute top-2 right-2">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-2 py-1 rounded-md transition-colors">
+                              <Palette className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                              <span className="capitalize">{instructionTone}</span>
+                              <ChevronDown className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-32">
+                            <DropdownMenuItem onClick={() => setInstructionTone('friendly')}>
+                              <Lightbulb className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
+                              <span className="text-xs">Friendly</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setInstructionTone('professional')}>
+                              <Users className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
+                              <span className="text-xs">Professional</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setInstructionTone('direct')}>
+                              <ArrowRight className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
+                              <span className="text-xs">Direct</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setInstructionTone('casual')}>
+                              <Eye className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
+                              <span className="text-xs">Casual</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setInstructionTone('formal')}>
+                              <Shield className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
+                              <span className="text-xs">Formal</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setInstructionTone('persuasive')}>
+                              <Wand2 className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
+                              <span className="text-xs">Persuasive</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
                   </div>
-                  <textarea
-                    ref={(el) => { if (el) el.id = 'instructions-textarea-1'; }}
-                    placeholder="Enter specific instructions for how you'd like the AI to respond..."
-                    className="w-full text-xs bg-gray-50 border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder-gray-500"
-                    rows={3}
-                  />
                 </div>
               </div>
             )}

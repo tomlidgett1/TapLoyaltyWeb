@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, getDoc, setDoc, updateDoc, DocumentData, deleteDoc } from "firebase/firestore"
+import { doc, getDoc, setDoc, updateDoc, DocumentData, deleteDoc, serverTimestamp } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
 import { functions } from "@/lib/firebase"
 import { toast } from "@/components/ui/use-toast"
@@ -15,6 +15,7 @@ import { PageTransition } from "@/components/page-transition"
 import { PageHeader } from "@/components/page-header"
 import { generateCodeVerifier, generateCodeChallenge } from "@/lib/pkce"
 import { CheckCircle, Globe, BarChart2, MessageSquare, Mail, Phone, Calculator, Calendar, FileText, Table } from "lucide-react"
+import { Composio } from 'composio-core'
 
 // Import icons for different POS systems
 import { LightspeedIcon } from "@/components/icons/lightspeed-icon"
@@ -318,17 +319,82 @@ export default function IntegrationsPage() {
         
         // Check Gmail integration status
         const gmailDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'gmail'))
-        if (gmailDoc.exists() && gmailDoc.data().connected) {
-          console.log('Gmail integration found:', gmailDoc.data())
-          setIntegrations(prev => ({
-            ...prev,
-            gmail: { 
-              connected: true, 
-              data: gmailDoc.data() 
+        if (gmailDoc.exists()) {
+          const gmailData = gmailDoc.data()
+          console.log('Gmail integration found:', gmailData)
+          
+          // If we have a connection request ID, check the status with Composio
+          if (gmailData.connectionRequestId && !gmailData.connected) {
+            try {
+              const composio = new Composio();
+              
+              const connectedAccount = await composio.connectedAccounts.get(gmailData.connectionRequestId);
+              
+              if (connectedAccount.status === 'ACTIVE') {
+                // Update Firestore with active connection
+                await setDoc(
+                  doc(db, 'merchants', user.uid, 'integrations', 'gmail'),
+                  {
+                    connected: true,
+                    connectedAccountId: gmailData.connectionRequestId,
+                    connectionStatus: connectedAccount.status,
+                    provider: 'composio',
+                    lastUpdated: serverTimestamp(),
+                    connectedAt: serverTimestamp(),
+                  },
+                  { merge: true }
+                );
+                
+                setIntegrations(prev => ({
+                  ...prev,
+                  gmail: { 
+                    connected: true, 
+                    data: {
+                      ...gmailData,
+                      connected: true,
+                      connectedAccountId: gmailData.connectionRequestId,
+                      connectionStatus: connectedAccount.status
+                    }
+                  }
+                }))
+              } else {
+                setIntegrations(prev => ({
+                  ...prev,
+                  gmail: { 
+                    connected: false, 
+                    data: gmailData 
+                  }
+                }))
+              }
+            } catch (error) {
+              console.error('Error checking Gmail connection status:', error)
+              setIntegrations(prev => ({
+                ...prev,
+                gmail: { 
+                  connected: false, 
+                  data: gmailData 
+                }
+              }))
             }
-          }))
+          } else if (gmailData.connected) {
+            setIntegrations(prev => ({
+              ...prev,
+              gmail: { 
+                connected: true, 
+                data: gmailData 
+              }
+            }))
+          } else {
+            setIntegrations(prev => ({
+              ...prev,
+              gmail: { 
+                connected: false, 
+                data: gmailData 
+              }
+            }))
+          }
         } else {
-          console.log('Gmail integration not connected or not found')
+          console.log('Gmail integration not found')
         }
         
         // Check Google Calendar integration status
@@ -599,20 +665,51 @@ export default function IntegrationsPage() {
     }
   };
 
-  // Gmail integration – always go through the backend connect route so that the
-  // `state` parameter is consistently the merchantId expected by the callback.
-  const connectGmail = () => {
+  // Gmail integration – using Composio SDK directly as per documentation
+  const connectGmail = async () => {
     if (!user?.uid) return
 
     setConnecting("gmail")
 
     try {
-      // Simply hit our server-side connect endpoint – it does all the heavy lifting
-      // (building the Google OAuth URL, enforcing scopes, etc.) and guarantees the
-      // `state` value matches the merchantId.
-      window.location.href = `/api/auth/gmail/connect?merchantId=${user.uid}`
+      // Initialize Composio with API key
+      const composio = new Composio();
+
+      // Gmail auth config ID (this should be the ac_* ID from Composio dashboard)
+      const gmailAuthConfigId = "ac_48ab3736-146c-4fdf-bd30-dda79973bd1d"; // This should be replaced with the actual auth config ID from Composio dashboard
+
+      // Initiate the connection using the correct parameters for this version
+      const connectionRequest = await composio.connectedAccounts.initiate({
+        integrationId: gmailAuthConfigId,
+        entityId: user.uid,
+        redirectUri: "https://app.taployalty.com.au"
+      });
+
+      console.log(`Visit this URL to authenticate Gmail: ${connectionRequest.redirectUrl}`);
+      
+      // Store the connection request in Firestore for tracking
+      await setDoc(
+        doc(db, 'merchants', user.uid, 'integrations', 'gmail'),
+        {
+          connected: false,
+          connectionRequestId: connectionRequest.connectedAccountId,
+          redirectUrl: connectionRequest.redirectUrl,
+          provider: 'composio',
+          lastUpdated: serverTimestamp(),
+          initiatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      // Redirect to the OAuth URL
+      if (connectionRequest.redirectUrl) {
+        window.location.href = connectionRequest.redirectUrl;
+      } else {
+        throw new Error('No redirect URL provided by Composio');
+      }
+
     } catch (error) {
-      console.error("Error redirecting to Gmail connect route:", error)
+      console.error("Error initiating Gmail connection:", error)
       toast({
         title: "Connection Failed",
         description: "Failed to initiate Gmail connection. Please try again.",

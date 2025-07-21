@@ -45,6 +45,7 @@ export function LoginForm({
   const [resetEmail, setResetEmail] = useState("")
   const [resetLoading, setResetLoading] = useState(false)
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
+  const [progress, setProgress] = useState(0)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -53,11 +54,25 @@ export function LoginForm({
     try {
       console.log('Attempting to sign in...')
       setShowLoadingPage(true) // Show loading page immediately after submit
+      setProgress(0) // Reset progress
+      
+      // Start progress animation
+      const progressInterval = setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 85) {
+            clearInterval(progressInterval)
+            return 85
+          }
+          return prev + Math.random() * 15 + 5 // Random increment between 5-20
+        })
+      }, 200)
+      
       await signIn(email, password, redirectPath)
       
       // No need for toast as we're showing loading page and redirecting
     } catch (error) {
       setShowLoadingPage(false) // Hide loading page on error
+      setProgress(0) // Reset progress
       console.error('Sign in error:', error)
       
       if (error instanceof FirebaseError) {
@@ -136,160 +151,184 @@ export function LoginForm({
     // Show full-screen loading page when logging in
   if (showLoadingPage) {
     return (
-      <div className="fixed inset-0 bg-gray-50 flex flex-col items-center justify-center z-50">
-        <div className="flex flex-col items-center gap-5">
-          <img 
-            src="/taplogo.png" 
-            alt="Tap Loyalty" 
-            className="w-16 h-16 rounded-md" 
-          />
-          <div className="animate-spin rounded-full h-6 w-6 border-2 border-[#007AFF] border-t-transparent" />
+      <div className="fixed inset-0 bg-[#F5F5F5] flex flex-col items-center justify-center z-50">
+        <div className="flex flex-col items-center gap-6 p-8">
+          {/* Tap Loyalty Text */}
+          <div className="text-center">
+            <h1 className="text-4xl mb-2">
+              <span className="font-extrabold text-[#007AFF]">Tap</span>
+              <span className="font-normal text-black"> Loyalty</span>
+            </h1>
+          </div>
+
+          {/* Progress Bar Container */}
+          <div className="w-64 max-w-full">
+            <div className="w-full bg-gray-200 rounded-full h-1">
+              <div 
+                className="bg-[#007AFF] h-1 rounded-full transition-all duration-300 ease-out" 
+                style={{ width: `${Math.min(progress, 100)}%` }}
+              ></div>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
   
   return (
-    <div className={cn("w-full", className)} {...props}>
-      <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-gray-700">
-                Email address
-              </Label>
+    <>
+      <Card className={cn("w-full max-w-md mx-auto border-0 shadow-lg rounded-2xl bg-white", className)} {...props}>
+      <CardHeader className="space-y-1 pb-8 pt-8">
+        <div className="text-center mb-2">
+          <h1 className="text-3xl mb-1">
+            <span className="font-extrabold text-[#007AFF]">Tap</span>
+            <span className="font-normal text-gray-900"> Loyalty</span>
+          </h1>
+          <p className="text-gray-500 text-sm">Welcome back</p>
+        </div>
+      </CardHeader>
+      <CardContent className="px-8 pb-8">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-sm font-medium text-gray-900">
+                  Email
+                </Label>
                 <Input
                   id="email"
                   type="email"
-              placeholder="Enter your email"
+                  placeholder="name@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-              className="h-12 px-4 text-base rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-[#007AFF]"
+                  className="h-11 px-4 text-sm rounded-lg border-gray-300 focus:border-[#007AFF] focus:ring-[#007AFF] focus:ring-2 transition-all"
                 />
               </div>
-          
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password" className="text-sm font-medium text-gray-700">
-                Password
-              </Label>
+            
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password" className="text-sm font-medium text-gray-900">
+                    Password
+                  </Label>
                   <button
                     type="button"
                     onClick={() => {
                       setResetEmail(email)
                       setResetDialogOpen(true)
                     }}
-                className="text-sm text-[#007AFF] hover:text-[#0066CC] hover:underline underline-offset-4 transition-colors"
+                    className="text-sm text-[#007AFF] hover:text-[#0066CC] font-medium transition-colors"
                   >
-                Forgot password?
+                    Forgot?
                   </button>
                 </div>
                 <Input 
                   id="password" 
                   type="password" 
-              placeholder="Enter your password"
+                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required 
-              className="h-12 px-4 text-base rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-[#007AFF]"
+                  className="h-11 px-4 text-sm rounded-lg border-gray-300 focus:border-[#007AFF] focus:ring-[#007AFF] focus:ring-2 transition-all"
                 />
               </div>
-        </div>
-        
-              <Button 
-                type="submit" 
-          className="w-full h-12 bg-[#007AFF] hover:bg-[#0066CC] text-white font-medium text-base rounded-md transition-colors"
-                disabled={loading}
-              >
-          {loading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Signing in...
-            </>
-          ) : (
-            "Sign in"
-          )}
-              </Button>
+            </div>
+            
+            <Button 
+              type="submit" 
+              className="w-full h-11 bg-[#007AFF] hover:bg-[#0066CC] text-white font-medium text-sm rounded-lg transition-all shadow-md hover:shadow-lg"
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                "Sign in"
+              )}
+            </Button>
 
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-300" />
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-gray-500">New to Tap Loyalty?</span>
-          </div>
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-200" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="px-3 bg-white text-gray-500">Don't have an account?</span>
+              </div>
             </div>
 
-        <div className="text-center">
+            <div className="text-center">
               <Link 
                 href="/signup" 
-            className="text-[#007AFF] hover:text-[#0066CC] font-medium hover:underline underline-offset-4 transition-colors"
+                className="text-[#007AFF] hover:text-[#0066CC] font-medium text-sm transition-colors"
               >
-            Create an account
+                Create account
               </Link>
             </div>
           </form>
-
-      <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
-        <DialogContent className="sm:max-w-[425px] rounded-md">
-          <DialogHeader>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-blue-100 rounded-md flex items-center justify-center">
-                <Mail className="w-5 h-5 text-[#007AFF]" />
+        </CardContent>
+        
+        <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+          <DialogContent className="sm:max-w-[425px] rounded-md">
+            <DialogHeader>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-blue-100 rounded-md flex items-center justify-center">
+                  <Mail className="w-5 h-5 text-[#007AFF]" />
+                </div>
+                <div>
+                  <DialogTitle className="text-left">Reset your password</DialogTitle>
+                  <DialogDescription className="text-left">
+                    We'll send you a link to reset your password
+              </DialogDescription>
+                </div>
               </div>
-              <div>
-                <DialogTitle className="text-left">Reset your password</DialogTitle>
-                <DialogDescription className="text-left">
-                  We'll send you a link to reset your password
-            </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleResetPassword}>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="resetEmail" className="text-sm font-medium text-gray-700">
+                    Email address
+                  </Label>
+                  <Input
+                    id="resetEmail"
+                    type="email"
+                    placeholder="Enter your email"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    required
+                    className="h-12 px-4 text-base rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-[#007AFF]"
+                  />
+                </div>
               </div>
-            </div>
-          </DialogHeader>
-          <form onSubmit={handleResetPassword}>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="resetEmail" className="text-sm font-medium text-gray-700">
-                  Email address
-                </Label>
-                <Input
-                  id="resetEmail"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                  required
-                  className="h-12 px-4 text-base rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-[#007AFF]"
-                />
-              </div>
-            </div>
-            <DialogFooter className="gap-3 sm:gap-3">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => setResetDialogOpen(false)}
-                disabled={resetLoading}
-                className="rounded-md"
-              >
-                Cancel
-              </Button>
-              <Button 
-                type="submit"
-                className="bg-[#007AFF] hover:bg-[#0066CC] rounded-md"
-                disabled={resetLoading}
-              >
-                {resetLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  "Send reset link"
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </div>
+              <DialogFooter className="gap-3 sm:gap-3">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setResetDialogOpen(false)}
+                  disabled={resetLoading}
+                  className="rounded-md"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit"
+                  className="bg-[#007AFF] hover:bg-[#0066CC] rounded-md"
+                  disabled={resetLoading}
+                >
+                  {resetLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    "Send reset link"
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </Card>
+    </>
   )
 } 

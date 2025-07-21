@@ -104,14 +104,14 @@ import { cn } from "@/lib/utils"
 // Email Chip Component for displaying email addresses with light box
 const EmailChip = ({ email, onRemove }: { email: string; onRemove?: (email: string) => void }) => {
   return (
-    <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 shadow-sm">
+    <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs bg-transparent text-gray-700 border border-gray-300">
       <span className="truncate max-w-32">{email}</span>
       {onRemove && (
         <button
           onClick={() => onRemove(email)}
-          className="ml-1 p-0.5 hover:bg-blue-100 rounded-full transition-colors"
+          className="ml-1 p-0.5 hover:bg-gray-100 rounded-full transition-colors"
         >
-          <X className="h-3 w-3 text-blue-600" />
+          <X className="h-3 w-3 text-gray-500" />
         </button>
       )}
     </div>

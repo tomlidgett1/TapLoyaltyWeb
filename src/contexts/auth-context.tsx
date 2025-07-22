@@ -11,7 +11,7 @@ import {
   browserLocalPersistence
 } from "firebase/auth"
 import { auth, functions } from "@/lib/firebase"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { httpsCallable } from "firebase/functions"
 
 interface AuthContextType {
@@ -24,10 +24,22 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType)
 
+// Define public routes that don't require authentication
+const PUBLIC_ROUTES = [
+  '/login', 
+  '/signup', 
+  '/_next', 
+  '/api/auth',
+  '/api/ai-status',
+  '/favicon.ico'
+]
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [authInitialized, setAuthInitialized] = useState(false)
   const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -43,17 +55,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       
       setLoading(false)
+      setAuthInitialized(true)
     })
 
     return () => unsubscribe()
   }, [])
 
+  // Handle redirects when auth state changes
+  useEffect(() => {
+    if (!authInitialized) return // Don't redirect until auth is initialized
+
+    const isPublicRoute = PUBLIC_ROUTES.some(route => pathname?.startsWith(route))
+    const isPublicAsset = pathname?.includes('.') // Files with extensions
+
+    // If we're on a public route/asset, don't redirect
+    if (isPublicRoute || isPublicAsset) {
+      return
+    }
+
+    // If no user and not on a public route, redirect to login
+    if (!user && pathname !== '/login') {
+      console.log('No authenticated user, redirecting to login')
+      router.push('/login')
+      return
+    }
+
+    // If user is authenticated and on login page, redirect to dashboard
+    if (user && pathname === '/login') {
+      console.log('User authenticated, redirecting to dashboard')
+      router.push('/dashboard')
+      return
+    }
+  }, [user, authInitialized, pathname, router])
+
   useEffect(() => {
     console.log('Auth state changed:', { 
       user: auth.currentUser?.uid || 'none',
-      isLoading: loading
+      isLoading: loading,
+      authInitialized,
+      pathname
     });
-  }, [auth.currentUser, loading]);
+  }, [auth.currentUser, loading, authInitialized, pathname]);
 
   const signIn = async (email: string, password: string, redirectPath: string = '/dashboard') => {
     try {
@@ -109,9 +151,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+
+
   return (
     <AuthContext.Provider value={{ user, loading, signIn, signUp, logout }}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   )
 }

@@ -4913,10 +4913,13 @@ const ComposeEmailView = ({
 
   return (
     <div className="flex flex-col h-full bg-white">
-      {/* From Field - matches reply module design */}
-      <div className="flex items-center py-2 px-4 border-b border-gray-100">
-        <div className="w-12 text-xs text-gray-600 font-medium">From:</div>
-        <div className="flex-1 text-xs text-gray-900">{selectedAccount || 'Your Account'}</div>
+      {/* From Field */}
+      <div className="flex items-center py-3 px-4 border-b border-gray-200">
+        <span className="text-xs text-gray-700 font-medium w-16">From:</span>
+        <div className="flex items-center gap-2 flex-1">
+          <span className="text-xs text-gray-900">{selectedAccount || 'Your Account'}</span>
+          <ChevronDown className="h-4 w-4 text-gray-400" />
+        </div>
         <div className="flex gap-2">
           <Button
             onClick={() => {
@@ -4925,19 +4928,19 @@ const ComposeEmailView = ({
               }
             }}
             disabled={!to.trim() || !content.trim() || isSending}
-            className="bg-blue-500 hover:bg-blue-600 text-white h-7 px-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+            className="bg-blue-500 hover:bg-blue-600 text-white h-8 px-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
             {isSending ? (
-              <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+              <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
             ) : (
-              <Send className="h-3 w-3 mr-1" />
+              <Send className="h-4 w-4 mr-1" />
             )}
             {isSending ? 'Sending...' : 'Send'}
           </Button>
           <Button
             variant="ghost"
             onClick={onCancel}
-            className="h-7 px-2 text-gray-600 hover:text-gray-900 text-xs"
+            className="h-8 px-3 text-gray-600 hover:text-gray-900 text-sm"
           >
             Cancel
           </Button>
@@ -4945,15 +4948,17 @@ const ComposeEmailView = ({
       </div>
 
       {/* To Field */}
-      <div className="flex items-center py-2 px-4 border-b border-gray-100">
-        <div className="w-12 text-xs text-gray-600 font-medium">To:</div>
-        <EmailInputWithChips
-          value={to}
-          onChange={setTo}
-          placeholder="Enter recipient email address"
-          className="flex-1"
-        />
-        <div className="flex items-center gap-2 ml-2">
+      <div className="flex items-center py-3 px-4 border-b border-gray-200">
+        <span className="text-xs text-gray-700 font-medium w-16">To:</span>
+        <div className="flex-1">
+          <EmailInputWithChips
+            value={to}
+            onChange={setTo}
+            placeholder="Enter recipient email address"
+            className="w-full"
+          />
+        </div>
+        <div className="flex items-center gap-2 ml-3">
           <button
             onClick={() => setShowCc(!showCc)}
             className={`text-xs px-2 py-1 rounded transition-colors ${
@@ -4979,40 +4984,46 @@ const ComposeEmailView = ({
 
       {/* CC Field */}
       {showCc && (
-        <div className="flex items-center py-2 px-4 border-b border-gray-100">
-          <div className="w-12 text-xs text-gray-600 font-medium">Cc:</div>
-          <EmailInputWithChips
-            value={cc}
-            onChange={setCc}
-            placeholder="Enter CC email addresses"
-            className="flex-1"
-          />
+        <div className="flex items-center py-3 px-4 border-b border-gray-200">
+          <span className="text-xs text-gray-700 font-medium w-16">Cc:</span>
+          <div className="flex-1 ml-2">
+            <EmailInputWithChips
+              value={cc}
+              onChange={setCc}
+              placeholder="Enter CC email addresses"
+              className="w-full"
+            />
+          </div>
         </div>
       )}
 
       {/* BCC Field */}
       {showBcc && (
-        <div className="flex items-center py-2 px-4 border-b border-gray-100">
-          <div className="w-12 text-xs text-gray-600 font-medium">Bcc:</div>
-          <EmailInputWithChips
-            value={bcc}
-            onChange={setBcc}
-            placeholder="Enter BCC email addresses"
-            className="flex-1"
-          />
+        <div className="flex items-center py-3 px-4 border-b border-gray-200">
+          <span className="text-xs text-gray-700 font-medium w-16">Bcc:</span>
+          <div className="flex-1 ml-2">
+            <EmailInputWithChips
+              value={bcc}
+              onChange={setBcc}
+              placeholder="Enter BCC email addresses"
+              className="w-full"
+            />
+          </div>
         </div>
       )}
 
       {/* Subject Field */}
-      <div className="flex items-center py-2 px-4 border-b border-gray-100">
-        <div className="w-12 text-xs text-gray-600 font-medium">Subject:</div>
-        <input
-          type="text"
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          className="flex-1 text-xs bg-transparent border-none outline-none focus:ring-0 text-gray-900"
-          placeholder="Enter subject"
-        />
+      <div className="flex items-center py-3 px-4 border-b border-gray-200">
+        <span className="text-xs text-gray-700 font-medium w-16">Subject:</span>
+        <div className="flex-1 ml-2">
+          <input
+            type="text"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            className="w-full text-xs bg-transparent border-none outline-none focus:ring-0 text-gray-900"
+            placeholder="Enter subject"
+          />
+        </div>
       </div>
 
       {/* Attachments Section */}

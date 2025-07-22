@@ -8,6 +8,9 @@ const PUBLIC_ROUTES = [
   '/_next', 
   '/api/auth',
   '/api/ai-status', // Allow checking AI status without auth
+  '/api/ai-assistant',
+  '/api/ai-assistant-proxy',
+  '/api/ai',
   '/favicon.ico'
 ]
 
@@ -32,7 +35,11 @@ export function middleware(request: NextRequest) {
   }
   
   // If not a public route/asset and no token exists, redirect to login
-  if (!isPublicRoute && !isPublicAsset && !token) {
+  // Only redirect for specific protected routes to avoid conflicts with auth context
+  const PROTECTED_ROUTES = ['/dashboard', '/store', '/customers', '/email', '/notes', '/analytics', '/financials', '/merchant', '/auth-test']
+  const isProtectedRoute = PROTECTED_ROUTES.some(route => path.startsWith(route))
+  
+  if (isProtectedRoute && !token) {
     // Store the original URL to redirect back after login
     const url = new URL('/login', request.url)
     url.searchParams.set('from', path)

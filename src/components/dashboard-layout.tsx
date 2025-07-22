@@ -3,6 +3,7 @@
 import { SideNav } from "@/components/side-nav"
 import { usePathname } from "next/navigation"
 import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu, Mic, Menu, Pencil, Loader2, ExternalLink, Plug, PanelRight, Send, Activity, Clock, Wrench, Code, Layers } from "lucide-react"
+import { AuthGuard } from "@/components/auth-guard"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -2158,12 +2159,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   // Regular layout for non-onboarding pages
   return (
-    <div className={cn(
-      "flex h-screen overflow-hidden transition-opacity duration-1000 ease-out",
-      layoutVisible 
-        ? "opacity-100" 
-        : "opacity-0"
-    )}>
+    <AuthGuard>
+      <div className={cn(
+        "flex h-screen overflow-hidden transition-opacity duration-1000 ease-out",
+        layoutVisible 
+          ? "opacity-100" 
+          : "opacity-0"
+      )}>
       {/* Mobile menu button - only visible on small screens */}
       <button
         className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-md bg-white shadow-md border border-gray-200"
@@ -3143,6 +3145,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </DialogContent>
       </Dialog>
     </div>
+    </AuthGuard>
   )
 } 
 

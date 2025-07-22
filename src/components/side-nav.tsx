@@ -311,6 +311,11 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
     async function fetchMerchantData() {
       if (!user?.uid) {
         setLoading(false)
+        // Reset merchant data when no user
+        setMerchantName("My Business")
+        setMerchantEmail("")
+        setInitials("MB")
+        setMerchantData(null)
         return
       }
       
@@ -403,7 +408,16 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
 
   useEffect(() => {
     const checkOnboardingStatus = async () => {
-      if (!user?.uid) return;
+      if (!user?.uid) {
+        // Reset checklist when no user
+        setChecklistItems([
+          { id: 'reward', title: 'Create a reward', completed: false, href: '#', openSheet: true },
+          { id: 'banner', title: 'Create a banner', completed: false, href: '/store/banners' },
+          { id: 'points', title: 'Set up a points rule', completed: false, href: '/store/points-rules' },
+          { id: 'customer', title: 'Add a customer', completed: false, href: '/customers' }
+        ]);
+        return;
+      }
       
       try {
         // Check if rewards exist
@@ -455,7 +469,10 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
 
   // Add a useEffect to fetch pending inbox items count
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid) {
+      setPendingInboxCount(0);
+      return;
+    }
     
     // Create a listener for agent inbox documents with status "new"
     const agentInboxRef = collection(db, `merchants/${user.uid}/agentinbox`);
@@ -486,7 +503,10 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   }
 
   const updateMerchantStatus = async (newStatus: 'active' | 'inactive') => {
-    if (!user?.uid) return;
+    if (!user?.uid) {
+      console.warn("Cannot update merchant status: no authenticated user");
+      return;
+    }
 
     try {
       const merchantRef = doc(db, 'merchants', user.uid);
@@ -511,7 +531,10 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   }
 
   const handleSupportSubmit = async () => {
-    if (!supportMessage.trim() || !user?.uid) return;
+    if (!supportMessage.trim() || !user?.uid) {
+      console.warn("Cannot submit support request: no authenticated user or empty message");
+      return;
+    }
 
     setSupportLoading(true);
     try {

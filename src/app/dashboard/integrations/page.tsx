@@ -1619,40 +1619,6 @@ export default function IntegrationsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 auto-rows-fr integration-grid">
           {/* Connected Apps First */}
           {[
-            // Gmail
-            integrations.gmail.connected && (
-              <Card key="gmail" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors h-full">
-                <CardHeader className="pb-2 px-3 sm:px-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <img src="/gmailpro.png" alt="Gmail" className="w-6 h-6 sm:w-8 sm:h-8 object-contain" />
-                      <div>
-                        <CardTitle className="text-sm font-medium line-clamp-1">Gmail</CardTitle>
-                        <CardDescription className="text-xs line-clamp-1">Email Integration</CardDescription>
-                      </div>
-                    </div>
-                    <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0 px-3 sm:px-4 pb-3">
-                  <div className="flex justify-between items-center">
-                    <div className="text-xs text-muted-foreground">
-                      <span className="text-green-600 font-medium">Connected</span>
-                    </div>
-                    <Button 
-                      variant="outline"
-                      size="sm"
-                      className="rounded-md h-7 px-2 sm:px-3 text-xs"
-                      onClick={disconnectGmail}
-                      disabled={connecting === "gmail"}
-                    >
-                      {connecting === "gmail" ? "..." : "Disconnect"}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ),
-            
             // Gmail Composio
             integrations.gmail_composio.connected && (
               <Card key="gmail_composio" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors h-full">
@@ -1928,36 +1894,6 @@ export default function IntegrationsPage() {
           
           {/* Not Connected Apps */}
           {[
-            // Gmail
-            !integrations.gmail.connected && (
-              <Card key="gmail" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors h-full">
-                <CardHeader className="pb-2 px-3 sm:px-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <img src="/gmailpro.png" alt="Gmail" className="w-6 h-6 sm:w-8 sm:h-8 object-contain" />
-                      <div>
-                        <CardTitle className="text-sm font-medium line-clamp-1">Gmail</CardTitle>
-                        <CardDescription className="text-xs line-clamp-1">Email Integration</CardDescription>
-                      </div>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0 px-3 sm:px-4 pb-3">
-                  <div className="flex justify-between items-center">
-                    <div className="text-xs text-muted-foreground">Connect your Gmail account</div>
-                    <Button 
-                      size="sm"
-                      className="rounded-md h-7 px-2 sm:px-3 text-xs"
-                      onClick={connectGmail}
-                      disabled={connecting === "gmail"}
-                    >
-                      {connecting === "gmail" ? "..." : "Connect"}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ),
-            
             // Gmail Composio
             !integrations.gmail_composio.connected && (
               <Card key="gmail_composio" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors h-full">

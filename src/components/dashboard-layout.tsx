@@ -286,12 +286,22 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [isSearchFocused, setIsSearchFocused] = useState(false)
   // Add state to track if animation should be shown (initially true)
   const [showAnimation, setShowAnimation] = useState(true)
+  // Add fade-in state for the entire layout
+  const [layoutVisible, setLayoutVisible] = useState(false)
   // Add search state
   const [searchQuery, setSearchQuery] = useState('')
   const [showSearchPopup, setShowSearchPopup] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const searchPopupRef = useRef<HTMLDivElement>(null)
   
+  // Add effect to trigger layout fade-in
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLayoutVisible(true)
+    }, 50) // Reduced delay for faster transition after splash screen
+    return () => clearTimeout(timer)
+  }, [])
+
   // Add effect to stop animation after 60 seconds
   useEffect(() => {
     // Only set up timer if animation is showing
@@ -2060,7 +2070,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   // Special layout for onboarding pages
   if (isOnboarding) {
     return (
-      <div className="flex h-screen overflow-hidden">
+      <div className={cn(
+        "flex h-screen overflow-hidden transition-opacity duration-1000 ease-out",
+        layoutVisible 
+          ? "opacity-100" 
+          : "opacity-0"
+      )}>
         {/* Left sidebar for progress steps */}
         <div className="w-72 bg-white p-6">
           <div className="flex flex-col h-full">
@@ -2143,7 +2158,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   // Regular layout for non-onboarding pages
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className={cn(
+      "flex h-screen overflow-hidden transition-opacity duration-1000 ease-out",
+      layoutVisible 
+        ? "opacity-100" 
+        : "opacity-0"
+    )}>
       {/* Mobile menu button - only visible on small screens */}
       <button
         className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-md bg-white shadow-md border border-gray-200"

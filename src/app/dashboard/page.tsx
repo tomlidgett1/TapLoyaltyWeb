@@ -4515,7 +4515,7 @@ export default function DashboardPage() {
     if (!initialLoading) {
       const timer = setTimeout(() => {
         setPageVisible(true)
-      }, 100) // Small delay for smooth transition
+      }, 25) // Reduced delay for faster transition
       return () => clearTimeout(timer)
     }
   }, [initialLoading])
@@ -4534,10 +4534,10 @@ export default function DashboardPage() {
     <>
       <style dangerouslySetInnerHTML={{ __html: customAnimationStyles }} />
       <div className={cn(
-        "flex flex-col h-full max-w-full transition-all duration-700 ease-out",
+        "flex flex-col h-full max-w-full transition-opacity duration-700 ease-out",
         pageVisible 
-          ? "opacity-100 translate-y-0" 
-          : "opacity-0 translate-y-4"
+          ? "opacity-100" 
+          : "opacity-0"
       )}>
         {/* Header Section */}
         <div className="px-6 py-5">

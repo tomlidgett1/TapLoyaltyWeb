@@ -63,9 +63,9 @@ export function LoginForm({
             clearInterval(progressInterval)
             return 85
           }
-          return prev + Math.random() * 15 + 5 // Random increment between 5-20
+          return prev + Math.random() * 10 + 10 // Random increment between 10-20
         })
-      }, 200)
+      }, 100)
       
       await signIn(email, password, redirectPath)
       
@@ -177,19 +177,26 @@ export function LoginForm({
   
   return (
     <>
-      <Card className={cn("w-full max-w-md mx-auto border-0 shadow-lg rounded-2xl bg-white", className)} {...props}>
-      <CardHeader className="space-y-1 pb-8 pt-8">
-        <div className="text-center mb-2">
-          <h1 className="text-3xl mb-1">
-            <span className="font-extrabold text-[#007AFF]">Tap</span>
-            <span className="font-normal text-gray-900"> Loyalty</span>
-          </h1>
-          <p className="text-gray-500 text-sm">Welcome back</p>
-        </div>
-      </CardHeader>
-      <CardContent className="px-8 pb-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-5">
+      <Card className={cn("w-full max-w-sm mx-auto border border-gray-200 shadow-sm rounded-xl bg-white", className)} {...props}>
+        <CardHeader className="space-y-1 pb-6 pt-8">
+          <div className="text-center">
+            {/* Logo */}
+            <div className="flex justify-center mb-4">
+              <img 
+                src="/taplogo.png" 
+                alt="Tap Loyalty" 
+                className="w-8 h-8 rounded-sm"
+              />
+            </div>
+            {/* Header Text */}
+            <h1 className="text-xl font-semibold text-gray-900">
+              Sign in to Tap Loyalty
+            </h1>
+          </div>
+        </CardHeader>
+        <CardContent className="px-6 pb-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium text-gray-900">
                   Email
@@ -197,30 +204,18 @@ export function LoginForm({
                 <Input
                   id="email"
                   type="email"
-                  placeholder="name@company.com"
+                  placeholder="Enter your email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="h-11 px-4 text-sm rounded-lg border-gray-300 focus:border-[#007AFF] focus:ring-[#007AFF] focus:ring-2 transition-all"
+                  className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
                 />
               </div>
             
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-sm font-medium text-gray-900">
-                    Password
-                  </Label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setResetEmail(email)
-                      setResetDialogOpen(true)
-                    }}
-                    className="text-sm text-[#007AFF] hover:text-[#0066CC] font-medium transition-colors"
-                  >
-                    Forgot?
-                  </button>
-                </div>
+                <Label htmlFor="password" className="text-sm font-medium text-gray-900">
+                  Password
+                </Label>
                 <Input 
                   id="password" 
                   type="password" 
@@ -228,14 +223,14 @@ export function LoginForm({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required 
-                  className="h-11 px-4 text-sm rounded-lg border-gray-300 focus:border-[#007AFF] focus:ring-[#007AFF] focus:ring-2 transition-all"
+                  className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
                 />
               </div>
             </div>
             
             <Button 
               type="submit" 
-              className="w-full h-11 bg-[#007AFF] hover:bg-[#0066CC] text-white font-medium text-sm rounded-lg transition-all shadow-md hover:shadow-lg"
+              className="w-full h-10 bg-[#007AFF] hover:bg-[#0066CC] text-white font-medium text-sm rounded-md transition-colors"
               disabled={loading}
             >
               {loading ? (
@@ -247,6 +242,19 @@ export function LoginForm({
                 "Sign in"
               )}
             </Button>
+
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setResetEmail(email)
+                  setResetDialogOpen(true)
+                }}
+                className="text-sm text-[#007AFF] hover:text-[#0066CC] font-medium transition-colors"
+              >
+                Forgot password?
+              </button>
+            </div>
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">

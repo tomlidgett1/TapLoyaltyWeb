@@ -15,7 +15,6 @@ import { PageTransition } from "@/components/page-transition"
 import { PageHeader } from "@/components/page-header"
 import { generateCodeVerifier, generateCodeChallenge } from "@/lib/pkce"
 import { CheckCircle, Globe, BarChart2, MessageSquare, Mail, Phone, Calculator, Calendar, FileText, Table } from "lucide-react"
-import { Composio } from 'composio-core'
 
 // Import icons for different POS systems
 import { LightspeedIcon } from "@/components/icons/lightspeed-icon"
@@ -36,6 +35,7 @@ interface IntegrationsState {
   shopify: IntegrationState;
   lightspeed_new: IntegrationState;
   gmail: IntegrationState;
+  gmail_composio: IntegrationState;
   google_calendar: IntegrationState;
   google_docs: IntegrationState;
   google_sheets: IntegrationState;
@@ -52,6 +52,7 @@ export default function IntegrationsPage() {
     shopify: { connected: false, data: null },
     lightspeed_new: { connected: false, data: null },
     gmail: { connected: false, data: null },
+    gmail_composio: { connected: false, data: null },
     google_calendar: { connected: false, data: null },
     google_docs: { connected: false, data: null },
     google_sheets: { connected: false, data: null },
@@ -138,6 +139,11 @@ export default function IntegrationsPage() {
         const gmailConnected = gmailDoc.exists() && gmailDoc.data()?.connected === true;
         console.log('Gmail integration status:', gmailConnected ? 'Connected' : 'Not connected');
         
+        // Check Gmail Composio integration status
+        const gmailComposioDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/gmail_composio`));
+        const gmailComposioConnected = gmailComposioDoc.exists() && gmailComposioDoc.data()?.connected === true;
+        console.log('Gmail Composio integration status:', gmailComposioConnected ? 'Connected' : 'Not connected');
+        
         // Check Google Calendar integration status
         const googleCalendarDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/google_calendar`));
         const googleCalendarConnected = googleCalendarDoc.exists() && googleCalendarDoc.data()?.connected === true;
@@ -177,6 +183,10 @@ export default function IntegrationsPage() {
             connected: gmailConnected,
             data: gmailDoc.exists() ? gmailDoc.data() : null
           },
+          gmail_composio: {
+            connected: gmailComposioConnected,
+            data: gmailComposioDoc.exists() ? gmailComposioDoc.data() : null
+          },
           google_calendar: {
             connected: googleCalendarConnected,
             data: googleCalendarDoc.exists() ? googleCalendarDoc.data() : null
@@ -205,6 +215,11 @@ export default function IntegrationsPage() {
         const gmailDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/gmail`));
         const gmailConnected = gmailDoc.exists() && gmailDoc.data()?.connected === true;
         console.log('Gmail integration status:', gmailConnected ? 'Connected' : 'Not connected');
+        
+        // Check Gmail Composio integration status even if Lightspeed is not found
+        const gmailComposioDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/gmail_composio`));
+        const gmailComposioConnected = gmailComposioDoc.exists() && gmailComposioDoc.data()?.connected === true;
+        console.log('Gmail Composio integration status:', gmailComposioConnected ? 'Connected' : 'Not connected');
         
         // Check Google Calendar integration status even if Lightspeed is not found
         const googleCalendarDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/google_calendar`));
@@ -244,6 +259,10 @@ export default function IntegrationsPage() {
           gmail: {
             connected: gmailConnected,
             data: gmailDoc.exists() ? gmailDoc.data() : null
+          },
+          gmail_composio: {
+            connected: gmailComposioConnected,
+            data: gmailComposioDoc.exists() ? gmailComposioDoc.data() : null
           },
           google_calendar: {
             connected: googleCalendarConnected,
@@ -319,82 +338,32 @@ export default function IntegrationsPage() {
         
         // Check Gmail integration status
         const gmailDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'gmail'))
-        if (gmailDoc.exists()) {
-          const gmailData = gmailDoc.data()
-          console.log('Gmail integration found:', gmailData)
-          
-          // If we have a connection request ID, check the status with Composio
-          if (gmailData.connectionRequestId && !gmailData.connected) {
-            try {
-              const composio = new Composio();
-              
-              const connectedAccount = await composio.connectedAccounts.get(gmailData.connectionRequestId);
-              
-              if (connectedAccount.status === 'ACTIVE') {
-                // Update Firestore with active connection
-                await setDoc(
-                  doc(db, 'merchants', user.uid, 'integrations', 'gmail'),
-                  {
-                    connected: true,
-                    connectedAccountId: gmailData.connectionRequestId,
-                    connectionStatus: connectedAccount.status,
-                    provider: 'composio',
-                    lastUpdated: serverTimestamp(),
-                    connectedAt: serverTimestamp(),
-                  },
-                  { merge: true }
-                );
-                
-                setIntegrations(prev => ({
-                  ...prev,
-                  gmail: { 
-                    connected: true, 
-                    data: {
-                      ...gmailData,
-                      connected: true,
-                      connectedAccountId: gmailData.connectionRequestId,
-                      connectionStatus: connectedAccount.status
-                    }
-                  }
-                }))
-              } else {
-                setIntegrations(prev => ({
-                  ...prev,
-                  gmail: { 
-                    connected: false, 
-                    data: gmailData 
-                  }
-                }))
-              }
-            } catch (error) {
-              console.error('Error checking Gmail connection status:', error)
-              setIntegrations(prev => ({
-                ...prev,
-                gmail: { 
-                  connected: false, 
-                  data: gmailData 
-                }
-              }))
+        if (gmailDoc.exists() && gmailDoc.data().connected) {
+          console.log('Gmail integration found:', gmailDoc.data())
+          setIntegrations(prev => ({
+            ...prev,
+            gmail: { 
+              connected: true, 
+              data: gmailDoc.data() 
             }
-          } else if (gmailData.connected) {
-            setIntegrations(prev => ({
-              ...prev,
-              gmail: { 
-                connected: true, 
-                data: gmailData 
-              }
-            }))
-          } else {
-            setIntegrations(prev => ({
-              ...prev,
-              gmail: { 
-                connected: false, 
-                data: gmailData 
-              }
-            }))
-          }
+          }))
         } else {
-          console.log('Gmail integration not found')
+          console.log('Gmail integration not connected or not found')
+        }
+        
+        // Check Gmail Composio integration status
+        const gmailComposioDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'gmail_composio'))
+        if (gmailComposioDoc.exists() && gmailComposioDoc.data().connected) {
+          console.log('Gmail Composio integration found:', gmailComposioDoc.data())
+          setIntegrations(prev => ({
+            ...prev,
+            gmail_composio: { 
+              connected: true, 
+              data: gmailComposioDoc.data() 
+            }
+          }))
+        } else {
+          console.log('Gmail Composio integration not connected or not found')
         }
         
         // Check Google Calendar integration status
@@ -665,51 +634,17 @@ export default function IntegrationsPage() {
     }
   };
 
-  // Gmail integration – using Composio SDK directly as per documentation
-  const connectGmail = async () => {
+  // Gmail integration – using server-side Composio route like Google Docs
+  const connectGmail = () => {
     if (!user?.uid) return
 
     setConnecting("gmail")
 
     try {
-      // Initialize Composio with API key
-      const composio = new Composio();
-
-      // Gmail auth config ID (this should be the ac_* ID from Composio dashboard)
-      const gmailAuthConfigId = "ac_48ab3736-146c-4fdf-bd30-dda79973bd1d"; // This should be replaced with the actual auth config ID from Composio dashboard
-
-      // Initiate the connection using the correct parameters for this version
-      const connectionRequest = await composio.connectedAccounts.initiate({
-        integrationId: gmailAuthConfigId,
-        entityId: user.uid,
-        redirectUri: "https://app.taployalty.com.au"
-      });
-
-      console.log(`Visit this URL to authenticate Gmail: ${connectionRequest.redirectUrl}`);
-      
-      // Store the connection request in Firestore for tracking
-      await setDoc(
-        doc(db, 'merchants', user.uid, 'integrations', 'gmail'),
-        {
-          connected: false,
-          connectionRequestId: connectionRequest.connectedAccountId,
-          redirectUrl: connectionRequest.redirectUrl,
-          provider: 'composio',
-          lastUpdated: serverTimestamp(),
-          initiatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
-
-      // Redirect to the OAuth URL
-      if (connectionRequest.redirectUrl) {
-        window.location.href = connectionRequest.redirectUrl;
-      } else {
-        throw new Error('No redirect URL provided by Composio');
-      }
-
+      // Go directly to the Gmail Composio connect route
+      window.location.href = `/api/auth/gmail/composio?merchantId=${user.uid}`
     } catch (error) {
-      console.error("Error initiating Gmail connection:", error)
+      console.error("Error redirecting to Gmail connect route:", error)
       toast({
         title: "Connection Failed",
         description: "Failed to initiate Gmail connection. Please try again.",
@@ -925,6 +860,126 @@ export default function IntegrationsPage() {
       toast({
         title: "Error", 
         description: "Failed to check Gmail connection status",
+        variant: "destructive"
+      });
+    } finally {
+      setConnecting(null);
+    }
+  };
+
+  // Gmail Composio integration functions
+  const connectGmailComposio = () => {
+    if (!user?.uid) return
+
+    setConnecting("gmail_composio")
+
+    try {
+      // Go directly to the Gmail Composio connect route
+      window.location.href = `/api/auth/gmail-composio/composio?merchantId=${user.uid}`
+    } catch (error) {
+      console.error("Error redirecting to Gmail Composio connect route:", error)
+      toast({
+        title: "Connection Failed",
+        description: "Failed to initiate Gmail Composio connection. Please try again.",
+        variant: "destructive",
+      })
+      setConnecting(null)
+    }
+  }
+
+  // Disconnect Gmail Composio
+  const disconnectGmailComposio = async () => {
+    if (!user) return
+    
+    try {
+      // Delete the integration from Firestore
+      const integrationRef = doc(db, `merchants/${user.uid}/integrations/gmail_composio`);
+      await deleteDoc(integrationRef);
+      
+      // Update local state
+      setIntegrations(prev => ({
+        ...prev,
+        gmail_composio: { connected: false, data: null }
+      }))
+      
+      toast({
+        title: "Disconnected",
+        description: "Your Gmail Composio account has been disconnected."
+      })
+    } catch (error) {
+      console.error("Error disconnecting Gmail Composio:", error)
+      toast({
+        title: "Error",
+        description: "Failed to disconnect Gmail Composio. Please try again.",
+        variant: "destructive"
+      })
+    }
+  }
+
+  // Manual Gmail Composio status check function
+  const checkGmailComposioStatusNew = async () => {
+    if (!user?.uid) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to check status",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setConnecting("gmail_composio");
+    
+    try {
+      const response = await fetch(`/api/auth/gmail-composio/composio/check-status?merchantId=${user.uid}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update local state based on the response
+        if (data.connection.connected) {
+          setIntegrations(prev => ({
+            ...prev,
+            gmail_composio: {
+              connected: true,
+              data: {
+                connectedAccountId: data.connection.id,
+                connectionStatus: data.connection.status,
+                provider: 'composio',
+                connectedAt: { toDate: () => new Date() } // Mock timestamp for display
+              }
+            }
+          }));
+          
+          toast({
+            title: "Success",
+            description: "Gmail Composio connection is active and updated successfully",
+          });
+        } else {
+          setIntegrations(prev => ({
+            ...prev,
+            gmail_composio: {
+              connected: false,
+              data: null
+            }
+          }));
+          
+          toast({
+            title: "Not Connected",
+            description: "No active Gmail Composio connection found",
+            variant: "destructive"
+          });
+        }
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Failed to check Gmail Composio status",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error checking Gmail Composio status:', error);
+      toast({
+        title: "Error", 
+        description: "Failed to check Gmail Composio connection status",
         variant: "destructive"
       });
     } finally {
@@ -1591,6 +1646,40 @@ export default function IntegrationsPage() {
               </Card>
             ),
             
+            // Gmail Composio
+            integrations.gmail_composio.connected && (
+              <Card key="gmail_composio" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors h-full">
+                <CardHeader className="pb-2 px-3 sm:px-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <img src="/gmailpro.png" alt="Gmail Composio" className="w-6 h-6 sm:w-8 sm:h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium line-clamp-1">Gmail Composio</CardTitle>
+                        <CardDescription className="text-xs line-clamp-1">Advanced Email Integration</CardDescription>
+                      </div>
+                    </div>
+                    <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0 px-3 sm:px-4 pb-3">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-green-600 font-medium">Connected</span>
+                    </div>
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      className="rounded-md h-7 px-2 sm:px-3 text-xs"
+                      onClick={disconnectGmailComposio}
+                      disabled={connecting === "gmail_composio"}
+                    >
+                      {connecting === "gmail_composio" ? "..." : "Disconnect"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ),
+            
             // Google Calendar
             integrations.google_calendar.connected && (
               <Card key="google_calendar" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors">
@@ -1856,6 +1945,36 @@ export default function IntegrationsPage() {
                       disabled={connecting === "gmail"}
                     >
                       {connecting === "gmail" ? "..." : "Connect"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ),
+            
+            // Gmail Composio
+            !integrations.gmail_composio.connected && (
+              <Card key="gmail_composio" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors h-full">
+                <CardHeader className="pb-2 px-3 sm:px-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <img src="/gmailpro.png" alt="Gmail Composio" className="w-6 h-6 sm:w-8 sm:h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium line-clamp-1">Gmail Composio</CardTitle>
+                        <CardDescription className="text-xs line-clamp-1">Advanced Email Integration</CardDescription>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0 px-3 sm:px-4 pb-3">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">Connect your Gmail account with Composio</div>
+                    <Button 
+                      size="sm"
+                      className="rounded-md h-7 px-2 sm:px-3 text-xs"
+                      onClick={connectGmailComposio}
+                      disabled={connecting === "gmail_composio"}
+                    >
+                      {connecting === "gmail_composio" ? "..." : "Connect"}
                     </Button>
                   </div>
                 </CardContent>

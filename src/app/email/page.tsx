@@ -1044,10 +1044,13 @@ export default function EmailPage() {
   const [composeTo, setComposeTo] = useState("")
   const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([])
   const [loading, setLoading] = useState(true)
+  const [gmailProfileData, setGmailProfileData] = useState<any>(null)
   const [fetchedEmails, setFetchedEmails] = useState<any[]>([])
+  const [gmailEmailAddress, setGmailEmailAddress] = useState<string | null>(null)
   const [emailsLoading, setEmailsLoading] = useState(false)
   const [debugDialogOpen, setDebugDialogOpen] = useState(false)
   const [debugResponse, setDebugResponse] = useState<any>(null)
+  const [isExtractingWritingStyle, setIsExtractingWritingStyle] = useState(false)
 
   const [merchantData, setMerchantData] = useState<any>(null)
   const [merchantEmail, setMerchantEmail] = useState("")
@@ -1979,29 +1982,72 @@ ${content}
     try {
       setLoading(true)
       
-      // Query Gmail integrations where connected = true
-      const gmailIntegrationsRef = collection(db, 'merchants', user.uid, 'integrations')
-      const gmailQuery = query(gmailIntegrationsRef, where('connected', '==', true))
-      const querySnapshot = await getDocs(gmailQuery)
+      // First, fetch the Gmail integration data specifically
+      const gmailIntegrationDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'gmail'))
       
-      const accounts: ConnectedAccount[] = []
-      querySnapshot.forEach((doc) => {
-        const data = doc.data()
-        if (data.emailAddress) {
-          accounts.push({
-            id: doc.id,
-            emailAddress: data.emailAddress,
-            connected: data.connected,
-            provider: data.provider || 'gmail' // Default to gmail if provider not specified
-          })
+      if (gmailIntegrationDoc.exists()) {
+        const gmailData = gmailIntegrationDoc.data()
+        console.log('Gmail integration data:', gmailData)
+        console.log('Gmail integration data keys:', Object.keys(gmailData))
+        
+        // Debug the profile structure
+        if (gmailData.profile) {
+          console.log('Profile exists:', gmailData.profile)
+          console.log('Profile keys:', Object.keys(gmailData.profile))
+          if (gmailData.profile.data) {
+            console.log('Profile.data exists:', gmailData.profile.data)
+            console.log('Profile.data keys:', Object.keys(gmailData.profile.data))
+            if (gmailData.profile.data.response_data) {
+              console.log('Profile.data.response_data exists:', gmailData.profile.data.response_data)
+              console.log('Profile.data.response_data keys:', Object.keys(gmailData.profile.data.response_data))
+            }
+          }
         }
-      })
-      
-      setConnectedAccounts(accounts)
-      
-      // Set the first connected account as selected if none is selected
-      if (accounts.length > 0 && !selectedAccount) {
-        setSelectedAccount(accounts[0].emailAddress)
+        
+        // Extract email address from profile.data.response_data.emailAddress
+        let gmailEmailAddress = null
+        if (gmailData.profile?.data?.response_data?.emailAddress) {
+          gmailEmailAddress = gmailData.profile.data.response_data.emailAddress
+          console.log('Found Gmail email address from profile:', gmailEmailAddress)
+        } else if (gmailData.emailAddress) {
+          gmailEmailAddress = gmailData.emailAddress
+          console.log('Found Gmail email address from top level:', gmailEmailAddress)
+        } else {
+          console.log('No email address found in Gmail integration data')
+        }
+        
+        // Set the email address state for the listener
+        setGmailEmailAddress(gmailEmailAddress)
+        
+        // Store the profile data for use in the UI
+        setGmailProfileData(gmailData)
+        
+        // Create accounts array with Gmail account if email address is available
+        const accounts: ConnectedAccount[] = []
+        if (gmailEmailAddress) {
+          accounts.push({
+            id: 'gmail',
+            emailAddress: gmailEmailAddress,
+            connected: gmailData.connected || false,
+            provider: 'gmail'
+          })
+          
+          // Set as selected account if none is selected
+          if (!selectedAccount) {
+            setSelectedAccount(gmailEmailAddress)
+          }
+          
+          console.log('Added Gmail account to connected accounts:', gmailEmailAddress)
+        } else if (gmailData.connected && !gmailEmailAddress) {
+          // Gmail integration exists but missing email address
+          console.log('Gmail integration found but missing email address, triggering gmailIntegrationTrigger')
+          await handleGmailIntegrationTrigger()
+        }
+        
+        setConnectedAccounts(accounts)
+      } else {
+        console.log('No Gmail integration found')
+        setConnectedAccounts([])
       }
       
     } catch (error) {
@@ -2046,46 +2092,123 @@ ${content}
   }, [user?.uid, user?.email]);
 
   useEffect(() => {
-    if (user?.uid) {
-      fetchConnectedAccounts()
-      
-      // Initial fetch of emails
-      console.log("🚀 Initial fetch of emails on component mount or folder change")
-      fetchGmailEmails()
-      
-      // Set up Firestore listener for real-time thread updates (only for inbox)
-      if (selectedFolder !== "sent") {
-        const threadsRef = collection(db, 'merchants', user.uid, 'fetchedemails')
-        const threadsQuery = query(
-          threadsRef,
-          orderBy('updatedAt', 'desc'),
-          limit(50)
-        )
-        
-        console.log("📡 Setting up Firestore listener for real-time thread updates")
-        console.log("📡 Listener path:", `merchants/${user.uid}/fetchedemails`)
-        const unsubscribe = onSnapshot(threadsQuery, (snapshot) => {
-          console.log(`📡 Firestore listener: ${snapshot.size} threads found, ${snapshot.docChanges().length} changes`)
-          
-          // Log the changes for debugging
-          snapshot.docChanges().forEach((change) => {
-            console.log(`📡 Change type: ${change.type}, doc: ${change.doc.id}`)
-          })
-          
-          // Only refresh if there are actual changes (new threads, modifications, etc.)
-          if (snapshot.docChanges().length > 0 && selectedFolder !== "sent") {
-            console.log("📡 Thread changes detected, refreshing thread list")
-            fetchGmailEmails()
+    if (!user?.uid) return;
+    
+    fetchConnectedAccounts()
+    
+    // Initial fetch of emails
+    console.log("🚀 Initial fetch of emails on component mount or folder change")
+    fetchGmailEmails()
+    
+    // Check if we need to trigger Gmail integration setup
+    const checkAndTriggerGmailIntegration = async () => {
+      try {
+        const gmailIntegrationDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'gmail'))
+        if (!gmailIntegrationDoc.exists()) {
+          console.log('No Gmail integration found, triggering gmailIntegrationCall')
+          await handleGmailIntegrationTrigger()
+        } else {
+          const gmailData = gmailIntegrationDoc.data()
+          const hasEmailAddress = gmailData.profile?.data?.response_data?.emailAddress || gmailData.emailAddress
+          if (!hasEmailAddress) {
+            console.log('Gmail integration exists but no email address, triggering gmailIntegrationCall')
+            await handleGmailIntegrationTrigger()
           }
-        }, (error) => {
-          console.error("❌ Error in Firestore listener:", error)
+        }
+      } catch (error) {
+        console.error('Error checking Gmail integration status:', error)
+      }
+    }
+    
+    // Call this after a short delay to ensure other data is loaded first
+    setTimeout(checkAndTriggerGmailIntegration, 1000)
+    
+    // Set up listener for Gmail integration changes
+    const gmailIntegrationRef = doc(db, 'merchants', user.uid, 'integrations', 'gmail')
+    const gmailUnsubscribe = onSnapshot(gmailIntegrationRef, (doc) => {
+      if (doc.exists()) {
+        const gmailData = doc.data()
+        console.log('Gmail integration updated:', gmailData)
+        
+        // Extract email address from profile.data.response_data.emailAddress
+        let emailAddress = null
+        if (gmailData.profile?.data?.response_data?.emailAddress) {
+          emailAddress = gmailData.profile.data.response_data.emailAddress
+          console.log('Email address updated from listener:', emailAddress)
+        } else if (gmailData.emailAddress) {
+          emailAddress = gmailData.emailAddress
+          console.log('Email address updated from listener (top level):', emailAddress)
+        }
+        
+        setGmailEmailAddress(emailAddress)
+        setGmailProfileData(gmailData)
+        
+        // Update connected accounts if email address is available
+        if (emailAddress) {
+          const accounts: ConnectedAccount[] = [{
+            id: 'gmail',
+            emailAddress: emailAddress,
+            connected: gmailData.connected || false,
+            provider: 'gmail'
+          }]
+          setConnectedAccounts(accounts)
+          
+          // Set as selected account if none is selected
+          if (!selectedAccount) {
+            setSelectedAccount(emailAddress)
+          }
+        } else {
+          setConnectedAccounts([])
+        }
+              } else {
+          console.log('Gmail integration document does not exist')
+          setGmailEmailAddress(null)
+          setGmailProfileData(null)
+          setConnectedAccounts([])
+          
+          // Trigger Gmail integration setup if document doesn't exist
+          handleGmailIntegrationTrigger()
+        }
+    }, (error) => {
+      console.error('Error listening to Gmail integration:', error)
+    })
+    
+    // Set up Firestore listener for real-time thread updates (only for inbox)
+    let threadsUnsubscribe: (() => void) | undefined
+    if (selectedFolder !== "sent") {
+      const threadsRef = collection(db, 'merchants', user.uid, 'fetchedemails')
+      const threadsQuery = query(
+        threadsRef,
+        orderBy('updatedAt', 'desc'),
+        limit(50)
+      )
+      
+      console.log("📡 Setting up Firestore listener for real-time thread updates")
+      console.log("📡 Listener path:", `merchants/${user.uid}/fetchedemails`)
+      threadsUnsubscribe = onSnapshot(threadsQuery, (snapshot) => {
+        console.log(`📡 Firestore listener: ${snapshot.size} threads found, ${snapshot.docChanges().length} changes`)
+        
+        // Log the changes for debugging
+        snapshot.docChanges().forEach((change) => {
+          console.log(`📡 Change type: ${change.type}, doc: ${change.doc.id}`)
         })
         
-        // Cleanup function
-        return () => {
-          console.log("🧹 Cleaning up Firestore listener")
-          unsubscribe()
+        // Only refresh if there are actual changes (new threads, modifications, etc.)
+        if (snapshot.docChanges().length > 0 && selectedFolder !== "sent") {
+          console.log("📡 Thread changes detected, refreshing thread list")
+          fetchGmailEmails()
         }
+      }, (error) => {
+        console.error("❌ Error in Firestore listener:", error)
+      })
+    }
+    
+    // Cleanup function
+    return () => {
+      console.log("🧹 Cleaning up listeners")
+      gmailUnsubscribe()
+      if (threadsUnsubscribe) {
+        threadsUnsubscribe()
       }
     }
   }, [user?.uid, selectedFolder])
@@ -2247,7 +2370,26 @@ ${content}
 
   // Get current selected account details
   const getCurrentAccount = () => {
-    return connectedAccounts.find(account => account.emailAddress === selectedAccount)
+    console.log('getCurrentAccount called - selectedAccount:', selectedAccount)
+    console.log('gmailProfileData:', gmailProfileData)
+    console.log('connectedAccounts:', connectedAccounts)
+    
+    // If we have Gmail profile data and it matches the selected account, return it
+    if (gmailProfileData && gmailProfileData.profile?.data?.response_data?.emailAddress === selectedAccount) {
+      console.log('Returning Gmail account from profile data')
+      return {
+        id: 'gmail',
+        emailAddress: gmailProfileData.profile.data.response_data.emailAddress,
+        connected: gmailProfileData.connected || false,
+        provider: 'gmail'
+      }
+    }
+    
+    // Fallback to connected accounts array
+    console.log('Falling back to connected accounts array')
+    const foundAccount = connectedAccounts.find(account => account.emailAddress === selectedAccount)
+    console.log('Found account in connected accounts:', foundAccount)
+    return foundAccount
   }
 
   const handleCancelCompose = () => {
@@ -2348,6 +2490,50 @@ ${content}
     } finally {
       setIsEnablingTrigger(false)
     }
+  }
+
+  const handleExtractWritingStyle = async () => {
+    if (!user?.uid) {
+      alert('You must be logged in to extract writing style');
+      return;
+    }
+
+    setIsExtractingWritingStyle(true);
+    try {
+      const extractWritingStyle = httpsCallable(functions, 'extractWritingStyle');
+      const result = await extractWritingStyle({ merchantId: user.uid });
+      
+      console.log('Writing style extraction result:', result);
+      
+      setSuccessMessage('Writing style extracted successfully! Check your profile for the analysis.');
+    } catch (error) {
+      console.error('Error extracting writing style:', error);
+      alert('Failed to extract writing style. Please try again.');
+    } finally {
+      setIsExtractingWritingStyle(false);
+    }
+  }
+
+  const handleGmailIntegrationTrigger = async () => {
+    if (!user?.uid) {
+      console.log('User not authenticated, skipping Gmail integration trigger');
+      return;
+    }
+
+    try {
+      console.log('Calling gmailIntegrationTrigger for merchant:', user.uid);
+      const gmailIntegrationTrigger = httpsCallable(functions, 'gmailIntegrationCall');
+      const result = await gmailIntegrationTrigger({ merchantId: user.uid });
+      
+      console.log('Gmail integration trigger result:', result);
+    } catch (error) {
+      console.error('Error calling gmailIntegrationTrigger:', error);
+    }
+  }
+
+  const handleConnectEmail = () => {
+    // Redirect to integrations page to connect Gmail
+    window.location.href = '/dashboard/integrations';
   }
 
   const handleComposeNew = () => {
@@ -3046,71 +3232,102 @@ ${content}
                   <p>{isEnablingTrigger ? 'Enabling...' : 'Enable Gmail Trigger'}</p>
                 </TooltipContent>
               </Tooltip>
+              
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={handleExtractWritingStyle}
+                    disabled={isExtractingWritingStyle}
+                    className="text-gray-700 hover:bg-gray-200"
+                  >
+                    {isExtractingWritingStyle ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Palette className="h-4 w-4" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{isExtractingWritingStyle ? 'Extracting...' : 'Extract Writing Style'}</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           </TooltipProvider>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Connected Account Selector */}
-          <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-            <SelectTrigger className="w-64 h-8 text-sm">
-              <SelectValue>
-                {loading ? (
-                  <div className="flex items-center gap-3">
-                    <div className="w-6 h-6 bg-gray-200 rounded animate-pulse"></div>
-                    <span className="text-sm text-gray-500">Loading accounts...</span>
-                </div>
-                ) : getCurrentAccount() ? (
-                  <div className="flex items-center gap-3">
-                    <div className="w-6 h-6 flex-shrink-0">
-                      <Image 
-                        src={getCurrentAccount()?.provider === "gmail" ? "/gmailnew.png" : "/outlook.png"}
-                        alt={getCurrentAccount()?.provider === "gmail" ? "Gmail" : "Outlook"}
-                        width={24}
-                        height={24}
-                        className="w-full h-full object-contain"
-                      />
-                        </div>
-                    <span className="text-sm text-gray-700">
-                      {getCurrentAccount()?.emailAddress}
-                    </span>
-                      </div>
-                ) : (
-                  <div className="flex items-center gap-3">
-                    <div className="w-6 h-6 flex-shrink-0">
-                      <Plus className="h-4 w-4 text-gray-400" />
-                        </div>
-                    <span className="text-sm text-gray-500">No connected accounts</span>
-                      </div>
-                )}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {connectedAccounts.map((account) => (
-                <SelectItem key={account.id} value={account.emailAddress}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-6 h-6 flex-shrink-0">
-                      <Image 
-                        src={account.provider === "gmail" ? "/gmailnew.png" : "/outlook.png"}
-                        alt={account.provider === "gmail" ? "Gmail" : "Outlook"}
-                        width={24}
-                        height={24}
-                        className="w-full h-full object-contain"
-                      />
+          {/* Connected Account Selector or Connect Button */}
+          {gmailEmailAddress ? (
+            <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+              <SelectTrigger className="w-64 h-8 text-sm">
+                <SelectValue>
+                  {loading ? (
+                    <div className="flex items-center gap-3">
+                      <div className="w-6 h-6 bg-gray-200 rounded animate-pulse"></div>
+                      <span className="text-sm text-gray-500">Loading accounts...</span>
                     </div>
-                    <span>{account.emailAddress}</span>
+                  ) : getCurrentAccount() ? (
+                    <div className="flex items-center gap-3">
+                      <div className="w-6 h-6 flex-shrink-0">
+                        <Image 
+                          src={getCurrentAccount()?.provider === "gmail" ? "/gmailnew.png" : "/outlook.png"}
+                          alt={getCurrentAccount()?.provider === "gmail" ? "Gmail" : "Outlook"}
+                          width={24}
+                          height={24}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      <span className="text-sm text-gray-700">
+                        {getCurrentAccount()?.emailAddress}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <div className="w-6 h-6 flex-shrink-0">
+                        <Plus className="h-4 w-4 text-gray-400" />
+                      </div>
+                      <span className="text-sm text-gray-500">No connected accounts</span>
+                    </div>
+                  )}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {connectedAccounts.map((account) => (
+                  <SelectItem key={account.id} value={account.emailAddress}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-6 h-6 flex-shrink-0">
+                        <Image 
+                          src={account.provider === "gmail" ? "/gmailnew.png" : "/outlook.png"}
+                          alt={account.provider === "gmail" ? "Gmail" : "Outlook"}
+                          width={24}
+                          height={24}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      <span>{account.emailAddress}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+                {connectedAccounts.length > 0 && <Separator className="my-1" />}
+                <SelectItem value="new">
+                  <div className="flex items-center gap-2">
+                    <Plus className="h-4 w-4" />
+                    <span>Add New Account</span>
                   </div>
                 </SelectItem>
-                  ))}
-              {connectedAccounts.length > 0 && <Separator className="my-1" />}
-              <SelectItem value="new">
-                <div className="flex items-center gap-2">
-                  <Plus className="h-4 w-4" />
-                  <span>Add New Account</span>
-                </div>
-              </SelectItem>
-            </SelectContent>
-          </Select>
+              </SelectContent>
+            </Select>
+          ) : (
+            <Button 
+              onClick={handleConnectEmail}
+              className="w-64 h-8 text-sm bg-blue-500 hover:bg-blue-600 text-white"
+            >
+              <Mail className="h-4 w-4 mr-2" />
+              Connect Email Now
+            </Button>
+          )}
 
           {/* Notifications button */}
           <DropdownMenu>

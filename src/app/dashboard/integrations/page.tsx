@@ -892,6 +892,13 @@ export default function IntegrationsPage() {
     if (!user) return
     
     try {
+      // Call the deleteConnectedAccounts Firebase function
+      const deleteConnectedAccounts = httpsCallable(functions, 'deleteConnectedAccounts');
+      await deleteConnectedAccounts({
+        merchantId: user.uid,
+        slug: 'gmail'
+      });
+      
       // Delete the integration from Firestore
       const integrationRef = doc(db, `merchants/${user.uid}/integrations/gmail`);
       await deleteDoc(integrationRef);

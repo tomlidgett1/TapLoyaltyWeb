@@ -351,20 +351,20 @@ export default function IntegrationsPage() {
           console.log('Gmail integration not connected or not found')
         }
         
-        // Check Gmail Composio integration status
-        const gmailComposioDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'gmail_composio'))
-        if (gmailComposioDoc.exists() && gmailComposioDoc.data().connected) {
-          console.log('Gmail Composio integration found:', gmailComposioDoc.data())
-          setIntegrations(prev => ({
-            ...prev,
-            gmail_composio: { 
-              connected: true, 
-              data: gmailComposioDoc.data() 
-            }
-          }))
-        } else {
-          console.log('Gmail Composio integration not connected or not found')
-        }
+                        // Check Gmail Composio integration status
+                const gmailComposioDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'gmail'))
+                if (gmailComposioDoc.exists() && gmailComposioDoc.data().connected) {
+                  console.log('Gmail Composio integration found:', gmailComposioDoc.data())
+                  setIntegrations(prev => ({
+                    ...prev,
+                    gmail_composio: {
+                      connected: true,
+                      data: gmailComposioDoc.data()
+                    }
+                  }))
+                } else {
+                  console.log('Gmail Composio integration not connected or not found')
+                }
         
         // Check Google Calendar integration status
         const googleCalendarDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'google_calendar'))
@@ -893,7 +893,7 @@ export default function IntegrationsPage() {
     
     try {
       // Delete the integration from Firestore
-      const integrationRef = doc(db, `merchants/${user.uid}/integrations/gmail_composio`);
+      const integrationRef = doc(db, `merchants/${user.uid}/integrations/gmail`);
       await deleteDoc(integrationRef);
       
       // Update local state

@@ -148,7 +148,9 @@ export async function GET(request: NextRequest) {
                       // Also store email address at the top level for easy access
                       if (profileData.emailAddress) {
                         updateData.emailAddress = profileData.emailAddress;
+                        updateData.connected = true; // Set connected status when email is found
                         console.log('Email address fetched from Gmail API:', profileData.emailAddress);
+                        console.log('Setting connected status to true');
                       }
                       
                       console.log('Successfully stored Gmail profile data');
@@ -164,7 +166,7 @@ export async function GET(request: NextRequest) {
                 }
 
                 await updateDoc(
-                  doc(db, 'merchants', merchantId, 'integrations', 'gmail_composio'),
+                  doc(db, 'merchants', merchantId, 'integrations', 'gmail'),
                   updateData
                 );
                 
@@ -207,13 +209,13 @@ export async function GET(request: NextRequest) {
                   integrationId: GMAIL_INTEGRATION_ID,
                   ...(merchantAccount.appName ? { appName: merchantAccount.appName } : {}),
                   ...(merchantAccount.appUniqueId ? { appUniqueId: merchantAccount.appUniqueId } : {}),
-                  ...(merchantAccount.emailAddress ? { emailAddress: merchantAccount.emailAddress } : {}),
+                  ...(merchantAccount.emailAddress ? { emailAddress: merchantAccount.emailAddress, connected: true } : {}),
                   ...(merchantAccount.displayName ? { displayName: merchantAccount.displayName } : {}),
                   fullDetailedResponse: JSON.parse(JSON.stringify(detailedAccount))
                 };
 
                 await updateDoc(
-                  doc(db, 'merchants', state, 'integrations', 'gmail_composio'),
+                  doc(db, 'merchants', state, 'integrations', 'gmail'),
                   updateData
                 );
                 

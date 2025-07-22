@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
           },
           body: JSON.stringify({
             "arguments": {},
-            "user_id": merchantId
+            "connectedAccountId": gmailConnection.id
           }),
         });
 
@@ -125,7 +125,9 @@ export async function GET(request: NextRequest) {
             // Also store email address at the top level for easy access
             if (profileData.emailAddress) {
               updateData.emailAddress = profileData.emailAddress;
+              updateData.connected = true; // Set connected status when email is found
               console.log('Email address fetched from Gmail API in check-status:', profileData.emailAddress);
+              console.log('Setting connected status to true in check-status');
             }
             
             console.log('Successfully stored Gmail profile data in check-status');
@@ -141,7 +143,7 @@ export async function GET(request: NextRequest) {
       }
 
       await setDoc(
-        doc(db, 'merchants', merchantId, 'integrations', 'gmail_composio'),
+        doc(db, 'merchants', merchantId, 'integrations', 'gmail'),
         updateData
       );
       

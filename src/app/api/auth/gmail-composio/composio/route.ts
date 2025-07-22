@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
     // Store the connection information in Firestore
     try {
       await setDoc(
-        doc(db, 'merchants', merchantId, 'integrations', 'gmail_composio'),
+        doc(db, 'merchants', merchantId, 'integrations', 'gmail'),
         {
           connected: connectedAccount.connectionStatus === 'ACTIVE',
           connectedAccountId: connectedAccount.connectedAccountId,

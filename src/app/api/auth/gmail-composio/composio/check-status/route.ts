@@ -56,20 +56,38 @@ export async function GET(request: NextRequest) {
     if (gmailConnection) {
       console.log('Found active Gmail connection:', gmailConnection.id);
       
-      // Update the Gmail Composio integration status in Firestore
+      // Update the Gmail Composio integration status in Firestore with all available data
+      const updateData: any = {
+        connected: true,
+        connectedAccountId: gmailConnection.id,
+        connectionStatus: gmailConnection.status,
+        provider: 'composio',
+        lastUpdated: serverTimestamp(),
+        connectedAt: serverTimestamp(),
+        integrationId: GMAIL_INTEGRATION_ID,
+        // Store all available properties from the connection response
+        ...(gmailConnection.appName ? { appName: gmailConnection.appName } : {}),
+        ...(gmailConnection.appUniqueId ? { appUniqueId: gmailConnection.appUniqueId } : {}),
+        ...(gmailConnection.entityId ? { entityId: gmailConnection.entityId } : {}),
+        ...(gmailConnection.userId ? { userId: gmailConnection.userId } : {}),
+        ...(gmailConnection.emailAddress ? { emailAddress: gmailConnection.emailAddress } : {}),
+        ...(gmailConnection.displayName ? { displayName: gmailConnection.displayName } : {}),
+        ...(gmailConnection.avatarUrl ? { avatarUrl: gmailConnection.avatarUrl } : {}),
+        ...(gmailConnection.createdAt ? { createdAt: gmailConnection.createdAt } : {}),
+        ...(gmailConnection.updatedAt ? { updatedAt: gmailConnection.updatedAt } : {}),
+        ...(gmailConnection.metadata ? { metadata: gmailConnection.metadata } : {}),
+        ...(gmailConnection.config ? { config: gmailConnection.config } : {}),
+        ...(gmailConnection.tags ? { tags: gmailConnection.tags } : {}),
+        ...(gmailConnection.permissions ? { permissions: gmailConnection.permissions } : {}),
+        ...(gmailConnection.scopes ? { scopes: gmailConnection.scopes } : {}),
+        ...(gmailConnection.expiresAt ? { expiresAt: gmailConnection.expiresAt } : {}),
+        // Store the complete response for debugging
+        fullResponse: JSON.parse(JSON.stringify(gmailConnection))
+      };
+
       await setDoc(
         doc(db, 'merchants', merchantId, 'integrations', 'gmail_composio'),
-        {
-          connected: true,
-          connectedAccountId: gmailConnection.id,
-          connectionStatus: gmailConnection.status,
-          provider: 'composio',
-          lastUpdated: serverTimestamp(),
-          connectedAt: serverTimestamp(),
-          integrationId: GMAIL_INTEGRATION_ID,
-          appName: gmailConnection.appName,
-          ...(gmailConnection.appUniqueId ? { appUniqueId: gmailConnection.appUniqueId } : {})
-        }
+        updateData
       );
       
       console.log(`Successfully updated Gmail Composio integration status for merchant: ${merchantId}`);

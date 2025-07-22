@@ -70,7 +70,9 @@ export async function GET(request: NextRequest) {
           provider: 'composio',
           lastUpdated: serverTimestamp(),
           connectedAt: serverTimestamp(),
-          integrationId: customIntegrationId
+          integrationId: customIntegrationId,
+          // Store the complete response for debugging
+          fullResponse: JSON.parse(JSON.stringify(connectedAccount))
         },
         { merge: true }
       );

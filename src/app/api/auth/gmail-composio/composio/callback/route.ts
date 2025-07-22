@@ -61,6 +61,14 @@ export async function GET(request: NextRequest) {
                 // Get detailed account information
                 const detailedAccount = await toolset.connectedAccounts.get(account.id);
                 
+                // Debug: Log all available data from both account and detailedAccount
+                console.log('=== COMPLETE ACCOUNT DATA DEBUG ===');
+                console.log('Account from list:', JSON.stringify(account, null, 2));
+                console.log('Detailed account:', JSON.stringify(detailedAccount, null, 2));
+                console.log('Account properties:', Object.keys(account));
+                console.log('Detailed account properties:', Object.keys(detailedAccount));
+                console.log('=== END ACCOUNT DEBUG ===');
+                
                 // Update the Gmail Composio integration status with all available data
                 const updateData: any = {
                   connected: true,
@@ -70,31 +78,89 @@ export async function GET(request: NextRequest) {
                   lastUpdated: serverTimestamp(),
                   connectedAt: serverTimestamp(),
                   integrationId: GMAIL_INTEGRATION_ID,
-                  // Store all available properties from the detailed account response
-                  ...(account.appName ? { appName: account.appName } : {}),
-                  ...(account.appUniqueId ? { appUniqueId: account.appUniqueId } : {}),
-                  ...(account.entityId ? { entityId: account.entityId } : {}),
-                  ...(account.userId ? { userId: account.userId } : {}),
-                  ...(account.emailAddress ? { emailAddress: account.emailAddress } : {}),
-                  ...(account.displayName ? { displayName: account.displayName } : {}),
-                  ...(account.avatarUrl ? { avatarUrl: account.avatarUrl } : {}),
-                  ...(account.createdAt ? { createdAt: account.createdAt } : {}),
-                  ...(account.updatedAt ? { updatedAt: account.updatedAt } : {}),
-                  ...(account.metadata ? { metadata: account.metadata } : {}),
-                  ...(account.config ? { config: account.config } : {}),
-                  ...(account.tags ? { tags: account.tags } : {}),
-                  ...(account.permissions ? { permissions: account.permissions } : {}),
-                  ...(account.scopes ? { scopes: account.scopes } : {}),
-                  ...(account.expiresAt ? { expiresAt: account.expiresAt } : {}),
-                  // Store the complete detailed response for debugging
-                  fullDetailedResponse: JSON.parse(JSON.stringify(detailedAccount))
                 };
 
-                // If we don't have email address from Composio, try to fetch it from Gmail API
-                // Note: Composio doesn't expose access tokens directly, so we'll rely on the email address
-                // that should be available in the Composio response
-                if (!updateData.emailAddress) {
-                  console.log('No email address found in Composio response, will need to fetch it later');
+                // Store all available properties from the account response
+                const accountProperties = [
+                  'appName', 'appUniqueId', 'entityId', 'userId', 'emailAddress', 
+                  'displayName', 'avatarUrl', 'createdAt', 'updatedAt', 'metadata', 
+                  'config', 'tags', 'permissions', 'scopes', 'expiresAt', 'refreshToken',
+                  'accessToken', 'idToken', 'tokenType', 'expiresIn', 'scope'
+                ];
+
+                accountProperties.forEach(prop => {
+                  if ((account as any)[prop] !== undefined) {
+                    updateData[prop] = (account as any)[prop];
+                    console.log(`Storing ${prop}:`, (account as any)[prop]);
+                  }
+                });
+
+                // Store all available properties from the detailed account response
+                const detailedProperties = [
+                  'appName', 'appUniqueId', 'entityId', 'userId', 'emailAddress', 
+                  'displayName', 'avatarUrl', 'createdAt', 'updatedAt', 'metadata', 
+                  'config', 'tags', 'permissions', 'scopes', 'expiresAt', 'refreshToken',
+                  'accessToken', 'idToken', 'tokenType', 'expiresIn', 'scope'
+                ];
+
+                detailedProperties.forEach(prop => {
+                  if ((detailedAccount as any)[prop] !== undefined) {
+                    updateData[prop] = (detailedAccount as any)[prop];
+                    console.log(`Storing detailed ${prop}:`, (detailedAccount as any)[prop]);
+                  }
+                });
+
+                // Store the complete responses for debugging
+                updateData.fullAccountResponse = JSON.parse(JSON.stringify(account));
+                updateData.fullDetailedResponse = JSON.parse(JSON.stringify(detailedAccount));
+
+                // Fetch Gmail profile data directly from Composio API to get email address and other details
+                try {
+                  console.log('Fetching Gmail profile data from Composio API...');
+                  
+                  const gmailProfileResponse = await fetch("https://backend.composio.dev/api/v3/tools/execute/GMAIL_GET_PROFILE", {
+                    method: "POST",
+                    headers: {
+                      "x-api-key": COMPOSIO_API_KEY,
+                      "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                      "arguments": {},
+                      "user_id": merchantId
+                    }),
+                  });
+
+                  if (gmailProfileResponse.ok) {
+                    const gmailProfileData = await gmailProfileResponse.json();
+                    console.log('Gmail profile API response:', JSON.stringify(gmailProfileData, null, 2));
+                    
+                    if (gmailProfileData.successful && gmailProfileData.data?.response_data) {
+                      const profileData = gmailProfileData.data.response_data;
+                      
+                      // Store all the Gmail profile data
+                      updateData.gmailProfile = {
+                        emailAddress: profileData.emailAddress,
+                        historyId: profileData.historyId,
+                        messagesTotal: profileData.messagesTotal,
+                        threadsTotal: profileData.threadsTotal
+                      };
+                      
+                      // Also store email address at the top level for easy access
+                      if (profileData.emailAddress) {
+                        updateData.emailAddress = profileData.emailAddress;
+                        console.log('Email address fetched from Gmail API:', profileData.emailAddress);
+                      }
+                      
+                      console.log('Successfully stored Gmail profile data');
+                    } else {
+                      console.warn('Gmail profile API call was not successful:', gmailProfileData);
+                    }
+                  } else {
+                    const errorText = await gmailProfileResponse.text();
+                    console.error('Failed to fetch Gmail profile. Status:', gmailProfileResponse.status, 'Response:', errorText);
+                  }
+                } catch (gmailApiError) {
+                  console.error('Error calling Gmail profile API:', gmailApiError);
                 }
 
                 await updateDoc(

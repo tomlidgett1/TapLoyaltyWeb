@@ -45,19 +45,42 @@ export async function GET(request: NextRequest) {
     console.log('Initializing Composio with integration ID:', customIntegrationId);
     const toolset = new OpenAIToolSet({ apiKey: 'smwbexfl2lqlcy3wb0cq3' });
     
+    // Debug: Log the toolset object to see what methods are available
+    console.log('=== TOOLSET DEBUG ===');
+    console.log('Toolset object:', toolset);
+    console.log('Toolset methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(toolset)));
+    console.log('Connected accounts methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(toolset.connectedAccounts)));
+    console.log('=== END TOOLSET DEBUG ===');
+    
     // Skip straight to initiation - this is the simplest test
     console.log(`Initiating connection with entityId: ${merchantId}, integrationId: ${customIntegrationId}`);
-    const connectedAccount = await toolset.connectedAccounts.initiate({
+    
+    // Debug: Log the initiate method parameters
+    const initiateParams = {
       integrationId: customIntegrationId,
       entityId: merchantId,
       redirectUri: "https://app.taployalty.com.au"
-    });
+    };
+    console.log('=== INITIATE PARAMETERS DEBUG ===');
+    console.log('Initiate parameters:', JSON.stringify(initiateParams, null, 2));
+    console.log('=== END INITIATE PARAMETERS DEBUG ===');
+    
+    const connectedAccount = await toolset.connectedAccounts.initiate(initiateParams);
     
     console.log('Connected account initiated:', {
       status: connectedAccount.connectionStatus,
       id: connectedAccount.connectedAccountId,
       hasRedirectUrl: !!connectedAccount.redirectUrl
     });
+
+    // Debug: Log all available properties from the connected account response
+    console.log('=== COMPLETE CONNECTED ACCOUNT RESPONSE DEBUG ===');
+    console.log('Full response object:', JSON.stringify(connectedAccount, null, 2));
+    console.log('Available properties:');
+    Object.keys(connectedAccount).forEach(key => {
+      console.log(`- ${key}:`, (connectedAccount as any)[key]);
+    });
+    console.log('=== END DEBUG ===');
     
     // Store the connection information in Firestore
     try {

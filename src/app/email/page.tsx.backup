@@ -86,9 +86,7 @@ import {
   FileVideo,
   FileAudio,
   MailPlus,
-  Maximize2,
-  Grid,
-  ArrowLeftCircle
+  Maximize2
 } from "lucide-react"
 import React, { useState, useEffect, useRef } from "react"
 import Image from "next/image"
@@ -102,6 +100,7 @@ import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/
 import { formatMelbourneTime } from "@/lib/date-utils"
 import { formatDistanceToNow } from "date-fns"
 import { cn } from "@/lib/utils"
+import EmailAttachmentsView from "@/components/email-attachments-view"
 
 // Email Chip Component for displaying email addresses with light box
 const EmailChip = ({ email, onRemove }: { email: string; onRemove?: (email: string) => void }) => {
@@ -1053,9 +1052,6 @@ export default function EmailPage() {
   const [debugDialogOpen, setDebugDialogOpen] = useState(false)
   const [debugResponse, setDebugResponse] = useState<any>(null)
   const [isExtractingWritingStyle, setIsExtractingWritingStyle] = useState(false)
-  const [showAllAttachments, setShowAllAttachments] = useState(false)
-  const [allAttachments, setAllAttachments] = useState<any[]>([])
-  const [attachmentsLoading, setAttachmentsLoading] = useState(false)
 
   const [merchantData, setMerchantData] = useState<any>(null)
   const [merchantEmail, setMerchantEmail] = useState("")
@@ -1213,7 +1209,8 @@ ${content}
   const actualTempEmailRules = tempEmailRules ?? localTempEmailRules;
   const actualSetTempEmailRules = setTempEmailRules ?? setLocalTempEmailRules;
 
-
+  // Add a new state for showing all attachments
+const [showAllAttachments, setShowAllAttachments] = useState(false)
 
   // Helper function to call generateEmailResponse with proper error handling
   const callGenerateEmailResponse = async (requestType: string, tone?: string, customInstructions?: string, replyEditor?: React.RefObject<HTMLDivElement | null>) => {
@@ -1400,71 +1397,6 @@ ${content}
       }
       return newSet;
     });
-  };
-  
-  // Function to fetch all attachments from emails
-  const fetchAllAttachments = async () => {
-    if (!user?.uid) return;
-    
-    try {
-      setAttachmentsLoading(true);
-      const attachments: any[] = [];
-      
-      // Fetch emails with attachments from all threads
-      const threadsRef = collection(db, 'merchants', user.uid, 'fetchedemails');
-      const threadsSnapshot = await getDocs(threadsRef);
-      
-      // Process each thread
-      for (const threadDoc of threadsSnapshot.docs) {
-        const threadId = threadDoc.id;
-        const chainRef = collection(db, 'merchants', user.uid, 'fetchedemails', threadId, 'chain');
-        const chainSnapshot = await getDocs(chainRef);
-        
-        // Process each email in the thread
-        for (const emailDoc of chainSnapshot.docs) {
-          const emailData = emailDoc.data();
-          const emailAttachments = extractAttachments(emailData);
-          
-          if (emailAttachments && emailAttachments.length > 0) {
-            // Add email metadata to each attachment
-            const enrichedAttachments = emailAttachments.map(attachment => ({
-              ...attachment,
-              emailId: emailDoc.id,
-              threadId: threadId,
-              subject: emailData.subject || 'No Subject',
-              sender: emailData.sender || 'Unknown Sender',
-              receivedAt: emailData.receivedAt || emailData.time || new Date(),
-            }));
-            
-            attachments.push(...enrichedAttachments);
-          }
-        }
-      }
-      
-      // Sort attachments by date (newest first)
-      const sortedAttachments = attachments.sort((a, b) => {
-        const getTime = (timestamp: any) => {
-          if (typeof timestamp === 'string') {
-            return new Date(timestamp).getTime();
-          } else if (timestamp && typeof timestamp.toDate === 'function') {
-            return timestamp.toDate().getTime();
-          } else if (timestamp instanceof Date) {
-            return timestamp.getTime();
-          } else {
-            return 0;
-          }
-        };
-        return getTime(b.receivedAt) - getTime(a.receivedAt);
-      });
-      
-      setAllAttachments(sortedAttachments);
-      console.log(`Found ${sortedAttachments.length} attachments across all emails`);
-      
-    } catch (error) {
-      console.error("Error fetching all attachments:", error);
-    } finally {
-      setAttachmentsLoading(false);
-    }
   };
 
   // Use only fetched Gmail emails
@@ -3214,6 +3146,25 @@ ${content}
           {/* Toolbar Actions */}
           <TooltipProvider>
             <div className="flex items-center gap-2">
+              {/* Show All Attachments Button */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant={showAllAttachments ? "default" : "ghost"} 
+                    size="sm" 
+                    onClick={() => setShowAllAttachments(!showAllAttachments)}
+                    className={`flex items-center gap-1.5 ${showAllAttachments ? "bg-blue-500 hover:bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-200"}`}
+                  >
+                    <Paperclip className="h-4 w-4" />
+                    <span className="hidden sm:inline">
+                      {showAllAttachments ? "Hide Attachments" : "Show All Attachments"}
+                    </span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{showAllAttachments ? "Hide all attachments view" : "Show all email attachments"}</p>
+                </TooltipContent>
+              </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button onClick={handleComposeNew} size="sm" className="bg-blue-500 hover:bg-blue-600 text-white">
@@ -3490,7 +3441,93 @@ ${content}
                 </div>
 
         {/* Main Content */}
-        <div className="flex flex-1 min-h-0 px-3 pb-3 main-panels-container">
+        {showAllAttachments ? (
+          /* All Attachments View - Full Width */
+          <div className="flex-1 overflow-hidden p-3">
+            {user?.uid && (
+              <EmailAttachmentsView 
+                userId={user.uid} 
+                onClose={() => setShowAllAttachments(false)} 
+              />
+            )}
+          </div>
+        ) : (>
+                      {allAttachments.map((attachment, index) => (
+                        <tr key={`${attachment.emailId}-${attachment.attachmentId || index}`} className="hover:bg-gray-50">
+                          <td className="px-4 py-2 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              {getFileIcon(attachment.mimeType || '', attachment.filename || '')}
+                              <span className="text-sm text-gray-900 truncate max-w-[200px]" title={attachment.filename}>
+                                {attachment.filename || 'Unknown file'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                            {attachment.mimeType || 'Unknown type'}
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                            {formatFileSize(attachment.size || 0)}
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap">
+                            <div className="text-sm text-gray-900 truncate max-w-[200px]" title={attachment.sender}>
+                              {attachment.sender || 'Unknown sender'}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap">
+                            <div className="text-sm text-gray-900 truncate max-w-[200px]" title={attachment.subject}>
+                              {attachment.subject || 'No subject'}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                            {formatMelbourneTime(attachment.receivedAt || new Date())}
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap">
+                            <div className="flex flex-wrap gap-1">
+                              {attachment.tags && attachment.tags.length > 0 ? (
+                                attachment.tags.map((tag: string, tagIndex: number) => (
+                                  <span key={tagIndex} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                    <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+                                    {tag}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-xs text-gray-400">No tags</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                if (attachment.s3url) {
+                                  window.open(attachment.s3url, '_blank');
+                                }
+                              }}
+                              disabled={!attachment.s3url}
+                              className="text-xs"
+                            >
+                              <Download className="h-3.5 w-3.5 mr-1" />
+                              Open
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center flex-1 text-center">
+                  <Paperclip className="h-12 w-12 text-gray-300 mb-2" />
+                  <p className="text-lg font-medium text-gray-500 mb-1">No attachments found</p>
+                  <p className="text-sm text-gray-400">Any attachments from your emails will appear here</p>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* Regular Email Interface */
+          <div className="flex flex-1 min-h-0 px-3 pb-3 main-panels-container">>
           {/* Left Panel - Email List Card */}
           <div 
             className="bg-white rounded-xl shadow-lg border border-gray-100 flex flex-col h-full mr-1"
@@ -3616,9 +3653,10 @@ ${content}
                 {/* Add Custom Button */}
                 <button
                   onClick={() => setShowAddCustomDialog(true)}
-                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium border border-gray-300 border-dashed text-gray-600 hover:text-gray-800 hover:border-gray-400 transition-colors w-fit"
+                  className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border border-gray-300 border-dashed text-gray-600 hover:text-gray-800 hover:border-gray-400 transition-colors w-fit"
                 >
                   <Plus className="h-3 w-3" />
+                  Add Custom
                 </button>
               </div>
             </div>

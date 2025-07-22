@@ -24,9 +24,13 @@ export function AuthGuard({ children, fallback }: AuthGuardProps) {
   if (loading) {
     return fallback || (
       <div className="flex items-center justify-center h-screen">
-        <div className="flex flex-col items-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#007AFF]"></div>
-          <p className="mt-4 text-sm text-gray-500">Loading...</p>
+        <div className="w-80 max-w-full">
+          <div className="w-full bg-gray-200 rounded-full h-1.5">
+            <div 
+              className="bg-[#007AFF] h-1.5 rounded-full transition-all duration-300 ease-out animate-pulse" 
+              style={{ width: '75%' }}
+            ></div>
+          </div>
         </div>
       </div>
     )

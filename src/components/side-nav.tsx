@@ -15,7 +15,6 @@ import {
   Clock,
   Settings,
   FileText,
-  Bot,
   Rocket,
   ChevronRight,
   PanelRight,
@@ -37,6 +36,7 @@ import {
   X,
   Mail
 } from "lucide-react"
+import { RiRobot3Line } from "react-icons/ri"
 
 import {
   DropdownMenu,
@@ -149,7 +149,7 @@ const navItems: NavItem[] = [
   {
     title: "Agents",
     href: "/dashboard/agents",
-    icon: Bot,
+    icon: RiRobot3Line,
   },
   {
     title: "Inbox",
@@ -692,11 +692,15 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                       >
                         <div className="flex items-center gap-3 h-full">
                           <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                            <item.icon className={cn("h-4 w-4", 
-                              isActive 
-                                ? "text-[#007AFF]" 
-                                : "text-gray-500 group-hover:text-[#007AFF]"
-                            )} strokeWidth={2.75} />
+                            <item.icon 
+                              className={cn("h-4 w-4", 
+                                isActive 
+                                  ? "text-[#007AFF]" 
+                                  : "text-gray-500 group-hover:text-[#007AFF]"
+                              )} 
+                              strokeWidth={2.75}
+                              style={item.title === "Agents" ? { strokeWidth: 1 } : undefined}
+                            />
                           </div>
                           <div className="h-full flex items-center overflow-hidden">
                             <span className={cn(
@@ -772,11 +776,15 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                     title={isCollapsed ? item.title : undefined}
                   >
                     <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
-                      <item.icon className={cn("h-4 w-4", 
-                        isActive 
-                          ? "text-[#007AFF]" 
-                          : "text-gray-500 group-hover:text-[#007AFF]"
-                      )} strokeWidth={2.75} />
+                      <item.icon 
+                        className={cn("h-4 w-4", 
+                          isActive 
+                            ? "text-[#007AFF]" 
+                            : "text-gray-500 group-hover:text-[#007AFF]"
+                        )} 
+                                                 strokeWidth={2.75}
+                         style={item.title === "Agents" ? { strokeWidth: 1 } : undefined}
+                      />
                     </div>
                     <div className="h-full flex items-center overflow-hidden flex-1">
                       <span className={cn(

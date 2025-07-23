@@ -1,0 +1,140 @@
+diff --git a/src/app/email/page.tsx b/src/app/email/page.tsx
+index 1234567..abcdef0 100644
+--- a/src/app/email/page.tsx
++++ b/src/app/email/page.tsx
+@@ -67,6 +67,7 @@ import {
+   FileAudio,
+   MailPlus,
+   Maximize2,
++  FileX
+ } from "lucide-react"
+ import React, { useState, useEffect, useRef, useMemo } from "react"
+ import Image from "next/image"
+@@ -74,6 +75,7 @@ import { useAuth } from "@/contexts/auth-context"
+ import GradientText from "@/components/GradientText"
+ import { db } from "@/lib/firebase"
+ import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnapshot, updateDoc, setDoc } from "firebase/firestore"
++import { AttachmentsView } from "@/components/email-attachments-view"
+ import { httpsCallable } from "firebase/functions"
+ import { functions } from "@/lib/firebase"
+ import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"
+@@ -1333,6 +1335,9 @@ export default function EmailPage() {
+   const [debugDialogOpen, setDebugDialogOpen] = useState(false)
+   const [debugResponse, setDebugResponse] = useState<any>(null)
+   const [isExtractingWritingStyle, setIsExtractingWritingStyle] = useState(false)
++  
++  const [showAttachmentsView, setShowAttachmentsView] = useState(false)
++  const [allAttachments, setAllAttachments] = useState<any[]>([])
+ 
+   const [merchantData, setMerchantData] = useState<any>(null)
+   const [merchantEmail, setMerchantEmail] = useState("")
+@@ -1523,6 +1528,32 @@ export default function EmailPage() {
+       }
+     }
+   }, [isDragging])
++  
++  // Function to collect all attachments from emails
++  const collectAllAttachments = () => {
++    const attachmentsWithEmailInfo: any[] = [];
++    
++    fetchedEmails.forEach(email => {
++      const attachments = extractAttachments(email);
++      if (attachments && attachments.length > 0) {
++        attachments.forEach(attachment => {
++          attachmentsWithEmailInfo.push({
++            ...attachment,
++            emailSubject: email.subject || 'No Subject',
++            emailSender: email.sender || email.from || 'Unknown Sender',
++            emailDate: email.time || email.receivedAt || email.date || new Date(),
++            emailId: email.id || email.messageId || '',
++            threadId: email.threadId || ''
++          });
++        });
++      }
++    });
++    
++    return attachmentsWithEmailInfo;
++  };
++  
++  // Toggle attachments view
++  const toggleAttachmentsView = () => {
++    if (!showAttachmentsView) {
++      // When enabling attachments view, collect all attachments
++      const collected = collectAllAttachments();
++      setAllAttachments(collected);
++    }
++    setShowAttachmentsView(!showAttachmentsView);
++  };
+ 
+   // Function to summarize email thread
+@@ -3107,6 +3138,22 @@ export default function EmailPage() {
+               </Tooltip>
+               
+               <div className="h-6 w-px bg-gray-300 mx-1"></div>
++              
++              <Tooltip>
++                <TooltipTrigger asChild>
++                  <Button 
++                    variant={showAttachmentsView ? "default" : "ghost"}
++                    size="sm" 
++                    onClick={toggleAttachmentsView} 
++                    className={showAttachmentsView 
++                      ? "bg-blue-500 hover:bg-blue-600 text-white" 
++                      : "text-gray-700 hover:bg-gray-200"
++                    }
++                  >
++                    <Paperclip className="h-4 w-4" />
++                  </Button>
++                </TooltipTrigger>
++                <TooltipContent>
++                  <p>{showAttachmentsView ? "Back to Emails" : "View All Attachments"}</p>
++                </TooltipContent>
++              </Tooltip>
++              
++              <div className="h-6 w-px bg-gray-300 mx-1"></div>
+ 
+                   <Tooltip>
+                     <TooltipTrigger asChild>
+@@ -3806,7 +3853,18 @@ export default function EmailPage() {
+ 
+         {/* Main Content */}
+         <div className="flex flex-1 min-h-0 px-3 pb-3 main-panels-container">
+-          {/* Left Panel - Email List Card */}
++          {showAttachmentsView ? (
++            /* Attachments View - Full Width */
++            <div className="flex-1">
++              <AttachmentsView 
++                attachments={allAttachments} 
++                onBack={toggleAttachmentsView}
++                onSelectEmail={(emailId, threadId) => {
++                  // Exit attachments view
++                  setShowAttachmentsView(false);
++                  
++                  // Find and select the email
++                  const email = fetchedEmails.find(e => e.id === emailId || e.messageId === emailId);
++                  if (email) {
++                    setSelectedEmail(email);
++                    if (threadId) {
++                      const thread = groupEmailsByThread(fetchedEmails).find(t => t.threadId === threadId);
++                      if (thread) setSelectedThread(thread);
++                    }
++                  }
++                }}
++              />
++            </div>
++          ) : (
++            /* Normal Email View with Left and Right Panels */
++            <div className="flex w-full">
++              {/* Left Panel - Email List Card */}
+           <div 
+             className="bg-white rounded-xl shadow-lg border border-gray-100 flex flex-col h-full mr-1"
+             style={{ width: `${leftPanelWidth}%` }}
+           >
+@@ -4721,6 +4779,7 @@ export default function EmailPage() {
+               </div>
+             </div>
+           </div>
++          </div>
+           )}
+         </div>
+       </div>

@@ -21,7 +21,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogPortal,
 } from "@/components/ui/dialog"
+import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { 
   Select,
   SelectContent,
@@ -86,16 +88,18 @@ import {
   FileVideo,
   FileAudio,
   MailPlus,
-  Maximize2,
-  Grid,
-  ArrowLeftCircle
+  CheckCircle,
+  Clock,
+  Filter
 } from "lucide-react"
-import React, { useState, useEffect, useRef } from "react"
+import { RiRobot3Line } from "react-icons/ri"
+import React, { useState, useEffect, useRef, useMemo } from "react"
 import Image from "next/image"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import GradientText from "@/components/GradientText"
 import { db } from "@/lib/firebase"
-import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnapshot, updateDoc, setDoc } from "firebase/firestore"
+import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnapshot, updateDoc, setDoc, addDoc } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
 import { functions } from "@/lib/firebase"
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"
@@ -125,22 +129,79 @@ const EmailInputWithChips = ({
   value, 
   onChange, 
   placeholder, 
-  className = "" 
+  className = "",
+  user
 }: { 
   value: string; 
   onChange: (value: string) => void; 
   placeholder: string; 
   className?: string;
+  user?: any;
 }) => {
   const [inputValue, setInputValue] = useState('');
+  const [contactEmails, setContactEmails] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const emails = value.split(',').map(e => e.trim()).filter(Boolean);
+
+  // Filter suggestions based on input
+  const filteredSuggestions = useMemo(() => {
+    if (!inputValue.trim()) return [];
+    
+    return contactEmails
+      .filter(email => 
+        email.toLowerCase().includes(inputValue.toLowerCase()) &&
+        !emails.includes(email)
+      )
+      .slice(0, 8);
+  }, [inputValue, contactEmails, emails]);
+
+  // Fetch contact emails from Firestore
+  useEffect(() => {
+    const fetchContactEmails = async () => {
+      if (!user?.uid) return;
+      
+      try {
+        const contactEmailsRef = collection(db, 'merchants', user.uid, 'contactemails');
+        const querySnapshot = await getDocs(contactEmailsRef);
+        const emails = querySnapshot.docs.map(doc => doc.data().email).filter(Boolean);
+        // Remove duplicates and sort
+        const uniqueEmails = [...new Set(emails)].sort();
+        setContactEmails(uniqueEmails);
+      } catch (error) {
+        console.error('Error fetching contact emails:', error);
+      }
+    };
+
+    fetchContactEmails();
+  }, [user?.uid]);
+
+  // Update showSuggestions based on filtered results
+  useEffect(() => {
+    setShowSuggestions(filteredSuggestions.length > 0);
+  }, [filteredSuggestions]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value);
   };
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === ',') {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (selectedIndex >= 0 && filteredSuggestions[selectedIndex]) {
+        // Select the highlighted suggestion
+        const selectedEmail = filteredSuggestions[selectedIndex];
+        handleSuggestionSelect(selectedEmail);
+      } else {
+        // Add the typed email
+        const newEmail = inputValue.trim();
+        if (newEmail && !emails.includes(newEmail)) {
+          const newEmails = [...emails, newEmail];
+          onChange(newEmails.join(', '));
+          setInputValue('');
+        }
+      }
+    } else if (e.key === ',') {
       e.preventDefault();
       const newEmail = inputValue.trim();
       if (newEmail && !emails.includes(newEmail)) {
@@ -148,6 +209,30 @@ const EmailInputWithChips = ({
         onChange(newEmails.join(', '));
         setInputValue('');
       }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (filteredSuggestions.length > 0) {
+        setSelectedIndex(prev => 
+          prev < filteredSuggestions.length - 1 ? prev + 1 : 0
+        );
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (filteredSuggestions.length > 0) {
+        setSelectedIndex(prev => 
+          prev > 0 ? prev - 1 : filteredSuggestions.length - 1
+        );
+      }
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      if (selectedIndex >= 0 && filteredSuggestions[selectedIndex]) {
+        // Select the highlighted suggestion with Tab
+        const selectedEmail = filteredSuggestions[selectedIndex];
+        handleSuggestionSelect(selectedEmail);
+      }
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+      setSelectedIndex(-1);
     } else if (e.key === 'Backspace' && inputValue === '' && emails.length > 0) {
       // Remove last email on backspace when input is empty
       const newEmails = emails.slice(0, -1);
@@ -167,26 +252,77 @@ const EmailInputWithChips = ({
       onChange(newEmails.join(', '));
       setInputValue('');
     }
+    // Delay hiding suggestions to allow for clicks
+    setTimeout(() => {
+      setShowSuggestions(false);
+      setSelectedIndex(-1);
+    }, 100);
+  };
+
+  const handleSuggestionClick = (email: string) => {
+    if (!emails.includes(email)) {
+      const newEmails = [...emails, email];
+      onChange(newEmails.join(', '));
+    }
+    setInputValue('');
+    setShowSuggestions(false);
+    setSelectedIndex(-1);
+  };
+
+  const handleSuggestionSelect = (email: string) => {
+    // Add the selected email as a chip
+    if (!emails.includes(email)) {
+      const newEmails = [...emails, email];
+      onChange(newEmails.join(', '));
+    }
+    // Clear the input and close suggestions
+    setInputValue('');
+    setShowSuggestions(false);
+    setSelectedIndex(-1);
   };
 
   return (
-    <div className={`flex flex-wrap items-center gap-1.5 min-h-8 px-2 py-1 bg-transparent border-none outline-none focus:ring-0 text-gray-900 ${className}`}>
-      {emails.map((email, index) => (
-        <EmailChip 
-          key={index} 
-          email={email} 
-          onRemove={handleRemoveEmail}
+    <div className="relative">
+      <div className={`flex flex-wrap items-center gap-1.5 min-h-8 px-2 py-1 bg-transparent border-none outline-none focus:ring-0 text-gray-900 ${className}`}>
+        {emails.map((email, index) => (
+          <EmailChip 
+            key={index} 
+            email={email} 
+            onRemove={handleRemoveEmail}
+          />
+        ))}
+        <input
+          type="text"
+          value={inputValue}
+          onChange={handleInputChange}
+          onKeyDown={handleInputKeyDown}
+          onBlur={handleBlur}
+
+          className="flex-1 min-w-32 text-xs bg-transparent border-none outline-none focus:ring-0 text-gray-900 placeholder-gray-500"
+          placeholder={emails.length === 0 ? placeholder : ''}
         />
-      ))}
-      <input
-        type="text"
-        value={inputValue}
-        onChange={handleInputChange}
-        onKeyDown={handleInputKeyDown}
-        onBlur={handleBlur}
-        className="flex-1 min-w-32 text-xs bg-transparent border-none outline-none focus:ring-0 text-gray-900 placeholder-gray-500"
-        placeholder={emails.length === 0 ? placeholder : ''}
-      />
+      </div>
+      
+      {/* Autocomplete Dropdown */}
+      {showSuggestions && filteredSuggestions.length > 0 && (
+        <div 
+          className="absolute top-full left-0 z-50 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto w-96"
+          onMouseDown={(e) => e.preventDefault()} // Prevent blur when clicking dropdown
+        >
+          {filteredSuggestions.map((email: string, index: number) => (
+            <div
+              key={email}
+              className={`px-3 py-1.5 text-xs cursor-pointer ${
+                index === selectedIndex ? 'bg-blue-100 text-gray-700 font-medium' : 'text-gray-700 hover:bg-blue-100'
+              }`}
+              onClick={() => handleSuggestionSelect(email)}
+              onMouseDown={(e) => e.preventDefault()} // Prevent blur when clicking items
+            >
+              {email}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -310,7 +446,7 @@ const CompactAttachmentList = ({ attachments }: { attachments: any[] }) => {
 // Add custom CSS for discreet scrollbar
 const customScrollbarStyles = `
   .custom-scrollbar::-webkit-scrollbar {
-    width: 4px;
+    width: 3px;
   }
   
   .custom-scrollbar::-webkit-scrollbar-track {
@@ -318,18 +454,18 @@ const customScrollbarStyles = `
   }
   
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(156, 163, 175, 0.3);
-    border-radius: 2px;
+    background: rgba(156, 163, 175, 0.2);
+    border-radius: 1.5px;
   }
   
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(156, 163, 175, 0.5);
+    background: rgba(156, 163, 175, 0.4);
   }
   
   /* For Firefox */
   .custom-scrollbar {
     scrollbar-width: thin;
-    scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+    scrollbar-color: rgba(156, 163, 175, 0.2) transparent;
   }
   
   /* Prevent scroll chaining - stops scroll from bubbling to parent */
@@ -594,61 +730,9 @@ const processEmailContent = (emailData: any): { content: string; isHtml: boolean
     }
   }
   
-  // LAST RESORT: Fall back to messageText (deprecated approach)
-  console.log('⚠️ FALLING BACK TO messageText - This should rarely happen with payload.parts approach');
-  let content = emailData.messageText || "No content available";
-  console.log('📝 messageText raw content:', content);
-  
-  // Try to decode messageText if it looks like base64
-  if (content && typeof content === 'string' && content.length > 50 && !content.includes('<') && !content.includes(' ')) {
-    try {
-      content = decodePart(content); // Use improved decoder here too
-      console.log('🔄 Decoded messageText with decodePart, preview (first 200 chars):', content.substring(0, 200));
-    } catch (error) {
-      console.warn('❌ decodePart failed on messageText, trying fallback decoder:', error);
-      try {
-        content = decodeBase64Url(content);
-        console.log('🔄 Fallback decoder successful for messageText');
-      } catch (fallbackError) {
-        console.warn('❌ All decoders failed for messageText, using original content');
-      }
-    }
-  }
-  
-  // Handle mixed plain text + HTML content (legacy handling)
-  if (content.includes('<html') || content.includes('<body')) {
-    console.log('🔀 Detected mixed plain text and HTML content in messageText');
-    
-    // Extract any plain text before the HTML starts
-    const htmlStartIndex = content.search(/<html|<body|<div[^>]*>/i);
-    let plainTextPrefix = '';
-    let htmlContent = content;
-    
-    if (htmlStartIndex > 0) {
-      plainTextPrefix = content.substring(0, htmlStartIndex).trim();
-      htmlContent = content.substring(htmlStartIndex);
-      console.log('📝 Plain text prefix:', plainTextPrefix.substring(0, 100));
-      console.log('🏷️ HTML portion starts with:', htmlContent.substring(0, 100));
-      
-      // If we have meaningful plain text at the start, combine it with HTML
-      if (plainTextPrefix.length > 10 && 
-          !plainTextPrefix.startsWith('From:') && 
-          !plainTextPrefix.includes('wrote:')) {
-        console.log('✅ Found meaningful plain text prefix, combining with HTML');
-        content = `<div style="margin-bottom: 10px;">${plainTextPrefix.replace(/\n/g, '<br>')}</div>${htmlContent}`;
-      } else {
-        content = htmlContent;
-      }
-    }
-  }
-  
-  // Determine if content is HTML
-  const isHtml = isHtmlContent(content);
-  console.log('🔍 Using messageText fallback (DEPRECATED), isHtml:', isHtml);
-  console.log('📄 Final content preview (first 200 chars):', content.substring(0, 200));
-  console.log('🏷️ Content contains HTML tags:', ['<html', '<div', '<body'].map(tag => ({ tag, found: content.includes(tag) })));
-  
-  return { content, isHtml };
+  // No content available from any source
+  console.log('❌ No content available from any source');
+  return { content: "No content available", isHtml: false };
 };
 
 // Helper function to check if email is from current user
@@ -686,31 +770,37 @@ const extractCcRecipients = (emailData: any): string => {
   console.log("🔍 Extracting CC recipients from Firestore email document");
   
   try {
-    // Look in rawData (Firestore document) at payload.data.payload.headers
-    const headers = emailData.rawData?.payload?.data?.payload?.headers;
+    // First try: Look in rawData (Firestore document) at payload.data.payload.headers
+    let headers = emailData.rawData?.payload?.data?.payload?.headers;
+    
+    // Second try: Look directly in payload.data.payload.headers (for direct Firestore structure)
+    if (!headers || !Array.isArray(headers)) {
+      headers = emailData.payload?.data?.payload?.headers;
+    }
     
     if (headers && Array.isArray(headers)) {
-      console.log("📋 Found headers in rawData, length:", headers.length);
+      console.log("📋 Found headers, length:", headers.length);
       console.log("📋 All header names:", headers.map(h => h.name));
       
+      // Look for CC header (case-insensitive)
       const ccHeader = headers.find((header: any) => 
-        header.name === 'Cc'
+        header.name && (header.name.toLowerCase() === 'cc' || header.name === 'CC')
       );
       
       if (ccHeader && ccHeader.value) {
         console.log("✅ Found CC header in Firestore document:", ccHeader.value);
         return ccHeader.value;
       } else {
-        console.log("ℹ️ No CC header found in Firestore headers array");
+        console.log("ℹ️ No CC header found in headers array");
       }
     } else {
-      console.log("❌ No headers array found at rawData.payload.data.payload.headers");
-      console.log("📊 Firestore document structure:", {
+      console.log("❌ No headers array found");
+      console.log("📊 Email document structure:", {
         hasRawData: !!emailData.rawData,
-        hasPayload: !!emailData.rawData?.payload,
-        hasPayloadData: !!emailData.rawData?.payload?.data,
-        hasPayloadDataPayload: !!emailData.rawData?.payload?.data?.payload,
-        payloadDataPayloadKeys: emailData.rawData?.payload?.data?.payload ? Object.keys(emailData.rawData.payload.data.payload) : []
+        hasPayload: !!emailData.payload,
+        hasPayloadData: !!emailData.payload?.data,
+        hasPayloadDataPayload: !!emailData.payload?.data?.payload,
+        payloadDataPayloadKeys: emailData.payload?.data?.payload ? Object.keys(emailData.payload.data.payload) : []
       });
     }
     
@@ -1027,6 +1117,7 @@ const formatPreviewTime = (timestamp: any) => {
 
 export default function EmailPage() {
   const { user } = useAuth()
+  const router = useRouter()
   
   // Firebase function for generating email responses
   const generateEmailResponse = httpsCallable(functions, 'generateEmailResponse');
@@ -1040,6 +1131,65 @@ export default function EmailPage() {
     thread?: any
   } | null>(null)
   const [selectedAccount, setSelectedAccount] = useState("")
+  const [selectedAgent, setSelectedAgent] = useState("customer-service")
+  
+  // Agent modal states
+  const [isCustomerServiceModalOpen, setIsCustomerServiceModalOpen] = useState(false)
+  const [isEmailSummaryModalOpen, setIsEmailSummaryModalOpen] = useState(false)
+  const [isEmailExecutiveModalOpen, setIsEmailExecutiveModalOpen] = useState(false)
+  
+  // Connect email loading state
+  const [isConnectingEmail, setIsConnectingEmail] = useState(false)
+
+  // Function to log contact emails to Firestore
+  const logContactEmails = async (emailAddresses: string[], type: 'sent' | 'received', context?: string) => {
+    if (!user?.uid || !emailAddresses.length) return;
+    
+    try {
+      const contactEmailsRef = collection(db, 'merchants', user.uid, 'contactemails');
+      
+      // Process each email address
+      for (const email of emailAddresses) {
+        const cleanEmail = email.trim().toLowerCase();
+        if (!cleanEmail || !cleanEmail.includes('@')) continue;
+        
+        // Check if this email already exists
+        const emailQuery = query(contactEmailsRef, where('email', '==', cleanEmail));
+        const existingDoc = await getDocs(emailQuery);
+        
+        if (existingDoc.empty) {
+          // Create new contact email document
+          await addDoc(contactEmailsRef, {
+            email: cleanEmail,
+            firstSeen: new Date(),
+            lastSeen: new Date(),
+            sentCount: type === 'sent' ? 1 : 0,
+            receivedCount: type === 'received' ? 1 : 0,
+            contexts: [context || 'email'],
+            lastContext: context || 'email'
+          });
+          console.log(`📧 Logged new contact email: ${cleanEmail} (${type})`);
+        } else {
+          // Update existing contact email document
+          const existingDocRef = existingDoc.docs[0].ref;
+          const existingData = existingDoc.docs[0].data();
+          
+          await updateDoc(existingDocRef, {
+            lastSeen: new Date(),
+            sentCount: existingData.sentCount + (type === 'sent' ? 1 : 0),
+            receivedCount: existingData.receivedCount + (type === 'received' ? 1 : 0),
+            contexts: existingData.contexts?.includes(context || 'email') 
+              ? existingData.contexts 
+              : [...(existingData.contexts || []), context || 'email'],
+            lastContext: context || 'email'
+          });
+          console.log(`📧 Updated contact email: ${cleanEmail} (${type})`);
+        }
+      }
+    } catch (error) {
+      console.error('Error logging contact emails:', error);
+    }
+  };
   const [composeMode, setComposeMode] = useState<"none" | "reply" | "replyAll" | "forward">("none")
   const [composeSubject, setComposeSubject] = useState("")
   const [composeContent, setComposeContent] = useState("")
@@ -1053,9 +1203,6 @@ export default function EmailPage() {
   const [debugDialogOpen, setDebugDialogOpen] = useState(false)
   const [debugResponse, setDebugResponse] = useState<any>(null)
   const [isExtractingWritingStyle, setIsExtractingWritingStyle] = useState(false)
-  const [showAllAttachments, setShowAllAttachments] = useState(false)
-  const [allAttachments, setAllAttachments] = useState<any[]>([])
-  const [attachmentsLoading, setAttachmentsLoading] = useState(false)
 
   const [merchantData, setMerchantData] = useState<any>(null)
   const [merchantEmail, setMerchantEmail] = useState("")
@@ -1121,15 +1268,19 @@ export default function EmailPage() {
   }, [isDragging])
 
   // Function to summarize email thread
-  const summarizeThread = async (thread: any) => {
-    if (!thread || !user?.uid) return;
+  const summarizeEmailOrThread = async (emailOrThread: any) => {
+    if (!emailOrThread || !user?.uid) return;
     
     setIsSummarizing(true);
     try {
-      // Prepare thread content for summarization - combine all emails into one content string
-      const threadContentText = thread.emails.map((email: any) => {
-        const content = email.content || email.htmlMessage || 'No content';
-        return `From: ${email.sender}
+      let contentToSummarize = '';
+      
+      // Check if it's a thread (has emails array) or single email
+      if (emailOrThread.emails && Array.isArray(emailOrThread.emails)) {
+        // It's a thread - combine all emails
+        contentToSummarize = emailOrThread.emails.map((email: any) => {
+          const content = email.content || email.htmlMessage || 'No content';
+          return `From: ${email.sender}
 To: ${email.to || 'Unknown'}
 Subject: ${email.subject || 'No Subject'}
 Date: ${email.time || email.receivedAt || email.repliedAt || 'Unknown time'}
@@ -1137,12 +1288,22 @@ Date: ${email.time || email.receivedAt || email.repliedAt || 'Unknown time'}
 ${content}
 
 ---`;
-      }).join('\n\n');
+        }).join('\n\n');
+      } else {
+        // It's a single email
+        const content = emailOrThread.content || emailOrThread.htmlMessage || 'No content';
+        contentToSummarize = `From: ${emailOrThread.sender}
+To: ${emailOrThread.to || 'Unknown'}
+Subject: ${emailOrThread.subject || 'No Subject'}
+Date: ${emailOrThread.time || emailOrThread.receivedAt || emailOrThread.repliedAt || 'Unknown time'}
+
+${content}`;
+      }
 
       const summaryResponse = await generateEmailResponse({
         merchantId: user.uid,
-        summarise: threadContentText, // Content to summarise
-        email: threadContentText // Required field for summarise mode
+        summarise: contentToSummarize, // Content to summarise
+        email: contentToSummarize // Required field for summarise mode
       }) as { data?: { summary?: string } };
 
       if (summaryResponse.data?.summary) {
@@ -1150,13 +1311,17 @@ ${content}
         setShowSummaryDropdown(true);
       }
     } catch (error) {
-      console.error('Error summarizing thread:', error);
+      console.error('Error summarizing email/thread:', error);
       // Show error in dropdown
       setThreadSummary('Error generating summary. Please try again.');
       setShowSummaryDropdown(true);
     } finally {
       setIsSummarizing(false);
     }
+  };
+
+  const summarizeThread = async (thread: any) => {
+    await summarizeEmailOrThread(thread);
   };
   
   // Helper function to close summary dropdown with animation
@@ -1165,7 +1330,7 @@ ${content}
     setTimeout(() => {
       setShowSummaryDropdown(false);
       setSummaryClosing(false);
-    }, 200);
+    }, 300);
   };
   const [isSending, setIsSending] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string>('')
@@ -1192,7 +1357,7 @@ ${content}
   const [instructionsClosing, setInstructionsClosing] = useState(false)
   const [showSummaryDropdown, setShowSummaryDropdown] = useState(false)
   const [summaryClosing, setSummaryClosing] = useState(false)
-  const [isFullHeight, setIsFullHeight] = useState(false)
+  const [currentView, setCurrentView] = useState<'email' | 'agent'>('email')
   
   // Email Rules state
   const [emailRulesList, setEmailRulesList] = useState<Array<{id: string, title: string, content: string, type: 'reply' | 'new' | 'both'}>>([]); // Added type field
@@ -1400,71 +1565,6 @@ ${content}
       }
       return newSet;
     });
-  };
-  
-  // Function to fetch all attachments from emails
-  const fetchAllAttachments = async () => {
-    if (!user?.uid) return;
-    
-    try {
-      setAttachmentsLoading(true);
-      const attachments: any[] = [];
-      
-      // Fetch emails with attachments from all threads
-      const threadsRef = collection(db, 'merchants', user.uid, 'fetchedemails');
-      const threadsSnapshot = await getDocs(threadsRef);
-      
-      // Process each thread
-      for (const threadDoc of threadsSnapshot.docs) {
-        const threadId = threadDoc.id;
-        const chainRef = collection(db, 'merchants', user.uid, 'fetchedemails', threadId, 'chain');
-        const chainSnapshot = await getDocs(chainRef);
-        
-        // Process each email in the thread
-        for (const emailDoc of chainSnapshot.docs) {
-          const emailData = emailDoc.data();
-          const emailAttachments = extractAttachments(emailData);
-          
-          if (emailAttachments && emailAttachments.length > 0) {
-            // Add email metadata to each attachment
-            const enrichedAttachments = emailAttachments.map(attachment => ({
-              ...attachment,
-              emailId: emailDoc.id,
-              threadId: threadId,
-              subject: emailData.subject || 'No Subject',
-              sender: emailData.sender || 'Unknown Sender',
-              receivedAt: emailData.receivedAt || emailData.time || new Date(),
-            }));
-            
-            attachments.push(...enrichedAttachments);
-          }
-        }
-      }
-      
-      // Sort attachments by date (newest first)
-      const sortedAttachments = attachments.sort((a, b) => {
-        const getTime = (timestamp: any) => {
-          if (typeof timestamp === 'string') {
-            return new Date(timestamp).getTime();
-          } else if (timestamp && typeof timestamp.toDate === 'function') {
-            return timestamp.toDate().getTime();
-          } else if (timestamp instanceof Date) {
-            return timestamp.getTime();
-          } else {
-            return 0;
-          }
-        };
-        return getTime(b.receivedAt) - getTime(a.receivedAt);
-      });
-      
-      setAllAttachments(sortedAttachments);
-      console.log(`Found ${sortedAttachments.length} attachments across all emails`);
-      
-    } catch (error) {
-      console.error("Error fetching all attachments:", error);
-    } finally {
-      setAttachmentsLoading(false);
-    }
   };
 
   // Use only fetched Gmail emails
@@ -1827,7 +1927,8 @@ ${content}
         
         // Use thread metadata for the list view
         const threadId = threadData.threadId || doc.id
-        const subject = threadData.subject || "No Subject"
+        // Use payload.data.preview.subject if available, otherwise fallback to threadData.subject
+        const subject = threadData.payload?.data?.preview?.subject || threadData.subject || "No Subject"
         const latestSender = threadData.latestSender || "Unknown Sender"
         const latestReceivedAt = threadData.latestReceivedAt
         
@@ -1878,10 +1979,6 @@ ${content}
             if (messageData) {
               if (messageData.htmlMessage) {
                 mostRecentContent = messageData.htmlMessage;
-              } else if (messageData.payload?.data?.message_text) {
-                mostRecentContent = messageData.payload.data.message_text;
-              } else if (messageData.message_text) {
-                mostRecentContent = messageData.message_text;
               } else if (messageData.payload) {
                 try {
                   const parts = messageData.payload?.data?.payload?.parts;
@@ -1926,8 +2023,9 @@ ${content}
           senderName = latestSender
         }
         
-        // Create preview text from actual message content
-        const previewText = createPreviewText(mostRecentContent);
+        // Create preview text - prioritize payload.data.preview.body, fallback to extracted content
+        let previewContent = threadData.payload?.data?.preview?.body || mostRecentContent;
+        const previewText = createPreviewText(previewContent);
         
         // Create thread object for left panel display
         const threadObj = {
@@ -1937,7 +2035,7 @@ ${content}
           email: senderEmail,
           subject: subject,
           preview: previewText,
-          content: mostRecentContent || "Click to view thread messages",
+          content: previewContent || "Click to view thread messages",
           time: latestReceivedAt,
           read: mostRecentEmailRead, // Use actual read status from most recent email
           hasAttachment: hasAttachment,
@@ -1955,7 +2053,7 @@ ${content}
             email: senderEmail,
             subject: subject,
             preview: previewText,
-            content: mostRecentContent || "Click to view thread messages",
+            content: previewContent || "Click to view thread messages",
             time: latestReceivedAt,
             read: mostRecentEmailRead,
             hasAttachment: hasAttachment
@@ -2601,9 +2699,24 @@ ${content}
     }
   }
 
-  const handleConnectEmail = () => {
+  const handleConnectEmail = async () => {
+    setIsConnectingEmail(true);
+    
+    // Show loading animation for 5 seconds
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
     // Redirect to integrations page to connect Gmail
     window.location.href = '/dashboard/integrations';
+  }
+
+  const handleAgentSelection = (agentId: string) => {
+    if (agentId === 'customer-service') {
+      setIsCustomerServiceModalOpen(true)
+    } else if (agentId === 'categorising') {
+      setIsEmailExecutiveModalOpen(true)
+    } else if (agentId === 'summary') {
+      setIsEmailSummaryModalOpen(true)
+    }
   }
 
   const handleComposeNew = () => {
@@ -2745,8 +2858,9 @@ ${content}
     }
     
     try {
-      // Clear both states immediately to prevent flicker
-      setSelectedEmail(null)
+      // Set selectedEmail immediately for instant highlighting
+      // Use the thread representative for immediate feedback
+      setSelectedEmail(thread.representative || thread)
       setSelectedThread(null)
       setReplyMode(null) // Also clear reply mode
       
@@ -2807,10 +2921,6 @@ ${content}
         let content = ""
         if (messageData.htmlMessage) {
           content = messageData.htmlMessage
-        } else if (messageData.payload?.data?.message_text) {
-          content = messageData.payload.data.message_text
-        } else if (messageData.message_text) {
-          content = messageData.message_text
         } else if (messageData.payload) {
           try {
             const parts = messageData.payload?.data?.payload?.parts
@@ -2880,6 +2990,16 @@ ${content}
         receivedAt: email.receivedAt,
         repliedAt: email.repliedAt
       })))
+      
+      // Log all sender email addresses from incoming emails
+      const senderEmails = threadEmails
+        .map(email => email.email)
+        .filter(email => email && email.includes('@') && !isEmailFromCurrentUser(email, user?.email || '', merchantEmail))
+        .filter((email, index, arr) => arr.indexOf(email) === index); // Remove duplicates
+      
+      if (senderEmails.length > 0) {
+        await logContactEmails(senderEmails, 'received', 'email_inbox');
+      }
       
       // IMPORTANT: Check if there's only 1 email in chain
       if (threadEmails.length === 1) {
@@ -3169,11 +3289,45 @@ ${content}
           </linearGradient>
         </defs>
       </svg>
+      
+      {/* Mode Toggle Tabs */}
+      <div className="mx-3 mt-3 mb-1">
+        {/* Main Tab Container */}
+        <div className="flex items-center bg-white p-0.5 rounded-md w-fit">
+          <button
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+              currentView === 'email'
+                ? "text-gray-800 bg-[#EEEEEE] shadow-sm"
+                : "text-gray-600 hover:bg-gray-50"
+            )}
+            onClick={() => setCurrentView('email')}
+          >
+            <Mail size={15} strokeWidth={2.75} />
+            Email Inbox
+          </button>
+          <button
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+              currentView === 'agent'
+                ? "text-gray-800 bg-[#EEEEEE] shadow-sm"
+                : "text-gray-600 hover:bg-gray-50"
+            )}
+            onClick={() => setCurrentView('agent')}
+          >
+            <RiRobot3Line size={15} />
+            Agent Inbox
+          </button>
+        </div>
+      </div>
+      
       {/* Top Bar - Combined Header with folder dropdown, toolbar, and connected account */}
-      <div className="mx-3 mt-3 mb-3 bg-white rounded-xl shadow-lg border border-gray-100 flex items-center justify-between px-4 py-3 flex-shrink-0">
-        <div className="flex items-center gap-4">
-          {/* Folder Dropdown */}
-          <Select value={selectedFolder} onValueChange={setSelectedFolder}>
+      <div className="mx-3 mb-3 bg-white rounded-xl shadow-lg border border-gray-100 flex items-center justify-between px-4 py-3 flex-shrink-0">
+        {currentView === 'email' ? (
+          <>
+            <div className="flex items-center gap-4">
+              {/* Folder Dropdown */}
+              <Select value={selectedFolder} onValueChange={setSelectedFolder}>
             <SelectTrigger className="w-32 h-8 text-sm">
               <SelectValue />
             </SelectTrigger>
@@ -3222,6 +3376,22 @@ ${content}
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>New Email</p>
+                </TooltipContent>
+              </Tooltip>
+              
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    onClick={() => router.push('/email/attachments')} 
+                    size="sm" 
+                    variant="outline"
+                    className="text-gray-700 hover:bg-gray-100"
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Attachments</p>
                 </TooltipContent>
               </Tooltip>
               
@@ -3328,10 +3498,45 @@ ${content}
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Agents Dropdown */}
+          <Select value={selectedAgent} onValueChange={(value) => {
+            setSelectedAgent(value)
+            handleAgentSelection(value)
+          }}>
+            <SelectTrigger className="w-32 h-8 text-sm focus:outline-none focus:ring-0">
+              <SelectValue>
+                <div className="flex items-center gap-2">
+                  <RiRobot3Line className="h-4 w-4 text-gray-600" />
+                  <span className="text-sm text-gray-700">Agents</span>
+                </div>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="customer-service">
+                <div className="flex flex-col items-start">
+                  <div className="font-medium">Customer Service</div>
+                  <div className="text-xs text-gray-500">Handles customer inquiries and support requests</div>
+                </div>
+              </SelectItem>
+              <SelectItem value="categorising">
+                <div className="flex flex-col items-start">
+                  <div className="font-medium">Categorising Agent</div>
+                  <div className="text-xs text-gray-500">Organises and tags emails by type and priority</div>
+                </div>
+              </SelectItem>
+              <SelectItem value="summary">
+                <div className="flex flex-col items-start">
+                  <div className="font-medium">Summary Agent</div>
+                  <div className="text-xs text-gray-500">Creates concise summaries of email threads</div>
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
           {/* Connected Account Selector or Connect Button */}
           {gmailEmailAddress ? (
             <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-              <SelectTrigger className="w-64 h-8 text-sm">
+              <SelectTrigger className="w-64 h-8 text-sm focus:outline-none focus:ring-0">
                 <SelectValue>
                   {loading ? (
                     <div className="flex items-center gap-3">
@@ -3392,10 +3597,20 @@ ${content}
           ) : (
             <Button 
               onClick={handleConnectEmail}
-              className="w-64 h-8 text-sm bg-blue-500 hover:bg-blue-600 text-white"
+              disabled={loading || isConnectingEmail}
+              className="w-64 h-8 text-sm bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Mail className="h-4 w-4 mr-2" />
-              Connect Email Now
+              {(loading || isConnectingEmail) ? (
+                <>
+                  <div className="h-4 w-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  {isConnectingEmail ? "Connecting..." : ""}
+                </>
+              ) : (
+                <>
+                  <Mail className="h-4 w-4 mr-2" />
+                  Connect Email Now
+                </>
+              )}
             </Button>
           )}
 
@@ -3487,10 +3702,158 @@ ${content}
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </div>
+            </>
+          ) : (
+            /* Agent Inbox Top Bar */
+            <>
+              <div className="flex items-center gap-4">
+                {/* Agent Status Filter */}
+                <Select value="all" onValueChange={() => {}}>
+                  <SelectTrigger className="w-32 h-8 text-sm">
+                    <SelectValue placeholder="All Tasks" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      <div className="flex items-center gap-2">
+                        <Filter className="h-4 w-4" strokeWidth={2.75} />
+                        <span>All Tasks</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="pending">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4" strokeWidth={2.75} />
+                        <span>Pending</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="approved">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4" strokeWidth={2.75} />
+                        <span>Approved</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="rejected">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4" strokeWidth={2.75} />
+                        <span>Rejected</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Agent Toolbar Actions */}
+                <TooltipProvider>
+                  <div className="flex items-center gap-2">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="sm" className="bg-green-500 hover:bg-green-600 text-white">
+                          <CheckCircle className="h-4 w-4" strokeWidth={2.75} />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Approve Selected</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          className="text-red-600 border-red-200 hover:bg-red-50"
+                        >
+                          <AlertCircle className="h-4 w-4" strokeWidth={2.75} />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Reject Selected</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    
+                    <div className="h-6 w-px bg-gray-300 mx-1"></div>
+                    
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className="text-gray-700 hover:bg-gray-200"
+                        >
+                          <Settings className="h-4 w-4" strokeWidth={2.75} />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Agent Settings</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className="text-gray-700 hover:bg-gray-200"
+                        >
+                          <RefreshCw className="h-4 w-4" strokeWidth={2.75} />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Refresh Tasks</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </TooltipProvider>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Agent Performance Stats */}
+                <div className="flex items-center gap-4 text-sm text-gray-600">
+                  <div className="flex items-center gap-1">
+                    <Clock className="h-4 w-4" strokeWidth={2.75} />
+                    <span>5 Pending</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <CheckCircle className="h-4 w-4 text-green-500" strokeWidth={2.75} />
+                    <span>12 Approved</span>
+                  </div>
+                </div>
+
+                {/* Notifications button */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="relative h-8 w-8 p-0">
+                      <Bell className="h-4 w-4" strokeWidth={2.75} />
+                      <span className="absolute -top-0.5 -right-0.5 h-3 w-3 bg-orange-500 rounded-full text-white font-medium flex items-center justify-center min-w-3 text-[7px]">
+                        5
+                      </span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-[350px] rounded-md">
+                    <div className="flex items-center justify-between px-4 py-2 border-b">
+                      <h3 className="font-medium">Agent Tasks</h3>
+                      <Button variant="ghost" size="sm" className="h-8 text-xs rounded-md">
+                        Mark all reviewed
+                      </Button>
+                    </div>
+                    <div className="p-2">
+                      <div className="text-center text-gray-500 py-4">
+                        <RiRobot3Line className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                        <p className="text-sm">No pending tasks</p>
+                      </div>
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <Button variant="ghost" size="sm" className="h-9 px-2 text-gray-600 hover:bg-gray-200">
+                  <MoreHorizontal className="h-4 w-4" strokeWidth={2.75} />
+                </Button>
+              </div>
+            </>
+          )}
                 </div>
 
         {/* Main Content */}
-        <div className="flex flex-1 min-h-0 px-3 pb-3 main-panels-container">
+        {currentView === 'email' ? (
+          <div className="flex flex-1 min-h-0 px-3 pb-3 main-panels-container">
           {/* Left Panel - Email List Card */}
           <div 
             className="bg-white rounded-xl shadow-lg border border-gray-100 flex flex-col h-full mr-1"
@@ -3616,7 +3979,7 @@ ${content}
                 {/* Add Custom Button */}
                 <button
                   onClick={() => setShowAddCustomDialog(true)}
-                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium border border-gray-300 border-dashed text-gray-600 hover:text-gray-800 hover:border-gray-400 transition-colors w-fit"
+                  className="inline-flex items-center justify-center px-2 py-1.5 rounded-md text-xs font-medium border border-gray-300 border-dashed text-gray-600 hover:text-gray-800 hover:border-gray-400 transition-colors w-fit"
                 >
                   <Plus className="h-3 w-3" />
                 </button>
@@ -3625,13 +3988,13 @@ ${content}
           )}
           {/* Summary Panel - Shows at top of left panel */}
           {(showSummaryDropdown || summaryClosing) && (
-            <div className={`flex-shrink-0 border-b border-gray-200 bg-gray-50 transition-all duration-200 ease-out ${
+            <div className={`flex-1 min-h-0 border-b border-gray-200 bg-gray-50 transition-all duration-300 ease-out ${
               summaryClosing 
-                ? 'animate-out slide-out-to-top-2 fade-out-50' 
-                : 'animate-in slide-in-from-top-2 fade-in-50'
+                ? 'animate-out fade-out-0 slide-out-to-top-1 duration-300' 
+                : 'animate-in fade-in-0 slide-in-from-top-1 duration-300'
             }`}>
-              <div className="p-3">
-                <div className="flex items-start justify-between mb-2">
+              <div className="p-3 h-full flex flex-col" style={{ background: 'linear-gradient(white, white) padding-box, linear-gradient(to right, #f97316, #3b82f6) border-box', border: '2px solid transparent', borderRadius: '0.5rem' }}>
+                <div className="flex items-start justify-between mb-2 flex-shrink-0">
                   <div className="flex items-center gap-2">
                     <label className="block text-xs font-medium bg-gradient-to-r from-orange-500 to-blue-500 bg-clip-text text-transparent">
                       Thread Summary
@@ -3639,13 +4002,6 @@ ${content}
                     </label>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setIsFullHeight(prev => !prev)}
-                      className="text-gray-400 hover:text-gray-600"
-                      title="Toggle full height view"
-                    >
-                      <Maximize2 className="h-4 w-4" />
-                    </button>
                     <button
                       onClick={closeSummaryDropdownWithAnimation}
                       className="text-gray-400 hover:text-gray-600"
@@ -3661,9 +4017,7 @@ ${content}
                     <span className="text-xs text-gray-600">Generating summary...</span>
                   </div>
                 ) : (
-                  <div className={`bg-white rounded-md p-3 border border-gray-200 shadow-sm overflow-y-auto ${
-                    isFullHeight ? 'h-[calc(100vh-220px)]' : 'max-h-[24.75rem]'
-                  }`}>
+                  <div className="overflow-y-auto flex-1 custom-scrollbar min-h-0">
                     <div 
                       className="text-sm text-gray-700 leading-relaxed"
                       dangerouslySetInnerHTML={{
@@ -3676,10 +4030,11 @@ ${content}
             </div>
           )}
 
-          {/* Email list - Scrollable middle section */}
-          <div className={`flex-1 overflow-y-auto min-h-0 custom-scrollbar transition-opacity duration-200 ${
-            (showSummaryDropdown && !summaryClosing) ? 'opacity-40 pointer-events-auto' : 'opacity-100'
-          }`} style={{ height: 'auto' }}>
+          {/* Email list - Scrollable middle section - Hidden when summary is shown */}
+          {!(showSummaryDropdown && !summaryClosing) && (
+            <div className={`flex-1 overflow-y-auto min-h-0 custom-scrollbar rounded-bl-xl transition-all duration-300 ease-out ${
+              summaryClosing ? 'animate-in fade-in-0 slide-in-from-top-1 duration-300' : ''
+            }`} style={{ height: 'auto' }}>
             {emailsLoading && (
               <div className="p-3 border-b border-gray-200 bg-blue-50">
                 <div className="flex items-center gap-2 text-sm text-blue-600">
@@ -3876,6 +4231,7 @@ ${content}
               ))}
             </div>
           </div>
+          )}
         </div>
 
         {/* Draggable Divider */}
@@ -3919,6 +4275,7 @@ ${content}
               selectedAccount={selectedAccount}
               callGenerateEmailResponse={callGenerateEmailResponse}
               setShowEmailRulesDialog={setShowEmailRulesDialog}
+              user={user}
               onSend={async (to: string, subject: string, content: string, cc?: string, bcc?: string, attachments?: File[]) => {
                 try {
                   setIsSending(true);
@@ -3944,14 +4301,25 @@ ${content}
                   
                   // Use sendGmailEmail for new emails
                   const sendGmailEmail = httpsCallable(functions, 'sendGmailEmail');
+                  
+                  // Split the 'to' field to handle multiple recipients
+                  const toEmails = to.split(',').map(email => email.trim()).filter(Boolean);
+                  const primaryRecipient = toEmails[0]; // First email is the primary recipient
+                  const extraRecipients = toEmails.slice(1); // Rest go to extra_recipients
+                  
                   const emailData: any = {
                     merchantId: user.uid,
                     body: content,
-                    recipient_email: to,
+                    recipient_email: primaryRecipient,
                     subject: subject || '(No Subject)',
                     is_html: true,
                     attachmentUrls: attachmentUrls, // Add attachment URLs
                   };
+                  
+                  // Add extra recipients if there are multiple emails in 'to' field
+                  if (extraRecipients.length > 0) {
+                    emailData.extra_recipients = extraRecipients;
+                  }
                   
                   // Add CC and BCC if provided
                   if (cc && cc.trim()) {
@@ -3963,6 +4331,14 @@ ${content}
                   
                   const response = await sendGmailEmail(emailData);
                   console.log('Email sent successfully:', response.data);
+                  
+                  // Log all email addresses to contactemails collection
+                  const allRecipients = [...toEmails];
+                  if (cc && cc.trim()) allRecipients.push(...cc.split(',').map(email => email.trim()).filter(Boolean));
+                  if (bcc && bcc.trim()) allRecipients.push(...bcc.split(',').map(email => email.trim()).filter(Boolean));
+                  
+                  // Log as sent emails
+                  await logContactEmails(allRecipients, 'sent', 'email_compose');
                   
                   // Show success message with all recipients
                   let recipients = [to];
@@ -4062,6 +4438,9 @@ ${content}
                     
                     console.log('Email forwarded successfully:', response.data);
                     
+                    // Log all email addresses to contactemails collection
+                    await logContactEmails(recipients, 'sent', 'email_forward');
+                    
                     // Show success message
                     const recipientList = recipients.join(', ');
                     setSuccessMessage(`Email forwarded successfully to: ${recipientList}`);
@@ -4103,6 +4482,9 @@ ${content}
                     const response = await replyToGmailThread(replyData);
                     
                     console.log('Reply sent successfully:', response.data);
+                    
+                    // Log all email addresses to contactemails collection
+                    await logContactEmails(recipients, 'sent', 'email_reply');
                     
                     // Show success message
                     const recipientList = recipients.join(', ');
@@ -4168,7 +4550,13 @@ ${content}
               setShowEmailRulesDialog={setShowEmailRulesDialog}
               tempEmailRules={tempEmailRules}
               setTempEmailRules={setTempEmailRules}
-              onSummariseThread={() => selectedThread && summarizeThread(selectedThread)}
+              onSummariseThread={() => {
+                if (selectedThread) {
+                  summarizeEmailOrThread(selectedThread);
+                } else if (selectedEmail) {
+                  summarizeEmailOrThread(selectedEmail);
+                }
+              }}
               selectedThread={selectedThread}
               user={user}
               showSummaryDropdown={showSummaryDropdown}
@@ -4183,6 +4571,82 @@ ${content}
           )}
         </div>
       </div>
+        ) : (
+          /* Agent Inbox View */
+          <div className="flex flex-1 min-h-0 px-3 pb-3 main-panels-container">
+            {/* Agent Inbox Left Panel */}
+            <div 
+              className="bg-white rounded-xl shadow-lg border border-gray-100 flex flex-col h-full mr-1"
+              style={{ width: `${leftPanelWidth}%` }}
+            >
+              <div className="p-4 border-b border-gray-200">
+                <h2 className="text-lg font-medium text-gray-900 mb-2">Agent Tasks</h2>
+                <div className="text-sm text-gray-500">
+                  Tasks and actions requiring approval
+                </div>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                <div className="p-4">
+                  <div className="text-center text-gray-500 py-8">
+                    <RiRobot3Line className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <h3 className="text-lg font-medium text-gray-700 mb-2">No agent tasks yet</h3>
+                    <p className="text-sm mb-4">Agent actions will appear here for your approval</p>
+                    
+                    {/* Sample task types */}
+                    <div className="text-left max-w-sm mx-auto space-y-2">
+                      <p className="text-xs font-medium text-gray-600 mb-3">Upcoming task types:</p>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <Reply className="h-3 w-3" />
+                          <span>Email responses awaiting approval</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <Users className="h-3 w-3" />
+                          <span>Customer service actions</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <WandSparkles className="h-3 w-3" />
+                          <span>Automated task completions</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <Shield className="h-3 w-3" />
+                          <span>Security and compliance checks</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Draggable Divider */}
+            <div 
+              className={`w-1 bg-transparent hover:bg-gray-200 cursor-col-resize transition-colors relative ${
+                isDragging ? 'bg-blue-300' : ''
+              }`}
+              onMouseDown={handleMouseDown}
+            />
+
+            {/* Agent Inbox Right Panel */}
+            <div 
+              className="bg-white rounded-xl shadow-lg border border-gray-100 flex flex-col h-full overflow-hidden ml-1"
+              style={{ width: `${100 - leftPanelWidth}%` }}
+            >
+              <div className="p-4 border-b border-gray-200">
+                <h2 className="text-lg font-medium text-gray-900">Task Details</h2>
+              </div>
+              
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center text-gray-500">
+                  <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <h3 className="text-lg font-medium text-gray-700 mb-2">Select a task to view details</h3>
+                  <p className="text-sm">Choose an agent task from the left panel to see its details and actions</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
       {/* Email Rules Modal */}
       {(showEmailRulesDialog || rulesDialogClosing) && (
@@ -4685,6 +5149,125 @@ ${content}
           </div>
         </div>
       )}
+
+      {/* Agent Modals */}
+      
+      {/* Customer Service Agent Modal */}
+      <Dialog open={isCustomerServiceModalOpen} onOpenChange={setIsCustomerServiceModalOpen}>
+        <DialogPortal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+          <DialogPrimitive.Content className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-2xl translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-semibold">Customer Service Agent</DialogTitle>
+              <DialogDescription>
+                Handles customer inquiries and support requests automatically.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="text-sm text-gray-600 leading-relaxed space-y-2">
+                <div className="flex gap-3">
+                  <span className="font-medium text-gray-900">1.</span>
+                  <span>Receives and analyses incoming emails to determine if they're customer inquiries</span>
+                </div>
+                <div className="flex gap-3">
+                  <span className="font-medium text-gray-900">2.</span>
+                  <span>Generates appropriate responses using your business context</span>
+                </div>
+                <div className="flex gap-3">
+                  <span className="font-medium text-gray-900">3.</span>
+                  <span>Sends responses for review or automatically replies to customers</span>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" onClick={() => setIsCustomerServiceModalOpen(false)}>
+                  Close
+                </Button>
+                <Button onClick={() => setIsCustomerServiceModalOpen(false)}>
+                  Connect Agent
+                </Button>
+              </div>
+            </div>
+          </DialogPrimitive.Content>
+        </DialogPortal>
+      </Dialog>
+
+      {/* Email Summary Agent Modal */}
+      <Dialog open={isEmailSummaryModalOpen} onOpenChange={setIsEmailSummaryModalOpen}>
+        <DialogPortal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+          <DialogPrimitive.Content className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-2xl translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-semibold">Summary Agent</DialogTitle>
+              <DialogDescription>
+                Creates concise summaries of email threads and conversations.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="text-sm text-gray-600 leading-relaxed space-y-2">
+                <div className="flex gap-3">
+                  <span className="font-medium text-gray-900">1.</span>
+                  <span>Analyses email threads to extract key information</span>
+                </div>
+                <div className="flex gap-3">
+                  <span className="font-medium text-gray-900">2.</span>
+                  <span>Creates concise summaries highlighting important points</span>
+                </div>
+                <div className="flex gap-3">
+                  <span className="font-medium text-gray-900">3.</span>
+                  <span>Provides quick overviews for busy professionals</span>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" onClick={() => setIsEmailSummaryModalOpen(false)}>
+                  Close
+                </Button>
+                <Button onClick={() => setIsEmailSummaryModalOpen(false)}>
+                  Connect Agent
+                </Button>
+              </div>
+            </div>
+          </DialogPrimitive.Content>
+        </DialogPortal>
+      </Dialog>
+
+      {/* Email Executive Agent Modal */}
+      <Dialog open={isEmailExecutiveModalOpen} onOpenChange={setIsEmailExecutiveModalOpen}>
+        <DialogPortal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+          <DialogPrimitive.Content className="fixed left-[50%] top-[50%] z-50 grid w-full max-w-2xl translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-semibold">Categorising Agent</DialogTitle>
+              <DialogDescription>
+                Organises and tags emails by type and priority for better management.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="text-sm text-gray-600 leading-relaxed space-y-2">
+                <div className="flex gap-3">
+                  <span className="font-medium text-gray-900">1.</span>
+                  <span>Analyses email content to determine category and priority</span>
+                </div>
+                <div className="flex gap-3">
+                  <span className="font-medium text-gray-900">2.</span>
+                  <span>Automatically tags emails with appropriate labels</span>
+                </div>
+                <div className="flex gap-3">
+                  <span className="font-medium text-gray-900">3.</span>
+                  <span>Helps organise your inbox for better productivity</span>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" onClick={() => setIsEmailExecutiveModalOpen(false)}>
+                  Close
+                </Button>
+                <Button onClick={() => setIsEmailExecutiveModalOpen(false)}>
+                  Connect Agent
+                </Button>
+              </div>
+            </div>
+          </DialogPrimitive.Content>
+        </DialogPortal>
+      </Dialog>
     </div>
   )
 } 
@@ -4881,7 +5464,8 @@ const ComposeEmailView = ({
   isSending,
   selectedAccount,
   callGenerateEmailResponse,
-  setShowEmailRulesDialog
+  setShowEmailRulesDialog,
+  user
 }: { 
   onSend: (to: string, subject: string, content: string, cc?: string, bcc?: string, attachments?: File[]) => void;
   onCancel: () => void;
@@ -4889,6 +5473,7 @@ const ComposeEmailView = ({
   selectedAccount?: string;
   callGenerateEmailResponse?: (requestType: string, tone?: string, customInstructions?: string, replyEditor?: React.RefObject<HTMLDivElement | null>) => Promise<any>;
   setShowEmailRulesDialog?: (show: boolean) => void;
+  user?: any;
 }) => {
   const [to, setTo] = useState('');
   const [cc, setCc] = useState('');
@@ -4983,10 +5568,10 @@ const ComposeEmailView = ({
   return (
     <div className="flex flex-col h-full bg-white">
       {/* From Field */}
-      <div className="flex items-center py-3 px-4 border-b border-gray-200">
-        <span className="text-xs text-gray-700 font-medium w-16">From:</span>
+      <div className="flex items-center py-2 px-4 border-b border-gray-100">
+        <span className="text-xs text-gray-600 font-medium w-12">From:</span>
         <div className="flex items-center gap-2 flex-1">
-          <span className="text-xs text-gray-900">{selectedAccount || 'Your Account'}</span>
+          <span className="text-xs text-gray-900 ml-2">{selectedAccount || 'Your Account'}</span>
           <ChevronDown className="h-4 w-4 text-gray-400" />
         </div>
         <div className="flex gap-2">
@@ -4997,7 +5582,7 @@ const ComposeEmailView = ({
               }
             }}
             disabled={!to.trim() || !content.trim() || isSending}
-            className="bg-blue-500 hover:bg-blue-600 text-white h-8 px-3 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            className="bg-blue-500 hover:bg-blue-600 text-white h-7 px-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
           >
             {isSending ? (
               <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
@@ -5009,7 +5594,7 @@ const ComposeEmailView = ({
           <Button
             variant="ghost"
             onClick={onCancel}
-            className="h-8 px-3 text-gray-600 hover:text-gray-900 text-sm"
+            className="h-7 px-2 text-gray-600 hover:text-gray-900 text-xs"
           >
             Cancel
           </Button>
@@ -5017,14 +5602,15 @@ const ComposeEmailView = ({
       </div>
 
       {/* To Field */}
-      <div className="flex items-center py-3 px-4 border-b border-gray-200">
-        <span className="text-xs text-gray-700 font-medium w-16">To:</span>
+      <div className="flex items-center py-2 px-4 border-b border-gray-100">
+        <span className="text-xs text-gray-600 font-medium w-12">To:</span>
         <div className="flex-1">
           <EmailInputWithChips
             value={to}
             onChange={setTo}
             placeholder="Enter recipient email address"
             className="w-full"
+            user={user}
           />
         </div>
         <div className="flex items-center gap-2 ml-3">
@@ -5053,14 +5639,15 @@ const ComposeEmailView = ({
 
       {/* CC Field */}
       {showCc && (
-        <div className="flex items-center py-3 px-4 border-b border-gray-200">
-          <span className="text-xs text-gray-700 font-medium w-16">Cc:</span>
-          <div className="flex-1 ml-2">
+        <div className="flex items-center py-2 px-4 border-b border-gray-100">
+          <span className="text-xs text-gray-600 font-medium w-12">Cc:</span>
+          <div className="flex-1">
             <EmailInputWithChips
               value={cc}
               onChange={setCc}
               placeholder="Enter CC email addresses"
               className="w-full"
+              user={user}
             />
           </div>
         </div>
@@ -5068,36 +5655,35 @@ const ComposeEmailView = ({
 
       {/* BCC Field */}
       {showBcc && (
-        <div className="flex items-center py-3 px-4 border-b border-gray-200">
-          <span className="text-xs text-gray-700 font-medium w-16">Bcc:</span>
-          <div className="flex-1 ml-2">
+        <div className="flex items-center py-2 px-4 border-b border-gray-100">
+          <span className="text-xs text-gray-600 font-medium w-12">Bcc:</span>
+          <div className="flex-1">
             <EmailInputWithChips
               value={bcc}
               onChange={setBcc}
               placeholder="Enter BCC email addresses"
               className="w-full"
+              user={user}
             />
           </div>
         </div>
       )}
 
       {/* Subject Field */}
-      <div className="flex items-center py-3 px-4 border-b border-gray-200">
-        <span className="text-xs text-gray-700 font-medium w-16">Subject:</span>
-        <div className="flex-1 ml-2">
-          <input
-            type="text"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            className="w-full text-xs bg-transparent border-none outline-none focus:ring-0 text-gray-900"
-            placeholder="Enter subject"
-          />
+      <div className="flex items-center py-2 px-4 border-b border-gray-100">
+        <span className="text-xs text-gray-600 font-medium w-12">Subject:</span>
+        <div className="flex-1">
+          <div className="min-h-8 px-2 py-0.5 bg-transparent border-none outline-none focus:ring-0 text-gray-900">
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="w-full text-xs bg-transparent border-none outline-none focus:ring-0 text-gray-900 placeholder-gray-500"
+              placeholder="Enter subject"
+            />
+          </div>
         </div>
-      </div>
-
-      {/* Attachments Section */}
-      <div className="px-4 py-2 border-b border-gray-100">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-3">
           <input
             ref={fileInputRef}
             type="file"
@@ -5108,41 +5694,33 @@ const ComposeEmailView = ({
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+            className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-2 py-1 rounded transition-colors"
           >
             <Paperclip className="h-3 w-3 text-gray-500" strokeWidth="2" />
-            Attach Files
+            Attach
           </button>
-          {attachments.length > 0 && (
-            <span className="text-xs text-gray-500">
-              {attachments.length} file{attachments.length !== 1 ? 's' : ''} attached
-            </span>
-          )}
         </div>
-        
-        {/* Attachment List */}
-        {attachments.length > 0 && (
-          <div className="mt-2 space-y-1">
+      </div>
+
+      {/* Compact Attachment List */}
+      {attachments.length > 0 && (
+        <div className="px-4 py-1 border-b border-gray-100">
+          <div className="flex flex-wrap gap-1">
             {attachments.map((file, index) => (
-              <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md">
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <File className="h-3 w-3 text-gray-500 flex-shrink-0" />
-                  <span className="text-xs text-gray-700 truncate">{file.name}</span>
-                  <span className="text-xs text-gray-500 flex-shrink-0">
-                    ({(file.size / 1024 / 1024).toFixed(2)} MB)
-                  </span>
-                </div>
+              <div key={index} className="flex items-center gap-1 px-2 py-1 bg-gray-50 rounded text-xs">
+                <File className="h-3 w-3 text-gray-500 flex-shrink-0" />
+                <span className="text-gray-700 truncate max-w-32">{file.name}</span>
                 <button
                   onClick={() => removeAttachment(index)}
-                  className="p-1 hover:bg-gray-200 rounded transition-colors"
+                  className="p-0.5 hover:bg-gray-200 rounded transition-colors"
                 >
-                  <X className="h-3 w-3 text-gray-500" />
+                  <X className="h-2.5 w-2.5 text-gray-500" />
                 </button>
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Tap Agent Bar for Compose */}
       <div className="px-3 py-2">
@@ -5696,36 +6274,34 @@ const EmailViewer = ({
             </TooltipProvider>
             
             {/* Summarise Button - Available for all emails */}
-            {selectedThread && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-6 w-6 p-0 hover:bg-gray-100"
-                      onClick={() => onSummariseThread?.()}
-                      disabled={isSummarizing}
-                    >
-                      {isSummarizing ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <MessageSquare 
-                          className="h-3 w-3" 
-                          style={{
-                            stroke: 'url(#orange-blue-gradient)',
-                            fill: 'none'
-                          }}
-                        />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{isSummarizing ? 'Generating Summary...' : `Summarise ${selectedThread.count > 1 ? `Thread (${selectedThread.count} messages)` : 'Email'}`}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 w-6 p-0 hover:bg-gray-100"
+                    onClick={() => onSummariseThread?.()}
+                    disabled={isSummarizing}
+                  >
+                    {isSummarizing ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <MessageSquare 
+                        className="h-3 w-3" 
+                        style={{
+                          stroke: 'url(#orange-blue-gradient)',
+                          fill: 'none'
+                        }}
+                      />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{isSummarizing ? 'Generating Summary...' : `Summarise ${selectedThread && selectedThread.count > 1 ? `Thread (${selectedThread.count} messages)` : 'Email'}`}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
 
@@ -5842,6 +6418,7 @@ const EmailViewer = ({
               onChange={setReplyRecipients}
               placeholder="Enter recipient email addresses"
               className="flex-1"
+              user={user}
             />
           </div>
 
@@ -5854,6 +6431,7 @@ const EmailViewer = ({
                 onChange={setReplyCc}
                 placeholder="Enter CC email addresses"
                 className="flex-1"
+                user={user}
               />
             </div>
             )}
@@ -6145,6 +6723,7 @@ const EmailViewer = ({
         )}
       </div>
       )}
+
     </div>
   );
 };

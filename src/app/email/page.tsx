@@ -91,7 +91,8 @@ import {
   MailPlus,
   CheckCircle,
   Clock,
-  Filter
+  Filter,
+  NotebookPen
 } from "lucide-react"
 import { RiRobot3Line } from "react-icons/ri"
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
@@ -4140,8 +4141,8 @@ ${content}`;
             <div className="fixed top-4 right-4 z-50 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-md shadow-md animate-in slide-in-from-top-2 duration-200 ease-out">
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <Check className="h-4 w-4 mr-2" />
-                  <span className="text-sm font-medium">✅ {successMessage}</span>
+                  <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
+                  <span className="text-sm font-medium">{successMessage}</span>
                 </div>
                 <Button
                   variant="ghost"
@@ -4231,7 +4232,7 @@ ${content}`;
                   let recipients = [to];
                   if (cc && cc.trim()) recipients.push(...cc.split(',').map(email => email.trim()).filter(Boolean));
                   if (bcc && bcc.trim()) recipients.push(...bcc.split(',').map(email => email.trim()).filter(Boolean));
-                  setSuccessMessage(`Email sent successfully to: ${recipients.join(', ')}`);
+                  setSuccessMessage(`Message sent to ${recipients.join(', ')}`);
                   
                   // Exit compose mode
                   setIsComposing(false);
@@ -4330,7 +4331,7 @@ ${content}`;
                     
                     // Show success message
                     const recipientList = recipients.join(', ');
-                    setSuccessMessage(`Email forwarded successfully to: ${recipientList}`);
+                    setSuccessMessage(`Message forwarded to ${recipientList}`);
                     
                   } else {
                     // For reply/replyAll, use the replyToGmailThread function
@@ -4375,7 +4376,7 @@ ${content}`;
                     
                     // Show success message
                     const recipientList = recipients.join(', ');
-                    setSuccessMessage(`Reply sent successfully to: ${recipientList}`);
+                    setSuccessMessage(`Reply sent to ${recipientList}`);
                   }
                   
                   // Create the sent message object for UI
@@ -6183,7 +6184,7 @@ const EmailViewer = ({
                         }}
                       />
                     ) : (
-                      <MessageSquare 
+                      <NotebookPen 
                         className="h-3 w-3" 
                         style={{
                           stroke: 'url(#orange-blue-gradient)',
@@ -6515,7 +6516,7 @@ const EmailViewer = ({
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-48">
                             <DropdownMenuItem onClick={() => onSummariseThread?.()}>
-                              <MessageSquare 
+                              <NotebookPen 
                                 className="h-3 w-3 mr-2" 
                                 strokeWidth="2"
                                 style={{

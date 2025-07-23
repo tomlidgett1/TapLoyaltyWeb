@@ -30,6 +30,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSeparator,
 } from "@/components/ui/select"
 import {
   DropdownMenu,
@@ -617,8 +618,22 @@ const IframeEmail = ({ html, className = "" }: IframeEmailProps) => {
 
 // Utility functions for email processing
 const decodeBase64Url = (input: string): string => {
+  if (!input) return '';
+  
   try {
-    return decodeURIComponent(escape(window.atob(input.replace(/-/g, '+').replace(/_/g, '/'))));
+    // Convert base64url to base64
+    const base64 = input.replace(/-/g, '+').replace(/_/g, '/');
+    // Decode base64 to binary
+    const binary = window.atob(base64);
+    
+    try {
+      // Convert binary to UTF-8 string
+      return decodeURIComponent(escape(binary));
+    } catch (uriError) {
+      // Handle malformed URI error by returning the raw binary
+      console.warn('URIError in decodeURIComponent:', uriError);
+      return binary;
+    }
   } catch (error) {
     console.warn('Failed to decode base64url:', error);
     return input; // Return original if decoding fails
@@ -627,6 +642,8 @@ const decodeBase64Url = (input: string): string => {
 
 // Test decoder function similar to the provided Node.js version
 const decodePart = (data: string): string => {
+  if (!data) return '';
+  
   try {
     // 1) Base64-URL → Base64
     let base64Data = data.replace(/-/g, '+').replace(/_/g, '/');
@@ -636,8 +653,14 @@ const decodePart = (data: string): string => {
     // 2) Decode using browser's atob (equivalent to Buffer.from in Node.js)
     const decoded = atob(base64Data);
     
-    // Convert to UTF-8 string (browser equivalent of .toString('utf8'))
-    return decodeURIComponent(escape(decoded));
+    try {
+      // Convert to UTF-8 string (browser equivalent of .toString('utf8'))
+      return decodeURIComponent(escape(decoded));
+    } catch (uriError) {
+      // Handle malformed URI error by returning the raw decoded string
+      console.warn('URIError in decodeURIComponent:', uriError);
+      return decoded;
+    }
   } catch (error) {
     console.error('Failed to decode part:', error);
     return `Error decoding: ${error}`;
@@ -3325,383 +3348,258 @@ ${content}`;
       <div className="mx-3 mb-3 bg-white rounded-xl shadow-lg border border-gray-100 flex items-center justify-between px-4 py-3 flex-shrink-0">
         {currentView === 'email' ? (
           <>
+            {/* Left Side: Folder dropdown and toolbar actions */}
             <div className="flex items-center gap-4">
               {/* Folder Dropdown */}
               <Select value={selectedFolder} onValueChange={setSelectedFolder}>
-            <SelectTrigger className="w-32 h-8 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="inbox">
-                <div className="flex items-center gap-2">
-                  <Inbox className="h-4 w-4" />
-                  <span>Inbox</span>
-                </div>
-              </SelectItem>
-              <SelectItem value="spam">
-                <div className="flex items-center gap-2">
-                  <Shield className="h-4 w-4" />
-                  <span>Spam</span>
-                </div>
-              </SelectItem>
-              <SelectItem value="trash">
-                <div className="flex items-center gap-2">
-                  <Trash2 className="h-4 w-4" />
-                  <span>Trash</span>
-                </div>
-              </SelectItem>
-              <SelectItem value="drafts">
-                <div className="flex items-center gap-2">
-                  <Edit3 className="h-4 w-4" />
-                  <span>Drafts</span>
-                </div>
-              </SelectItem>
-              <SelectItem value="sent">
-                <div className="flex items-center gap-2">
-                  <Send className="h-4 w-4" />
-                  <span>Sent</span>
-                </div>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Toolbar Actions */}
-          <TooltipProvider>
-            <div className="flex items-center gap-2">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button onClick={handleComposeNew} size="sm" className="bg-blue-500 hover:bg-blue-600 text-white">
-                    <MailPlus className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>New Email</p>
-                </TooltipContent>
-              </Tooltip>
-              
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    onClick={() => router.push('/email/attachments')} 
-                    size="sm" 
-                    variant="outline"
-                    className="text-gray-700 hover:bg-gray-100"
-                  >
-                    <Paperclip className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Attachments</p>
-                </TooltipContent>
-              </Tooltip>
-              
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={() => setShowEmailRulesDialog(true)}
-                    className="text-gray-700 hover:bg-gray-200"
-                  >
-                    <Shield className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Email Rules</p>
-                </TooltipContent>
-              </Tooltip>
-              
-              <div className="h-6 w-px bg-gray-300 mx-1"></div>
-              
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                  <Button variant="ghost" size="sm" onClick={handleDelete} className="text-gray-700 hover:bg-gray-200">
-                    <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                  <p>Delete</p>
-                    </TooltipContent>
-                  </Tooltip>
-                  
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                  <Button variant="ghost" size="sm" onClick={handleArchive} className="text-gray-700 hover:bg-gray-200">
-                    <Archive className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                  <p>Archive</p>
-                    </TooltipContent>
-                  </Tooltip>
-                  
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={handleSync} 
-                    disabled={emailsLoading}
-                    className="text-gray-700 hover:bg-gray-200 transition-all duration-200"
-                  >
-                    <RefreshCw className={`h-4 w-4 transition-transform duration-300 ${emailsLoading ? 'animate-spin' : 'hover:rotate-180'}`} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                  <p>{emailsLoading ? 'Refreshing...' : 'Refresh'}</p>
-                    </TooltipContent>
-                  </Tooltip>
-              
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={handleEnableGmailTrigger}
-                    disabled={isEnablingTrigger}
-                    className="text-gray-700 hover:bg-gray-200"
-                  >
-                    {isEnablingTrigger ? (
-                      <RefreshCw className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Bell className="h-4 w-4" />
-                    )}
-        </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{isEnablingTrigger ? 'Enabling...' : 'Enable Gmail Trigger'}</p>
-                </TooltipContent>
-              </Tooltip>
-              
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={handleExtractWritingStyle}
-                    disabled={isExtractingWritingStyle}
-                    className="text-gray-700 hover:bg-gray-200"
-                  >
-                    {isExtractingWritingStyle ? (
-                      <RefreshCw className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Palette className="h-4 w-4" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{isExtractingWritingStyle ? 'Extracting...' : 'Extract Writing Style'}</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </TooltipProvider>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Agents Dropdown */}
-          <Select value={selectedAgent} onValueChange={(value) => {
-            setSelectedAgent(value)
-            handleAgentSelection(value)
-          }}>
-            <SelectTrigger className="w-32 h-8 text-sm focus:outline-none focus:ring-0">
-              <SelectValue>
-                <div className="flex items-center gap-2">
-                  <RiRobot3Line className="h-4 w-4 text-gray-600" />
-                  <span className="text-sm text-gray-700">Agents</span>
-                </div>
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="customer-service">
-                <div className="flex flex-col items-start">
-                  <div className="font-medium">Customer Service</div>
-                  <div className="text-xs text-gray-500">Handles customer inquiries and support requests</div>
-                </div>
-              </SelectItem>
-              <SelectItem value="categorising">
-                <div className="flex flex-col items-start">
-                  <div className="font-medium">Categorising Agent</div>
-                  <div className="text-xs text-gray-500">Organises and tags emails by type and priority</div>
-                </div>
-              </SelectItem>
-              <SelectItem value="summary">
-                <div className="flex flex-col items-start">
-                  <div className="font-medium">Summary Agent</div>
-                  <div className="text-xs text-gray-500">Creates concise summaries of email threads</div>
-                </div>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Connected Account Selector or Connect Button */}
-          {gmailEmailAddress ? (
-            <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-              <SelectTrigger className="w-64 h-8 text-sm focus:outline-none focus:ring-0">
-                <SelectValue>
-                  {loading ? (
-                    <div className="flex items-center gap-3">
-                      <div className="w-6 h-6 bg-gray-200 rounded animate-pulse"></div>
-                      <span className="text-sm text-gray-500">Loading accounts...</span>
-                    </div>
-                  ) : getCurrentAccount() ? (
-                    <div className="flex items-center gap-3">
-                      <div className="w-6 h-6 flex-shrink-0">
-                        <Image 
-                          src={getCurrentAccount()?.provider === "gmail" ? "/gmailnew.png" : "/outlook.png"}
-                          alt={getCurrentAccount()?.provider === "gmail" ? "Gmail" : "Outlook"}
-                          width={24}
-                          height={24}
-                          className="w-full h-full object-contain"
-                        />
-                      </div>
-                      <span className="text-sm text-gray-700">
-                        {getCurrentAccount()?.emailAddress}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-3">
-                      <div className="w-6 h-6 flex-shrink-0">
-                        <Plus className="h-4 w-4 text-gray-400" />
-                      </div>
-                      <span className="text-sm text-gray-500">No connected accounts</span>
-                    </div>
-                  )}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {connectedAccounts.map((account) => (
-                  <SelectItem key={account.id} value={account.emailAddress}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-6 h-6 flex-shrink-0">
-                        <Image 
-                          src={account.provider === "gmail" ? "/gmailnew.png" : "/outlook.png"}
-                          alt={account.provider === "gmail" ? "Gmail" : "Outlook"}
-                          width={24}
-                          height={24}
-                          className="w-full h-full object-contain"
-                        />
-                      </div>
-                      <span>{account.emailAddress}</span>
+                <SelectTrigger className="w-24 h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="inbox">
+                    <div className="flex items-center gap-2">
+                      <Inbox className="h-4 w-4" />
+                      <span>Inbox</span>
                     </div>
                   </SelectItem>
-                ))}
-                {connectedAccounts.length > 0 && <Separator className="my-1" />}
-                <SelectItem value="new">
-                  <div className="flex items-center gap-2">
-                    <Plus className="h-4 w-4" />
-                    <span>Add New Account</span>
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          ) : (
-            <Button 
-              onClick={handleConnectEmail}
-              disabled={loading || isConnectingEmail}
-              className="w-64 h-8 text-sm bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {(loading || isConnectingEmail) ? (
-                <>
-                  <div className="h-4 w-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  {isConnectingEmail ? "Connecting..." : ""}
-                </>
-              ) : (
-                <>
-                  <Mail className="h-4 w-4 mr-2" />
-                  Connect Email Now
-                </>
-              )}
-            </Button>
-          )}
-
-          {/* Notifications button */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="relative h-8 w-8 p-0">
-                <Bell className="h-4 w-4" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 h-3 w-3 bg-red-500 rounded-full text-white font-medium flex items-center justify-center min-w-3 text-[7px]">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[450px] rounded-md">
-              <div className="flex items-center justify-between px-4 py-2 border-b">
-                <h3 className="font-medium">Notifications</h3>
-                {unreadCount > 0 && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-8 text-xs rounded-md"
-                    onClick={markAllAsRead}
-                  >
-                    Mark all as read
-                  </Button>
-                )}
-              </div>
-              <div className="max-h-[400px] overflow-y-auto">
-                {notificationsLoading ? (
-                  <div className="py-6 text-center">
-                    <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto mb-2"></div>
-                    <p className="text-sm text-muted-foreground">Loading notifications...</p>
-                  </div>
-                ) : notifications.length === 0 ? (
-                  <div className="py-6 text-center">
-                    <Bell className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">No notifications yet</p>
-                  </div>
-                ) : (
-                  notifications.map((notification) => (
-                    <div 
-                      key={notification.id} 
-                      className={cn(
-                        "px-4 py-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors cursor-pointer",
-                        !notification.read && "bg-blue-50/50"
-                      )}
-                      onClick={() => markAsRead(notification.id)}
-                    >
-                      <div className="flex gap-3">
-                        <div className="flex-shrink-0 pt-1">
-                          {getNotificationIcon(notification.type)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start gap-3">
-                            <p className="text-sm font-medium flex-1">
-                              {notification.type === "AGENT_ACTION" ? (
-                                <>
-                                  <span className="bg-gradient-to-r from-blue-500 to-orange-400 bg-clip-text text-transparent font-semibold">
-                                    Agent Notification:
-                                  </span>{' '}
-                                  {notification.message}
-                                </>
-                              ) : (
-                                notification.message
-                              )}
-                            </p>
-                            <p className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
-                              {formatTimeAgo(notification.dateCreated || notification.timestamp)}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
+                  <SelectItem value="spam">
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-4 w-4" />
+                      <span>Spam</span>
                     </div>
-                  ))
-                )}
-              </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="justify-center" asChild>
-                <a href="/notifications" className="w-full text-center cursor-pointer">
-                  View all notifications
-                </a>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  </SelectItem>
+                  <SelectItem value="trash">
+                    <div className="flex items-center gap-2">
+                      <Trash2 className="h-4 w-4" />
+                      <span>Trash</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="drafts">
+                    <div className="flex items-center gap-2">
+                      <Edit3 className="h-4 w-4" />
+                      <span>Drafts</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="sent">
+                    <div className="flex items-center gap-2">
+                      <Send className="h-4 w-4" />
+                      <span>Sent</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
 
-          <Button variant="ghost" size="sm" className="h-9 px-2 text-gray-600 hover:bg-gray-200">
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </div>
+              {/* Toolbar Actions */}
+              <TooltipProvider>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    onClick={handleComposeNew} 
+                    size="sm" 
+                    className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-3 py-1.5 rounded-md shadow-sm flex items-center gap-1.5 transition-all duration-200 hover:shadow"
+                  >
+                    <MailPlus className="h-3.5 w-3.5" />
+                    <span className="text-xs font-medium">New Email</span>
+                  </Button>
+                  
+                  <div className="h-6 w-px bg-gray-300 mx-1"></div>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="sm" onClick={handleDelete} className="text-gray-700 hover:bg-gray-200">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Delete</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="sm" onClick={handleArchive} className="text-gray-700 hover:bg-gray-200">
+                        <Archive className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Archive</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={handleSync} 
+                        disabled={emailsLoading}
+                        className="text-gray-700 hover:bg-gray-200 transition-all duration-200"
+                      >
+                        <RefreshCw className={`h-4 w-4 transition-transform duration-300 ${emailsLoading ? 'animate-spin' : 'hover:rotate-180'}`} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{emailsLoading ? 'Refreshing...' : 'Refresh'}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </TooltipProvider>
+            </div>
+
+            {/* Right Side: Agents, Email Tools, and Account Selector */}
+            <div className="flex items-center gap-2">
+              {/* Agents Dropdown */}
+              <Select value={selectedAgent} onValueChange={(value) => {
+                setSelectedAgent(value)
+                handleAgentSelection(value)
+              }}>
+                <SelectTrigger className="w-32 h-8 text-sm focus:outline-none focus:ring-0">
+                  <SelectValue>
+                    <div className="flex items-center gap-2">
+                      <RiRobot3Line className="h-4 w-4 text-gray-600" />
+                      <span className="text-sm text-gray-700">Agents</span>
+                    </div>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="customer-service">
+                    <div className="flex flex-col items-start">
+                      <div className="font-medium">Customer Service</div>
+                      <div className="text-xs text-gray-500">Handles customer inquiries and support requests</div>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="categorising">
+                    <div className="flex flex-col items-start">
+                      <div className="font-medium">Categorising Agent</div>
+                      <div className="text-xs text-gray-500">Organises and tags emails by type and priority</div>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="summary">
+                    <div className="flex flex-col items-start">
+                      <div className="font-medium">Summary Agent</div>
+                      <div className="text-xs text-gray-500">Creates concise summaries of email threads</div>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Email Tools Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 px-3 flex items-center gap-2 text-gray-700">
+                    <Settings className="h-4 w-4 text-gray-600" />
+                    <span className="text-sm">Email Tools</span>
+                    <ChevronDown className="h-3.5 w-3.5 text-gray-500" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => setShowEmailRulesDialog(true)}>
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-4 w-4 text-gray-600" />
+                      <span>Email Rules</span>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleEnableGmailTrigger}>
+                    <div className="flex items-center gap-2">
+                      <Bell className="h-4 w-4 text-gray-600" />
+                      <span>Email Triggers</span>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExtractWritingStyle}>
+                    <div className="flex items-center gap-2">
+                      <Palette className="h-4 w-4 text-gray-600" />
+                      <span>Writing Style</span>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => router.push('/email/attachments')}>
+                    <div className="flex items-center gap-2">
+                      <Paperclip className="h-4 w-4 text-gray-600" />
+                      <span>Attachments</span>
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Connected Account Selector or Connect Button - Now at far right */}
+              {gmailEmailAddress ? (
+                <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+                  <SelectTrigger className="w-44 h-8 text-sm focus:outline-none focus:ring-0">
+                    <SelectValue>
+                      {loading ? (
+                        <div className="flex items-center gap-3">
+                          <div className="w-6 h-6 bg-gray-200 rounded animate-pulse"></div>
+                          <span className="text-sm text-gray-500">Loading...</span>
+                        </div>
+                      ) : getCurrentAccount() ? (
+                        <div className="flex items-center gap-3">
+                          <div className="w-6 h-6 flex-shrink-0">
+                            <Image 
+                              src={getCurrentAccount()?.provider === "gmail" ? "/gmailnew.png" : "/outlook.png"}
+                              alt={getCurrentAccount()?.provider === "gmail" ? "Gmail" : "Outlook"}
+                              width={24}
+                              height={24}
+                              className="w-full h-full object-contain"
+                            />
+                          </div>
+                          <span className="text-sm text-gray-700 truncate">
+                            {getCurrentAccount()?.emailAddress}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <div className="w-6 h-6 flex-shrink-0">
+                            <Plus className="h-4 w-4 text-gray-400" />
+                          </div>
+                          <span className="text-sm text-gray-500">No accounts</span>
+                        </div>
+                      )}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {connectedAccounts.map((account) => (
+                      <SelectItem key={account.id} value={account.emailAddress}>
+                        <div className="flex items-center gap-3">
+                          <div className="w-6 h-6 flex-shrink-0">
+                            <Image 
+                              src={account.provider === "gmail" ? "/gmailnew.png" : "/outlook.png"}
+                              alt={account.provider === "gmail" ? "Gmail" : "Outlook"}
+                              width={24}
+                              height={24}
+                              className="w-full h-full object-contain"
+                            />
+                          </div>
+                          <span>{account.emailAddress}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                    {connectedAccounts.length > 0 && <Separator className="my-1" />}
+                    <SelectItem value="new">
+                      <div className="flex items-center gap-2">
+                        <Plus className="h-4 w-4" />
+                        <span>Add New Account</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Button 
+                  onClick={handleConnectEmail}
+                  disabled={loading || isConnectingEmail}
+                  className="w-44 h-8 text-sm bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {(loading || isConnectingEmail) ? (
+                    <>
+                      <div className="h-4 w-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      {isConnectingEmail ? "Connecting..." : ""}
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="h-4 w-4 mr-2" />
+                      Connect Email
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
             </>
           ) : (
             /* Agent Inbox Top Bar */
@@ -3711,34 +3609,34 @@ ${content}`;
                 <Select value="all" onValueChange={() => {}}>
                   <SelectTrigger className="w-32 h-8 text-sm">
                     <SelectValue placeholder="All Tasks" />
-                  </SelectTrigger>
-                  <SelectContent>
+            </SelectTrigger>
+            <SelectContent>
                     <SelectItem value="all">
-                      <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                         <Filter className="h-4 w-4" strokeWidth={2.75} />
                         <span>All Tasks</span>
-                      </div>
-                    </SelectItem>
+                </div>
+              </SelectItem>
                     <SelectItem value="pending">
-                      <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                         <Clock className="h-4 w-4" strokeWidth={2.75} />
                         <span>Pending</span>
-                      </div>
-                    </SelectItem>
+                </div>
+              </SelectItem>
                     <SelectItem value="approved">
-                      <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                         <CheckCircle className="h-4 w-4" strokeWidth={2.75} />
                         <span>Approved</span>
-                      </div>
-                    </SelectItem>
+                </div>
+              </SelectItem>
                     <SelectItem value="rejected">
-                      <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                         <AlertCircle className="h-4 w-4" strokeWidth={2.75} />
                         <span>Rejected</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
 
                 {/* Agent Toolbar Actions */}
                 <TooltipProvider>
@@ -3846,7 +3744,7 @@ ${content}`;
                 <Button variant="ghost" size="sm" className="h-9 px-2 text-gray-600 hover:bg-gray-200">
                   <MoreHorizontal className="h-4 w-4" strokeWidth={2.75} />
                 </Button>
-              </div>
+        </div>
             </>
           )}
                 </div>

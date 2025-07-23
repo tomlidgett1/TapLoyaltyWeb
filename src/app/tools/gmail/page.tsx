@@ -1,10 +1,23 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
-export default function GmailToolsPage() {
+// Loading component for the Suspense boundary
+function GmailToolsPageLoading() {
+  return (
+    <div className="flex items-center justify-center h-screen">
+      <div className="text-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600 mx-auto mb-4"></div>
+        <p className="text-gray-500">Loading Gmail tools...</p>
+      </div>
+    </div>
+  );
+}
+
+// Component that uses useSearchParams
+function GmailToolsPageContent() {
   const [merchantId, setMerchantId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +30,7 @@ export default function GmailToolsPage() {
   
   useEffect(() => {
     // Get merchantId from URL if present
-    const urlMerchantId = searchParams.get('merchantId');
+    const urlMerchantId = searchParams?.get('merchantId');
     if (urlMerchantId) {
       setMerchantId(urlMerchantId);
     }
@@ -165,5 +178,14 @@ export default function GmailToolsPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+// Main component wrapped in Suspense
+export default function GmailToolsPage() {
+  return (
+    <Suspense fallback={<GmailToolsPageLoading />}>
+      <GmailToolsPageContent />
+    </Suspense>
   );
 } 

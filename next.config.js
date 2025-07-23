@@ -12,13 +12,21 @@ const nextConfig = {
   },
   experimental: {
     missingSuspenseWithCSRBailout: false, // Disable the error for missing Suspense boundaries with useSearchParams
+    serverActions: {
+      bodySizeLimit: '4mb',
+    },
   },
   // Force dynamic rendering for all pages to avoid useSearchParams errors
-  // This is more reliable than the experimental option
   output: 'standalone',
   staticPageGenerationTimeout: 1000,
   compiler: {
     styledComponents: true,
+  },
+  // Disable static optimization to force dynamic rendering
+  swcMinify: true,
+  // Force all pages to be dynamically rendered
+  serverRuntimeConfig: {
+    experimental_useSearchParamsInSSRWorkaround: true,
   },
   webpack: (config, { dev }) => {
     if (dev) {

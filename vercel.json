@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "routes": [
+    {
+      "src": "/(.*)",
+      "headers": {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        "x-middleware-cache": "no-cache"
+      },
+      "continue": true
+    }
+  ],
+  "build": {
+    "env": {
+      "NEXT_FORCE_DYNAMIC": "true"
+    }
+  }
+} 

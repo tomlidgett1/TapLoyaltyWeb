@@ -46,7 +46,14 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  return NextResponse.next()
+  // Force dynamic rendering for all pages to avoid useSearchParams errors
+  const response = NextResponse.next()
+  
+  // Add header to force dynamic rendering
+  response.headers.set('x-middleware-cache', 'no-cache')
+  response.headers.set('Cache-Control', 'no-store')
+  
+  return response
 }
 
 export const config = {

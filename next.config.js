@@ -13,6 +13,13 @@ const nextConfig = {
   experimental: {
     missingSuspenseWithCSRBailout: false, // Disable the error for missing Suspense boundaries with useSearchParams
   },
+  // Force dynamic rendering for all pages to avoid useSearchParams errors
+  // This is more reliable than the experimental option
+  output: 'standalone',
+  staticPageGenerationTimeout: 1000,
+  compiler: {
+    styledComponents: true,
+  },
   webpack: (config, { dev }) => {
     if (dev) {
       // Suppress specific console errors in development

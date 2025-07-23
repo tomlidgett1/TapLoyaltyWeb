@@ -2865,15 +2865,16 @@ ${content}`;
       return shouldHighlight
     }
     
-    // For multi-email threads, only highlight the representative if:
-    // 1. The selected email is the thread representative (most recent email)
-    // 2. AND the dropdown is not expanded (so we don't double-highlight)
+    // For multi-email threads, highlight the representative if:
+    // 1. This is the selected thread
+    // 2. AND the representative is selected (not a sub-email)
     if (selectedThread?.threadId === thread.threadId && selectedThread.emails?.length > 0) {
       const isRepresentativeSelected = selectedEmail.id === selectedThread.emails[0]?.id
-      const isDropdownExpanded = expandedThreads.has(thread.threadId)
+      const isSubEmailSelected = selectedThread.emails.slice(1).some((email: any) => email.id === selectedEmail.id)
       
-      // Only highlight if representative is selected AND dropdown is collapsed
-      const shouldHighlight = isRepresentativeSelected && !isDropdownExpanded
+      // Only highlight the main thread item when the representative itself is selected
+      // Do NOT highlight the main thread when a sub-email is selected
+      const shouldHighlight = isRepresentativeSelected && !isSubEmailSelected
       
       if (shouldHighlight) {
         console.log("🎯 Highlighting thread representative:", thread.threadId, "selectedEmail:", selectedEmail.id)
@@ -6373,27 +6374,42 @@ const EmailViewer = ({
                     </div>
                   ) : !showInstructions && (
                     <div className="flex items-center gap-2">
-                      <div className={`flex items-center transition-all duration-500 ease-in-out ${
-                        !isReplyContentEmpty(replyContent) 
-                          ? 'opacity-100 scale-100 w-auto' 
-                          : 'opacity-0 scale-95 w-0 overflow-hidden'
-                      }`}>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)}
-                            className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                          >
-                            <Lightbulb className="h-3 w-3 text-gray-500" />
-                            Friendly
-                          </button>
-                          <button
-                            onClick={() => callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)}
-                            className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                          >
-                            <Users className="h-3 w-3 text-gray-500" />
-                            Professional
-                          </button>
-                        </div>
+                      <div className="flex items-center gap-2">
+                                                  <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors">
+                                <Palette className="h-3 w-3 text-gray-500" />
+                                <span>Tone</span>
+                                <ChevronDown className="h-3 w-3 text-gray-500 ml-1" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-40 z-50">
+                              <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)}>
+                                <Lightbulb className="h-3 w-3 text-gray-500 mr-2" />
+                                <span className="text-xs">Friendly</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)}>
+                                <Users className="h-3 w-3 text-gray-500 mr-2" />
+                                <span className="text-xs">Professional</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'direct', undefined, replyEditorRef)}>
+                                <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
+                                <span className="text-xs">Direct</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'casual', undefined, replyEditorRef)}>
+                                <Eye className="h-3 w-3 text-gray-500 mr-2" />
+                                <span className="text-xs">Casual</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'formal', undefined, replyEditorRef)}>
+                                <Shield className="h-3 w-3 text-gray-500 mr-2" />
+                                <span className="text-xs">Formal</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'persuasive', undefined, replyEditorRef)}>
+                                <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
+                                <span className="text-xs">Persuasive</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         <div className="h-4 w-px bg-gray-300 mx-2"></div>
                       </div>
                       <button

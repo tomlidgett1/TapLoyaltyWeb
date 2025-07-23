@@ -94,7 +94,7 @@ import {
   Filter
 } from "lucide-react"
 import { RiRobot3Line } from "react-icons/ri"
-import React, { useState, useEffect, useRef, useMemo } from "react"
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
@@ -107,6 +107,8 @@ import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/
 import { formatMelbourneTime } from "@/lib/date-utils"
 import { formatDistanceToNow } from "date-fns"
 import { cn } from "@/lib/utils"
+
+
 
 // Email Chip Component for displaying email addresses with light box
 const EmailChip = ({ email, onRemove }: { email: string; onRemove?: (email: string) => void }) => {
@@ -1145,6 +1147,49 @@ export default function EmailPage() {
   // Firebase function for generating email responses
   const generateEmailResponse = httpsCallable(functions, 'generateEmailResponse');
   
+  // Request queue and debouncing utilities
+  const [isProcessing, setIsProcessing] = useState(false);
+  const queue = useRef<Array<() => Promise<any>>>([]);
+  
+  const addToQueue = useCallback((request: () => Promise<any>) => {
+    queue.current.push(request);
+    processQueue();
+  }, []);
+  
+  const processQueue = useCallback(async () => {
+    if (isProcessing || queue.current.length === 0) return;
+    
+    setIsProcessing(true);
+    
+    try {
+      // Process requests in batches of 5 to avoid overwhelming Firestore
+      const batchSize = 5;
+      const batch = queue.current.splice(0, batchSize);
+      
+      // Execute batch with a small delay between requests
+      for (let i = 0; i < batch.length; i++) {
+        try {
+          await batch[i]();
+          // Add a small delay between requests to avoid rate limiting
+          if (i < batch.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        } catch (error) {
+          console.error('Request in batch failed:', error);
+        }
+      }
+    } finally {
+      setIsProcessing(false);
+      
+      // Process next batch if there are more requests
+      if (queue.current.length > 0) {
+        setTimeout(processQueue, 200);
+      }
+    }
+  }, [isProcessing]);
+  
+
+  
   const [selectedFolder, setSelectedFolder] = useState("inbox")
   const [selectedEmail, setSelectedEmail] = useState<any>(null)
   const [selectedThread, setSelectedThread] = useState<any>(null)
@@ -1914,6 +1959,12 @@ ${content}`;
   // Fetch Gmail threads from the new Firestore structure
   const fetchGmailEmails = async () => {
     if (!user?.uid) return
+    
+    // Prevent multiple simultaneous calls
+    if (emailsLoading) {
+      console.log("Already loading emails, skipping duplicate request")
+      return
+    }
 
     try {
       setEmailsLoading(true)
@@ -1944,9 +1995,14 @@ ${content}`;
       console.log("🔍 Thread documents:", threadsSnapshot.docs.map(doc => ({ id: doc.id, data: doc.data() })))
       
       // Transform thread documents into thread objects for the left panel
-      const transformedThreads = await Promise.all(threadsSnapshot.docs.map(async (doc) => {
+      const transformedThreads = await Promise.all(threadsSnapshot.docs.map(async (doc, index) => {
         const threadData = doc.data()
         console.log("Processing thread:", doc.id, threadData)
+        
+        // Add delay between requests to avoid overwhelming Firestore
+        if (index > 0) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
         
         // Use thread metadata for the list view
         const threadId = threadData.threadId || doc.id
@@ -2387,7 +2443,10 @@ ${content}`;
         // Only refresh if there are actual changes (new threads, modifications, etc.)
         if (snapshot.docChanges().length > 0 && selectedFolder !== "sent") {
           console.log("📡 Thread changes detected, refreshing thread list")
-          fetchGmailEmails()
+          // Add delay to prevent rapid successive calls
+          setTimeout(() => {
+            fetchGmailEmails()
+          }, 1000)
         }
       }, (error) => {
         console.error("❌ Error in Firestore listener:", error)
@@ -2629,19 +2688,22 @@ ${content}`;
       return
     }
 
-    try {
-      // All emails are now in the chain subcollection structure
-      const emailRef = doc(db, 'merchants', user.uid, 'fetchedemails', threadId || emailId, 'chain', emailId)
-      console.log("Marking email as read:", emailId, "in thread:", threadId || emailId)
-      
-      await updateDoc(emailRef, {
-        read: true
-      })
-      console.log("Successfully marked email as read:", emailId)
-    } catch (error) {
-      console.error("Error marking email as read:", error)
-      console.error("Email ID:", emailId, "Thread ID:", threadId || emailId)
-    }
+    // Add to queue to prevent overwhelming Firestore
+    addToQueue(async () => {
+      try {
+        // All emails are now in the chain subcollection structure
+        const emailRef = doc(db, 'merchants', user.uid, 'fetchedemails', threadId || emailId, 'chain', emailId)
+        console.log("Marking email as read:", emailId, "in thread:", threadId || emailId)
+        
+        await updateDoc(emailRef, {
+          read: true
+        })
+        console.log("Successfully marked email as read:", emailId)
+      } catch (error) {
+        console.error("Error marking email as read:", error)
+        console.error("Email ID:", emailId, "Thread ID:", threadId || emailId)
+      }
+    })
   }
 
   const handleEnableGmailTrigger = async () => {
@@ -3326,7 +3388,7 @@ ${content}`;
                     <TooltipTrigger asChild>
                       <button
                         className={cn(
-                          "flex items-center justify-center h-7 w-7 rounded-md transition-colors",
+                          "flex items-center justify-center h-7 w-9 rounded-md transition-colors",
                           String(currentView) === 'email'
                             ? "text-gray-800 bg-white shadow-sm"
                             : "text-gray-600 hover:bg-gray-200/70"
@@ -3347,7 +3409,7 @@ ${content}`;
                     <TooltipTrigger asChild>
                       <button
                         className={cn(
-                          "flex items-center justify-center h-7 w-7 rounded-md transition-colors",
+                          "flex items-center justify-center h-7 w-9 rounded-md transition-colors",
                           String(currentView) === 'agent'
                             ? "text-gray-800 bg-white shadow-sm"
                             : "text-gray-600 hover:bg-gray-200/70"
@@ -3467,7 +3529,6 @@ ${content}`;
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="h-8 px-3 flex items-center gap-2 text-gray-700">
-                    <RiRobot3Line className="h-4 w-4 text-gray-600" />
                     <span className="text-sm">Agent Setup</span>
                     <ChevronDown className="h-3.5 w-3.5 text-gray-500" />
                   </Button>
@@ -3498,7 +3559,6 @@ ${content}`;
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="h-8 px-3 flex items-center gap-2 text-gray-700">
-                    <Settings className="h-4 w-4 text-gray-600" />
                     <span className="text-sm">Email Tools</span>
                     <ChevronDown className="h-3.5 w-3.5 text-gray-500" />
                   </Button>
@@ -3534,7 +3594,7 @@ ${content}`;
               {/* Connected Account Selector or Connect Button - Now at far right */}
               {gmailEmailAddress ? (
                 <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-                  <SelectTrigger className="w-10 h-8 text-sm focus:outline-none focus:ring-0 border-gray-200 hover:border-gray-300">
+                  <SelectTrigger className="w-12 h-8 text-sm focus:outline-none focus:ring-0 border-gray-200 hover:border-gray-300 [&>span]:flex [&>span]:w-full [&>span]:justify-center [&>svg]:hidden">
                     <SelectValue>
                       {loading ? (
                         <div className="flex items-center justify-center">
@@ -3542,14 +3602,23 @@ ${content}`;
                         </div>
                       ) : getCurrentAccount() ? (
                         <div className="flex items-center justify-center">
-                          <div className="w-5 h-5 flex-shrink-0">
-                            <Image 
-                              src={getCurrentAccount()?.provider === "gmail" ? "/gmailnew.png" : "/outlook.png"}
-                              alt={getCurrentAccount()?.provider === "gmail" ? "Gmail" : "Outlook"}
-                              width={20}
-                              height={20}
-                              className="w-full h-full object-contain"
-                            />
+                          <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center">
+                            {(() => {
+                              const account = getCurrentAccount();
+                              console.log('Account button - account:', account);
+                              console.log('Account button - provider:', account?.provider);
+                              const isGmail = account?.provider === "gmail";
+                              console.log('Account button - isGmail:', isGmail);
+                              return (
+                                <Image 
+                                  src={isGmail ? "/gmailnew.png" : "/outlook.png"}
+                                  alt={isGmail ? "Gmail" : "Outlook"}
+                                  width={20}
+                                  height={20}
+                                  className="w-6 h-6 object-scale-down"
+                                />
+                              );
+                            })()}
                           </div>
                         </div>
                       ) : (
@@ -3563,13 +3632,13 @@ ${content}`;
                     {connectedAccounts.map((account) => (
                       <SelectItem key={account.id} value={account.emailAddress}>
                         <div className="flex items-center gap-3">
-                          <div className="w-6 h-6 flex-shrink-0">
+                          <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center">
                             <Image 
                               src={account.provider === "gmail" ? "/gmailnew.png" : "/outlook.png"}
                               alt={account.provider === "gmail" ? "Gmail" : "Outlook"}
                               width={24}
                               height={24}
-                              className="w-full h-full object-contain"
+                              className="w-6 h-6 object-scale-down"
                             />
                           </div>
                           <span>{account.emailAddress}</span>
@@ -3617,7 +3686,7 @@ ${content}`;
                       <TooltipTrigger asChild>
                         <button
                           className={cn(
-                            "flex items-center justify-center h-7 w-7 rounded-md transition-colors",
+                            "flex items-center justify-center h-7 w-9 rounded-md transition-colors",
                             String(currentView) === 'email'
                               ? "text-gray-800 bg-white shadow-sm"
                               : "text-gray-600 hover:bg-gray-200/70"
@@ -3638,7 +3707,7 @@ ${content}`;
                       <TooltipTrigger asChild>
                         <button
                           className={cn(
-                            "flex items-center justify-center h-7 w-7 rounded-md transition-colors",
+                            "flex items-center justify-center h-7 w-9 rounded-md transition-colors",
                             String(currentView) === 'agent'
                               ? "text-gray-800 bg-white shadow-sm"
                               : "text-gray-600 hover:bg-gray-200/70"
@@ -3866,7 +3935,7 @@ ${content}`;
                 <div key={thread.threadId}>
                   {/* Main email button - always shown */}
                   <div
-                    className={`flex items-start gap-1.5 py-2 pr-2 pl-1.5 transition-all duration-200 cursor-pointer ${
+                    className={`flex items-start gap-1.5 py-2 pr-2 pl-1.5 cursor-pointer ${
                       isThreadRepresentativeHighlighted(thread)
                         ? 'bg-blue-100' 
                         : thread.representative?.read === true
@@ -3983,7 +4052,7 @@ ${content}`;
                           return (
                             <div
                               key={email.id}
-                              className={`flex items-center gap-1.5 p-2 pl-16 cursor-pointer transition-all duration-200 border-t border-t-gray-200 ${
+                              className={`flex items-center gap-1.5 p-2 pl-16 cursor-pointer border-t border-t-gray-200 ${
                                 isDropdownEmailHighlighted
                                   ? 'bg-blue-100'
                                   : email.read === true

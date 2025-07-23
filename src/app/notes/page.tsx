@@ -3283,7 +3283,7 @@ export default function NotesPage() {
                     <DropdownMenuItem onClick={() => setTypeFilter("gmail")} className="cursor-pointer flex items-center gap-2">
                       <div className="h-4 w-4 flex items-center justify-center">
                         <Image 
-                          src="/gmail.png" 
+                          src="/gmailnew.png" 
                           alt="Gmail" 
                           width={14} 
                           height={10}

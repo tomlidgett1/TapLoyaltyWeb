@@ -3313,43 +3313,59 @@ ${content}`;
         </defs>
       </svg>
       
-      {/* Mode Toggle Tabs */}
-      <div className="mx-3 mt-3 mb-1">
-        {/* Main Tab Container */}
-        <div className="flex items-center bg-white p-0.5 rounded-md w-fit">
-          <button
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-              currentView === 'email'
-                ? "text-gray-800 bg-[#EEEEEE] shadow-sm"
-                : "text-gray-600 hover:bg-gray-50"
-            )}
-            onClick={() => setCurrentView('email')}
-          >
-            <Mail size={15} strokeWidth={2.75} />
-            Email Inbox
-          </button>
-          <button
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-              currentView === 'agent'
-                ? "text-gray-800 bg-[#EEEEEE] shadow-sm"
-                : "text-gray-600 hover:bg-gray-50"
-            )}
-            onClick={() => setCurrentView('agent')}
-          >
-            <RiRobot3Line size={15} />
-            Agent Inbox
-          </button>
-        </div>
-      </div>
-      
       {/* Top Bar - Combined Header with folder dropdown, toolbar, and connected account */}
       <div className="mx-3 mb-3 bg-white rounded-xl shadow-lg border border-gray-100 flex items-center justify-between px-4 py-3 flex-shrink-0">
         {currentView === 'email' ? (
           <>
             {/* Left Side: Folder dropdown and toolbar actions */}
             <div className="flex items-center gap-4">
+              {/* Main Tab Container */}
+              <TooltipProvider>
+                <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit mr-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        className={cn(
+                          "flex items-center justify-center h-7 w-7 rounded-md transition-colors",
+                          String(currentView) === 'email'
+                            ? "text-gray-800 bg-white shadow-sm"
+                            : "text-gray-600 hover:bg-gray-200/70"
+                        )}
+                        onClick={() => {
+                          const view = 'email';
+                          setCurrentView(view as any);
+                        }}
+                      >
+                        <Mail size={15} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Inbox</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        className={cn(
+                          "flex items-center justify-center h-7 w-7 rounded-md transition-colors",
+                          String(currentView) === 'agent'
+                            ? "text-gray-800 bg-white shadow-sm"
+                            : "text-gray-600 hover:bg-gray-200/70"
+                        )}
+                        onClick={() => {
+                          const view = 'agent';
+                          setCurrentView(view as any);
+                        }}
+                      >
+                        <RiRobot3Line size={15} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Agent Inbox</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </TooltipProvider>
               {/* Folder Dropdown */}
               <Select value={selectedFolder} onValueChange={setSelectedFolder}>
                 <SelectTrigger className="w-24 h-8 text-sm">
@@ -3434,7 +3450,7 @@ ${content}`;
                         disabled={emailsLoading}
                         className="text-gray-700 hover:bg-gray-200 transition-all duration-200"
                       >
-                        <RefreshCw className={`h-4 w-4 transition-transform duration-300 ${emailsLoading ? 'animate-spin' : 'hover:rotate-180'}`} />
+                        <RefreshCw className={`h-4 w-4 transition-transform duration-300 ${emailsLoading ? 'animate-spin [animation-duration:2s]' : 'hover:rotate-180'}`} />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -3448,39 +3464,35 @@ ${content}`;
             {/* Right Side: Agents, Email Tools, and Account Selector */}
             <div className="flex items-center gap-2">
               {/* Agents Dropdown */}
-              <Select value={selectedAgent} onValueChange={(value) => {
-                setSelectedAgent(value)
-                handleAgentSelection(value)
-              }}>
-                <SelectTrigger className="w-32 h-8 text-sm focus:outline-none focus:ring-0">
-                  <SelectValue>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 px-3 flex items-center gap-2 text-gray-700">
+                    <RiRobot3Line className="h-4 w-4 text-gray-600" />
+                    <span className="text-sm">Agent Setup</span>
+                    <ChevronDown className="h-3.5 w-3.5 text-gray-500" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => handleAgentSelection('customer-service')}>
                     <div className="flex items-center gap-2">
-                      <RiRobot3Line className="h-4 w-4 text-gray-600" />
-                      <span className="text-sm text-gray-700">Agents</span>
+                      <MessageSquare className="h-4 w-4 text-gray-600" />
+                      <span>Customer Service</span>
                     </div>
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="customer-service">
-                    <div className="flex flex-col items-start">
-                      <div className="font-medium">Customer Service</div>
-                      <div className="text-xs text-gray-500">Handles customer inquiries and support requests</div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleAgentSelection('categorising')}>
+                    <div className="flex items-center gap-2">
+                      <Filter className="h-4 w-4 text-gray-600" />
+                      <span>Categorising Agent</span>
                     </div>
-                  </SelectItem>
-                  <SelectItem value="categorising">
-                    <div className="flex flex-col items-start">
-                      <div className="font-medium">Categorising Agent</div>
-                      <div className="text-xs text-gray-500">Organises and tags emails by type and priority</div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleAgentSelection('summary')}>
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-gray-600" />
+                      <span>Summary Agent</span>
                     </div>
-                  </SelectItem>
-                  <SelectItem value="summary">
-                    <div className="flex flex-col items-start">
-                      <div className="font-medium">Summary Agent</div>
-                      <div className="text-xs text-gray-500">Creates concise summaries of email threads</div>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {/* Email Tools Dropdown */}
               <DropdownMenu>
@@ -3522,34 +3534,27 @@ ${content}`;
               {/* Connected Account Selector or Connect Button - Now at far right */}
               {gmailEmailAddress ? (
                 <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-                  <SelectTrigger className="w-44 h-8 text-sm focus:outline-none focus:ring-0">
+                  <SelectTrigger className="w-10 h-8 text-sm focus:outline-none focus:ring-0 border-gray-200 hover:border-gray-300">
                     <SelectValue>
                       {loading ? (
-                        <div className="flex items-center gap-3">
-                          <div className="w-6 h-6 bg-gray-200 rounded animate-pulse"></div>
-                          <span className="text-sm text-gray-500">Loading...</span>
+                        <div className="flex items-center justify-center">
+                          <div className="w-4 h-4 bg-gray-200 rounded animate-pulse"></div>
                         </div>
                       ) : getCurrentAccount() ? (
-                        <div className="flex items-center gap-3">
-                          <div className="w-6 h-6 flex-shrink-0">
+                        <div className="flex items-center justify-center">
+                          <div className="w-5 h-5 flex-shrink-0">
                             <Image 
                               src={getCurrentAccount()?.provider === "gmail" ? "/gmailnew.png" : "/outlook.png"}
                               alt={getCurrentAccount()?.provider === "gmail" ? "Gmail" : "Outlook"}
-                              width={24}
-                              height={24}
+                              width={20}
+                              height={20}
                               className="w-full h-full object-contain"
                             />
                           </div>
-                          <span className="text-sm text-gray-700 truncate">
-                            {getCurrentAccount()?.emailAddress}
-                          </span>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-3">
-                          <div className="w-6 h-6 flex-shrink-0">
-                            <Plus className="h-4 w-4 text-gray-400" />
-                          </div>
-                          <span className="text-sm text-gray-500">No accounts</span>
+                        <div className="flex items-center justify-center">
+                          <Plus className="h-4 w-4 text-gray-400" />
                         </div>
                       )}
                     </SelectValue>
@@ -3605,146 +3610,60 @@ ${content}`;
             /* Agent Inbox Top Bar */
             <>
               <div className="flex items-center gap-4">
-                {/* Agent Status Filter */}
-                <Select value="all" onValueChange={() => {}}>
-                  <SelectTrigger className="w-32 h-8 text-sm">
-                    <SelectValue placeholder="All Tasks" />
-            </SelectTrigger>
-            <SelectContent>
-                    <SelectItem value="all">
-                <div className="flex items-center gap-2">
-                        <Filter className="h-4 w-4" strokeWidth={2.75} />
-                        <span>All Tasks</span>
-                </div>
-              </SelectItem>
-                    <SelectItem value="pending">
-                <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4" strokeWidth={2.75} />
-                        <span>Pending</span>
-                </div>
-              </SelectItem>
-                    <SelectItem value="approved">
-                <div className="flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4" strokeWidth={2.75} />
-                        <span>Approved</span>
-                </div>
-              </SelectItem>
-                    <SelectItem value="rejected">
-                <div className="flex items-center gap-2">
-                        <AlertCircle className="h-4 w-4" strokeWidth={2.75} />
-                        <span>Rejected</span>
-                </div>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-
-                {/* Agent Toolbar Actions */}
+                {/* Main Tab Container */}
                 <TooltipProvider>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit mr-2">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button size="sm" className="bg-green-500 hover:bg-green-600 text-white">
-                          <CheckCircle className="h-4 w-4" strokeWidth={2.75} />
-                        </Button>
+                        <button
+                          className={cn(
+                            "flex items-center justify-center h-7 w-7 rounded-md transition-colors",
+                            String(currentView) === 'email'
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                          onClick={() => {
+                            const view = 'email';
+                            setCurrentView(view as any);
+                          }}
+                        >
+                          <Mail size={15} />
+                        </button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Approve Selected</p>
+                        <p>Inbox</p>
                       </TooltipContent>
                     </Tooltip>
-                    
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          className="text-red-600 border-red-200 hover:bg-red-50"
+                        <button
+                          className={cn(
+                            "flex items-center justify-center h-7 w-7 rounded-md transition-colors",
+                            String(currentView) === 'agent'
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                          onClick={() => {
+                            const view = 'agent';
+                            setCurrentView(view as any);
+                          }}
                         >
-                          <AlertCircle className="h-4 w-4" strokeWidth={2.75} />
-                        </Button>
+                          <RiRobot3Line size={15} />
+                        </button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Reject Selected</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    
-                    <div className="h-6 w-px bg-gray-300 mx-1"></div>
-                    
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          className="text-gray-700 hover:bg-gray-200"
-                        >
-                          <Settings className="h-4 w-4" strokeWidth={2.75} />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Agent Settings</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          className="text-gray-700 hover:bg-gray-200"
-                        >
-                          <RefreshCw className="h-4 w-4" strokeWidth={2.75} />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Refresh Tasks</p>
+                        <p>Agent Inbox</p>
                       </TooltipContent>
                     </Tooltip>
                   </div>
                 </TooltipProvider>
+                
+
+
+
               </div>
 
-              <div className="flex items-center gap-2">
-                {/* Agent Performance Stats */}
-                <div className="flex items-center gap-4 text-sm text-gray-600">
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-4 w-4" strokeWidth={2.75} />
-                    <span>5 Pending</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <CheckCircle className="h-4 w-4 text-green-500" strokeWidth={2.75} />
-                    <span>12 Approved</span>
-                  </div>
-                </div>
 
-                {/* Notifications button */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="relative h-8 w-8 p-0">
-                      <Bell className="h-4 w-4" strokeWidth={2.75} />
-                      <span className="absolute -top-0.5 -right-0.5 h-3 w-3 bg-orange-500 rounded-full text-white font-medium flex items-center justify-center min-w-3 text-[7px]">
-                        5
-                      </span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-[350px] rounded-md">
-                    <div className="flex items-center justify-between px-4 py-2 border-b">
-                      <h3 className="font-medium">Agent Tasks</h3>
-                      <Button variant="ghost" size="sm" className="h-8 text-xs rounded-md">
-                        Mark all reviewed
-                      </Button>
-                    </div>
-                    <div className="p-2">
-                      <div className="text-center text-gray-500 py-4">
-                        <RiRobot3Line className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                        <p className="text-sm">No pending tasks</p>
-                      </div>
-                    </div>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                <Button variant="ghost" size="sm" className="h-9 px-2 text-gray-600 hover:bg-gray-200">
-                  <MoreHorizontal className="h-4 w-4" strokeWidth={2.75} />
-                </Button>
-        </div>
             </>
           )}
                 </div>
@@ -3934,10 +3853,10 @@ ${content}`;
               summaryClosing ? 'animate-in fade-in-0 slide-in-from-top-1 duration-300' : ''
             }`} style={{ height: 'auto' }}>
             {emailsLoading && (
-              <div className="p-3 border-b border-gray-200 bg-blue-50">
-                <div className="flex items-center gap-2 text-sm text-blue-600">
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                  <span>Fetching Gmail emails...</span>
+              <div className="flex items-center justify-center h-32">
+                <div className="flex flex-col items-center gap-2">
+                  <RefreshCw className="h-6 w-6 animate-spin text-gray-400" />
+                  <span className="text-sm text-gray-500">Fetching emails...</span>
                 </div>
               </div>
             )}
@@ -4477,14 +4396,14 @@ ${content}`;
               className="bg-white rounded-xl shadow-lg border border-gray-100 flex flex-col h-full mr-1"
               style={{ width: `${leftPanelWidth}%` }}
             >
-              <div className="p-4 border-b border-gray-200">
+              <div className="flex-shrink-0 p-3 border-b border-gray-200 bg-white rounded-t-xl">
                 <h2 className="text-lg font-medium text-gray-900 mb-2">Agent Tasks</h2>
                 <div className="text-sm text-gray-500">
                   Tasks and actions requiring approval
                 </div>
               </div>
               
-              <div className="flex-1 overflow-y-auto custom-scrollbar">
+              <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar rounded-bl-xl">
                 <div className="p-4">
                   <div className="text-center text-gray-500 py-8">
                     <RiRobot3Line className="h-12 w-12 mx-auto mb-4 text-gray-300" />
@@ -4524,22 +4443,25 @@ ${content}`;
                 isDragging ? 'bg-blue-300' : ''
               }`}
               onMouseDown={handleMouseDown}
-            />
+            >
+            </div>
 
             {/* Agent Inbox Right Panel */}
             <div 
               className="bg-white rounded-xl shadow-lg border border-gray-100 flex flex-col h-full overflow-hidden ml-1"
               style={{ width: `${100 - leftPanelWidth}%` }}
             >
-              <div className="p-4 border-b border-gray-200">
+              <div className="flex-shrink-0 p-3 border-b border-gray-200 bg-white rounded-t-xl">
                 <h2 className="text-lg font-medium text-gray-900">Task Details</h2>
               </div>
               
-              <div className="flex-1 flex items-center justify-center">
-                <div className="text-center text-gray-500">
-                  <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <h3 className="text-lg font-medium text-gray-700 mb-2">Select a task to view details</h3>
-                  <p className="text-sm">Choose an agent task from the left panel to see its details and actions</p>
+              <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar rounded-bl-xl">
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center text-gray-500">
+                    <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <h3 className="text-lg font-medium text-gray-700 mb-2">Select a task to view details</h3>
+                    <p className="text-sm">Choose an agent task from the left panel to see its details and actions</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -6392,14 +6314,14 @@ const EmailViewer = ({
                             onClick={() => callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)}
                             className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
                           >
-                            <Lightbulb className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                            <Lightbulb className="h-3 w-3 text-gray-500" />
                             Friendly
                           </button>
                           <button
                             onClick={() => callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)}
                             className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
                           >
-                            <Users className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                            <Users className="h-3 w-3 text-gray-500" />
                             Professional
                           </button>
                         </div>
@@ -6409,7 +6331,7 @@ const EmailViewer = ({
                         onClick={() => setShowInstructions(!showInstructions)}
                         className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
                       >
-                        <MessageSquare className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                        <MessageSquare className="h-3 w-3 text-gray-500" />
                         Instructions
                       </button>
                     </div>
@@ -6428,14 +6350,14 @@ const EmailViewer = ({
                           }}
                           className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
                         >
-                          <Shield className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                          <Shield className="h-3 w-3 text-gray-500" />
                           Rules
                         </button>
                         <button
                           onClick={closeInstructionsWithAnimation}
                           className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
                         >
-                          <X className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                          <X className="h-3 w-3 text-gray-500" />
                           Cancel
                         </button>
                         <button
@@ -6465,14 +6387,14 @@ const EmailViewer = ({
                         >
                           {actualIsGenerating ? (
                             <>
-                              <Loader2 className="h-3 w-3 text-white animate-spin" strokeWidth="2" />
+                              <Loader2 className="h-3 w-3 text-white animate-spin" />
                               <span className="text-xs font-normal text-white">
                                 Applying...
                               </span>
                             </>
                           ) : (
                             <>
-                              <Check className="h-3 w-3 text-white" strokeWidth="2" />
+                              <Check className="h-3 w-3 text-white" />
                               Apply
                             </>
                           )}
@@ -6487,7 +6409,7 @@ const EmailViewer = ({
                           }}
                           className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
                         >
-                          <Shield className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                          <Shield className="h-3 w-3 text-gray-500" />
                           Rules
                         </button>
                         <DropdownMenu>

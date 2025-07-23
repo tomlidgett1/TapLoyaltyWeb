@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,7 +17,8 @@ import {
   Tag,
   GitBranch,
   CheckSquare,
-  Square
+  Square,
+  Loader2
 } from "lucide-react"
 import { 
   Dialog,
@@ -99,7 +100,24 @@ const themeColors = {
   'Design': 'bg-pink-100 text-pink-800'
 }
 
-export default function PlanPage() {
+// Create a loading component for the Suspense boundary
+function PlanPageLoading() {
+  return (
+    <DashboardLayout>
+      <div className="p-6">
+        <div className="flex items-center justify-center h-[80vh]">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
+            <p className="text-gray-500">Loading plan...</p>
+          </div>
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+}
+
+// Create a component that uses useSearchParams
+function PlanPageContent() {
   const { user } = useAuth()
   const searchParams = useSearchParams()
   const [tasks, setTasks] = useState<Task[]>([])
@@ -125,7 +143,6 @@ export default function PlanPage() {
     task: Task | null
   } | null>(null)
 
-
   // Check for URL parameter to open add task dialog
   useEffect(() => {
     if (!searchParams) return
@@ -134,9 +151,11 @@ export default function PlanPage() {
     if (addTaskParam === 'true') {
       setIsAddingTask(true)
       // Clean up URL parameter
-      const url = new URL(window.location.href)
-      url.searchParams.delete('addTask')
-      window.history.replaceState({}, '', url.toString())
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href)
+        url.searchParams.delete('addTask')
+        window.history.replaceState({}, '', url.toString())
+      }
     }
   }, [searchParams])
 
@@ -959,5 +978,14 @@ export default function PlanPage() {
       {/* Context Menu */}
       <ContextMenu />
     </DashboardLayout>
+  )
+}
+
+// Main component wrapped in Suspense
+export default function PlanPage() {
+  return (
+    <Suspense fallback={<PlanPageLoading />}>
+      <PlanPageContent />
+    </Suspense>
   )
 } 

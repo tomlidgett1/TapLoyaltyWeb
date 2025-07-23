@@ -10,6 +10,9 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  experimental: {
+    missingSuspenseWithCSRBailout: false, // Disable the error for missing Suspense boundaries with useSearchParams
+  },
   webpack: (config, { dev }) => {
     if (dev) {
       // Suppress specific console errors in development

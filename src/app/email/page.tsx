@@ -6313,13 +6313,28 @@ const EmailViewer = ({
               </AvatarFallback>
             </Avatar>
             
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-900">{email.sender}</span>
+            <div className="flex-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-900">{email.sender}</span>
 
-                {email.hasAttachment && (
-                  <Paperclip className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                )}
+                  {email.hasAttachment && (
+                    <Paperclip className="h-3 w-3 text-gray-400 flex-shrink-0" />
+                  )}
+                </div>
+                <span className="text-xs text-gray-600">{(() => {
+                  // Get the appropriate timestamp with proper Firestore handling
+                  const timestamp = email.repliedAt || email.receivedAt || email.time;
+                  if (!timestamp) return 'Unknown time';
+                  
+                  // Handle Firestore Timestamp objects
+                  if (timestamp && typeof timestamp.toDate === 'function') {
+                    return formatMelbourneTime(timestamp.toDate(), 'Unknown time');
+                  }
+                  
+                  // Handle string or Date objects
+                  return formatMelbourneTime(timestamp, 'Unknown time');
+                })()}</span>
               </div>
               <div className="flex items-center gap-1 text-xs text-gray-600">
                 <span><span className="font-bold">To:</span> {email.to}</span>
@@ -6335,20 +6350,6 @@ const EmailViewer = ({
                   }
                   return null;
                 })()}
-                <span>•</span>
-                <span>{(() => {
-                  // Get the appropriate timestamp with proper Firestore handling
-                  const timestamp = email.repliedAt || email.receivedAt || email.time;
-                  if (!timestamp) return 'Unknown time';
-                  
-                  // Handle Firestore Timestamp objects
-                  if (timestamp && typeof timestamp.toDate === 'function') {
-                    return formatMelbourneTime(timestamp.toDate(), 'Unknown time');
-                  }
-                  
-                  // Handle string or Date objects
-                  return formatMelbourneTime(timestamp, 'Unknown time');
-                })()}</span>
               </div>
             </div>
           </div>

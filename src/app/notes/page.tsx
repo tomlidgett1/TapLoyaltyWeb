@@ -1087,7 +1087,7 @@ export default function NotesPage() {
               const notesRef = collection(db, `merchants/${user.uid}/files`);
               
               // Check if auto-add to CS Vault was requested
-              const autoAddToCSVault = localStorage.getItem('auto_add_to_cs_vault') === 'true';
+              const autoAddToCSVault = typeof window !== 'undefined' ? localStorage.getItem('auto_add_to_cs_vault') === 'true' : false;
               
               // Prepare document data
               const noteData = {
@@ -1129,7 +1129,9 @@ export default function NotesPage() {
                 });
                 
                 // Clean up the flag
-                localStorage.removeItem('auto_add_to_cs_vault');
+                if (typeof window !== 'undefined') {
+                  localStorage.removeItem('auto_add_to_cs_vault');
+                }
                 
                 // Automatically send to CS Vault
                 setTimeout(async () => {
@@ -1175,14 +1177,18 @@ export default function NotesPage() {
     } finally {
       setUploading(false);
       // Ensure flag is cleared
-      localStorage.removeItem('auto_add_to_cs_vault');
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('auto_add_to_cs_vault');
+      }
     }
   };
   
   const resetUploadForm = () => {
     setUploadFile(null); setUploadTitle(""); setUploadSummary(""); setUploadTags("");
     setUploadProgress(0); if (fileInputRef.current) fileInputRef.current.value = "";
-    localStorage.removeItem('auto_add_to_cs_vault');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('auto_add_to_cs_vault');
+    }
   };
 
   const handleDeleteFile = async () => {
@@ -2903,10 +2909,12 @@ export default function NotesPage() {
       setUploadDialogOpen(true);
       
       // Set a flag to automatically add to CS Vault if in CS tab
-      if (activeTab === "cs") {
-        localStorage.setItem('auto_add_to_cs_vault', 'true');
-      } else {
-        localStorage.removeItem('auto_add_to_cs_vault');
+      if (typeof window !== 'undefined') {
+        if (activeTab === "cs") {
+          localStorage.setItem('auto_add_to_cs_vault', 'true');
+        } else {
+          localStorage.removeItem('auto_add_to_cs_vault');
+        }
       }
     }
   };
@@ -4023,18 +4031,18 @@ export default function NotesPage() {
       
       {/* Upload Dialog - ensure all rounded-md */}
       <Dialog open={uploadDialogOpen} onOpenChange={(open) => {
-        if (!open) localStorage.removeItem('auto_add_to_cs_vault');
+        if (!open && typeof window !== 'undefined') localStorage.removeItem('auto_add_to_cs_vault');
         setUploadDialogOpen(open);
       }}>
         <DialogContent className="sm:max-w-md max-w-[95vw] rounded-md">
           <DialogHeader>
             <DialogTitle>
-              {localStorage.getItem('auto_add_to_cs_vault') === 'true' 
+              {(typeof window !== 'undefined' && localStorage.getItem('auto_add_to_cs_vault') === 'true')
                 ? "Upload Document to CS Agent" 
                 : "Upload Document"}
             </DialogTitle>
             <DialogDescription>
-              {localStorage.getItem('auto_add_to_cs_vault') === 'true'
+              {(typeof window !== 'undefined' && localStorage.getItem('auto_add_to_cs_vault') === 'true')
                 ? "This document will be automatically added to your CS Agent."
                 : "Add a new file to your collection."}
             </DialogDescription>
@@ -4097,7 +4105,7 @@ export default function NotesPage() {
               </div>
             )}
             
-            {localStorage.getItem('auto_add_to_cs_vault') === 'true' && (
+            {(typeof window !== 'undefined' && localStorage.getItem('auto_add_to_cs_vault') === 'true') && (
               <div className="flex items-center p-3 bg-purple-50 rounded-md border border-purple-100">
                 <Users className="h-4 w-4 text-purple-500 mr-2 flex-shrink-0" />
                 <p className="text-sm text-purple-700">
@@ -4118,7 +4126,7 @@ export default function NotesPage() {
             <Button 
               className={cn(
                 "rounded-md", 
-                localStorage.getItem('auto_add_to_cs_vault') === 'true' ? 
+                (typeof window !== 'undefined' && localStorage.getItem('auto_add_to_cs_vault') === 'true') ? 
                   "bg-purple-600 hover:bg-purple-700" : "",
                 !uploadFile ? "opacity-50 cursor-not-allowed" : ""
               )} 

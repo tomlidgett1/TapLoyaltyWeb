@@ -1,7 +1,7 @@
 "use client"
 
 import { redirect } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/auth-context"
@@ -33,7 +33,20 @@ const safelyGetDate = (dateField: any): Date => {
   }
 };
 
-export default function Home() {
+// Loading fallback component
+function HomeLoading() {
+  return (
+    <div className="flex items-center justify-center h-screen">
+      <div className="text-center">
+        <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto mb-4"></div>
+        <p>Loading...</p>
+      </div>
+    </div>
+  );
+}
+
+// Main component that uses useSearchParams
+function HomeContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
@@ -160,7 +173,7 @@ export default function Home() {
       }
       
       // Check if it's a Lightspeed callback by looking at the stored state
-      if (state === localStorage.getItem('lightspeed_new_state')) {
+      if (typeof window !== 'undefined' && state === localStorage.getItem('lightspeed_new_state')) {
         console.log('===== LIGHTSPEED CALLBACK STATE MATCH =====');
         console.log('URL state:', state);
         console.log('localStorage state:', localStorage.getItem('lightspeed_new_state'));
@@ -173,7 +186,7 @@ export default function Home() {
         
         handleLightspeedCallback();
         return; // Prevent immediate redirect
-      } else if (state && localStorage.getItem('lightspeed_new_state')) {
+      } else if (typeof window !== 'undefined' && state && localStorage.getItem('lightspeed_new_state')) {
         console.log('===== LIGHTSPEED CALLBACK STATE MISMATCH =====');
         console.log('URL state:', state);
         console.log('localStorage state:', localStorage.getItem('lightspeed_new_state'));
@@ -258,17 +271,19 @@ export default function Home() {
       }
       
       // Check if it's a Square callback
-      if (state === localStorage.getItem('square_state')) {
+      if (typeof window !== 'undefined' && state === localStorage.getItem('square_state')) {
         handleSquareCallback()
         return // Prevent immediate redirect
       }
       
-      console.log('OAuth callback detected but no matching state found in localStorage', {
-        availableLocalStorageKeys: Object.keys(localStorage),
-        squareStateExists: !!localStorage.getItem('square_state'),
-        lightspeedNewStateExists: !!localStorage.getItem('lightspeed_new_state'),
-        lightspeedNewState: localStorage.getItem('lightspeed_new_state')
-      })
+      if (typeof window !== 'undefined') {
+        console.log('OAuth callback detected but no matching state found in localStorage', {
+          availableLocalStorageKeys: Object.keys(localStorage),
+          squareStateExists: !!localStorage.getItem('square_state'),
+          lightspeedNewStateExists: !!localStorage.getItem('lightspeed_new_state'),
+          lightspeedNewState: localStorage.getItem('lightspeed_new_state')
+        })
+      }
     }
     
     // If not an OAuth callback or already processed, redirect to dashboard
@@ -284,4 +299,13 @@ export default function Home() {
       </div>
     </div>
   )
+}
+
+// Export the wrapped component
+export default function Home() {
+  return (
+    <Suspense fallback={<HomeLoading />}>
+      <HomeContent />
+    </Suspense>
+  );
 }

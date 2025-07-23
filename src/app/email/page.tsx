@@ -6285,7 +6285,13 @@ const EmailViewer = ({
                     disabled={isSummarizing}
                   >
                     {isSummarizing ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <Loader2 
+                        className="h-3 w-3 animate-spin" 
+                        style={{
+                          stroke: 'url(#orange-blue-gradient)',
+                          strokeWidth: 2
+                        }}
+                      />
                     ) : (
                       <MessageSquare 
                         className="h-3 w-3" 
@@ -6590,7 +6596,13 @@ const EmailViewer = ({
                           <DropdownMenuTrigger asChild>
                             <button className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-2 py-1.5 rounded-md transition-colors">
                               {isSummarizing ? (
-                                <Loader2 className="h-3 w-3 text-blue-500 animate-spin" strokeWidth="2" />
+                                <Loader2 
+                                  className="h-3 w-3 animate-spin" 
+                                  strokeWidth="2"
+                                  style={{
+                                    stroke: 'url(#orange-blue-gradient)'
+                                  }}
+                                />
                               ) : (
                                 <MoreHorizontal className="h-3 w-3 text-gray-500" strokeWidth="2" />
                               )}
@@ -6598,7 +6610,14 @@ const EmailViewer = ({
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-48">
                             <DropdownMenuItem onClick={() => onSummariseThread?.()}>
-                              <MessageSquare className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
+                              <MessageSquare 
+                                className="h-3 w-3 mr-2" 
+                                strokeWidth="2"
+                                style={{
+                                  stroke: 'url(#orange-blue-gradient)',
+                                  fill: 'none'
+                                }}
+                              />
                               <span className="text-xs">Summarise {selectedThread && selectedThread.count > 1 ? `Thread (${selectedThread.count})` : 'Email'}</span>
                             </DropdownMenuItem>
                           </DropdownMenuContent>

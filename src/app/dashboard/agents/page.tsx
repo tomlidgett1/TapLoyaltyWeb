@@ -55,7 +55,7 @@ import {
 export default function AgentsPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const [isIntegrationsOpen, setIsIntegrationsOpen] = useState(false)
   const [isRequestAgentOpen, setIsRequestAgentOpen] = useState(false)
   const [isCustomerServiceModalOpen, setIsCustomerServiceModalOpen] = useState(false)
@@ -748,12 +748,44 @@ export default function AgentsPage() {
     setConnectingAgents(prev => new Set([...prev, agent.id]))
     
     try {
+      // Check if auth is still loading
+      if (authLoading) {
+        console.log('⏳ [handleCustomerServiceConnect] Auth is still loading, waiting...')
+        toast({
+          title: "Please Wait",
+          description: "Authentication is still loading. Please try again in a moment.",
+          variant: "destructive"
+        })
+        return
+      }
+      
       // Get merchantId from authenticated user
-      if (!user?.uid) {
-        throw new Error('User not authenticated')
+      console.log('🔍 [handleCustomerServiceConnect] User object:', user)
+      console.log('🔍 [handleCustomerServiceConnect] User UID:', user?.uid)
+      console.log('🔍 [handleCustomerServiceConnect] Auth loading state:', authLoading)
+      
+      if (!user) {
+        console.error('❌ [handleCustomerServiceConnect] User object is null or undefined')
+        toast({
+          title: "Authentication Error",
+          description: "Please sign in to connect the Customer Service Agent.",
+          variant: "destructive"
+        })
+        return
+      }
+      
+      if (!user.uid) {
+        console.error('❌ [handleCustomerServiceConnect] User UID is missing')
+        toast({
+          title: "Authentication Error",
+          description: "User ID is missing. Please sign in again.",
+          variant: "destructive"
+        })
+        return
       }
       
       const merchantId = user.uid
+      console.log('🔍 [handleCustomerServiceConnect] Using merchantId:', merchantId)
       const isEnrolled = enrolledAgents['customer-service']?.status === 'active'
       
       if (isEnrolled) {
@@ -780,16 +812,24 @@ export default function AgentsPage() {
         })
       } else {
         // Handle connect
+        console.log('🔍 [handleCustomerServiceConnect] Making API call with merchantId:', merchantId)
+        const requestBody = { merchantId }
+        console.log('🔍 [handleCustomerServiceConnect] Request body:', requestBody)
+        
         const response = await fetch('/api/enrollGmailTrigger', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ merchantId })
+          body: JSON.stringify(requestBody)
         })
 
+        console.log('🔍 [handleCustomerServiceConnect] Response status:', response.status)
+        console.log('🔍 [handleCustomerServiceConnect] Response ok:', response.ok)
+        
         if (response.ok) {
           const result = await response.json()
+          console.log('🔍 [handleCustomerServiceConnect] Response result:', result)
           
           // Check if agent document already exists to preserve settings
           const agentEnrollmentRef = doc(db, 'merchants', merchantId, 'agentsenrolled', 'customer-service')
@@ -853,8 +893,20 @@ export default function AgentsPage() {
           // Close the modal
           setIsCustomerServiceModalOpen(false)
         } else {
-          const error = await response.json()
-          throw new Error(error.error || error.message || 'Failed to enroll Gmail trigger')
+          console.error('❌ [handleCustomerServiceConnect] API call failed with status:', response.status)
+          let errorMessage = 'Failed to enroll Gmail trigger'
+          
+          try {
+            const error = await response.json()
+            console.error('❌ [handleCustomerServiceConnect] Error response:', error)
+            errorMessage = error.error || error.message || errorMessage
+          } catch (parseError) {
+            console.error('❌ [handleCustomerServiceConnect] Failed to parse error response:', parseError)
+            const responseText = await response.text()
+            console.error('❌ [handleCustomerServiceConnect] Raw error response:', responseText)
+          }
+          
+          throw new Error(errorMessage)
         }
       }
     } catch (error) {
@@ -1517,10 +1569,18 @@ export default function AgentsPage() {
     
     // Set schedule if available
     if (agent.settings?.schedule) {
+      const frequency = agent.settings.schedule.frequency || ''
+      let days = agent.settings.schedule.days || []
+      
+      // Ensure days are correctly set for daily frequency
+      if (frequency === 'daily' && (!days || days.length === 0)) {
+        days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+      }
+      
       setCreateAgentSchedule({
-        frequency: agent.settings.schedule.frequency || '',
+        frequency,
         time: agent.settings.schedule.time || '12:00',
-        days: agent.settings.schedule.days || [],
+        days,
         selectedDay: agent.settings.schedule.selectedDay || ''
       })
     } else {
@@ -4355,76 +4415,7 @@ export default function AgentsPage() {
                               </TooltipContent>
                             </Tooltip>
 
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={async () => {
-                              if (!user?.uid) {
-                              toast({
-                                  title: "Authentication Required",
-                                  description: "Please sign in to generate agent ideas.",
-                                  variant: "destructive"
-                                })
-                                return
-                              }
 
-                              try {
-                                      setIsLoadingAgentIdeas(true)
-                                
-                                toast({
-                                  title: "Generating Agent Ideas",
-                                  description: "AI is analysing your business and available tools...",
-                                })
-
-                                const functions = getFunctions()
-                                const generateAgentIdeas = httpsCallable(functions, 'generateAgentIdeas')
-                                
-                                const result = await generateAgentIdeas({
-                                  merchantId: user.uid
-                                })
-
-                                const data = result.data as any
-
-                                setAgentIdeas(data)
-
-                                if (data && data.agentIdeas) {
-                                  toast({
-                                    title: "Agent Ideas Generated!",
-                                    description: `Found ${data.agentIdeas.length} agent ideas for your business.`,
-                                  })
-                                } else {
-                                  toast({
-                                    title: "Ideas Generated",
-                                    description: "Agent ideas have been generated successfully.",
-                                  })
-                                }
-                              } catch (error) {
-                                      console.error('Error generating agent ideas:', error)
-                                toast({
-                                  title: "Generation Failed",
-                                  description: error instanceof Error ? error.message : "Failed to generate agent ideas. Please try again.",
-                                  variant: "destructive"
-                                })
-                              } finally {
-                                      setIsLoadingAgentIdeas(false)
-                              }
-                            }}
-                            disabled={isLoadingAgentIdeas}
-                                  className="rounded-md h-8 w-8 p-0"
-                          >
-                            {isLoadingAgentIdeas ? (
-                              <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
-                            ) : (
-                              <Brain className="h-4 w-4" />
-                            )}
-                          </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Generate Ideas - Get AI agent suggestions</p>
-                              </TooltipContent>
-                            </Tooltip>
                           </>
                         )}
 
@@ -4452,7 +4443,7 @@ export default function AgentsPage() {
                                   setCreateAgentSchedule(prev => ({ 
                                     ...prev, 
                                     frequency: value,
-                                    days: value === 'daily' ? [] : prev.days,
+                                    days: value === 'daily' ? ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] : prev.days,
                                     selectedDay: value === 'weekly' ? 'monday' : prev.selectedDay
                                   }))
                                 }
@@ -4685,19 +4676,35 @@ export default function AgentsPage() {
                                   // Check if schedule information is provided in the response
                                   if (data.executionPlan && data.executionPlan.schedule) {
                                     console.log('✅ [CreateAgent] Found schedule information:', data.executionPlan.schedule)
+                                    const frequency = data.executionPlan.schedule.frequency || 'weekly'
+                                    let days = data.executionPlan.schedule.days || ['monday']
+                                    
+                                    // Ensure days array is populated correctly for daily frequency
+                                    if (frequency === 'daily' && (!days || days.length === 0)) {
+                                      days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+                                    }
+                                    
                                     setCreateAgentSchedule({
-                                      frequency: data.executionPlan.schedule.frequency || 'weekly',
+                                      frequency,
                                       time: data.executionPlan.schedule.time || '07:00',
-                                      days: data.executionPlan.schedule.days || ['monday'],
-                                      selectedDay: data.executionPlan.schedule.days && data.executionPlan.schedule.days[0] ? data.executionPlan.schedule.days[0] : 'monday'
+                                      days,
+                                      selectedDay: days[0] || 'monday'
                                     })
                                   } else if (data.schedule) {
                                     console.log('✅ [CreateAgent] Found direct schedule information:', data.schedule)
+                                    const frequency = data.schedule.frequency || 'weekly'
+                                    let days = data.schedule.days || ['monday']
+                                    
+                                    // Ensure days array is populated correctly for daily frequency
+                                    if (frequency === 'daily' && (!days || days.length === 0)) {
+                                      days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+                                    }
+                                    
                                     setCreateAgentSchedule({
-                                      frequency: data.schedule.frequency || 'weekly',
+                                      frequency,
                                       time: data.schedule.time || '07:00',
-                                      days: data.schedule.days || ['monday'],
-                                      selectedDay: data.schedule.days && data.schedule.days[0] ? data.schedule.days[0] : 'monday'
+                                      days,
+                                      selectedDay: days[0] || 'monday'
                                     })
                                   }
                                 
@@ -5199,6 +5206,11 @@ Describe the main purpose and goal of your agent...
                             })
                             setIsCreatingAgent(false)
                             return
+                          }
+                          
+                          // Ensure days array is populated correctly for daily frequency
+                          if (createAgentSchedule.frequency === 'daily' && (!createAgentSchedule.days || createAgentSchedule.days.length === 0)) {
+                            createAgentSchedule.days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
                           }
                           
                           // Validate agentCanvasContent

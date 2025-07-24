@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { useToast } from "@/components/ui/use-toast"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
@@ -92,7 +93,10 @@ import {
   CheckCircle,
   Clock,
   Filter,
-  NotebookPen
+  NotebookPen,
+  ClipboardCheck,
+  AlignLeft,
+  Code
 } from "lucide-react"
 import { RiRobot3Line } from "react-icons/ri"
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
@@ -101,7 +105,7 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import GradientText from "@/components/GradientText"
 import { db } from "@/lib/firebase"
-import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnapshot, updateDoc, setDoc, addDoc } from "firebase/firestore"
+import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnapshot, updateDoc, setDoc, addDoc, Timestamp } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
 import { functions } from "@/lib/firebase"
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"
@@ -1142,6 +1146,7 @@ const formatPreviewTime = (timestamp: any) => {
 }
 
 export default function EmailPage() {
+  const { toast } = useToast()
   const { user } = useAuth()
   const router = useRouter()
   
@@ -1151,6 +1156,153 @@ export default function EmailPage() {
   // Request queue and debouncing utilities
   const [isProcessing, setIsProcessing] = useState(false);
   const queue = useRef<Array<() => Promise<any>>>([]);
+  
+  // Agent tab states
+  const [agentTasks, setAgentTasks] = useState<any[]>([])
+  const [selectedAgentTask, setSelectedAgentTask] = useState<any>(null)
+  const [agentTasksLoading, setAgentTasksLoading] = useState(false)
+  const [agentSearchQuery, setAgentSearchQuery] = useState("")
+  const [isSendingAgentResponse, setIsSendingAgentResponse] = useState(false)
+  const [agentResponseSuccess, setAgentResponseSuccess] = useState<string | null>(null)
+  
+  // Filter agent tasks based on search query
+  const filteredAgentTasks = useMemo(() => {
+    return agentTasks.filter(task => 
+      agentSearchQuery === "" || 
+      task.emailTitle?.toLowerCase().includes(agentSearchQuery.toLowerCase()) ||
+      task.shortSummary?.toLowerCase().includes(agentSearchQuery.toLowerCase()) ||
+      task.conversationSummary?.toLowerCase().includes(agentSearchQuery.toLowerCase())
+    );
+  }, [agentTasks, agentSearchQuery]);
+  
+  // Fetch agent tasks from Firestore
+  const fetchAgentTasks = async () => {
+    if (!user?.uid) return;
+    
+    try {
+      setAgentTasksLoading(true);
+      console.log("Fetching agent tasks from Firestore for merchant:", user.uid);
+      
+      const agentTasksRef = collection(db, 'merchants', user.uid, 'agentinbox');
+      const agentTasksQuery = query(
+        agentTasksRef,
+        orderBy('timestamp', 'desc'),
+        limit(50) // Limit to 50 tasks
+      );
+      
+      const agentTasksSnapshot = await getDocs(agentTasksQuery);
+      console.log(`📊 Found ${agentTasksSnapshot.size} agent tasks`);
+      
+      const tasks = agentTasksSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      setAgentTasks(tasks);
+    } catch (error) {
+      console.error("Error fetching agent tasks:", error);
+    } finally {
+      setAgentTasksLoading(false);
+    }
+  };
+  
+  // Handle agent task selection
+  const handleAgentTaskSelect = (task: any) => {
+    console.log("Selected agent task:", task.id);
+    setSelectedAgentTask(task);
+  };
+  
+  // Handle sending agent response
+  const handleSendAgentResponse = async () => {
+    if (!user?.uid || !selectedAgentTask || !selectedAgentTask.response) return;
+    
+    try {
+      setIsSendingAgentResponse(true);
+      
+      // Get the necessary data from the selected agent task
+      const threadId = selectedAgentTask.threadId;
+      const response = selectedAgentTask.response;
+      const recipient = selectedAgentTask.sender || "customer@example.com";
+      
+      // Get the merchant's store name from Firestore for the email signature
+      let businessName = "Customer Support";
+      try {
+        const merchantDoc = await getDoc(doc(db, 'merchants', user.uid));
+        if (merchantDoc.exists()) {
+          // Prioritize merchantName field, falling back to businessName or storeName
+          const name = merchantDoc.data().merchantName || 
+                      merchantDoc.data().businessName || 
+                      merchantDoc.data().storeName || 
+                      "Customer Support";
+          businessName = `${name} Inquiry`;
+        }
+      } catch (storeNameError) {
+        console.error("Error fetching store name:", storeNameError);
+        // Continue with default name
+        businessName = "Customer Support Inquiry";
+      }
+      
+      // Call the same replyToGmailThread function used in the email tab
+      const replyToGmailThread = httpsCallable(functions, 'replyToGmailThread');
+      
+      const replyData: any = {
+        merchantId: user.uid,
+        message_body: response,
+        html_message_body: response, // HTML format of the message body
+        recipient_email: recipient,
+        thread_id: threadId,
+        is_html: true,
+        fromName: businessName
+      };
+      
+      const result = await replyToGmailThread(replyData);
+      
+      console.log('Agent response sent successfully:', result.data);
+      
+      // Update the agent task in Firestore to mark it as sent
+      const agentTaskRef = doc(db, `merchants/${user.uid}/agentinbox/${selectedAgentTask.id}`);
+      await updateDoc(agentTaskRef, {
+        status: "approved",
+        sentAt: Timestamp.now(),
+        sentBy: user.uid
+      });
+      
+      // Update the UI
+      setAgentTasks(prev => 
+        prev.filter(task => task.id !== selectedAgentTask.id)
+      );
+      
+      // Show success message
+      setAgentResponseSuccess("Response sent successfully!");
+      setTimeout(() => setAgentResponseSuccess(null), 3000);
+      
+      // Clear selected task
+      setSelectedAgentTask(null);
+      
+    } catch (error) {
+      console.error("Error sending agent response:", error);
+      
+      // Show specific error message if available
+      let errorMessage = 'Failed to send response';
+      if (error instanceof Error) {
+        if (error.message.includes('Gmail connection')) {
+          errorMessage = 'Please check your Gmail connection in Settings > Integrations';
+        } else if (error.message.includes('authentication')) {
+          errorMessage = 'Authentication error. Please try signing in again.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSendingAgentResponse(false);
+    }
+  };
   
   const addToQueue = useCallback((request: () => Promise<any>) => {
     queue.current.push(request);
@@ -2054,10 +2206,13 @@ ${content}`;
             const mostRecentEmail = sortedEmails[0];
             mostRecentEmailRead = mostRecentEmail?.data?.read === true;
             
-            // Extract content from the most recent email
+            // Extract content from the most recent email - ALWAYS use payload.data.preview.body from chain
             const messageData = mostRecentEmail?.data;
             if (messageData) {
-              if (messageData.htmlMessage) {
+              // Always prioritize payload.data.preview.body from the chain subcollection
+              if (messageData.payload?.data?.preview?.body) {
+                mostRecentContent = messageData.payload.data.preview.body;
+              } else if (messageData.htmlMessage) {
                 mostRecentContent = messageData.htmlMessage;
               } else if (messageData.payload) {
                 try {
@@ -2103,9 +2258,8 @@ ${content}`;
           senderName = latestSender
         }
         
-        // Create preview text - prioritize payload.data.preview.body, fallback to extracted content
-        let previewContent = threadData.payload?.data?.preview?.body || mostRecentContent;
-        const previewText = createPreviewText(previewContent);
+        // Create preview text - ALWAYS use content from chain subcollection, never thread-level data
+        const previewText = createPreviewText(mostRecentContent);
         
         // Create thread object for left panel display
         const threadObj = {
@@ -2115,7 +2269,7 @@ ${content}`;
           email: senderEmail,
           subject: subject,
           preview: previewText,
-          content: previewContent || "Click to view thread messages",
+          content: mostRecentContent || "Click to view thread messages",
           time: latestReceivedAt,
           read: mostRecentEmailRead, // Use actual read status from most recent email
           hasAttachment: hasAttachment,
@@ -2133,7 +2287,7 @@ ${content}`;
             email: senderEmail,
             subject: subject,
             preview: previewText,
-            content: previewContent || "Click to view thread messages",
+            content: "Click to view thread messages",
             time: latestReceivedAt,
             read: mostRecentEmailRead,
             hasAttachment: hasAttachment
@@ -3028,6 +3182,11 @@ ${content}`;
           }
         }
 
+        // Create preview text from payload.data.preview.body if available
+                  const previewText = messageData.payload?.data?.preview?.body 
+            ? createPreviewText(messageData.payload.data.preview.body)
+            : createPreviewText(content || "");
+          
         return {
           id: doc.id,
           threadId: thread.threadId,
@@ -3036,13 +3195,15 @@ ${content}`;
           to: toInfo,
           subject: subject,
           content: content || "No content available",
+          preview: previewText,
           receivedAt: messageData.receivedAt,
           repliedAt: messageData.repliedAt,
           time: messageData.receivedAt || messageData.repliedAt || messageData.processedAt,
           read: messageData.read === true, // Explicitly check for true, default to false (unread)
           hasAttachment: extractAttachments(messageData).length > 0,
           folder: "inbox",
-          rawData: messageData
+          rawData: messageData,
+          payload: messageData.payload // Include payload for access to preview data
         }
       })
       
@@ -3419,6 +3580,10 @@ ${content}`;
                         onClick={() => {
                           const view = 'agent';
                           setCurrentView(view as any);
+                          // Fetch agent tasks when switching to agent view
+                          if (user?.uid) {
+                            fetchAgentTasks();
+                          }
                         }}
                       >
                         <RiRobot3Line size={15} />
@@ -4089,7 +4254,12 @@ ${content}`;
                             </div>
                             <div className={`text-xs truncate ${!email.read ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
                               {(() => {
-                                // Use htmlMessage first, fallback to content
+                                // First try to use payload.data.preview.body if available
+                                if (email.payload?.data?.preview?.body) {
+                                  return createPreviewText(email.payload.data.preview.body, 60);
+                                }
+                                
+                                // Otherwise use htmlMessage or content
                                 const htmlContent = email.htmlMessage || email.content || '';
                                 if (!htmlContent) return 'No preview available...';
                                 
@@ -4467,47 +4637,118 @@ ${content}`;
               className="bg-white rounded-xl shadow-lg border border-gray-100 flex flex-col h-full mr-1"
               style={{ width: `${leftPanelWidth}%` }}
             >
+              {/* Search Bar */}
               <div className="flex-shrink-0 p-3 border-b border-gray-200 bg-white rounded-t-xl">
-                <h2 className="text-lg font-medium text-gray-900 mb-2">Agent Tasks</h2>
-                <div className="text-sm text-gray-500">
-                  Tasks and actions requiring approval
+                <div className="relative mb-3">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
+                    placeholder="Search agent tasks..."
+                    className="pl-10 pr-8"
+                    value={agentSearchQuery}
+                    onChange={(e) => setAgentSearchQuery(e.target.value)}
+                  />
+                  {agentSearchQuery && (
+                    <button
+                      onClick={() => setAgentSearchQuery("")}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                
+                {/* Filter Pills */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors w-fit bg-blue-50 text-blue-700 border-blue-200"
+                  >
+                    All
+                  </button>
+                  <button
+                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors w-fit bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                  >
+                    <div className="h-1.5 w-1.5 rounded-full flex-shrink-0 bg-green-500"></div>
+                    Customer Inquiries
+                  </button>
                 </div>
               </div>
               
-              <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar rounded-bl-xl">
-                <div className="p-4">
-                  <div className="text-center text-gray-500 py-8">
-                    <RiRobot3Line className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <h3 className="text-lg font-medium text-gray-700 mb-2">No agent tasks yet</h3>
-                    <p className="text-sm mb-4">Agent actions will appear here for your approval</p>
-                    
-                    {/* Sample task types */}
-                    <div className="text-left max-w-sm mx-auto space-y-2">
-                      <p className="text-xs font-medium text-gray-600 mb-3">Upcoming task types:</p>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          <Reply className="h-3 w-3" />
-                          <span>Email responses awaiting approval</span>
+              {/* Agent Tasks List */}
+              <div className="flex-1 overflow-y-auto scrollbar-thin">
+                {agentTasksLoading ? (
+                  <div className="flex flex-col items-center justify-center h-full">
+                    <Loader2 className="h-6 w-6 text-gray-400 animate-spin" />
+                    <p className="text-sm text-gray-500 mt-2">Loading agent tasks...</p>
+                  </div>
+                ) : agentTasks.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                    <RiRobot3Line className="h-12 w-12 text-gray-300 mb-3" />
+                    <h3 className="text-lg font-medium text-gray-700">No Agent Tasks</h3>
+                    <p className="text-sm text-gray-500 max-w-xs mt-1">
+                      Agent tasks will appear here when your email agents process incoming messages.
+                    </p>
+                  </div>
+                ) : filteredAgentTasks.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                    <Search className="h-12 w-12 text-gray-300 mb-3" />
+                    <h3 className="text-lg font-medium text-gray-700">No Matching Tasks</h3>
+                    <p className="text-sm text-gray-500 max-w-xs mt-1">
+                      No agent tasks match your search query. Try a different search term.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-200">
+                    {filteredAgentTasks.map((task) => (
+                      <div
+                        key={task.id}
+                        className={`flex items-start gap-1.5 py-2 pr-2 pl-1.5 cursor-pointer ${
+                          selectedAgentTask?.id === task.id
+                            ? 'bg-blue-100' 
+                            : 'bg-white hover:bg-gray-50'
+                        }`}
+                        onClick={() => handleAgentTaskSelect(task)}
+                      >
+                        <div className="w-5 flex justify-center items-start flex-shrink-0 pt-0.5">
+                          <div className="flex flex-col items-center gap-1">
+                            {task.classification?.isCustomerInquiry ? (
+                              <div className="h-2 w-2 bg-green-500 rounded-full flex-shrink-0 shadow-sm"></div>
+                            ) : (
+                              <div className="h-2 w-2 bg-gray-300 rounded-full flex-shrink-0"></div>
+                            )}
+                            {task.isOngoingConversation && (
+                              <div className="h-2 w-2 bg-blue-500 rounded-full flex-shrink-0 shadow-sm"></div>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          <Users className="h-3 w-3" />
-                          <span>Customer service actions</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          <WandSparkles className="h-3 w-3" />
-                          <span>Automated task completions</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          <Shield className="h-3 w-3" />
-                          <span>Security and compliance checks</span>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm truncate font-medium text-gray-900">
+                              {task.emailTitle || "Agent Task"}
+                            </span>
+                            {task.isOngoingConversation && (
+                              <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200 w-fit">
+                                Thread
+                              </span>
+                            )}
+                            <span className="text-xs ml-auto text-gray-500">
+                              {task.timestamp && formatPreviewTime(task.timestamp.__time__ ? new Date(task.timestamp.__time__) : task.timestamp.toDate())}
+                            </span>
+                          </div>
+                          <div className="text-sm truncate text-gray-700">
+                            {task.threadId || task.messageId || "No ID"}
+                          </div>
+                          <div className="text-xs truncate text-gray-500">
+                            {task.shortSummary || task.conversationSummary || "No summary available"}
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
-                </div>
+                )}
               </div>
             </div>
-
+            
             {/* Draggable Divider */}
             <div 
               className={`w-1 bg-transparent hover:bg-gray-200 cursor-col-resize transition-colors relative ${
@@ -4522,19 +4763,193 @@ ${content}`;
               className="bg-white rounded-xl shadow-lg border border-gray-100 flex flex-col h-full overflow-hidden ml-1"
               style={{ width: `${100 - leftPanelWidth}%` }}
             >
-              <div className="flex-shrink-0 p-3 border-b border-gray-200 bg-white rounded-t-xl">
-                <h2 className="text-lg font-medium text-gray-900">Task Details</h2>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar rounded-bl-xl">
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center text-gray-500">
-                    <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <h3 className="text-lg font-medium text-gray-700 mb-2">Select a task to view details</h3>
-                    <p className="text-sm">Choose an agent task from the left panel to see its details and actions</p>
+              {selectedAgentTask ? (
+                <div className="h-full flex flex-col">
+                  {/* Header */}
+                  <div className="p-4 border-b">
+                    <h2 className="text-xl font-semibold mb-2 flex items-center">
+                      {selectedAgentTask.emailTitle || "Agent Task"}
+                      {selectedAgentTask.classification?.isCustomerInquiry && (
+                        <Badge variant="outline" className="ml-2 bg-green-50 text-green-700 hover:bg-green-100 border-green-200">
+                          <User className="h-3 w-3 mr-1" />
+                          Customer Inquiry
+                        </Badge>
+                      )}
+                      {selectedAgentTask.isOngoingConversation && (
+                        <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200">
+                          <MessageSquare className="h-3 w-3 mr-1" />
+                          Ongoing Thread
+                        </Badge>
+                      )}
+                    </h2>
+                    <div className="flex flex-col md:flex-row md:justify-between gap-2">
+                      <div>
+                        <div className="font-medium text-sm">Thread ID: {selectedAgentTask.threadId || "N/A"}</div>
+                        <div className="text-xs text-muted-foreground">Message ID: {selectedAgentTask.messageId || "N/A"}</div>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {selectedAgentTask.timestamp && 
+                          formatMelbourneTime(
+                            selectedAgentTask.timestamp.__time__ 
+                              ? new Date(selectedAgentTask.timestamp.__time__) 
+                              : selectedAgentTask.timestamp.toDate()
+                          )
+                        }
+                      </div>
+                    </div>
                   </div>
+                  
+                  {/* Content */}
+                  <div className="flex-1 overflow-y-auto p-4">
+                    {/* Classification */}
+                    {selectedAgentTask.classification && (
+                      <div className="mb-6">
+                        <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+                          <ClipboardCheck className="h-4 w-4 text-green-600" />
+                          Classification
+                        </h3>
+                        <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="font-medium text-sm">Is Customer Inquiry:</span>
+                                                                                      <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ${
+                               selectedAgentTask.classification.isCustomerInquiry 
+                                 ? "bg-green-50 text-green-700 border border-green-200" 
+                                 : "bg-gray-50 text-gray-700 border border-gray-200"
+                             }`}>
+                               {selectedAgentTask.classification.isCustomerInquiry ? "Yes" : "No"}
+                              </span>
+                          </div>
+                          {selectedAgentTask.classification.reasoning && (
+                            <div className="text-sm text-gray-600">
+                              <span className="font-medium">Reasoning:</span> {selectedAgentTask.classification.reasoning}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Summary */}
+                    {(selectedAgentTask.shortSummary || selectedAgentTask.conversationSummary) && (
+                      <div className="mb-6">
+                        <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+                          <AlignLeft className="h-4 w-4 text-blue-600" />
+                          Summary
+                          {selectedAgentTask.isOngoingConversation && (
+                            <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200 w-fit">
+                              Ongoing Thread
+                            </span>
+                          )}
+                        </h3>
+                        <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                          {selectedAgentTask.shortSummary && (
+                            <div className="mb-2">
+                              <span className="font-medium text-sm">Short Summary:</span>
+                              <p className="text-sm text-gray-600 mt-1">{selectedAgentTask.shortSummary}</p>
+                            </div>
+                          )}
+                          {selectedAgentTask.conversationSummary && (
+                            <div className="mb-2">
+                              <span className="font-medium text-sm">Conversation Summary:</span>
+                              <p className="text-sm text-gray-600 mt-1">{selectedAgentTask.conversationSummary}</p>
+                            </div>
+                          )}
+                          {selectedAgentTask.isOngoingConversation && selectedAgentTask.threadSummary && (
+                            <div className="mt-4 p-3 bg-blue-50 rounded-md border border-blue-200">
+                              <div className="flex items-center gap-2 mb-1">
+                                <MessageSquare className="h-3.5 w-3.5 text-blue-600" />
+                                <span className="text-xs font-medium text-blue-700">Thread History:</span>
+                              </div>
+                              <p className="text-xs text-blue-700">
+                                {selectedAgentTask.threadSummary}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Agent Response */}
+                    {selectedAgentTask.response && (
+                      <div className="mb-6">
+                        <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+                          <MessageSquare className="h-4 w-4 text-purple-600" />
+                          Agent Response
+                        </h3>
+                        <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                          {isHtmlContent(selectedAgentTask.response) ? (
+                            <div 
+                              className="text-sm text-gray-600 email-content prose prose-sm max-w-none"
+                              dangerouslySetInnerHTML={{ 
+                                __html: DOMPurify.sanitize(selectedAgentTask.response) 
+                              }}
+                            />
+                          ) : (
+                            <div className="whitespace-pre-wrap text-sm text-gray-600">
+                              {selectedAgentTask.response}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Debug Information */}
+                    {selectedAgentTask.debug && selectedAgentTask.debug.length > 0 && (
+                      <div>
+                        <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+                          <Code className="h-4 w-4 text-gray-600" />
+                          Debug Information
+                        </h3>
+                        <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                          <ul className="text-xs text-gray-600 space-y-1">
+                            {selectedAgentTask.debug.map((item: string, index: number) => (
+                              <li key={index} className="font-mono">{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Actions */}
+                  <div className="p-3 border-t flex justify-end gap-2">
+                    <Button variant="outline" size="sm" className="text-xs">
+                      <Archive className="h-3 w-3 mr-1" />
+                      Archive
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      className="text-xs bg-blue-500 hover:bg-blue-600"
+                      onClick={handleSendAgentResponse}
+                      disabled={isSendingAgentResponse || !selectedAgentTask?.response}
+                    >
+                      {isSendingAgentResponse ? (
+                        <>
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="h-3 w-3 mr-1" />
+                          Send Response
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  {agentResponseSuccess && (
+                    <div className="absolute bottom-16 left-1/2 transform -translate-x-1/2 bg-green-100 text-green-800 px-4 py-2 rounded-md text-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      {agentResponseSuccess}
+                    </div>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                  <MessageSquare className="h-12 w-12 text-gray-300 mb-3" />
+                  <h3 className="text-lg font-medium text-gray-700">No Task Selected</h3>
+                  <p className="text-sm text-gray-500 max-w-xs mt-1">
+                    Select a task from the list to view details and agent responses.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}

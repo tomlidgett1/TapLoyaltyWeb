@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { useToast } from "@/components/ui/use-toast"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
@@ -54,6 +55,7 @@ import {
   ReplyAll,
   ArrowLeft,
   ArrowRight,
+  Briefcase,
   Inbox,
   Edit3,
   Shield,
@@ -71,6 +73,7 @@ import {
   AlertCircle,
   Palette,
   Lightbulb,
+  Smile,
   Wand2,
   Sparkles,
   UploadCloud,
@@ -91,22 +94,30 @@ import {
   MailPlus,
   CheckCircle,
   Clock,
-  Filter
+  Filter,
+  NotebookPen,
+  ClipboardCheck,
+  AlignLeft,
+  Code,
+  XCircle,
+  List
 } from "lucide-react"
 import { RiRobot3Line } from "react-icons/ri"
-import React, { useState, useEffect, useRef, useMemo } from "react"
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import GradientText from "@/components/GradientText"
 import { db } from "@/lib/firebase"
-import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnapshot, updateDoc, setDoc, addDoc } from "firebase/firestore"
+import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnapshot, updateDoc, setDoc, addDoc, Timestamp, QueryConstraint } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
 import { functions } from "@/lib/firebase"
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"
 import { formatMelbourneTime } from "@/lib/date-utils"
 import { formatDistanceToNow } from "date-fns"
 import { cn } from "@/lib/utils"
+
+
 
 // Email Chip Component for displaying email addresses with light box
 const EmailChip = ({ email, onRemove }: { email: string; onRemove?: (email: string) => void }) => {
@@ -1139,11 +1150,252 @@ const formatPreviewTime = (timestamp: any) => {
 }
 
 export default function EmailPage() {
+  const { toast } = useToast()
   const { user } = useAuth()
   const router = useRouter()
   
   // Firebase function for generating email responses
   const generateEmailResponse = httpsCallable(functions, 'generateEmailResponse');
+  
+  // Request queue and debouncing utilities
+  const [isProcessing, setIsProcessing] = useState(false);
+  const queue = useRef<Array<() => Promise<any>>>([]);
+  
+  // Agent tab states
+  const [agentTasks, setAgentTasks] = useState<any[]>([])
+  const [selectedAgentTask, setSelectedAgentTask] = useState<any>(null)
+  const [agentTasksLoading, setAgentTasksLoading] = useState(false)
+  const [agentSearchQuery, setAgentSearchQuery] = useState("")
+  const [isSendingAgentResponse, setIsSendingAgentResponse] = useState(false)
+  const [agentResponseSuccess, setAgentResponseSuccess] = useState<string | null>(null)
+  const [agentTaskStatusFilter, setAgentTaskStatusFilter] = useState<"pending" | "completed">("pending")
+  const [activeTab, setActiveTab] = useState<"response" | "summary">("response")
+  const [tabChanging, setTabChanging] = useState(false)
+  const [isEditingResponse, setIsEditingResponse] = useState(false)
+  const [editedResponse, setEditedResponse] = useState("")
+  const [editPrompt, setEditPrompt] = useState("")
+  const [isUsingAiEdit, setIsUsingAiEdit] = useState(false)
+  const [isGeneratingEdit, setIsGeneratingEdit] = useState(false)
+  
+  // Filter agent tasks based on search query
+  const filteredAgentTasks = useMemo(() => {
+    return agentTasks.filter(task => 
+      agentSearchQuery === "" || 
+      task.emailTitle?.toLowerCase().includes(agentSearchQuery.toLowerCase()) ||
+      task.shortSummary?.toLowerCase().includes(agentSearchQuery.toLowerCase()) ||
+      task.conversationSummary?.toLowerCase().includes(agentSearchQuery.toLowerCase())
+    );
+  }, [agentTasks, agentSearchQuery]);
+  
+  // Fetch agent tasks from Firestore
+  const fetchAgentTasks = async (statusFilter: "pending" | "completed" = agentTaskStatusFilter) => {
+    if (!user?.uid) return;
+    
+    try {
+      setAgentTasksLoading(true);
+      console.log("Fetching agent tasks from Firestore for merchant:", user.uid, "with status filter:", statusFilter);
+      
+      const agentTasksRef = collection(db, 'merchants', user.uid, 'agentinbox');
+      
+      // Create query constraints based on status filter
+      let constraints: QueryConstraint[] = [
+        orderBy('timestamp', 'desc'),
+        limit(50) // Limit to 50 tasks
+      ];
+      
+      if (statusFilter === "pending") {
+        // For the Inbox tab, we want to show all tasks that aren't completed
+        // But we can't directly check for != "approved" in Firestore
+        // So we'll fetch all tasks and filter client-side
+        // No additional constraint needed for inbox view
+      } else if (statusFilter === "completed") {
+        // Completed: Show only approved/sent tasks
+        constraints.push(where('status', '==', "approved"));
+      }
+      
+      const agentTasksQuery = query(agentTasksRef, ...constraints);
+      const agentTasksSnapshot = await getDocs(agentTasksQuery);
+      console.log(`📊 Found ${agentTasksSnapshot.size} agent tasks with status: ${statusFilter}`);
+      
+      let tasks = agentTasksSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        // Ensure status is defined for filtering
+        status: doc.data().status || "pending"
+      }));
+      
+      // Apply client-side filtering for inbox tab
+      if (statusFilter === "pending") {
+        // For inbox tab, show all tasks that aren't approved/completed
+        tasks = tasks.filter(task => task.status !== "approved");
+        console.log(`📊 Filtered to ${tasks.length} non-approved tasks for inbox tab`);
+      }
+      
+      setAgentTasks(tasks);
+      setAgentTaskStatusFilter(statusFilter);
+    } catch (error) {
+      console.error("Error fetching agent tasks:", error);
+    } finally {
+      setAgentTasksLoading(false);
+    }
+  };
+  
+  // Handle agent task selection
+  const handleAgentTaskSelect = (task: any) => {
+    console.log("Selected agent task:", task.id);
+    setSelectedAgentTask(task);
+    setActiveTab("response"); // Default to response tab when selecting a task
+  };
+  
+  // Handle tab change with animation
+  const handleTabChange = (tab: "response" | "summary") => {
+    if (tab === activeTab) return;
+    
+    setTabChanging(true);
+    setTimeout(() => {
+      setActiveTab(tab);
+      setTimeout(() => {
+        setTabChanging(false);
+      }, 50);
+    }, 150);
+  };
+  
+  // Handle sending agent response
+  const handleSendAgentResponse = async () => {
+    if (!user?.uid || !selectedAgentTask || !selectedAgentTask.response) return;
+    
+    try {
+      setIsSendingAgentResponse(true);
+      
+      // Get the necessary data from the selected agent task
+      const threadId = selectedAgentTask.threadId;
+      const response = selectedAgentTask.response;
+      
+      // Use senderEmail field from the agent task document (fallback to sender if not available)
+      const recipient = selectedAgentTask.senderEmail || selectedAgentTask.sender || "customer@example.com";
+      console.log("Using recipient email:", recipient, "from fields:", {
+        senderEmail: selectedAgentTask.senderEmail,
+        sender: selectedAgentTask.sender
+      });
+      
+      // Get the merchant's store name from Firestore for the email signature
+      let businessName = "Customer Support";
+      try {
+        const merchantDoc = await getDoc(doc(db, 'merchants', user.uid));
+        if (merchantDoc.exists()) {
+          // Prioritize merchantName field, falling back to businessName or storeName
+          const name = merchantDoc.data().merchantName || 
+                      merchantDoc.data().businessName || 
+                      merchantDoc.data().storeName || 
+                      "Customer Support";
+          businessName = `${name} Inquiry`;
+        }
+      } catch (storeNameError) {
+        console.error("Error fetching store name:", storeNameError);
+        // Continue with default name
+        businessName = "Customer Support Inquiry";
+      }
+      
+      // Call the same replyToGmailThread function used in the email tab
+      const replyToGmailThread = httpsCallable(functions, 'replyToGmailThread');
+      
+      const replyData: any = {
+        merchantId: user.uid,
+        message_body: response,
+        html_message_body: response, // HTML format of the message body
+        recipient_email: recipient,
+        thread_id: threadId,
+        is_html: true,
+        fromName: businessName
+      };
+      
+      const result = await replyToGmailThread(replyData);
+      
+      console.log('Agent response sent successfully to', recipient, ':', result.data);
+      
+      // Update the agent task in Firestore to mark it as sent
+      const agentTaskRef = doc(db, `merchants/${user.uid}/agentinbox/${selectedAgentTask.id}`);
+      await updateDoc(agentTaskRef, {
+        status: "approved",
+        sentAt: Timestamp.now(),
+        sentBy: user.uid
+      });
+      
+      // Update the UI
+      setAgentTasks(prev => 
+        prev.filter(task => task.id !== selectedAgentTask.id)
+      );
+      
+      // Show success message
+      setAgentResponseSuccess("Response sent successfully!");
+      setTimeout(() => setAgentResponseSuccess(null), 3000);
+      
+      // Clear selected task
+      setSelectedAgentTask(null);
+      
+    } catch (error) {
+      console.error("Error sending agent response:", error);
+      
+      // Show specific error message if available
+      let errorMessage = 'Failed to send response';
+      if (error instanceof Error) {
+        if (error.message.includes('Gmail connection')) {
+          errorMessage = 'Please check your Gmail connection in Settings > Integrations';
+        } else if (error.message.includes('authentication')) {
+          errorMessage = 'Authentication error. Please try signing in again.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSendingAgentResponse(false);
+    }
+  };
+  
+  const addToQueue = useCallback((request: () => Promise<any>) => {
+    queue.current.push(request);
+    processQueue();
+  }, []);
+  
+  const processQueue = useCallback(async () => {
+    if (isProcessing || queue.current.length === 0) return;
+    
+    setIsProcessing(true);
+    
+    try {
+      // Process requests in batches of 5 to avoid overwhelming Firestore
+      const batchSize = 5;
+      const batch = queue.current.splice(0, batchSize);
+      
+      // Execute batch with a small delay between requests
+      for (let i = 0; i < batch.length; i++) {
+        try {
+          await batch[i]();
+          // Add a small delay between requests to avoid rate limiting
+          if (i < batch.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        } catch (error) {
+          console.error('Request in batch failed:', error);
+        }
+      }
+    } finally {
+      setIsProcessing(false);
+      
+      // Process next batch if there are more requests
+      if (queue.current.length > 0) {
+        setTimeout(processQueue, 200);
+      }
+    }
+  }, [isProcessing]);
+  
+
   
   const [selectedFolder, setSelectedFolder] = useState("inbox")
   const [selectedEmail, setSelectedEmail] = useState<any>(null)
@@ -1156,10 +1408,6 @@ export default function EmailPage() {
   const [selectedAccount, setSelectedAccount] = useState("")
   const [selectedAgent, setSelectedAgent] = useState("customer-service")
   
-  // Tab animation states
-  const [tabsCollapsed, setTabsCollapsed] = useState(false)
-  const [tabsAnimating, setTabsAnimating] = useState(false)
-  
   // Agent modal states
   const [isCustomerServiceModalOpen, setIsCustomerServiceModalOpen] = useState(false)
   const [isEmailSummaryModalOpen, setIsEmailSummaryModalOpen] = useState(false)
@@ -1167,38 +1415,6 @@ export default function EmailPage() {
   
   // Connect email loading state
   const [isConnectingEmail, setIsConnectingEmail] = useState(false)
-  
-  // Function to toggle tabs expansion
-  const toggleTabsExpansion = () => {
-    if (tabsCollapsed) {
-      setTabsAnimating(true)
-      setTabsCollapsed(false)
-      setTimeout(() => setTabsAnimating(false), 300)
-    } else {
-      setTabsAnimating(true)
-      setTimeout(() => {
-        setTabsCollapsed(true)
-        setTabsAnimating(false)
-      }, 300)
-    }
-  }
-  
-  // Add tab collapse animation effect
-  useEffect(() => {
-    // Start with expanded tabs
-    setTabsCollapsed(false)
-    
-    // After 3 seconds, start the animation to collapse
-    const timer = setTimeout(() => {
-      setTabsAnimating(true)
-      setTimeout(() => {
-        setTabsCollapsed(true)
-        setTabsAnimating(false)
-      }, 300) // Animation duration
-    }, 3000)
-    
-    return () => clearTimeout(timer)
-  }, [])
 
   // Function to log contact emails to Firestore
   const logContactEmails = async (emailAddresses: string[], type: 'sent' | 'received', context?: string) => {
@@ -1416,7 +1632,7 @@ ${content}`;
   const [instructionsClosing, setInstructionsClosing] = useState(false)
   const [showSummaryDropdown, setShowSummaryDropdown] = useState(false)
   const [summaryClosing, setSummaryClosing] = useState(false)
-  const [currentView, setCurrentView] = useState<string>('email')
+  const [currentView, setCurrentView] = useState<'email' | 'agent'>('email')
   
   // Email Rules state
   const [emailRulesList, setEmailRulesList] = useState<Array<{id: string, title: string, content: string, type: 'reply' | 'new' | 'both'}>>([]); // Added type field
@@ -1950,6 +2166,12 @@ ${content}`;
   // Fetch Gmail threads from the new Firestore structure
   const fetchGmailEmails = async () => {
     if (!user?.uid) return
+    
+    // Prevent multiple simultaneous calls
+    if (emailsLoading) {
+      console.log("Already loading emails, skipping duplicate request")
+      return
+    }
 
     try {
       setEmailsLoading(true)
@@ -1980,9 +2202,14 @@ ${content}`;
       console.log("🔍 Thread documents:", threadsSnapshot.docs.map(doc => ({ id: doc.id, data: doc.data() })))
       
       // Transform thread documents into thread objects for the left panel
-      const transformedThreads = await Promise.all(threadsSnapshot.docs.map(async (doc) => {
+      const transformedThreads = await Promise.all(threadsSnapshot.docs.map(async (doc, index) => {
         const threadData = doc.data()
         console.log("Processing thread:", doc.id, threadData)
+        
+        // Add delay between requests to avoid overwhelming Firestore
+        if (index > 0) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
         
         // Use thread metadata for the list view
         const threadId = threadData.threadId || doc.id
@@ -2033,10 +2260,13 @@ ${content}`;
             const mostRecentEmail = sortedEmails[0];
             mostRecentEmailRead = mostRecentEmail?.data?.read === true;
             
-            // Extract content from the most recent email
+            // Extract content from the most recent email - ALWAYS use payload.data.preview.body from chain
             const messageData = mostRecentEmail?.data;
             if (messageData) {
-              if (messageData.htmlMessage) {
+              // Always prioritize payload.data.preview.body from the chain subcollection
+              if (messageData.payload?.data?.preview?.body) {
+                mostRecentContent = messageData.payload.data.preview.body;
+              } else if (messageData.htmlMessage) {
                 mostRecentContent = messageData.htmlMessage;
               } else if (messageData.payload) {
                 try {
@@ -2082,9 +2312,8 @@ ${content}`;
           senderName = latestSender
         }
         
-        // Create preview text - prioritize payload.data.preview.body, fallback to extracted content
-        let previewContent = threadData.payload?.data?.preview?.body || mostRecentContent;
-        const previewText = createPreviewText(previewContent);
+        // Create preview text - ALWAYS use content from chain subcollection, never thread-level data
+        const previewText = createPreviewText(mostRecentContent);
         
         // Create thread object for left panel display
         const threadObj = {
@@ -2094,7 +2323,7 @@ ${content}`;
           email: senderEmail,
           subject: subject,
           preview: previewText,
-          content: previewContent || "Click to view thread messages",
+          content: mostRecentContent || "Click to view thread messages",
           time: latestReceivedAt,
           read: mostRecentEmailRead, // Use actual read status from most recent email
           hasAttachment: hasAttachment,
@@ -2112,7 +2341,7 @@ ${content}`;
             email: senderEmail,
             subject: subject,
             preview: previewText,
-            content: previewContent || "Click to view thread messages",
+            content: "Click to view thread messages",
             time: latestReceivedAt,
             read: mostRecentEmailRead,
             hasAttachment: hasAttachment
@@ -2423,7 +2652,10 @@ ${content}`;
         // Only refresh if there are actual changes (new threads, modifications, etc.)
         if (snapshot.docChanges().length > 0 && selectedFolder !== "sent") {
           console.log("📡 Thread changes detected, refreshing thread list")
-          fetchGmailEmails()
+          // Add delay to prevent rapid successive calls
+          setTimeout(() => {
+            fetchGmailEmails()
+          }, 1000)
         }
       }, (error) => {
         console.error("❌ Error in Firestore listener:", error)
@@ -2665,19 +2897,22 @@ ${content}`;
       return
     }
 
-    try {
-      // All emails are now in the chain subcollection structure
-      const emailRef = doc(db, 'merchants', user.uid, 'fetchedemails', threadId || emailId, 'chain', emailId)
-      console.log("Marking email as read:", emailId, "in thread:", threadId || emailId)
-      
-      await updateDoc(emailRef, {
-        read: true
-      })
-      console.log("Successfully marked email as read:", emailId)
-    } catch (error) {
-      console.error("Error marking email as read:", error)
-      console.error("Email ID:", emailId, "Thread ID:", threadId || emailId)
-    }
+    // Add to queue to prevent overwhelming Firestore
+    addToQueue(async () => {
+      try {
+        // All emails are now in the chain subcollection structure
+        const emailRef = doc(db, 'merchants', user.uid, 'fetchedemails', threadId || emailId, 'chain', emailId)
+        console.log("Marking email as read:", emailId, "in thread:", threadId || emailId)
+        
+        await updateDoc(emailRef, {
+          read: true
+        })
+        console.log("Successfully marked email as read:", emailId)
+      } catch (error) {
+        console.error("Error marking email as read:", error)
+        console.error("Email ID:", emailId, "Thread ID:", threadId || emailId)
+      }
+    })
   }
 
   const handleEnableGmailTrigger = async () => {
@@ -2839,15 +3074,16 @@ ${content}`;
       return shouldHighlight
     }
     
-    // For multi-email threads, only highlight the representative if:
-    // 1. The selected email is the thread representative (most recent email)
-    // 2. AND the dropdown is not expanded (so we don't double-highlight)
+    // For multi-email threads, highlight the representative if:
+    // 1. This is the selected thread
+    // 2. AND the representative is selected (not a sub-email)
     if (selectedThread?.threadId === thread.threadId && selectedThread.emails?.length > 0) {
       const isRepresentativeSelected = selectedEmail.id === selectedThread.emails[0]?.id
-      const isDropdownExpanded = expandedThreads.has(thread.threadId)
+      const isSubEmailSelected = selectedThread.emails.slice(1).some((email: any) => email.id === selectedEmail.id)
       
-      // Only highlight if representative is selected AND dropdown is collapsed
-      const shouldHighlight = isRepresentativeSelected && !isDropdownExpanded
+      // Only highlight the main thread item when the representative itself is selected
+      // Do NOT highlight the main thread when a sub-email is selected
+      const shouldHighlight = isRepresentativeSelected && !isSubEmailSelected
       
       if (shouldHighlight) {
         console.log("🎯 Highlighting thread representative:", thread.threadId, "selectedEmail:", selectedEmail.id)
@@ -3000,6 +3236,11 @@ ${content}`;
           }
         }
 
+        // Create preview text from payload.data.preview.body if available
+                  const previewText = messageData.payload?.data?.preview?.body 
+            ? createPreviewText(messageData.payload.data.preview.body)
+            : createPreviewText(content || "");
+          
         return {
           id: doc.id,
           threadId: thread.threadId,
@@ -3008,13 +3249,15 @@ ${content}`;
           to: toInfo,
           subject: subject,
           content: content || "No content available",
+          preview: previewText,
           receivedAt: messageData.receivedAt,
           repliedAt: messageData.repliedAt,
           time: messageData.receivedAt || messageData.repliedAt || messageData.processedAt,
           read: messageData.read === true, // Explicitly check for true, default to false (unread)
           hasAttachment: extractAttachments(messageData).length > 0,
           folder: "inbox",
-          rawData: messageData
+          rawData: messageData,
+          payload: messageData.payload // Include payload for access to preview data
         }
       })
       
@@ -3350,59 +3593,62 @@ ${content}`;
       </svg>
       
       {/* Top Bar - Combined Header with folder dropdown, toolbar, and connected account */}
-      <div className="mx-3 mt-3 mb-3 bg-white rounded-xl shadow-lg border border-gray-100 flex items-center justify-between px-4 py-3 flex-shrink-0">
+      <div className="mx-3 mb-3 bg-white rounded-xl shadow-lg border border-gray-100 flex items-center justify-between px-4 py-3 flex-shrink-0">
         {currentView === 'email' ? (
           <>
-            {/* Left Side: Tab section, Folder dropdown and toolbar actions */}
+            {/* Left Side: Folder dropdown and toolbar actions */}
             <div className="flex items-center gap-4">
-              {/* Tab section - animated */}
-              <div 
-                className={cn(
-                  "flex items-center bg-gray-100 p-0.5 rounded-md w-fit transition-all duration-300 ease-out overflow-hidden", 
-                  tabsAnimating ? "opacity-90" : "opacity-100"
-                )}
-                style={{ 
-                  width: tabsCollapsed ? 'auto' : 'fit-content',
-                  maxWidth: tabsCollapsed ? '80px' : '300px'
-                }}
-              >
-                <button
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                    currentView === 'email'
-                      ? "text-gray-800 bg-white shadow-sm"
-                      : "text-gray-600 hover:bg-gray-200/70"
-                  )}
-                  onClick={() => {
-                    setCurrentView('email');
-                    if (tabsCollapsed) toggleTabsExpansion();
-                  }}
-                >
-                  <Mail size={15} />
-                  {!tabsCollapsed && <span>Email</span>}
-                </button>
-                
-                {!tabsCollapsed && (
-                  <div className="h-5 w-px bg-gray-300 mx-0.5"></div>
-                )}
-                
-                <button
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                    currentView === 'agent'
-                      ? "text-gray-800 bg-white shadow-sm"
-                      : "text-gray-600 hover:bg-gray-200/70"
-                  )}
-                  onClick={() => {
-                    setCurrentView('agent');
-                    if (tabsCollapsed) toggleTabsExpansion();
-                  }}
-                >
-                  <RiRobot3Line size={15} />
-                  {!tabsCollapsed && <span>Agent</span>}
-                </button>
-              </div>
-
+              {/* Main Tab Container */}
+              <TooltipProvider>
+                <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit mr-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        className={cn(
+                          "flex items-center justify-center h-7 w-9 rounded-md transition-colors",
+                          String(currentView) === 'email'
+                            ? "text-gray-800 bg-white shadow-sm"
+                            : "text-gray-600 hover:bg-gray-200/70"
+                        )}
+                        onClick={() => {
+                          const view = 'email';
+                          setCurrentView(view as any);
+                        }}
+                      >
+                        <Mail size={15} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Inbox</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        className={cn(
+                          "flex items-center justify-center h-7 w-9 rounded-md transition-colors",
+                          String(currentView) === 'agent'
+                            ? "text-gray-800 bg-white shadow-sm"
+                            : "text-gray-600 hover:bg-gray-200/70"
+                        )}
+                        onClick={() => {
+                          const view = 'agent';
+                          setCurrentView(view as any);
+                          // Fetch agent tasks when switching to agent view
+                          if (user?.uid) {
+                            fetchAgentTasks();
+                          }
+                        }}
+                      >
+                        <RiRobot3Line size={15} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Agent Inbox</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </TooltipProvider>
               {/* Folder Dropdown */}
               <Select value={selectedFolder} onValueChange={setSelectedFolder}>
                 <SelectTrigger className="w-24 h-8 text-sm">
@@ -3487,7 +3733,7 @@ ${content}`;
                         disabled={emailsLoading}
                         className="text-gray-700 hover:bg-gray-200 transition-all duration-200"
                       >
-                        <RefreshCw className={`h-4 w-4 transition-transform duration-300 ${emailsLoading ? 'animate-spin' : 'hover:rotate-180'}`} />
+                        <RefreshCw className={`h-4 w-4 transition-transform duration-300 ${emailsLoading ? 'animate-spin [animation-duration:2s]' : 'hover:rotate-180'}`} />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -3501,45 +3747,39 @@ ${content}`;
             {/* Right Side: Agents, Email Tools, and Account Selector */}
             <div className="flex items-center gap-2">
               {/* Agents Dropdown */}
-              <Select value={selectedAgent} onValueChange={(value) => {
-                setSelectedAgent(value)
-                handleAgentSelection(value)
-              }}>
-                <SelectTrigger className="w-32 h-8 text-sm focus:outline-none focus:ring-0">
-                  <SelectValue>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 px-3 flex items-center gap-2 text-gray-700">
+                    <span className="text-sm">Agent Setup</span>
+                    <ChevronDown className="h-3.5 w-3.5 text-gray-500" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => handleAgentSelection('customer-service')}>
                     <div className="flex items-center gap-2">
-                      <RiRobot3Line className="h-4 w-4 text-gray-600" />
-                      <span className="text-sm text-gray-700">Agents</span>
+                      <MessageSquare className="h-4 w-4 text-gray-600" />
+                      <span>Customer Service</span>
                     </div>
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="customer-service">
-                    <div className="flex flex-col items-start">
-                      <div className="font-medium">Customer Service</div>
-                      <div className="text-xs text-gray-500">Handles customer inquiries and support requests</div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleAgentSelection('categorising')}>
+                    <div className="flex items-center gap-2">
+                      <Filter className="h-4 w-4 text-gray-600" />
+                      <span>Categorising Agent</span>
                     </div>
-                  </SelectItem>
-                  <SelectItem value="categorising">
-                    <div className="flex flex-col items-start">
-                      <div className="font-medium">Categorising Agent</div>
-                      <div className="text-xs text-gray-500">Organises and tags emails by type and priority</div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleAgentSelection('summary')}>
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-gray-600" />
+                      <span>Summary Agent</span>
                     </div>
-                  </SelectItem>
-                  <SelectItem value="summary">
-                    <div className="flex flex-col items-start">
-                      <div className="font-medium">Summary Agent</div>
-                      <div className="text-xs text-gray-500">Creates concise summaries of email threads</div>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {/* Email Tools Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="h-8 px-3 flex items-center gap-2 text-gray-700">
-                    <Settings className="h-4 w-4 text-gray-600" />
                     <span className="text-sm">Email Tools</span>
                     <ChevronDown className="h-3.5 w-3.5 text-gray-500" />
                   </Button>
@@ -3575,34 +3815,36 @@ ${content}`;
               {/* Connected Account Selector or Connect Button - Now at far right */}
               {gmailEmailAddress ? (
                 <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-                  <SelectTrigger className="w-44 h-8 text-sm focus:outline-none focus:ring-0">
+                  <SelectTrigger className="w-12 h-8 text-sm focus:outline-none focus:ring-0 border-gray-200 hover:border-gray-300 [&>span]:flex [&>span]:w-full [&>span]:justify-center [&>svg]:hidden">
                     <SelectValue>
                       {loading ? (
-                        <div className="flex items-center gap-3">
-                          <div className="w-6 h-6 bg-gray-200 rounded animate-pulse"></div>
-                          <span className="text-sm text-gray-500">Loading...</span>
+                        <div className="flex items-center justify-center">
+                          <div className="w-4 h-4 bg-gray-200 rounded animate-pulse"></div>
                         </div>
                       ) : getCurrentAccount() ? (
-                        <div className="flex items-center gap-3">
-                          <div className="w-6 h-6 flex-shrink-0">
-                            <Image 
-                              src={getCurrentAccount()?.provider === "gmail" ? "/gmailnew.png" : "/outlook.png"}
-                              alt={getCurrentAccount()?.provider === "gmail" ? "Gmail" : "Outlook"}
-                              width={24}
-                              height={24}
-                              className="w-full h-full object-contain"
-                            />
+                        <div className="flex items-center justify-center">
+                          <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center">
+                            {(() => {
+                              const account = getCurrentAccount();
+                              console.log('Account button - account:', account);
+                              console.log('Account button - provider:', account?.provider);
+                              const isGmail = account?.provider === "gmail";
+                              console.log('Account button - isGmail:', isGmail);
+                              return (
+                                <Image 
+                                  src={isGmail ? "/gmailnew.png" : "/outlook.png"}
+                                  alt={isGmail ? "Gmail" : "Outlook"}
+                                  width={20}
+                                  height={20}
+                                  className="w-6 h-6 object-scale-down"
+                                />
+                              );
+                            })()}
                           </div>
-                          <span className="text-sm text-gray-700 truncate">
-                            {getCurrentAccount()?.emailAddress}
-                          </span>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-3">
-                          <div className="w-6 h-6 flex-shrink-0">
-                            <Plus className="h-4 w-4 text-gray-400" />
-                          </div>
-                          <span className="text-sm text-gray-500">No accounts</span>
+                        <div className="flex items-center justify-center">
+                          <Plus className="h-4 w-4 text-gray-400" />
                         </div>
                       )}
                     </SelectValue>
@@ -3611,13 +3853,13 @@ ${content}`;
                     {connectedAccounts.map((account) => (
                       <SelectItem key={account.id} value={account.emailAddress}>
                         <div className="flex items-center gap-3">
-                          <div className="w-6 h-6 flex-shrink-0">
+                          <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center">
                             <Image 
                               src={account.provider === "gmail" ? "/gmailnew.png" : "/outlook.png"}
                               alt={account.provider === "gmail" ? "Gmail" : "Outlook"}
                               width={24}
                               height={24}
-                              className="w-full h-full object-contain"
+                              className="w-6 h-6 object-scale-down"
                             />
                           </div>
                           <span>{account.emailAddress}</span>
@@ -3653,397 +3895,68 @@ ${content}`;
                 </Button>
               )}
             </div>
-          </>
-        ) : (
-          /* Agent Inbox Top Bar */
-          <>
-            <div className="flex items-center gap-4">
-              {/* Agent Status Filter */}
-              <Select value="all" onValueChange={() => {}}>
-                <SelectTrigger className="w-32 h-8 text-sm">
-                  <SelectValue placeholder="All Tasks" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">
-                    <div className="flex items-center gap-2">
-                      <Filter className="h-4 w-4" strokeWidth={2.75} />
-                      <span>All Tasks</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="pending">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4" strokeWidth={2.75} />
-                      <span>Pending</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="approved">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4" strokeWidth={2.75} />
-                      <span>Approved</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="rejected">
-                    <div className="flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4" strokeWidth={2.75} />
-                      <span>Rejected</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* Agent Toolbar Actions */}
-              <TooltipProvider>
-                <div className="flex items-center gap-2">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button size="sm" className="bg-green-500 hover:bg-green-600 text-white">
-                        <CheckCircle className="h-4 w-4" strokeWidth={2.75} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Approve Selected</p>
-                    </TooltipContent>
-                  </Tooltip>
-                  
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        className="text-red-600 border-red-200 hover:bg-red-50"
-                      >
-                        <AlertCircle className="h-4 w-4" strokeWidth={2.75} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Reject Selected</p>
-                    </TooltipContent>
-                  </Tooltip>
-                  
-                  <div className="h-6 w-px bg-gray-300 mx-1"></div>
-                  
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        className="text-gray-700 hover:bg-gray-200"
-                      >
-                        <Settings className="h-4 w-4" strokeWidth={2.75} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Agent Settings</p>
-                    </TooltipContent>
-                  </Tooltip>
-                  
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        className="text-gray-700 hover:bg-gray-200"
-                      >
-                        <RefreshCw className="h-4 w-4" strokeWidth={2.75} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Refresh Tasks</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-              </TooltipProvider>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {/* Agent Performance Stats */}
-              <div className="flex items-center gap-4 text-sm text-gray-600">
-                <div className="flex items-center gap-1">
-                  <Clock className="h-4 w-4" strokeWidth={2.75} />
-                  <span>5 Pending</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <CheckCircle className="h-4 w-4 text-green-500" strokeWidth={2.75} />
-                  <span>12 Approved</span>
-                </div>
-              </div>
-
-              {/* Notifications button */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="relative h-8 w-8 p-0">
-                    <Bell className="h-4 w-4" strokeWidth={2.75} />
-                    <span className="absolute -top-0.5 -right-0.5 h-3 w-3 bg-orange-500 rounded-full text-white font-medium flex items-center justify-center min-w-3 text-[7px]">
-                      5
-                    </span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-[350px] rounded-md">
-                  <div className="flex items-center justify-between px-4 py-2 border-b">
-                    <h3 className="font-medium">Agent Tasks</h3>
-                    <Button variant="ghost" size="sm" className="h-8 text-xs rounded-md">
-                      Mark all reviewed
-                    </Button>
-                  </div>
-                  <div className="p-2">
-                    <div className="text-center text-gray-500 py-4">
-                      <RiRobot3Line className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                      <p className="text-sm">No pending tasks</p>
-                    </div>
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <Button variant="ghost" size="sm" className="h-9 px-2 text-gray-600 hover:bg-gray-200">
-                <MoreHorizontal className="h-4 w-4" strokeWidth={2.75} />
-              </Button>
-            </div>
-          </>
-        )}
-      </div>
-      
-      {/* Main panels container */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Email panel */}
-        <div className={`flex flex-col flex-1 overflow-hidden ${currentView === 'email' ? 'block' : 'hidden'}`}>
-          <div className="flex flex-1 overflow-hidden">
-            {/* Email list */}
-            <div className="flex flex-col flex-1 overflow-hidden">
-              <div className="flex flex-col flex-1 overflow-hidden">
-                {/* Email list header */}
-                <div className="flex items-center justify-between px-4 py-2 border-b">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      checked={selectedEmails.length === filteredEmails.length}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedEmails(filteredEmails.map(email => email.id));
-                        } else {
-                          setSelectedEmails([]);
-                        }
-                      }}
-                    />
-                    <span className="text-sm font-medium">{selectedFolder.charAt(0).toUpperCase() + selectedFolder.slice(1)}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button variant="ghost" size="sm" className="text-gray-700 hover:bg-gray-200">
-                            <ChevronDown className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Sort by</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button variant="ghost" size="sm" className="text-gray-700 hover:bg-gray-200">
-                            <ChevronUp className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Sort ascending</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                </div>
-
-                {/* Email list */}
-                <div className="flex-1 overflow-y-auto">
-                  {filteredEmails.length > 0 ? (
-                    <div className="divide-y divide-gray-200">
-                      {filteredEmails.map((email) => (
-                        <EmailListItem
-                          key={email.id}
-                          email={email}
-                          selected={selectedEmails.includes(email.id)}
-                          onSelect={(selected) => {
-                            if (selected) {
-                              setSelectedEmails([...selectedEmails, email.id]);
-                            } else {
-                              setSelectedEmails(selectedEmails.filter(id => id !== email.id));
-                            }
-                          }}
+            </>
+          ) : (
+            /* Agent Inbox Top Bar */
+            <>
+              <div className="flex items-center gap-4">
+                {/* Main Tab Container */}
+                <TooltipProvider>
+                  <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit mr-2">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          className={cn(
+                            "flex items-center justify-center h-7 w-9 rounded-md transition-colors",
+                            String(currentView) === 'email'
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
                           onClick={() => {
-                            setSelectedEmail(email);
-                            setSelectedThread(null);
-                            setReplyMode(null);
+                            const view = 'email';
+                            setCurrentView(view as any);
                           }}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-full">
-                      <div className="text-center">
-                        <Mail className="h-12 w-12 mx-auto text-gray-400" />
-                        <p className="mt-2 text-sm text-gray-500">No emails in this folder</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Email details */}
-            <div className="flex flex-col flex-1 overflow-hidden">
-              {selectedEmail ? (
-                <EmailDetails
-                  email={selectedEmail}
-                  onReply={(type, originalEmail) => {
-                    setReplyMode({ type, originalEmail });
-                    setSelectedThread(null);
-                  }}
-                  onForward={(originalEmail) => {
-                    setReplyMode({ type: 'forward', originalEmail });
-                    setSelectedThread(null);
-                  }}
-                  onReplyAll={(originalEmail, thread) => {
-                    setReplyMode({ type: 'replyAll', originalEmail, thread });
-                    setSelectedThread(thread);
-                  }}
-                  onDelete={() => {
-                    setSelectedEmail(null);
-                    setSelectedThread(null);
-                    setReplyMode(null);
-                  }}
-                  onArchive={() => {
-                    setSelectedEmail(null);
-                    setSelectedThread(null);
-                    setReplyMode(null);
-                  }}
-                  onMarkAsRead={() => {
-                    markEmailAsReadAndUpdateUI(selectedEmail);
-                  }}
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full">
-                  <div className="text-center">
-                    <Mail className="h-12 w-12 mx-auto text-gray-400" />
-                    <p className="mt-2 text-sm text-gray-500">Select an email to view details</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Agent panel */}
-        <div className={`flex flex-col flex-1 overflow-hidden ${currentView === 'agent' ? 'block' : 'hidden'}`}>
-          <div className="flex flex-col flex-1 overflow-hidden">
-            {/* Agent tasks list */}
-            <div className="flex flex-col flex-1 overflow-hidden">
-              <div className="flex flex-col flex-1 overflow-hidden">
-                {/* Agent tasks list header */}
-                <div className="flex items-center justify-between px-4 py-2 border-b">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      checked={selectedTasks.length === agentTasks.length}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedTasks(agentTasks.map(task => task.id));
-                        } else {
-                          setSelectedTasks([]);
-                        }
-                      }}
-                    />
-                    <span className="text-sm font-medium">Agent Tasks</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button variant="ghost" size="sm" className="text-gray-700 hover:bg-gray-200">
-                            <ChevronDown className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Sort by</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button variant="ghost" size="sm" className="text-gray-700 hover:bg-gray-200">
-                            <ChevronUp className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Sort ascending</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                </div>
-
-                {/* Agent tasks list */}
-                <div className="flex-1 overflow-y-auto">
-                  {agentTasks.length > 0 ? (
-                    <div className="divide-y divide-gray-200">
-                      {agentTasks.map((task) => (
-                        <AgentTaskItem
-                          key={task.id}
-                          task={task}
-                          selected={selectedTasks.includes(task.id)}
-                          onSelect={(selected) => {
-                            if (selected) {
-                              setSelectedTasks([...selectedTasks, task.id]);
-                            } else {
-                              setSelectedTasks(selectedTasks.filter(id => id !== task.id));
-                            }
-                          }}
+                        >
+                          <Mail size={15} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Inbox</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          className={cn(
+                            "flex items-center justify-center h-7 w-9 rounded-md transition-colors",
+                            String(currentView) === 'agent'
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
                           onClick={() => {
-                            setSelectedTask(task);
+                            const view = 'agent';
+                            setCurrentView(view as any);
                           }}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-full">
-                      <div className="text-center">
-                        <RiRobot3Line className="h-12 w-12 mx-auto text-gray-400" />
-                        <p className="mt-2 text-sm text-gray-500">No agent tasks available</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Agent task details */}
-            <div className="flex flex-col flex-1 overflow-hidden">
-              {selectedTask ? (
-                <AgentTaskDetails
-                  task={selectedTask}
-                  onApprove={() => {
-                    setSelectedTask(null);
-                  }}
-                  onReject={() => {
-                    setSelectedTask(null);
-                  }}
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full">
-                  <div className="text-center">
-                    <RiRobot3Line className="h-12 w-12 mx-auto text-gray-400" />
-                    <p className="mt-2 text-sm text-gray-500">Select a task to view details</p>
+                        >
+                          <RiRobot3Line size={15} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Agent Inbox</p>
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+                </TooltipProvider>
+                
 
-export default EmailPage;
+
+
+              </div>
+
+
+            </>
+          )}
+                </div>
 
         {/* Main Content */}
         {currentView === 'email' ? (
@@ -4230,10 +4143,10 @@ export default EmailPage;
               summaryClosing ? 'animate-in fade-in-0 slide-in-from-top-1 duration-300' : ''
             }`} style={{ height: 'auto' }}>
             {emailsLoading && (
-              <div className="p-3 border-b border-gray-200 bg-blue-50">
-                <div className="flex items-center gap-2 text-sm text-blue-600">
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                  <span>Fetching Gmail emails...</span>
+              <div className="flex items-center justify-center h-32">
+                <div className="flex flex-col items-center gap-2">
+                  <RefreshCw className="h-6 w-6 animate-spin text-gray-400" />
+                  <span className="text-sm text-gray-500">Fetching emails...</span>
                 </div>
               </div>
             )}
@@ -4243,7 +4156,7 @@ export default EmailPage;
                 <div key={thread.threadId}>
                   {/* Main email button - always shown */}
                   <div
-                    className={`flex items-start gap-1.5 py-2 pr-2 pl-1.5 transition-all duration-200 cursor-pointer ${
+                    className={`flex items-start gap-1.5 py-2 pr-2 pl-1.5 cursor-pointer ${
                       isThreadRepresentativeHighlighted(thread)
                         ? 'bg-blue-100' 
                         : thread.representative?.read === true
@@ -4360,7 +4273,7 @@ export default EmailPage;
                           return (
                             <div
                               key={email.id}
-                              className={`flex items-center gap-1.5 p-2 pl-16 cursor-pointer transition-all duration-200 border-t border-t-gray-200 ${
+                              className={`flex items-center gap-1.5 p-2 pl-16 cursor-pointer border-t border-t-gray-200 ${
                                 isDropdownEmailHighlighted
                                   ? 'bg-blue-100'
                                   : email.read === true
@@ -4395,7 +4308,12 @@ export default EmailPage;
                             </div>
                             <div className={`text-xs truncate ${!email.read ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
                               {(() => {
-                                // Use htmlMessage first, fallback to content
+                                // First try to use payload.data.preview.body if available
+                                if (email.payload?.data?.preview?.body) {
+                                  return createPreviewText(email.payload.data.preview.body, 60);
+                                }
+                                
+                                // Otherwise use htmlMessage or content
                                 const htmlContent = email.htmlMessage || email.content || '';
                                 if (!htmlContent) return 'No preview available...';
                                 
@@ -4447,8 +4365,8 @@ export default EmailPage;
             <div className="fixed top-4 right-4 z-50 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-md shadow-md animate-in slide-in-from-top-2 duration-200 ease-out">
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <Check className="h-4 w-4 mr-2" />
-                  <span className="text-sm font-medium">✅ {successMessage}</span>
+                  <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
+                  <span className="text-sm font-medium">{successMessage}</span>
                 </div>
                 <Button
                   variant="ghost"
@@ -4538,7 +4456,7 @@ export default EmailPage;
                   let recipients = [to];
                   if (cc && cc.trim()) recipients.push(...cc.split(',').map(email => email.trim()).filter(Boolean));
                   if (bcc && bcc.trim()) recipients.push(...bcc.split(',').map(email => email.trim()).filter(Boolean));
-                  setSuccessMessage(`Email sent successfully to: ${recipients.join(', ')}`);
+                  setSuccessMessage(`Message sent to ${recipients.join(', ')}`);
                   
                   // Exit compose mode
                   setIsComposing(false);
@@ -4637,7 +4555,7 @@ export default EmailPage;
                     
                     // Show success message
                     const recipientList = recipients.join(', ');
-                    setSuccessMessage(`Email forwarded successfully to: ${recipientList}`);
+                    setSuccessMessage(`Message forwarded to ${recipientList}`);
                     
                   } else {
                     // For reply/replyAll, use the replyToGmailThread function
@@ -4682,7 +4600,7 @@ export default EmailPage;
                     
                     // Show success message
                     const recipientList = recipients.join(', ');
-                    setSuccessMessage(`Reply sent successfully to: ${recipientList}`);
+                    setSuccessMessage(`Reply sent to ${recipientList}`);
                   }
                   
                   // Create the sent message object for UI
@@ -4773,71 +4691,686 @@ export default EmailPage;
               className="bg-white rounded-xl shadow-lg border border-gray-100 flex flex-col h-full mr-1"
               style={{ width: `${leftPanelWidth}%` }}
             >
-              <div className="p-4 border-b border-gray-200">
-                <h2 className="text-lg font-medium text-gray-900 mb-2">Agent Tasks</h2>
-                <div className="text-sm text-gray-500">
-                  Tasks and actions requiring approval
+              {/* Search Bar */}
+              <div className="flex-shrink-0 p-3 border-b border-gray-200 bg-white rounded-t-xl">
+                <div className="relative mb-3">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
+                    placeholder="Search agent tasks..."
+                    className="pl-10 pr-8"
+                    value={agentSearchQuery}
+                    onChange={(e) => setAgentSearchQuery(e.target.value)}
+                  />
+                  {agentSearchQuery && (
+                    <button
+                      onClick={() => setAgentSearchQuery("")}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                
+                {/* Standard Tab Design */}
+                <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+                  <button
+                    onClick={() => fetchAgentTasks("pending")}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                      agentTaskStatusFilter === "pending"
+                        ? "text-gray-800 bg-white shadow-sm"
+                        : "text-gray-600 hover:bg-gray-200/70"
+                    )}
+                  >
+                    <Inbox size={15} />
+                    Inbox
+                  </button>
+                  <button
+                    onClick={() => fetchAgentTasks("completed")}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                      agentTaskStatusFilter === "completed"
+                        ? "text-gray-800 bg-white shadow-sm"
+                        : "text-gray-600 hover:bg-gray-200/70"
+                    )}
+                  >
+                    <CheckCircle size={15} />
+                    Completed
+                  </button>
                 </div>
               </div>
               
-              <div className="flex-1 overflow-y-auto custom-scrollbar">
-                <div className="p-4">
-                  <div className="text-center text-gray-500 py-8">
-                    <RiRobot3Line className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <h3 className="text-lg font-medium text-gray-700 mb-2">No agent tasks yet</h3>
-                    <p className="text-sm mb-4">Agent actions will appear here for your approval</p>
-                    
-                    {/* Sample task types */}
-                    <div className="text-left max-w-sm mx-auto space-y-2">
-                      <p className="text-xs font-medium text-gray-600 mb-3">Upcoming task types:</p>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          <Reply className="h-3 w-3" />
-                          <span>Email responses awaiting approval</span>
+              {/* Agent Tasks List */}
+              <div className="flex-1 overflow-y-auto scrollbar-thin">
+                {agentTasksLoading ? (
+                  <div className="flex flex-col items-center justify-center h-full">
+                    <Loader2 className="h-6 w-6 text-gray-400 animate-spin" />
+                    <p className="text-sm text-gray-500 mt-2">Loading agent tasks...</p>
+                  </div>
+                ) : agentTasks.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                    <RiRobot3Line className="h-12 w-12 text-gray-300 mb-3" />
+                    <h3 className="text-lg font-medium text-gray-700">No Agent Tasks</h3>
+                    <p className="text-sm text-gray-500 max-w-xs mt-1">
+                      Agent tasks will appear here when your email agents process incoming messages.
+                    </p>
+                  </div>
+                ) : filteredAgentTasks.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                    <Search className="h-12 w-12 text-gray-300 mb-3" />
+                    <h3 className="text-lg font-medium text-gray-700">No Matching Tasks</h3>
+                    <p className="text-sm text-gray-500 max-w-xs mt-1">
+                      No agent tasks match your search query. Try a different search term.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-200">
+                    {filteredAgentTasks.map((task) => (
+                      <div
+                        key={task.id}
+                        className={`flex items-start gap-1.5 py-2 pr-2 pl-1.5 cursor-pointer ${
+                          selectedAgentTask?.id === task.id
+                            ? 'bg-blue-100' 
+                            : 'bg-white hover:bg-gray-50'
+                        }`}
+                        onClick={() => handleAgentTaskSelect(task)}
+                      >
+                        <div className="w-5 flex justify-center items-start flex-shrink-0 pt-0.5">
+                          <div className="flex flex-col items-center gap-1">
+                            {task.classification?.isCustomerInquiry ? (
+                              <div className="h-2 w-2 bg-green-500 rounded-full flex-shrink-0 shadow-sm"></div>
+                            ) : (
+                              <div className="h-2 w-2 bg-gray-300 rounded-full flex-shrink-0"></div>
+                            )}
+                            {task.isOngoingConversation && (
+                              <div className="h-2 w-2 bg-blue-500 rounded-full flex-shrink-0 shadow-sm"></div>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          <Users className="h-3 w-3" />
-                          <span>Customer service actions</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          <WandSparkles className="h-3 w-3" />
-                          <span>Automated task completions</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          <Shield className="h-3 w-3" />
-                          <span>Security and compliance checks</span>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm truncate font-medium text-gray-900">
+                              {task.emailTitle || "Agent Task"}
+                            </span>
+                            {task.isOngoingConversation && (
+                              <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200 w-fit">
+                                Thread
+                              </span>
+                            )}
+                            {task.priority && (
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium w-fit ${
+                                task.priority === 'critical' ? 'bg-red-50 text-red-700 border border-red-200' :
+                                task.priority === 'high' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
+                                task.priority === 'medium' ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
+                                'bg-green-50 text-green-700 border border-green-200'
+                              }`}>
+                                {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
+                              </span>
+                            )}
+                            <span className="text-xs ml-auto text-gray-500">
+                              {task.timestamp && formatPreviewTime(task.timestamp.__time__ ? new Date(task.timestamp.__time__) : task.timestamp.toDate())}
+                            </span>
+                          </div>
+                          <div className="text-sm truncate text-gray-700 flex items-center gap-1.5">
+                            {task.classification?.isCustomerInquiry && (
+                              <Mail className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
+                            )}
+                            <span>
+                              {task.classification?.isCustomerInquiry 
+                                ? (task.senderEmail || task.sender || "Unknown sender")
+                                : (task.threadId || task.messageId || "No ID")
+                              }
+                            </span>
+                          </div>
+                          <div className="text-xs truncate text-gray-500">
+                            {task.shortSummary || task.conversationSummary || "No summary available"}
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
-                </div>
+                )}
               </div>
             </div>
-
+            
             {/* Draggable Divider */}
             <div 
               className={`w-1 bg-transparent hover:bg-gray-200 cursor-col-resize transition-colors relative ${
                 isDragging ? 'bg-blue-300' : ''
               }`}
               onMouseDown={handleMouseDown}
-            />
+            >
+            </div>
 
             {/* Agent Inbox Right Panel */}
             <div 
               className="bg-white rounded-xl shadow-lg border border-gray-100 flex flex-col h-full overflow-hidden ml-1"
               style={{ width: `${100 - leftPanelWidth}%` }}
             >
-              <div className="p-4 border-b border-gray-200">
-                <h2 className="text-lg font-medium text-gray-900">Task Details</h2>
-              </div>
-              
-              <div className="flex-1 flex items-center justify-center">
-                <div className="text-center text-gray-500">
-                  <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <h3 className="text-lg font-medium text-gray-700 mb-2">Select a task to view details</h3>
-                  <p className="text-sm">Choose an agent task from the left panel to see its details and actions</p>
+              {selectedAgentTask ? (
+                <div className="h-full flex flex-col">
+                  {/* Header */}
+                  <div className="p-4 border-b">
+                    <h2 className="text-xl font-semibold mb-2 flex items-center flex-wrap">
+                      {selectedAgentTask.emailTitle || "Agent Task"}
+                      {selectedAgentTask.classification?.isCustomerInquiry && (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit ml-2">
+                          <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                          Customer Inquiry
+                        </span>
+                      )}
+                      {selectedAgentTask.isOngoingConversation && (
+                        <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200">
+                          <MessageSquare className="h-3 w-3 mr-1" />
+                          Ongoing Thread
+                        </Badge>
+                      )}
+                      {agentTaskStatusFilter === "completed" && (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-green-50 text-green-700 border border-green-200 w-fit ml-2">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Completed
+                        </span>
+                      )}
+                      {selectedAgentTask.priority && (
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium w-fit ml-2 ${
+                          selectedAgentTask.priority === 'critical' ? 'bg-red-50 text-red-700 border border-red-200' :
+                          selectedAgentTask.priority === 'high' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
+                          selectedAgentTask.priority === 'medium' ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
+                          'bg-green-50 text-green-700 border border-green-200'
+                        }`}>
+                          <AlertCircle className="h-3 w-3" />
+                          {selectedAgentTask.priority.charAt(0).toUpperCase() + selectedAgentTask.priority.slice(1)} Priority
+                        </span>
+                      )}
+                    </h2>
+                    <div className="flex flex-col md:flex-row md:justify-between gap-2">
+                      <div>
+                        <div className="font-medium text-sm">
+                          From: {selectedAgentTask.senderEmail || selectedAgentTask.sender || "Unknown"}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Thread ID: {selectedAgentTask.threadId || "N/A"}</div>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {selectedAgentTask.timestamp && 
+                          formatMelbourneTime(
+                            selectedAgentTask.timestamp.__time__ 
+                              ? new Date(selectedAgentTask.timestamp.__time__) 
+                              : selectedAgentTask.timestamp.toDate()
+                          )
+                        }
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Content with Tabs */}
+                  <div className="flex-1 overflow-hidden flex flex-col">
+                                          {/* Tabs */}
+                    <div className="px-4 pt-4 pb-0">
+                      <div className="flex items-center bg-gray-100 p-0.5 rounded-xl w-fit">
+                        <button
+                          onClick={() => handleTabChange("response")}
+                          className={cn(
+                            "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+                            activeTab === "response"
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                        >
+                          <MessageSquare size={15} />
+                          Response
+                        </button>
+                        <button
+                          onClick={() => handleTabChange("summary")}
+                          className={cn(
+                            "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+                            activeTab === "summary"
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                        >
+                          <AlignLeft size={15} />
+                          Summary
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* Tab Content */}
+                    <div className="flex-1 overflow-y-auto p-4 pt-2">
+                      {/* Response Tab with Original Email Below */}
+                      {activeTab === "response" && (
+                        <div 
+                          className={`transition-opacity duration-300 ${tabChanging ? 'opacity-0' : 'opacity-100'} space-y-6`}
+                        >
+                          {/* Agent Response with Gradient Border */}
+                          {selectedAgentTask.response && (
+                            <div 
+                              className="p-[2px] rounded-xl"
+                              style={{ 
+                                background: 'linear-gradient(90deg, #f97316 0%, #3b82f6 100%)',
+                                boxShadow: '0 2px 8px -1px rgba(0, 0, 0, 0.1), 0 1px 4px -1px rgba(0, 0, 0, 0.06)'
+                              }}
+                            >
+                              <div className="bg-white p-4 rounded-lg">
+                                                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center">
+                          <MessageSquare className="h-4 w-4 text-purple-600 mr-2" />
+                          <h3 className="text-sm font-medium">
+                            {isEditingResponse && !isUsingAiEdit ? "Editing Response" : "Agent Response"}
+                          </h3>
+                          {agentTaskStatusFilter === "completed" && (
+                            <span className="inline-flex items-center gap-1 ml-2 px-2 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                              <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                              Sent
+                            </span>
+                          )}
+                        </div>
+                        {!isEditingResponse && agentTaskStatusFilter === "pending" && (
+                          <div className="flex items-center gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl"
+                              onClick={() => {
+                                setEditedResponse(selectedAgentTask.response);
+                                setIsEditingResponse(true);
+                                setIsUsingAiEdit(false);
+                              }}
+                            >
+                              <Edit3 className="h-3 w-3 mr-1" />
+                              Modify
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-7 px-2 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-xl"
+                              onClick={() => {
+                                setEditedResponse(selectedAgentTask.response);
+                                setIsEditingResponse(true);
+                                setIsUsingAiEdit(true);
+                              }}
+                            >
+                              <Sparkles className="h-3 w-3 mr-1" />
+                              AI Edit
+                            </Button>
+                          </div>
+                        )}
+                                </div>
+                                
+                                                      {isEditingResponse && isUsingAiEdit ? (
+                        <>
+                          {/* AI Edit Instructions (at the top) */}
+                          <div className="bg-white transition-all duration-200 ease-out animate-in slide-in-from-top-2 mb-3">
+                            <div className="relative border border-gray-200 rounded-md overflow-hidden">
+                              <textarea
+                                value={editPrompt}
+                                onChange={(e) => setEditPrompt(e.target.value)}
+                                placeholder="Enter specific instructions for how you'd like the AI to modify the response..."
+                                className="w-full text-xs bg-gray-50 px-3 py-2 focus:outline-none resize-none placeholder-gray-500 border-none"
+                                rows={3}
+                              />
+                              <div className="flex justify-between items-center bg-gray-50 border-t border-gray-200 px-3 py-2">
+                                <button
+                                  onClick={() => {
+                                    setIsEditingResponse(false);
+                                    setIsUsingAiEdit(false);
+                                    setEditPrompt("");
+                                  }}
+                                  className="flex items-center gap-1 text-xs font-medium text-gray-600 hover:text-gray-800"
+                                >
+                                  <X className="h-3 w-3" strokeWidth="2" />
+                                  Cancel
+                                </button>
+                                
+                                <button
+                                  disabled={!editPrompt.trim() || isGeneratingEdit}
+                                  onClick={async () => {
+                                    setIsGeneratingEdit(true);
+                                    try {
+                                      // Simulate AI editing with a timeout
+                                      await new Promise(resolve => setTimeout(resolve, 1500));
+                                      
+                                      // Create a modified response with the instructions
+                                      // In a real implementation, this would call an AI service
+                                      // For now, we'll create a more visible change to demonstrate the functionality
+                                      const aiModifiedResponse = `<div style="color: #1e40af; font-weight: 500; margin-bottom: 8px;">
+                                        AI has modified this response based on your instructions: "${editPrompt}"
+                                      </div>
+                                      ${selectedAgentTask.response}
+                                      <div style="border-top: 1px solid #e5e7eb; margin-top: 12px; padding-top: 8px; color: #4b5563; font-style: italic;">
+                                        Additional information added by AI based on your instructions.
+                                      </div>`;
+                                      
+                                      // Update the edited response
+                                      setEditedResponse(aiModifiedResponse);
+                                      
+                                      // Update the selectedAgentTask with the edited response
+                                      const aiUpdatedTask = {
+                                        ...selectedAgentTask,
+                                        response: aiModifiedResponse
+                                      };
+                                      
+                                      // Update in state
+                                      setSelectedAgentTask(aiUpdatedTask);
+                                      
+                                      // Update in the agentTasks array
+                                      setAgentTasks(prev => 
+                                        prev.map(task => 
+                                          task.id === selectedAgentTask.id ? aiUpdatedTask : task
+                                        )
+                                      );
+                                      
+                                      // Update in Firestore
+                                      if (user?.uid) {
+                                        const agentTaskRef = doc(db, `merchants/${user.uid}/agentinbox/${selectedAgentTask.id}`);
+                                        await updateDoc(agentTaskRef, { response: aiModifiedResponse });
+                                      }
+                                      
+                                      toast({
+                                        title: "AI edit applied",
+                                        description: "The response has been successfully modified and saved.",
+                                      });
+                                      
+                                      setIsEditingResponse(false);
+                                      setIsUsingAiEdit(false);
+                                    } catch (error) {
+                                      console.error("Error applying AI edit:", error);
+                                      toast({
+                                        variant: "destructive",
+                                        title: "AI edit failed",
+                                        description: "Failed to apply AI modifications. Please try again.",
+                                      });
+                                    } finally {
+                                      setIsGeneratingEdit(false);
+                                    }
+                                  }}
+                                  className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-md transition-colors ${
+                                    isGeneratingEdit || !editPrompt.trim()
+                                      ? 'text-gray-400 cursor-not-allowed' 
+                                      : 'text-blue-600 hover:text-blue-700'
+                                  }`}
+                                >
+                                  {isGeneratingEdit ? (
+                                    <>
+                                      <Loader2 className="h-3 w-3 animate-spin" strokeWidth="2" />
+                                      Generating...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Sparkles className="h-3 w-3" strokeWidth="2" />
+                                      Apply
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* View-only response for AI edit mode */}
+                          <div 
+                            className="text-sm text-gray-600 email-content prose prose-sm max-w-none"
+                            dangerouslySetInnerHTML={{ 
+                              __html: DOMPurify.sanitize(selectedAgentTask.response) 
+                            }}
+                          />
+                        </>
+                      ) : isEditingResponse && !isUsingAiEdit ? (
+                        <>
+                          {/* Direct editing of the response */}
+                          <div className="relative">
+                            <div 
+                              className="text-sm text-gray-600 email-content prose prose-sm max-w-none focus:outline-none"
+                              contentEditable
+                              suppressContentEditableWarning={true}
+                              onBlur={(e) => setEditedResponse(e.currentTarget.innerHTML)}
+                              dangerouslySetInnerHTML={{ 
+                                __html: editedResponse 
+                              }}
+                            />
+                            
+                            {/* Action buttons for manual edit */}
+                            <div className="flex justify-end gap-2 mt-3">
+                              <button
+                                onClick={() => {
+                                  setIsEditingResponse(false);
+                                  setIsUsingAiEdit(false);
+                                  setEditPrompt("");
+                                }}
+                                className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                              >
+                                <X className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                                Cancel
+                              </button>
+                              
+                              <button
+                                disabled={!editedResponse.trim()}
+                                onClick={() => {
+                                  // Update the selectedAgentTask with the edited response
+                                  const updatedTask = {
+                                    ...selectedAgentTask,
+                                    response: editedResponse
+                                  };
+                                  
+                                  // Update in state
+                                  setSelectedAgentTask(updatedTask);
+                                  
+                                  // Update in the agentTasks array
+                                  setAgentTasks(prev => 
+                                    prev.map(task => 
+                                      task.id === selectedAgentTask.id ? updatedTask : task
+                                    )
+                                  );
+                                  
+                                  // Update in Firestore
+                                  const agentTaskRef = doc(db, `merchants/${user?.uid}/agentinbox/${selectedAgentTask.id}`);
+                                  updateDoc(agentTaskRef, { response: editedResponse })
+                                    .then(() => {
+                                      toast({
+                                        title: "Response updated",
+                                        description: "The response has been successfully saved and will be used when sending.",
+                                      });
+                                    })
+                                    .catch(error => {
+                                      console.error("Error updating response:", error);
+                                      toast({
+                                        variant: "destructive",
+                                        title: "Update failed",
+                                        description: "Failed to save the response. Please try again.",
+                                      });
+                                    });
+                                  
+                                  setIsEditingResponse(false);
+                                  setIsUsingAiEdit(false);
+                                  setEditPrompt("");
+                                }}
+                                className={`flex items-center gap-1.5 text-xs font-normal px-3 py-1.5 rounded-md transition-colors ${
+                                  !editedResponse.trim()
+                                    ? 'text-white bg-blue-400 cursor-not-allowed' 
+                                    : 'text-white bg-blue-500 hover:bg-blue-600'
+                                }`}
+                              >
+                                <Check className="h-3 w-3 text-white" strokeWidth="2" />
+                                Save Changes
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                                  // Display the response
+                                  isHtmlContent(selectedAgentTask.response) ? (
+                                    <div 
+                                      className="text-sm text-gray-600 email-content prose prose-sm max-w-none"
+                                      dangerouslySetInnerHTML={{ 
+                                        __html: DOMPurify.sanitize(selectedAgentTask.response) 
+                                      }}
+                                    />
+                                  ) : (
+                                    <div className="whitespace-pre-wrap text-sm text-gray-600">
+                                      {selectedAgentTask.response}
+                                    </div>
+                                  )
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Original Email Below Response */}
+                          {selectedAgentTask.originalEmail?.htmlContent && (
+                            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                              <div className="flex items-center mb-2">
+                                <Mail className="h-4 w-4 text-gray-600 mr-2" />
+                                <h3 className="text-sm font-medium">Original Email</h3>
+                              </div>
+                              <div 
+                                className="text-sm text-gray-600 email-content prose prose-sm max-w-none"
+                                dangerouslySetInnerHTML={{ 
+                                  __html: DOMPurify.sanitize(selectedAgentTask.originalEmail.htmlContent) 
+                                }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Summary Tab */}
+                      {activeTab === "summary" && (
+                        <div 
+                          className={`transition-opacity duration-300 ${tabChanging ? 'opacity-0' : 'opacity-100'}`}
+                        >
+                          <div className="bg-white p-4 rounded-md border border-gray-200 shadow-sm mb-4">
+                            {selectedAgentTask.shortSummary && (
+                              <div className="mb-3">
+                                <p className="text-sm text-gray-600">{selectedAgentTask.shortSummary}</p>
+                              </div>
+                            )}
+                            {selectedAgentTask.conversationSummary && (
+                              <div>
+                                <p className="text-sm text-gray-600">{selectedAgentTask.conversationSummary}</p>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {selectedAgentTask.isOngoingConversation && selectedAgentTask.threadSummary && (
+                            <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <MessageSquare className="h-4 w-4 text-blue-600" />
+                                <h3 className="text-sm font-medium text-blue-700">Thread History</h3>
+                              </div>
+                              <p className="text-sm text-blue-700">
+                                {selectedAgentTask.threadSummary}
+                              </p>
+                            </div>
+                          )}
+                          
+                          {selectedAgentTask.classification && (
+                            <div className="mt-4 bg-white p-4 rounded-md border border-gray-200 shadow-sm">
+                              <div className="flex items-center gap-2 mb-2">
+                                <ClipboardCheck className="h-4 w-4 text-green-600" />
+                                <h3 className="text-sm font-medium text-gray-700">Classification</h3>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-gray-600">Customer Inquiry:</span>
+                                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                  <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+                                    selectedAgentTask.classification.isCustomerInquiry ? "bg-green-500" : "bg-gray-400"
+                                  }`}></div>
+                                  {selectedAgentTask.classification.isCustomerInquiry ? "Yes" : "No"}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Actions */}
+                  <div className="p-3 border-t flex justify-between gap-2">
+                    {/* Only show action buttons for pending tasks */}
+                    {agentTaskStatusFilter === "pending" ? (
+                      <>
+                        <div>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => {
+                              if (selectedAgentTask && user?.uid) {
+                                const agentTaskRef = doc(db, `merchants/${user.uid}/agentinbox/${selectedAgentTask.id}`);
+                                updateDoc(agentTaskRef, {
+                                  status: "rejected",
+                                  rejectedAt: Timestamp.now(),
+                                  rejectedBy: user.uid
+                                }).then(() => {
+                                  toast({
+                                    title: "Task rejected",
+                                    description: "The task has been marked as rejected",
+                                  });
+                                  // Refresh the current view
+                                  fetchAgentTasks(agentTaskStatusFilter);
+                                });
+                              }
+                            }}
+                          >
+                            <XCircle className="h-3 w-3 mr-1" />
+                            Reject
+                          </Button>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            size="sm" 
+                            className="text-xs bg-blue-500 hover:bg-blue-600"
+                            onClick={handleSendAgentResponse}
+                            disabled={isSendingAgentResponse || !selectedAgentTask?.response}
+                          >
+                            {isSendingAgentResponse ? (
+                              <>
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                Sending...
+                              </>
+                            ) : (
+                              <>
+                                <Send className="h-3 w-3 mr-1" />
+                                Send Response
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="w-full flex justify-center">
+                        <span className="text-xs text-gray-500 flex items-center">
+                          <CheckCircle className="h-3.5 w-3.5 text-green-500 mr-1.5" />
+                          {selectedAgentTask.sentAt ? (
+                            <>
+                              Completed on {formatMelbourneTime(
+                                selectedAgentTask.sentAt.__time__ 
+                                  ? new Date(selectedAgentTask.sentAt.__time__) 
+                                  : selectedAgentTask.sentAt.toDate()
+                              )}
+                            </>
+                          ) : (
+                            <>This task has been completed</>
+                          )}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  {agentResponseSuccess && (
+                    <div className="absolute bottom-16 left-1/2 transform -translate-x-1/2 bg-green-100 text-green-800 px-4 py-2 rounded-md text-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      {agentResponseSuccess}
+                    </div>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                  <MessageSquare className="h-12 w-12 text-gray-300 mb-3" />
+                  <h3 className="text-lg font-medium text-gray-700">No Task Selected</h3>
+                  <p className="text-sm text-gray-500 max-w-xs mt-1">
+                    Select a task from the list to view details and agent responses.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -5464,7 +5997,7 @@ export default EmailPage;
       </Dialog>
     </div>
   )
-}
+} 
 
 // Advanced HTML decoder component
 const advancedDecodeHtml = (data: string): string => {
@@ -6237,6 +6770,9 @@ const EmailViewer = ({
   const [showInstructions, setShowInstructions] = useState(false);
   const [instructionsClosing, setInstructionsClosing] = useState(false);
   const [instructionTone, setInstructionTone] = useState('professional');
+  const [showQuickReplyInstructions, setShowQuickReplyInstructions] = useState(false);
+  const [quickReplyInstructionsClosing, setQuickReplyInstructionsClosing] = useState(false);
+  const [quickReplyPrompt, setQuickReplyPrompt] = useState('');
   const [localIsGenerating, setLocalIsGenerating] = useState(false);
   
   // Local state for dialog
@@ -6272,6 +6808,15 @@ const EmailViewer = ({
     setTimeout(() => {
       setShowInstructions(false);
       setInstructionsClosing(false);
+    }, 200);
+  };
+  
+  // Close quick reply instructions with animation
+  const closeQuickReplyInstructionsWithAnimation = () => {
+    setQuickReplyInstructionsClosing(true);
+    setTimeout(() => {
+      setShowQuickReplyInstructions(false);
+      setQuickReplyInstructionsClosing(false);
     }, 200);
   };
 
@@ -6467,6 +7012,155 @@ const EmailViewer = ({
               </Tooltip>
             </TooltipProvider>
             
+            <div className="relative">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md flex items-center gap-1"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    Quick Reply
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem 
+                    className="flex items-center gap-2 cursor-pointer"
+                    onClick={() => {
+                      setShowQuickReplyInstructions(true);
+                    }}
+                  >
+                    <MessageSquare className="h-3.5 w-3.5 text-gray-500" />
+                    <span>Custom Instructions</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-gray-500">Select Tone</DropdownMenuLabel>
+                  <DropdownMenuItem 
+                    className="flex items-center gap-2 cursor-pointer"
+                    onClick={() => {
+                      onStartReply?.(email);
+                      setTimeout(() => {
+                        if (callGenerateEmailResponse && replyEditorRef.current) {
+                          callGenerateEmailResponse('tone', 'professional', undefined, replyEditorRef);
+                        }
+                      }, 100);
+                    }}
+                  >
+                    <Briefcase className="h-3.5 w-3.5 text-gray-500" />
+                    <span>Professional</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    className="flex items-center gap-2 cursor-pointer"
+                    onClick={() => {
+                      onStartReply?.(email);
+                      setTimeout(() => {
+                        if (callGenerateEmailResponse && replyEditorRef.current) {
+                          callGenerateEmailResponse('tone', 'friendly', undefined, replyEditorRef);
+                        }
+                      }, 100);
+                    }}
+                  >
+                    <Smile className="h-3.5 w-3.5 text-gray-500" />
+                    <span>Friendly</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    className="flex items-center gap-2 cursor-pointer"
+                    onClick={() => {
+                      onStartReply?.(email);
+                      setTimeout(() => {
+                        if (callGenerateEmailResponse && replyEditorRef.current) {
+                          callGenerateEmailResponse('tone', 'direct', undefined, replyEditorRef);
+                        }
+                      }, 100);
+                    }}
+                  >
+                    <ArrowRight className="h-3.5 w-3.5 text-gray-500" />
+                    <span>Direct</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              {/* Quick Reply Instructions Speech Bubble */}
+              {(showQuickReplyInstructions || quickReplyInstructionsClosing) && (
+                <div className={`absolute top-full right-0 mt-2 w-80 z-50 ${
+                  quickReplyInstructionsClosing 
+                    ? 'animate-out fade-out slide-out-to-top-2 duration-200' 
+                    : 'animate-in fade-in slide-in-from-top-2 duration-300'
+                }`}>
+                  <div className="bg-white border border-gray-200 rounded-md p-4 shadow-md">
+                    {/* Speech bubble pointer */}
+                    <div className="absolute -top-2 right-6 w-4 h-4 bg-white border-t border-l border-gray-200 transform rotate-45"></div>
+                    
+                    <div className="space-y-3">
+                      
+                      <textarea
+                        value={quickReplyPrompt}
+                        onChange={(e) => setQuickReplyPrompt(e.target.value)}
+                        placeholder="Enter specific instructions for how you'd like the AI to respond..."
+                        className="w-full text-xs bg-white border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder-gray-500"
+                        rows={3}
+                        autoFocus
+                      />
+                      
+                      <div className="flex justify-between items-center">
+                        <button
+                          onClick={() => closeQuickReplyInstructionsWithAnimation()}
+                          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors text-gray-600 hover:text-gray-800 border border-gray-200 hover:bg-gray-50"
+                        >
+                          <X className="h-3 w-3" strokeWidth="2" />
+                          Cancel
+                        </button>
+                        
+                        <button
+                          disabled={!quickReplyPrompt.trim() || actualIsGenerating}
+                          onClick={async () => {
+                            if (!quickReplyPrompt.trim()) return;
+                            
+                            // First start reply mode
+                            onStartReply?.(email);
+                            
+                            // Wait for reply mode to initialize
+                            setTimeout(async () => {
+                              if (!callGenerateEmailResponse || !replyEditorRef.current) return;
+                              
+                              setLocalIsGenerating(true);
+                              try {
+                                await callGenerateEmailResponse('custom', undefined, quickReplyPrompt, replyEditorRef);
+                                closeQuickReplyInstructionsWithAnimation();
+                                setQuickReplyPrompt('');
+                              } catch (error) {
+                                console.error('Error in quick reply AI generation:', error);
+                              } finally {
+                                setLocalIsGenerating(false);
+                              }
+                            }, 100);
+                          }}
+                          className={`flex items-center gap-1.5 text-xs font-normal px-3 py-1.5 rounded-md transition-colors ${
+                            !quickReplyPrompt.trim() || actualIsGenerating
+                              ? 'text-white bg-gray-400 cursor-not-allowed' 
+                              : 'text-white bg-gray-700 hover:bg-gray-800'
+                          }`}
+                        >
+                          {actualIsGenerating ? (
+                            <>
+                              <Loader2 className="h-3 w-3 text-white animate-spin" strokeWidth="2" />
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-3 w-3 text-white" strokeWidth="2" />
+                              Apply
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
             {/* Summarise Button - Available for all emails */}
             <TooltipProvider>
               <Tooltip>
@@ -6487,7 +7181,7 @@ const EmailViewer = ({
                         }}
                       />
                     ) : (
-                      <MessageSquare 
+                      <NotebookPen 
                         className="h-3 w-3" 
                         style={{
                           stroke: 'url(#orange-blue-gradient)',
@@ -6537,14 +7231,86 @@ const EmailViewer = ({
                 })()}</span>
               </div>
               <div className="flex items-center gap-1 text-xs text-gray-600">
-                <span><span className="font-bold">To:</span> {email.to}</span>
+                <span>
+                  <span className="font-bold">To:</span>{" "}
+                  {(() => {
+                    // Safety check for email object
+                    if (!email) {
+                      return <span className="text-gray-500">No email data</span>;
+                    }
+                    // Helper function to extract display names from email addresses
+                    const extractDisplayNames = (emailStr: string | undefined) => {
+                      if (!emailStr) return [];
+                      
+                      return emailStr.split(',').map(email => {
+                        const match = email.trim().match(/(.*?)\s*<(.+?)>/);
+                        return {
+                          displayName: match ? match[1].trim() : email.trim().split('@')[0],
+                          fullEmail: email.trim()
+                        };
+                      });
+                    };
+                    
+                    const recipients = extractDisplayNames(email.to);
+                    
+                    if (recipients.length === 0) {
+                      return <span className="text-gray-500"></span>;
+                    }
+                    
+                    return (
+                      <span className="inline-flex flex-wrap gap-x-1">
+                        {recipients.map((recipient, index) => (
+                          <span key={recipient.fullEmail} className="group relative cursor-default">
+                            {recipient.displayName}
+                            {index < recipients.length - 1 ? "," : ""}
+                            <span className="invisible absolute left-0 top-full z-10 mt-1 whitespace-nowrap rounded-md bg-gray-800 px-2 py-1 text-xs text-white group-hover:visible">
+                              {recipient.fullEmail}
+                            </span>
+                          </span>
+                        ))}
+                      </span>
+                    );
+                  })()}
+                </span>
                 {(() => {
                   const ccRecipients = extractCcRecipients(email);
                   if (ccRecipients) {
+                    // Helper function to extract display names from email addresses
+                    const extractDisplayNames = (emailStr: string | undefined) => {
+                      if (!emailStr) return [];
+                      
+                      return emailStr.split(',').map(email => {
+                        const match = email.trim().match(/(.*?)\s*<(.+?)>/);
+                        return {
+                          displayName: match ? match[1].trim() : email.trim().split('@')[0],
+                          fullEmail: email.trim()
+                        };
+                      });
+                    };
+                    
+                    const ccList = extractDisplayNames(ccRecipients);
+                    
+                    if (ccList.length === 0) {
+                      return null;
+                    }
+                    
                     return (
                       <>
                         <span>•</span>
-                        <span><span className="font-bold">Cc:</span> {ccRecipients}</span>
+                        <span>
+                          <span className="font-bold">Cc:</span>{" "}
+                          <span className="inline-flex flex-wrap gap-x-1">
+                            {ccList.map((recipient, index) => (
+                              <span key={recipient.fullEmail} className="group relative cursor-default">
+                                {recipient.displayName}
+                                {index < ccList.length - 1 ? "," : ""}
+                                <span className="invisible absolute left-0 top-full z-10 mt-1 whitespace-nowrap rounded-md bg-gray-800 px-2 py-1 text-xs text-white group-hover:visible">
+                                  {recipient.fullEmail}
+                                </span>
+                              </span>
+                            ))}
+                          </span>
+                        </span>
                       </>
                     );
                   }
@@ -6571,44 +7337,54 @@ const EmailViewer = ({
             <div className="w-12 text-xs text-gray-600 font-medium">From:</div>
             <div className="flex-1 text-xs text-gray-900">{selectedAccount}</div>
             <div className="flex gap-2">
-              <Button
-                onClick={() => {
-                  const currentReplyContent = replyEditorRef.current?.innerHTML || '';
-                  if (currentReplyContent.trim() && (replyMode.type === 'forward' || replyRecipients.trim())) {
-                    // For reply/replyAll, add "Re:" prefix; for forward, add "Fwd:" prefix
-                    let subject;
-                    if (replyMode.type === 'forward') {
-                      subject = replyMode.originalEmail.subject.startsWith('Fwd: ') ? replyMode.originalEmail.subject : `Fwd: ${replyMode.originalEmail.subject}`;
-                    } else {
-                      subject = replyMode.originalEmail.subject.startsWith('Re: ') ? replyMode.originalEmail.subject : `Re: ${replyMode.originalEmail.subject}`;
-                    }
-                    
-                    const recipients = [
-                      ...replyRecipients.split(',').map(email => email.trim()).filter(Boolean),
-                      ...replyCc.split(',').map(email => email.trim()).filter(Boolean)
-                    ];
-                    // Use the full HTML content from the editor (includes both user input and quoted content)
-                    onSendReply?.(currentReplyContent, subject, recipients, replyAttachments);
-                  }
-                }}
-                disabled={(replyMode.type !== 'forward' && !replyRecipients.trim()) || isSending}
-                className="bg-blue-500 hover:bg-blue-600 text-white h-7 px-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
-              >
-                {isSending ? (
-                  <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                ) : (
-                  <Send className="h-3 w-3 mr-1" />
-                )}
-                {isSending ? 'Sending...' : 'Send'}
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={onCancelReply}
-                className="h-7 px-2 text-gray-600 hover:text-gray-900 text-xs"
-              >
-                Cancel
-                </Button>
-              </div>
+              {actualIsGenerating ? (
+                <div className="flex items-center">
+                  <div className="animate-pulse bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 bg-[length:200%_100%] animate-shimmer rounded-md px-3 py-1.5 text-xs font-medium text-transparent">
+                    Generating response...
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <Button
+                    onClick={() => {
+                      const currentReplyContent = replyEditorRef.current?.innerHTML || '';
+                      if (currentReplyContent.trim() && (replyMode.type === 'forward' || replyRecipients.trim())) {
+                        // For reply/replyAll, add "Re:" prefix; for forward, add "Fwd:" prefix
+                        let subject;
+                        if (replyMode.type === 'forward') {
+                          subject = replyMode.originalEmail.subject.startsWith('Fwd: ') ? replyMode.originalEmail.subject : `Fwd: ${replyMode.originalEmail.subject}`;
+                        } else {
+                          subject = replyMode.originalEmail.subject.startsWith('Re: ') ? replyMode.originalEmail.subject : `Re: ${replyMode.originalEmail.subject}`;
+                        }
+                        
+                        const recipients = [
+                          ...replyRecipients.split(',').map(email => email.trim()).filter(Boolean),
+                          ...replyCc.split(',').map(email => email.trim()).filter(Boolean)
+                        ];
+                        // Use the full HTML content from the editor (includes both user input and quoted content)
+                        onSendReply?.(currentReplyContent, subject, recipients, replyAttachments);
+                      }
+                    }}
+                    disabled={(replyMode.type !== 'forward' && !replyRecipients.trim()) || isSending}
+                    className="bg-blue-500 hover:bg-blue-600 text-white h-7 px-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+                  >
+                    {isSending ? (
+                      <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                    ) : (
+                      <Send className="h-3 w-3 mr-1" />
+                    )}
+                    {isSending ? 'Sending...' : 'Send'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={onCancelReply}
+                    className="h-7 px-2 text-gray-600 hover:text-gray-900 text-xs"
+                  >
+                    Cancel
+                  </Button>
+                </>
+              )}
+            </div>
             </div>
 
             {/* To Field */}
@@ -6650,176 +7426,192 @@ const EmailViewer = ({
             </div>
 
           {/* Tap Agent Section */}
-          <div className="mx-3 my-2">
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3">
-            <div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5">
-                    <WandSparkles className="h-4 w-4 text-blue-500" />
-                    <GradientText
-                      colors={["#ff6b35", "#4079ff", "#ff8500", "#3b82f6", "#ff6b35"]}
-                      animationSpeed={3}
-                      showBorder={false}
-                      className="text-xs font-medium"
-                    >
-                      Tap Agent
-                    </GradientText>
-                  </div>
-                  {(showInstructions || instructionsClosing) && !actualIsGenerating && (
+          {!actualIsGenerating && (
+            <div className="mx-3 my-2">
+              <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-medium text-gray-700">Custom Instructions</span>
-                    </div>
-                  )}
-                                    {actualIsGenerating ? (
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="h-3 w-3 text-blue-500 animate-spin" />
-                      <span className="text-xs text-gray-600">Thinking...</span>
-                    </div>
-                  ) : !showInstructions && (
-                    <div className="flex items-center gap-2">
-                      <div className={`flex items-center transition-all duration-500 ease-in-out ${
-                        !isReplyContentEmpty(replyContent) 
-                          ? 'opacity-100 scale-100 w-auto' 
-                          : 'opacity-0 scale-95 w-0 overflow-hidden'
-                      }`}>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)}
-                            className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                          >
-                            <Lightbulb className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                            Friendly
-                          </button>
-                          <button
-                            onClick={() => callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)}
-                            className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                          >
-                            <Users className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                            Professional
-                          </button>
-                        </div>
-                        <div className="h-4 w-px bg-gray-300 mx-2"></div>
-                      </div>
-                      <button
-                        onClick={() => setShowInstructions(!showInstructions)}
-                        className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                      <WandSparkles className="h-4 w-4 text-blue-500" />
+                      <GradientText
+                        colors={["#ff6b35", "#4079ff", "#ff8500", "#3b82f6", "#ff6b35"]}
+                        animationSpeed={3}
+                        showBorder={false}
+                        className="text-xs font-medium"
                       >
-                        <MessageSquare className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                        Instructions
-                      </button>
+                        Tap Agent
+                      </GradientText>
                     </div>
-                  )}
-                </div>
-                
-                {/* Buttons section - show rules when not in instructions, show all buttons when in instructions */}
-                {!actualIsGenerating && (
-                  <div className="flex items-center gap-2">
-                    {(showInstructions || instructionsClosing) ? (
-                      <>
+                    {(showInstructions || instructionsClosing) && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-medium text-gray-700">Custom Instructions</span>
+                      </div>
+                    )}
+                    {!showInstructions && (
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors">
+                                <Palette className="h-3 w-3 text-gray-500" />
+                                <span>Tone</span>
+                                <ChevronDown className="h-3 w-3 text-gray-500 ml-1" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-40 z-50">
+                              <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)}>
+                                <Lightbulb className="h-3 w-3 text-gray-500 mr-2" />
+                                <span className="text-xs">Friendly</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)}>
+                                <Users className="h-3 w-3 text-gray-500 mr-2" />
+                                <span className="text-xs">Professional</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'direct', undefined, replyEditorRef)}>
+                                <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
+                                <span className="text-xs">Direct</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'casual', undefined, replyEditorRef)}>
+                                <Eye className="h-3 w-3 text-gray-500 mr-2" />
+                                <span className="text-xs">Casual</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'formal', undefined, replyEditorRef)}>
+                                <Shield className="h-3 w-3 text-gray-500 mr-2" />
+                                <span className="text-xs">Formal</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => callGenerateEmailResponse?.('tone', 'persuasive', undefined, replyEditorRef)}>
+                                <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
+                                <span className="text-xs">Persuasive</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          <div className="h-4 w-px bg-gray-300 mx-2"></div>
+                        </div>
                         <button
-                          onClick={() => {
-                            actualSetTempEmailRules(emailRules || '');
-                            actualSetShowEmailRulesDialog(true);
-                          }}
+                          onClick={() => setShowInstructions(!showInstructions)}
                           className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
                         >
-                          <Shield className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                          Rules
+                          <MessageSquare className="h-3 w-3 text-gray-500" />
+                          Instructions
                         </button>
-                        <button
-                          onClick={closeInstructionsWithAnimation}
-                          className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                        >
-                          <X className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                          Cancel
-                        </button>
-                        <button
-                          disabled={actualIsGenerating}
-                          onClick={async () => {
-                            const textarea = document.getElementById('instructions-textarea-reply') as HTMLTextAreaElement;
-                            const customInstructions = textarea?.value || '';
-                            if (customInstructions.trim()) {
-                              // Immediately close instructions without animation for Apply
-                              setShowInstructions(false);
-                              setInstructionsClosing(false);
-                              setLocalIsGenerating(true);
-                              try {
-                                await callGenerateEmailResponse?.('custom', instructionTone, customInstructions, replyEditorRef);
-                              } catch (error) {
-                                console.error('Error in reply AI generation:', error);
-                              } finally {
-                                setLocalIsGenerating(false);
-                              }
-                            }
-                          }}
-                          className={`flex items-center gap-1.5 text-xs font-normal px-3 py-1.5 rounded-md transition-colors ${
-                            actualIsGenerating 
-                              ? 'text-white bg-blue-600 cursor-not-allowed' 
-                              : 'text-white bg-blue-500 hover:bg-blue-600'
-                          }`}
-                        >
-                          {actualIsGenerating ? (
-                            <>
-                              <Loader2 className="h-3 w-3 text-white animate-spin" strokeWidth="2" />
-                              <span className="text-xs font-normal text-white">
-                                Applying...
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <Check className="h-3 w-3 text-white" strokeWidth="2" />
-                              Apply
-                            </>
-                          )}
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => {
-                            actualSetTempEmailRules(emailRules || '');
-                            actualSetShowEmailRulesDialog(true);
-                          }}
-                          className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                        >
-                          <Shield className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                          Rules
-                        </button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-2 py-1.5 rounded-md transition-colors">
-                              {isSummarizing ? (
-                                <Loader2 
-                                  className="h-3 w-3 animate-spin" 
-                                  strokeWidth="2"
-                                  style={{
-                                    stroke: 'url(#orange-blue-gradient)'
-                                  }}
-                                />
-                              ) : (
-                                <MoreHorizontal className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                              )}
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem onClick={() => onSummariseThread?.()}>
-                              <MessageSquare 
-                                className="h-3 w-3 mr-2" 
-                                strokeWidth="2"
-                                style={{
-                                  stroke: 'url(#orange-blue-gradient)',
-                                  fill: 'none'
-                                }}
-                              />
-                              <span className="text-xs">Summarise {selectedThread && selectedThread.count > 1 ? `Thread (${selectedThread.count})` : 'Email'}</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </>
+                      </div>
                     )}
                   </div>
-                )}
+                </div>
+              </div>
+            </div>
+                    )}
+            
+            {/* Buttons section - show rules when not in instructions, show all buttons when in instructions */}
+            {!actualIsGenerating && (
+              <div className="mx-3 mb-2">
+                <div className="flex items-center gap-2 justify-end">
+                  {(showInstructions || instructionsClosing) ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          actualSetTempEmailRules(emailRules || '');
+                          actualSetShowEmailRulesDialog(true);
+                        }}
+                        className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                      >
+                        <Shield className="h-3 w-3 text-gray-500" />
+                        Rules
+                      </button>
+                      <button
+                        onClick={closeInstructionsWithAnimation}
+                        className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                      >
+                        <X className="h-3 w-3 text-gray-500" />
+                        Cancel
+                      </button>
+                      <button
+                        disabled={actualIsGenerating}
+                        onClick={async () => {
+                          const textarea = document.getElementById('instructions-textarea-reply') as HTMLTextAreaElement;
+                          const customInstructions = textarea?.value || '';
+                          if (customInstructions.trim()) {
+                            // Immediately close instructions without animation for Apply
+                            setShowInstructions(false);
+                            setInstructionsClosing(false);
+                            setLocalIsGenerating(true);
+                            try {
+                              await callGenerateEmailResponse?.('custom', instructionTone, customInstructions, replyEditorRef);
+                            } catch (error) {
+                              console.error('Error in reply AI generation:', error);
+                            } finally {
+                              setLocalIsGenerating(false);
+                            }
+                          }
+                        }}
+                        className={`flex items-center gap-1.5 text-xs font-normal px-3 py-1.5 rounded-md transition-colors ${
+                          actualIsGenerating 
+                            ? 'text-white bg-blue-600 cursor-not-allowed' 
+                            : 'text-white bg-blue-500 hover:bg-blue-600'
+                        }`}
+                      >
+                        {actualIsGenerating ? (
+                          <>
+                            <Loader2 className="h-3 w-3 text-white animate-spin" />
+                            <span className="text-xs font-normal text-white">
+                              Applying...
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <Check className="h-3 w-3 text-white" />
+                            Apply
+                          </>
+                        )}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          actualSetTempEmailRules(emailRules || '');
+                          actualSetShowEmailRulesDialog(true);
+                        }}
+                        className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                      >
+                        <Shield className="h-3 w-3 text-gray-500" />
+                        Rules
+                      </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-2 py-1.5 rounded-md transition-colors">
+                            {isSummarizing ? (
+                              <Loader2 
+                                className="h-3 w-3 animate-spin" 
+                                strokeWidth="2"
+                                style={{
+                                  stroke: 'url(#orange-blue-gradient)'
+                                }}
+                              />
+                            ) : (
+                              <MoreHorizontal className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                            )}
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem onClick={() => onSummariseThread?.()}>
+                            <NotebookPen 
+                              className="h-3 w-3 mr-2" 
+                              strokeWidth="2"
+                              style={{
+                                stroke: 'url(#orange-blue-gradient)',
+                                fill: 'none'
+                              }}
+                            />
+                            <span className="text-xs">Summarise {selectedThread && selectedThread.count > 1 ? `Thread (${selectedThread.count})` : 'Email'}</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
               </div>
             </div>
             
@@ -6882,6 +7674,8 @@ const EmailViewer = ({
                 </div>
               </div>
             )}
+            
+
             </div>
             </div>
 

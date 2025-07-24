@@ -55,6 +55,7 @@ import {
   ReplyAll,
   ArrowLeft,
   ArrowRight,
+  Briefcase,
   Inbox,
   Edit3,
   Shield,
@@ -72,6 +73,7 @@ import {
   AlertCircle,
   Palette,
   Lightbulb,
+  Smile,
   Wand2,
   Sparkles,
   UploadCloud,
@@ -96,7 +98,9 @@ import {
   NotebookPen,
   ClipboardCheck,
   AlignLeft,
-  Code
+  Code,
+  XCircle,
+  List
 } from "lucide-react"
 import { RiRobot3Line } from "react-icons/ri"
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
@@ -105,7 +109,7 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import GradientText from "@/components/GradientText"
 import { db } from "@/lib/firebase"
-import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnapshot, updateDoc, setDoc, addDoc, Timestamp } from "firebase/firestore"
+import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnapshot, updateDoc, setDoc, addDoc, Timestamp, QueryConstraint } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
 import { functions } from "@/lib/firebase"
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"
@@ -1164,6 +1168,14 @@ export default function EmailPage() {
   const [agentSearchQuery, setAgentSearchQuery] = useState("")
   const [isSendingAgentResponse, setIsSendingAgentResponse] = useState(false)
   const [agentResponseSuccess, setAgentResponseSuccess] = useState<string | null>(null)
+  const [agentTaskStatusFilter, setAgentTaskStatusFilter] = useState<"pending" | "completed">("pending")
+  const [activeTab, setActiveTab] = useState<"response" | "summary">("response")
+  const [tabChanging, setTabChanging] = useState(false)
+  const [isEditingResponse, setIsEditingResponse] = useState(false)
+  const [editedResponse, setEditedResponse] = useState("")
+  const [editPrompt, setEditPrompt] = useState("")
+  const [isUsingAiEdit, setIsUsingAiEdit] = useState(false)
+  const [isGeneratingEdit, setIsGeneratingEdit] = useState(false)
   
   // Filter agent tasks based on search query
   const filteredAgentTasks = useMemo(() => {
@@ -1176,29 +1188,51 @@ export default function EmailPage() {
   }, [agentTasks, agentSearchQuery]);
   
   // Fetch agent tasks from Firestore
-  const fetchAgentTasks = async () => {
+  const fetchAgentTasks = async (statusFilter: "pending" | "completed" = agentTaskStatusFilter) => {
     if (!user?.uid) return;
     
     try {
       setAgentTasksLoading(true);
-      console.log("Fetching agent tasks from Firestore for merchant:", user.uid);
+      console.log("Fetching agent tasks from Firestore for merchant:", user.uid, "with status filter:", statusFilter);
       
       const agentTasksRef = collection(db, 'merchants', user.uid, 'agentinbox');
-      const agentTasksQuery = query(
-        agentTasksRef,
+      
+      // Create query constraints based on status filter
+      let constraints: QueryConstraint[] = [
         orderBy('timestamp', 'desc'),
         limit(50) // Limit to 50 tasks
-      );
+      ];
       
+      if (statusFilter === "pending") {
+        // For the Inbox tab, we want to show all tasks that aren't completed
+        // But we can't directly check for != "approved" in Firestore
+        // So we'll fetch all tasks and filter client-side
+        // No additional constraint needed for inbox view
+      } else if (statusFilter === "completed") {
+        // Completed: Show only approved/sent tasks
+        constraints.push(where('status', '==', "approved"));
+      }
+      
+      const agentTasksQuery = query(agentTasksRef, ...constraints);
       const agentTasksSnapshot = await getDocs(agentTasksQuery);
-      console.log(`📊 Found ${agentTasksSnapshot.size} agent tasks`);
+      console.log(`📊 Found ${agentTasksSnapshot.size} agent tasks with status: ${statusFilter}`);
       
-      const tasks = agentTasksSnapshot.docs.map(doc => ({
+      let tasks = agentTasksSnapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        // Ensure status is defined for filtering
+        status: doc.data().status || "pending"
       }));
       
+      // Apply client-side filtering for inbox tab
+      if (statusFilter === "pending") {
+        // For inbox tab, show all tasks that aren't approved/completed
+        tasks = tasks.filter(task => task.status !== "approved");
+        console.log(`📊 Filtered to ${tasks.length} non-approved tasks for inbox tab`);
+      }
+      
       setAgentTasks(tasks);
+      setAgentTaskStatusFilter(statusFilter);
     } catch (error) {
       console.error("Error fetching agent tasks:", error);
     } finally {
@@ -1210,6 +1244,20 @@ export default function EmailPage() {
   const handleAgentTaskSelect = (task: any) => {
     console.log("Selected agent task:", task.id);
     setSelectedAgentTask(task);
+    setActiveTab("response"); // Default to response tab when selecting a task
+  };
+  
+  // Handle tab change with animation
+  const handleTabChange = (tab: "response" | "summary") => {
+    if (tab === activeTab) return;
+    
+    setTabChanging(true);
+    setTimeout(() => {
+      setActiveTab(tab);
+      setTimeout(() => {
+        setTabChanging(false);
+      }, 50);
+    }, 150);
   };
   
   // Handle sending agent response
@@ -4663,18 +4711,31 @@ ${content}`;
                   )}
                 </div>
                 
-                {/* Filter Pills */}
-                <div className="flex items-center gap-2 flex-wrap">
+                {/* Standard Tab Design */}
+                <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
                   <button
-                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors w-fit bg-blue-50 text-blue-700 border-blue-200"
+                    onClick={() => fetchAgentTasks("pending")}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                      agentTaskStatusFilter === "pending"
+                        ? "text-gray-800 bg-white shadow-sm"
+                        : "text-gray-600 hover:bg-gray-200/70"
+                    )}
                   >
-                    All
+                    <Inbox size={15} />
+                    Inbox
                   </button>
                   <button
-                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors w-fit bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                    onClick={() => fetchAgentTasks("completed")}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                      agentTaskStatusFilter === "completed"
+                        ? "text-gray-800 bg-white shadow-sm"
+                        : "text-gray-600 hover:bg-gray-200/70"
+                    )}
                   >
-                    <div className="h-1.5 w-1.5 rounded-full flex-shrink-0 bg-green-500"></div>
-                    Customer Inquiries
+                    <CheckCircle size={15} />
+                    Completed
                   </button>
                 </div>
               </div>
@@ -4737,12 +4798,30 @@ ${content}`;
                                 Thread
                               </span>
                             )}
+                            {task.priority && (
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium w-fit ${
+                                task.priority === 'critical' ? 'bg-red-50 text-red-700 border border-red-200' :
+                                task.priority === 'high' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
+                                task.priority === 'medium' ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
+                                'bg-green-50 text-green-700 border border-green-200'
+                              }`}>
+                                {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
+                              </span>
+                            )}
                             <span className="text-xs ml-auto text-gray-500">
                               {task.timestamp && formatPreviewTime(task.timestamp.__time__ ? new Date(task.timestamp.__time__) : task.timestamp.toDate())}
                             </span>
                           </div>
-                          <div className="text-sm truncate text-gray-700">
-                            {task.threadId || task.messageId || "No ID"}
+                          <div className="text-sm truncate text-gray-700 flex items-center gap-1.5">
+                            {task.classification?.isCustomerInquiry && (
+                              <Mail className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
+                            )}
+                            <span>
+                              {task.classification?.isCustomerInquiry 
+                                ? (task.senderEmail || task.sender || "Unknown sender")
+                                : (task.threadId || task.messageId || "No ID")
+                              }
+                            </span>
                           </div>
                           <div className="text-xs truncate text-gray-500">
                             {task.shortSummary || task.conversationSummary || "No summary available"}
@@ -4773,13 +4852,13 @@ ${content}`;
                 <div className="h-full flex flex-col">
                   {/* Header */}
                   <div className="p-4 border-b">
-                    <h2 className="text-xl font-semibold mb-2 flex items-center">
+                    <h2 className="text-xl font-semibold mb-2 flex items-center flex-wrap">
                       {selectedAgentTask.emailTitle || "Agent Task"}
                       {selectedAgentTask.classification?.isCustomerInquiry && (
-                        <Badge variant="outline" className="ml-2 bg-green-50 text-green-700 hover:bg-green-100 border-green-200">
-                          <User className="h-3 w-3 mr-1" />
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit ml-2">
+                          <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
                           Customer Inquiry
-                        </Badge>
+                        </span>
                       )}
                       {selectedAgentTask.isOngoingConversation && (
                         <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200">
@@ -4787,11 +4866,30 @@ ${content}`;
                           Ongoing Thread
                         </Badge>
                       )}
+                      {agentTaskStatusFilter === "completed" && (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-green-50 text-green-700 border border-green-200 w-fit ml-2">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Completed
+                        </span>
+                      )}
+                      {selectedAgentTask.priority && (
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium w-fit ml-2 ${
+                          selectedAgentTask.priority === 'critical' ? 'bg-red-50 text-red-700 border border-red-200' :
+                          selectedAgentTask.priority === 'high' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
+                          selectedAgentTask.priority === 'medium' ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
+                          'bg-green-50 text-green-700 border border-green-200'
+                        }`}>
+                          <AlertCircle className="h-3 w-3" />
+                          {selectedAgentTask.priority.charAt(0).toUpperCase() + selectedAgentTask.priority.slice(1)} Priority
+                        </span>
+                      )}
                     </h2>
                     <div className="flex flex-col md:flex-row md:justify-between gap-2">
                       <div>
-                        <div className="font-medium text-sm">Thread ID: {selectedAgentTask.threadId || "N/A"}</div>
-                        <div className="text-xs text-muted-foreground">Message ID: {selectedAgentTask.messageId || "N/A"}</div>
+                        <div className="font-medium text-sm">
+                          From: {selectedAgentTask.senderEmail || selectedAgentTask.sender || "Unknown"}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Thread ID: {selectedAgentTask.threadId || "N/A"}</div>
                       </div>
                       <div className="text-sm text-muted-foreground">
                         {selectedAgentTask.timestamp && 
@@ -4805,141 +4903,458 @@ ${content}`;
                     </div>
                   </div>
                   
-                  {/* Content */}
-                  <div className="flex-1 overflow-y-auto p-4">
-                    {/* Classification */}
-                    {selectedAgentTask.classification && (
-                      <div className="mb-6">
-                        <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
-                          <ClipboardCheck className="h-4 w-4 text-green-600" />
-                          Classification
-                        </h3>
-                        <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="font-medium text-sm">Is Customer Inquiry:</span>
-                                                                                      <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ${
-                               selectedAgentTask.classification.isCustomerInquiry 
-                                 ? "bg-green-50 text-green-700 border border-green-200" 
-                                 : "bg-gray-50 text-gray-700 border border-gray-200"
-                             }`}>
-                               {selectedAgentTask.classification.isCustomerInquiry ? "Yes" : "No"}
-                              </span>
+                  {/* Content with Tabs */}
+                  <div className="flex-1 overflow-hidden flex flex-col">
+                                          {/* Tabs */}
+                    <div className="px-4 pt-4 pb-0">
+                      <div className="flex items-center bg-gray-100 p-0.5 rounded-xl w-fit">
+                        <button
+                          onClick={() => handleTabChange("response")}
+                          className={cn(
+                            "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+                            activeTab === "response"
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                        >
+                          <MessageSquare size={15} />
+                          Response
+                        </button>
+                        <button
+                          onClick={() => handleTabChange("summary")}
+                          className={cn(
+                            "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+                            activeTab === "summary"
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                        >
+                          <AlignLeft size={15} />
+                          Summary
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* Tab Content */}
+                    <div className="flex-1 overflow-y-auto p-4 pt-2">
+                      {/* Response Tab with Original Email Below */}
+                      {activeTab === "response" && (
+                        <div 
+                          className={`transition-opacity duration-300 ${tabChanging ? 'opacity-0' : 'opacity-100'} space-y-6`}
+                        >
+                          {/* Agent Response with Gradient Border */}
+                          {selectedAgentTask.response && (
+                            <div 
+                              className="p-[2px] rounded-xl"
+                              style={{ 
+                                background: 'linear-gradient(90deg, #f97316 0%, #3b82f6 100%)',
+                                boxShadow: '0 2px 8px -1px rgba(0, 0, 0, 0.1), 0 1px 4px -1px rgba(0, 0, 0, 0.06)'
+                              }}
+                            >
+                              <div className="bg-white p-4 rounded-lg">
+                                                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center">
+                          <MessageSquare className="h-4 w-4 text-purple-600 mr-2" />
+                          <h3 className="text-sm font-medium">
+                            {isEditingResponse && !isUsingAiEdit ? "Editing Response" : "Agent Response"}
+                          </h3>
+                          {agentTaskStatusFilter === "completed" && (
+                            <span className="inline-flex items-center gap-1 ml-2 px-2 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                              <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                              Sent
+                            </span>
+                          )}
+                        </div>
+                        {!isEditingResponse && agentTaskStatusFilter === "pending" && (
+                          <div className="flex items-center gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl"
+                              onClick={() => {
+                                setEditedResponse(selectedAgentTask.response);
+                                setIsEditingResponse(true);
+                                setIsUsingAiEdit(false);
+                              }}
+                            >
+                              <Edit3 className="h-3 w-3 mr-1" />
+                              Modify
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-7 px-2 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-xl"
+                              onClick={() => {
+                                setEditedResponse(selectedAgentTask.response);
+                                setIsEditingResponse(true);
+                                setIsUsingAiEdit(true);
+                              }}
+                            >
+                              <Sparkles className="h-3 w-3 mr-1" />
+                              AI Edit
+                            </Button>
                           </div>
-                          {selectedAgentTask.classification.reasoning && (
-                            <div className="text-sm text-gray-600">
-                              <span className="font-medium">Reasoning:</span> {selectedAgentTask.classification.reasoning}
+                        )}
+                                </div>
+                                
+                                                      {isEditingResponse && isUsingAiEdit ? (
+                        <>
+                          {/* AI Edit Instructions (at the top) */}
+                          <div className="bg-white transition-all duration-200 ease-out animate-in slide-in-from-top-2 mb-3">
+                            <div className="relative border border-gray-200 rounded-md overflow-hidden">
+                              <textarea
+                                value={editPrompt}
+                                onChange={(e) => setEditPrompt(e.target.value)}
+                                placeholder="Enter specific instructions for how you'd like the AI to modify the response..."
+                                className="w-full text-xs bg-gray-50 px-3 py-2 focus:outline-none resize-none placeholder-gray-500 border-none"
+                                rows={3}
+                              />
+                              <div className="flex justify-between items-center bg-gray-50 border-t border-gray-200 px-3 py-2">
+                                <button
+                                  onClick={() => {
+                                    setIsEditingResponse(false);
+                                    setIsUsingAiEdit(false);
+                                    setEditPrompt("");
+                                  }}
+                                  className="flex items-center gap-1 text-xs font-medium text-gray-600 hover:text-gray-800"
+                                >
+                                  <X className="h-3 w-3" strokeWidth="2" />
+                                  Cancel
+                                </button>
+                                
+                                <button
+                                  disabled={!editPrompt.trim() || isGeneratingEdit}
+                                  onClick={async () => {
+                                    setIsGeneratingEdit(true);
+                                    try {
+                                      // Simulate AI editing with a timeout
+                                      await new Promise(resolve => setTimeout(resolve, 1500));
+                                      
+                                      // Create a modified response with the instructions
+                                      // In a real implementation, this would call an AI service
+                                      // For now, we'll create a more visible change to demonstrate the functionality
+                                      const aiModifiedResponse = `<div style="color: #1e40af; font-weight: 500; margin-bottom: 8px;">
+                                        AI has modified this response based on your instructions: "${editPrompt}"
+                                      </div>
+                                      ${selectedAgentTask.response}
+                                      <div style="border-top: 1px solid #e5e7eb; margin-top: 12px; padding-top: 8px; color: #4b5563; font-style: italic;">
+                                        Additional information added by AI based on your instructions.
+                                      </div>`;
+                                      
+                                      // Update the edited response
+                                      setEditedResponse(aiModifiedResponse);
+                                      
+                                      // Update the selectedAgentTask with the edited response
+                                      const aiUpdatedTask = {
+                                        ...selectedAgentTask,
+                                        response: aiModifiedResponse
+                                      };
+                                      
+                                      // Update in state
+                                      setSelectedAgentTask(aiUpdatedTask);
+                                      
+                                      // Update in the agentTasks array
+                                      setAgentTasks(prev => 
+                                        prev.map(task => 
+                                          task.id === selectedAgentTask.id ? aiUpdatedTask : task
+                                        )
+                                      );
+                                      
+                                      // Update in Firestore
+                                      if (user?.uid) {
+                                        const agentTaskRef = doc(db, `merchants/${user.uid}/agentinbox/${selectedAgentTask.id}`);
+                                        await updateDoc(agentTaskRef, { response: aiModifiedResponse });
+                                      }
+                                      
+                                      toast({
+                                        title: "AI edit applied",
+                                        description: "The response has been successfully modified and saved.",
+                                      });
+                                      
+                                      setIsEditingResponse(false);
+                                      setIsUsingAiEdit(false);
+                                    } catch (error) {
+                                      console.error("Error applying AI edit:", error);
+                                      toast({
+                                        variant: "destructive",
+                                        title: "AI edit failed",
+                                        description: "Failed to apply AI modifications. Please try again.",
+                                      });
+                                    } finally {
+                                      setIsGeneratingEdit(false);
+                                    }
+                                  }}
+                                  className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-md transition-colors ${
+                                    isGeneratingEdit || !editPrompt.trim()
+                                      ? 'text-gray-400 cursor-not-allowed' 
+                                      : 'text-blue-600 hover:text-blue-700'
+                                  }`}
+                                >
+                                  {isGeneratingEdit ? (
+                                    <>
+                                      <Loader2 className="h-3 w-3 animate-spin" strokeWidth="2" />
+                                      Generating...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Sparkles className="h-3 w-3" strokeWidth="2" />
+                                      Apply
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* View-only response for AI edit mode */}
+                          <div 
+                            className="text-sm text-gray-600 email-content prose prose-sm max-w-none"
+                            dangerouslySetInnerHTML={{ 
+                              __html: DOMPurify.sanitize(selectedAgentTask.response) 
+                            }}
+                          />
+                        </>
+                      ) : isEditingResponse && !isUsingAiEdit ? (
+                        <>
+                          {/* Direct editing of the response */}
+                          <div className="relative">
+                            <div 
+                              className="text-sm text-gray-600 email-content prose prose-sm max-w-none focus:outline-none"
+                              contentEditable
+                              suppressContentEditableWarning={true}
+                              onBlur={(e) => setEditedResponse(e.currentTarget.innerHTML)}
+                              dangerouslySetInnerHTML={{ 
+                                __html: editedResponse 
+                              }}
+                            />
+                            
+                            {/* Action buttons for manual edit */}
+                            <div className="flex justify-end gap-2 mt-3">
+                              <button
+                                onClick={() => {
+                                  setIsEditingResponse(false);
+                                  setIsUsingAiEdit(false);
+                                  setEditPrompt("");
+                                }}
+                                className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                              >
+                                <X className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                                Cancel
+                              </button>
+                              
+                              <button
+                                disabled={!editedResponse.trim()}
+                                onClick={() => {
+                                  // Update the selectedAgentTask with the edited response
+                                  const updatedTask = {
+                                    ...selectedAgentTask,
+                                    response: editedResponse
+                                  };
+                                  
+                                  // Update in state
+                                  setSelectedAgentTask(updatedTask);
+                                  
+                                  // Update in the agentTasks array
+                                  setAgentTasks(prev => 
+                                    prev.map(task => 
+                                      task.id === selectedAgentTask.id ? updatedTask : task
+                                    )
+                                  );
+                                  
+                                  // Update in Firestore
+                                  const agentTaskRef = doc(db, `merchants/${user?.uid}/agentinbox/${selectedAgentTask.id}`);
+                                  updateDoc(agentTaskRef, { response: editedResponse })
+                                    .then(() => {
+                                      toast({
+                                        title: "Response updated",
+                                        description: "The response has been successfully saved and will be used when sending.",
+                                      });
+                                    })
+                                    .catch(error => {
+                                      console.error("Error updating response:", error);
+                                      toast({
+                                        variant: "destructive",
+                                        title: "Update failed",
+                                        description: "Failed to save the response. Please try again.",
+                                      });
+                                    });
+                                  
+                                  setIsEditingResponse(false);
+                                  setIsUsingAiEdit(false);
+                                  setEditPrompt("");
+                                }}
+                                className={`flex items-center gap-1.5 text-xs font-normal px-3 py-1.5 rounded-md transition-colors ${
+                                  !editedResponse.trim()
+                                    ? 'text-white bg-blue-400 cursor-not-allowed' 
+                                    : 'text-white bg-blue-500 hover:bg-blue-600'
+                                }`}
+                              >
+                                <Check className="h-3 w-3 text-white" strokeWidth="2" />
+                                Save Changes
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                                  // Display the response
+                                  isHtmlContent(selectedAgentTask.response) ? (
+                                    <div 
+                                      className="text-sm text-gray-600 email-content prose prose-sm max-w-none"
+                                      dangerouslySetInnerHTML={{ 
+                                        __html: DOMPurify.sanitize(selectedAgentTask.response) 
+                                      }}
+                                    />
+                                  ) : (
+                                    <div className="whitespace-pre-wrap text-sm text-gray-600">
+                                      {selectedAgentTask.response}
+                                    </div>
+                                  )
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Original Email Below Response */}
+                          {selectedAgentTask.originalEmail?.htmlContent && (
+                            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                              <div className="flex items-center mb-2">
+                                <Mail className="h-4 w-4 text-gray-600 mr-2" />
+                                <h3 className="text-sm font-medium">Original Email</h3>
+                              </div>
+                              <div 
+                                className="text-sm text-gray-600 email-content prose prose-sm max-w-none"
+                                dangerouslySetInnerHTML={{ 
+                                  __html: DOMPurify.sanitize(selectedAgentTask.originalEmail.htmlContent) 
+                                }}
+                              />
                             </div>
                           )}
                         </div>
-                      </div>
-                    )}
-                    
-                    {/* Summary */}
-                    {(selectedAgentTask.shortSummary || selectedAgentTask.conversationSummary) && (
-                      <div className="mb-6">
-                        <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
-                          <AlignLeft className="h-4 w-4 text-blue-600" />
-                          Summary
-                          {selectedAgentTask.isOngoingConversation && (
-                            <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200 w-fit">
-                              Ongoing Thread
-                            </span>
-                          )}
-                        </h3>
-                        <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                          {selectedAgentTask.shortSummary && (
-                            <div className="mb-2">
-                              <span className="font-medium text-sm">Short Summary:</span>
-                              <p className="text-sm text-gray-600 mt-1">{selectedAgentTask.shortSummary}</p>
-                            </div>
-                          )}
-                          {selectedAgentTask.conversationSummary && (
-                            <div className="mb-2">
-                              <span className="font-medium text-sm">Conversation Summary:</span>
-                              <p className="text-sm text-gray-600 mt-1">{selectedAgentTask.conversationSummary}</p>
-                            </div>
-                          )}
-                          {selectedAgentTask.isOngoingConversation && selectedAgentTask.threadSummary && (
-                            <div className="mt-4 p-3 bg-blue-50 rounded-md border border-blue-200">
-                              <div className="flex items-center gap-2 mb-1">
-                                <MessageSquare className="h-3.5 w-3.5 text-blue-600" />
-                                <span className="text-xs font-medium text-blue-700">Thread History:</span>
+                      )}
+                      
+                      {/* Summary Tab */}
+                      {activeTab === "summary" && (
+                        <div 
+                          className={`transition-opacity duration-300 ${tabChanging ? 'opacity-0' : 'opacity-100'}`}
+                        >
+                          <div className="bg-white p-4 rounded-md border border-gray-200 shadow-sm mb-4">
+                            {selectedAgentTask.shortSummary && (
+                              <div className="mb-3">
+                                <p className="text-sm text-gray-600">{selectedAgentTask.shortSummary}</p>
                               </div>
-                              <p className="text-xs text-blue-700">
+                            )}
+                            {selectedAgentTask.conversationSummary && (
+                              <div>
+                                <p className="text-sm text-gray-600">{selectedAgentTask.conversationSummary}</p>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {selectedAgentTask.isOngoingConversation && selectedAgentTask.threadSummary && (
+                            <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <MessageSquare className="h-4 w-4 text-blue-600" />
+                                <h3 className="text-sm font-medium text-blue-700">Thread History</h3>
+                              </div>
+                              <p className="text-sm text-blue-700">
                                 {selectedAgentTask.threadSummary}
                               </p>
                             </div>
                           )}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Agent Response */}
-                    {selectedAgentTask.response && (
-                      <div className="mb-6">
-                        <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
-                          <MessageSquare className="h-4 w-4 text-purple-600" />
-                          Agent Response
-                        </h3>
-                        <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                          {isHtmlContent(selectedAgentTask.response) ? (
-                            <div 
-                              className="text-sm text-gray-600 email-content prose prose-sm max-w-none"
-                              dangerouslySetInnerHTML={{ 
-                                __html: DOMPurify.sanitize(selectedAgentTask.response) 
-                              }}
-                            />
-                          ) : (
-                            <div className="whitespace-pre-wrap text-sm text-gray-600">
-                              {selectedAgentTask.response}
+                          
+                          {selectedAgentTask.classification && (
+                            <div className="mt-4 bg-white p-4 rounded-md border border-gray-200 shadow-sm">
+                              <div className="flex items-center gap-2 mb-2">
+                                <ClipboardCheck className="h-4 w-4 text-green-600" />
+                                <h3 className="text-sm font-medium text-gray-700">Classification</h3>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-gray-600">Customer Inquiry:</span>
+                                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                  <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+                                    selectedAgentTask.classification.isCustomerInquiry ? "bg-green-500" : "bg-gray-400"
+                                  }`}></div>
+                                  {selectedAgentTask.classification.isCustomerInquiry ? "Yes" : "No"}
+                                </span>
+                              </div>
                             </div>
                           )}
                         </div>
-                      </div>
-                    )}
-                    
-                    {/* Debug Information */}
-                    {selectedAgentTask.debug && selectedAgentTask.debug.length > 0 && (
-                      <div>
-                        <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
-                          <Code className="h-4 w-4 text-gray-600" />
-                          Debug Information
-                        </h3>
-                        <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                          <ul className="text-xs text-gray-600 space-y-1">
-                            {selectedAgentTask.debug.map((item: string, index: number) => (
-                              <li key={index} className="font-mono">{item}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                   
                   {/* Actions */}
-                  <div className="p-3 border-t flex justify-end gap-2">
-                    <Button variant="outline" size="sm" className="text-xs">
-                      <Archive className="h-3 w-3 mr-1" />
-                      Archive
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      className="text-xs bg-blue-500 hover:bg-blue-600"
-                      onClick={handleSendAgentResponse}
-                      disabled={isSendingAgentResponse || !selectedAgentTask?.response}
-                    >
-                      {isSendingAgentResponse ? (
-                        <>
-                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                          Sending...
-                        </>
-                      ) : (
-                        <>
-                          <Send className="h-3 w-3 mr-1" />
-                          Send Response
-                        </>
-                      )}
-                    </Button>
+                  <div className="p-3 border-t flex justify-between gap-2">
+                    {/* Only show action buttons for pending tasks */}
+                    {agentTaskStatusFilter === "pending" ? (
+                      <>
+                        <div>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => {
+                              if (selectedAgentTask && user?.uid) {
+                                const agentTaskRef = doc(db, `merchants/${user.uid}/agentinbox/${selectedAgentTask.id}`);
+                                updateDoc(agentTaskRef, {
+                                  status: "rejected",
+                                  rejectedAt: Timestamp.now(),
+                                  rejectedBy: user.uid
+                                }).then(() => {
+                                  toast({
+                                    title: "Task rejected",
+                                    description: "The task has been marked as rejected",
+                                  });
+                                  // Refresh the current view
+                                  fetchAgentTasks(agentTaskStatusFilter);
+                                });
+                              }
+                            }}
+                          >
+                            <XCircle className="h-3 w-3 mr-1" />
+                            Reject
+                          </Button>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            size="sm" 
+                            className="text-xs bg-blue-500 hover:bg-blue-600"
+                            onClick={handleSendAgentResponse}
+                            disabled={isSendingAgentResponse || !selectedAgentTask?.response}
+                          >
+                            {isSendingAgentResponse ? (
+                              <>
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                Sending...
+                              </>
+                            ) : (
+                              <>
+                                <Send className="h-3 w-3 mr-1" />
+                                Send Response
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="w-full flex justify-center">
+                        <span className="text-xs text-gray-500 flex items-center">
+                          <CheckCircle className="h-3.5 w-3.5 text-green-500 mr-1.5" />
+                          {selectedAgentTask.sentAt ? (
+                            <>
+                              Completed on {formatMelbourneTime(
+                                selectedAgentTask.sentAt.__time__ 
+                                  ? new Date(selectedAgentTask.sentAt.__time__) 
+                                  : selectedAgentTask.sentAt.toDate()
+                              )}
+                            </>
+                          ) : (
+                            <>This task has been completed</>
+                          )}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   {agentResponseSuccess && (
                     <div className="absolute bottom-16 left-1/2 transform -translate-x-1/2 bg-green-100 text-green-800 px-4 py-2 rounded-md text-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -6355,6 +6770,9 @@ const EmailViewer = ({
   const [showInstructions, setShowInstructions] = useState(false);
   const [instructionsClosing, setInstructionsClosing] = useState(false);
   const [instructionTone, setInstructionTone] = useState('professional');
+  const [showQuickReplyInstructions, setShowQuickReplyInstructions] = useState(false);
+  const [quickReplyInstructionsClosing, setQuickReplyInstructionsClosing] = useState(false);
+  const [quickReplyPrompt, setQuickReplyPrompt] = useState('');
   const [localIsGenerating, setLocalIsGenerating] = useState(false);
   
   // Local state for dialog
@@ -6390,6 +6808,15 @@ const EmailViewer = ({
     setTimeout(() => {
       setShowInstructions(false);
       setInstructionsClosing(false);
+    }, 200);
+  };
+  
+  // Close quick reply instructions with animation
+  const closeQuickReplyInstructionsWithAnimation = () => {
+    setQuickReplyInstructionsClosing(true);
+    setTimeout(() => {
+      setShowQuickReplyInstructions(false);
+      setQuickReplyInstructionsClosing(false);
     }, 200);
   };
 
@@ -6584,6 +7011,155 @@ const EmailViewer = ({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            
+            <div className="relative">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md flex items-center gap-1"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    Quick Reply
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem 
+                    className="flex items-center gap-2 cursor-pointer"
+                    onClick={() => {
+                      setShowQuickReplyInstructions(true);
+                    }}
+                  >
+                    <MessageSquare className="h-3.5 w-3.5 text-gray-500" />
+                    <span>Custom Instructions</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-gray-500">Select Tone</DropdownMenuLabel>
+                  <DropdownMenuItem 
+                    className="flex items-center gap-2 cursor-pointer"
+                    onClick={() => {
+                      onStartReply?.(email);
+                      setTimeout(() => {
+                        if (callGenerateEmailResponse && replyEditorRef.current) {
+                          callGenerateEmailResponse('tone', 'professional', undefined, replyEditorRef);
+                        }
+                      }, 100);
+                    }}
+                  >
+                    <Briefcase className="h-3.5 w-3.5 text-gray-500" />
+                    <span>Professional</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    className="flex items-center gap-2 cursor-pointer"
+                    onClick={() => {
+                      onStartReply?.(email);
+                      setTimeout(() => {
+                        if (callGenerateEmailResponse && replyEditorRef.current) {
+                          callGenerateEmailResponse('tone', 'friendly', undefined, replyEditorRef);
+                        }
+                      }, 100);
+                    }}
+                  >
+                    <Smile className="h-3.5 w-3.5 text-gray-500" />
+                    <span>Friendly</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    className="flex items-center gap-2 cursor-pointer"
+                    onClick={() => {
+                      onStartReply?.(email);
+                      setTimeout(() => {
+                        if (callGenerateEmailResponse && replyEditorRef.current) {
+                          callGenerateEmailResponse('tone', 'direct', undefined, replyEditorRef);
+                        }
+                      }, 100);
+                    }}
+                  >
+                    <ArrowRight className="h-3.5 w-3.5 text-gray-500" />
+                    <span>Direct</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              {/* Quick Reply Instructions Speech Bubble */}
+              {(showQuickReplyInstructions || quickReplyInstructionsClosing) && (
+                <div className={`absolute top-full right-0 mt-2 w-80 z-50 ${
+                  quickReplyInstructionsClosing 
+                    ? 'animate-out fade-out slide-out-to-top-2 duration-200' 
+                    : 'animate-in fade-in slide-in-from-top-2 duration-300'
+                }`}>
+                  <div className="bg-white border border-gray-200 rounded-md p-4 shadow-md">
+                    {/* Speech bubble pointer */}
+                    <div className="absolute -top-2 right-6 w-4 h-4 bg-white border-t border-l border-gray-200 transform rotate-45"></div>
+                    
+                    <div className="space-y-3">
+                      
+                      <textarea
+                        value={quickReplyPrompt}
+                        onChange={(e) => setQuickReplyPrompt(e.target.value)}
+                        placeholder="Enter specific instructions for how you'd like the AI to respond..."
+                        className="w-full text-xs bg-white border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder-gray-500"
+                        rows={3}
+                        autoFocus
+                      />
+                      
+                      <div className="flex justify-between items-center">
+                        <button
+                          onClick={() => closeQuickReplyInstructionsWithAnimation()}
+                          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors text-gray-600 hover:text-gray-800 border border-gray-200 hover:bg-gray-50"
+                        >
+                          <X className="h-3 w-3" strokeWidth="2" />
+                          Cancel
+                        </button>
+                        
+                        <button
+                          disabled={!quickReplyPrompt.trim() || actualIsGenerating}
+                          onClick={async () => {
+                            if (!quickReplyPrompt.trim()) return;
+                            
+                            // First start reply mode
+                            onStartReply?.(email);
+                            
+                            // Wait for reply mode to initialize
+                            setTimeout(async () => {
+                              if (!callGenerateEmailResponse || !replyEditorRef.current) return;
+                              
+                              setLocalIsGenerating(true);
+                              try {
+                                await callGenerateEmailResponse('custom', undefined, quickReplyPrompt, replyEditorRef);
+                                closeQuickReplyInstructionsWithAnimation();
+                                setQuickReplyPrompt('');
+                              } catch (error) {
+                                console.error('Error in quick reply AI generation:', error);
+                              } finally {
+                                setLocalIsGenerating(false);
+                              }
+                            }, 100);
+                          }}
+                          className={`flex items-center gap-1.5 text-xs font-normal px-3 py-1.5 rounded-md transition-colors ${
+                            !quickReplyPrompt.trim() || actualIsGenerating
+                              ? 'text-white bg-gray-400 cursor-not-allowed' 
+                              : 'text-white bg-gray-700 hover:bg-gray-800'
+                          }`}
+                        >
+                          {actualIsGenerating ? (
+                            <>
+                              <Loader2 className="h-3 w-3 text-white animate-spin" strokeWidth="2" />
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-3 w-3 text-white" strokeWidth="2" />
+                              Apply
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             
             {/* Summarise Button - Available for all emails */}
             <TooltipProvider>
@@ -7087,6 +7663,8 @@ const EmailViewer = ({
                 </div>
               </div>
             )}
+            
+
             </div>
             </div>
 

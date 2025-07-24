@@ -6336,34 +6336,111 @@ const ComposeEmailView = ({
       {/* From Field */}
       <div className="flex items-center py-2 px-4 border-b border-gray-100">
         <span className="text-xs text-gray-600 font-medium w-12">From:</span>
-        <div className="flex items-center gap-2 flex-1">
-          <span className="text-xs text-gray-900 ml-2">{selectedAccount || 'Your Account'}</span>
-          <ChevronDown className="h-4 w-4 text-gray-400" />
-        </div>
-        <div className="flex gap-2">
-          <Button
-            onClick={() => {
-              if (to.trim() && content.trim()) {
-                onSend(to, subject, content, cc, bcc, attachments);
-              }
-            }}
-            disabled={!to.trim() || !content.trim() || isSending}
-            className="bg-blue-500 hover:bg-blue-600 text-white h-7 px-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
-          >
-            {isSending ? (
-              <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4 mr-1" />
-            )}
-            {isSending ? 'Sending...' : 'Send'}
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={onCancel}
-            className="h-7 px-2 text-gray-600 hover:text-gray-900 text-xs"
-          >
-            Cancel
-          </Button>
+        <div className="flex-1 text-xs text-gray-900">{selectedAccount || 'Your Account'}</div>
+        <div className="flex items-center gap-2">
+          {/* Discreet Tap Agent Section - Only shown when not generating */}
+          {!isGenerating && (
+            <div className="flex items-center gap-2 mr-auto">
+              <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+                <button
+                  onClick={() => {}}
+                  className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md text-gray-800 bg-white shadow-sm"
+                >
+                  <WandSparkles className="h-3 w-3 text-blue-500" />
+                  <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Tap Agent</span>
+                </button>
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors text-gray-600 hover:bg-gray-200/70">
+                      <Palette className="h-3 w-3" />
+                      Tone
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-40 z-50">
+                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'friendly')}>
+                      <Lightbulb className="h-3 w-3 text-gray-500 mr-2" />
+                      <span className="text-xs">Friendly</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'professional')}>
+                      <Users className="h-3 w-3 text-gray-500 mr-2" />
+                      <span className="text-xs">Professional</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'direct')}>
+                      <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
+                      <span className="text-xs">Direct</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'casual')}>
+                      <Eye className="h-3 w-3 text-gray-500 mr-2" />
+                      <span className="text-xs">Casual</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'formal')}>
+                      <Shield className="h-3 w-3 text-gray-500 mr-2" />
+                      <span className="text-xs">Formal</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'persuasive')}>
+                      <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
+                      <span className="text-xs">Persuasive</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                
+                <button
+                  onClick={() => setShowInstructions(!showInstructions)}
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors text-gray-600 hover:bg-gray-200/70"
+                >
+                  <MessageSquare className="h-3 w-3" />
+                  Instructions
+                </button>
+                
+                <button
+                  onClick={() => setShowEmailRulesDialog && setShowEmailRulesDialog(true)}
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors text-gray-600 hover:bg-gray-200/70"
+                >
+                  <Shield className="h-3 w-3" />
+                  Rules
+                </button>
+              </div>
+            </div>
+          )}
+          
+          {isGenerating ? (
+            <div className="flex items-center">
+              {/* Generating Response Text */}
+              <div className="animate-pulse flex items-center h-7 px-3 text-xs text-blue-600 font-medium">
+                <Loader2 className="h-3 w-3 mr-1.5 animate-spin text-blue-500" />
+                <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">
+                  Generating content...
+                </span>
+              </div>
+            </div>
+          ) : (
+            <>
+              <Button
+                onClick={() => {
+                  if (to.trim() && content.trim()) {
+                    onSend(to, subject, content, cc, bcc, attachments);
+                  }
+                }}
+                disabled={!to.trim() || !content.trim() || isSending}
+                className="bg-blue-500 hover:bg-blue-600 text-white h-7 px-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+              >
+                {isSending ? (
+                  <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                ) : (
+                  <Send className="h-3 w-3 mr-1" />
+                )}
+                {isSending ? 'Sending...' : 'Send'}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={onCancel}
+                className="h-7 px-2 text-gray-600 hover:text-gray-900 text-xs"
+              >
+                Cancel
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -6488,148 +6565,77 @@ const ComposeEmailView = ({
         </div>
       )}
 
-      {/* Tap Agent Bar for Compose */}
-      <div className="px-3 py-2">
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3">
-          <div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5">
-                  <WandSparkles className="h-4 w-4 text-blue-500" />
-                  <GradientText
-                    colors={["#ff6b35", "#4079ff", "#ff8500", "#3b82f6", "#ff6b35"]}
-                    animationSpeed={3}
-                    showBorder={false}
-                    className="text-xs font-medium"
-                  >
-                    Tap Agent
-                  </GradientText>
-                </div>
-                {(showInstructions || instructionsClosing) && !isGenerating && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-medium text-gray-700">Custom Instructions</span>
-                  </div>
-                )}
-                {isGenerating ? (
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-3 w-3 text-blue-500 animate-spin" />
-                    <span className="text-xs text-gray-600">Thinking...</span>
-                  </div>
-                ) : !showInstructions && (
-                  <div className="flex items-center gap-2">
-                    <div className={`flex items-center transition-all duration-500 ease-in-out ${
-                      !isContentEmpty(content) 
-                        ? 'opacity-100 scale-100 w-auto' 
-                        : 'opacity-0 scale-95 w-0 overflow-hidden'
-                    }`}>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleComposeAI('tone', 'friendly')}
-                          className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors whitespace-nowrap"
-                        >
-                          <Lightbulb className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                          Friendly
-                        </button>
-                        <button
-                          onClick={() => handleComposeAI('tone', 'professional')}
-                          className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors whitespace-nowrap"
-                        >
-                          <Users className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                          Professional
-                        </button>
-                      </div>
-                      <div className="h-4 w-px bg-gray-300 mx-2"></div>
-                    </div>
-                    <button
-                      onClick={() => setShowInstructions(!showInstructions)}
-                      className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                    >
-                      <MessageSquare className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                      Instructions
-                    </button>
-                  </div>
-                )}
+      {/* Instructions Panel - Only shown when instructions are open */}
+      {(showInstructions || instructionsClosing) && !isGenerating && (
+        <div className="mx-3 my-2">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5">
+                <MessageSquare className="h-3.5 w-3.5 text-blue-500" />
+                <span className="text-xs font-medium text-gray-700">Custom Instructions</span>
               </div>
-              
-              {/* Buttons section - show rules when not in instructions, show all buttons when in instructions */}
-              {!isGenerating && (
-                <div className="flex items-center gap-2">
-                  {(showInstructions || instructionsClosing) ? (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowEmailRulesDialog && setShowEmailRulesDialog(true)}
+                  className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                >
+                  <Shield className="h-3 w-3 text-gray-500" />
+                  Rules
+                </button>
+                <button
+                  onClick={closeInstructionsWithAnimation}
+                  className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
+                >
+                  <X className="h-3 w-3 text-gray-500" />
+                  Cancel
+                </button>
+                <button
+                  disabled={isGenerating}
+                  onClick={async () => {
+                    const textarea = document.getElementById('instructions-textarea-compose') as HTMLTextAreaElement;
+                    const customInstructions = textarea?.value || '';
+                    if (customInstructions.trim()) {
+                      // Immediately close instructions without animation for Apply
+                      setShowInstructions(false);
+                      setInstructionsClosing(false);
+                      setIsGenerating(true);
+                      try {
+                        await callGenerateEmailResponse?.('createemail', instructionTone, customInstructions, composeEditorRef);
+                        // Update content state after AI generation
+                        if (composeEditorRef.current) {
+                          setContent(composeEditorRef.current.innerHTML || '');
+                        }
+                      } catch (error) {
+                        console.error('Error in compose AI generation:', error);
+                      } finally {
+                        setIsGenerating(false);
+                      }
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 text-xs font-normal px-3 py-1.5 rounded-md transition-colors ${
+                    isGenerating 
+                      ? 'text-white bg-blue-600 cursor-not-allowed' 
+                      : 'text-white bg-blue-500 hover:bg-blue-600'
+                  }`}
+                >
+                  {isGenerating ? (
                     <>
-                      <button
-                        onClick={() => setShowEmailRulesDialog && setShowEmailRulesDialog(true)}
-                        className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                      >
-                        <Shield className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                        Rules
-                      </button>
-                      <button
-                        onClick={closeInstructionsWithAnimation}
-                        className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                      >
-                        <X className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                        Cancel
-                      </button>
-                      <button
-                        disabled={isGenerating}
-                        onClick={async () => {
-                          const textarea = document.getElementById('instructions-textarea-compose') as HTMLTextAreaElement;
-                          const customInstructions = textarea?.value || '';
-                          if (customInstructions.trim()) {
-                            // Immediately close instructions without animation for Apply
-                            setShowInstructions(false);
-                            setInstructionsClosing(false);
-                            setIsGenerating(true);
-                            try {
-                              await callGenerateEmailResponse?.('createemail', instructionTone, customInstructions, composeEditorRef);
-                              // Update content state after AI generation
-                              if (composeEditorRef.current) {
-                                setContent(composeEditorRef.current.innerHTML || '');
-                              }
-                            } catch (error) {
-                              console.error('Error in compose AI generation:', error);
-                            } finally {
-                              setIsGenerating(false);
-                            }
-                          }
-                        }}
-                        className={`flex items-center gap-1.5 text-xs font-normal px-3 py-1.5 rounded-md transition-colors ${
-                          isGenerating 
-                            ? 'text-white bg-blue-600 cursor-not-allowed' 
-                            : 'text-white bg-blue-500 hover:bg-blue-600'
-                        }`}
-                      >
-                        {isGenerating ? (
-                          <>
-                            <Loader2 className="h-3 w-3 text-white animate-spin" strokeWidth="2" />
-                            <span className="text-xs font-normal text-white">
-                              Applying...
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <Check className="h-3 w-3 text-white" strokeWidth="2" />
-                            Apply
-                          </>
-                        )}
-                      </button>
+                      <Loader2 className="h-3 w-3 text-white animate-spin" />
+                      <span className="text-xs font-normal text-white">
+                        Applying...
+                      </span>
                     </>
                   ) : (
-                                         <button
-                       onClick={() => setShowEmailRulesDialog && setShowEmailRulesDialog(true)}
-                       className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                     >
-                       <Shield className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                       Rules
-                     </button>
+                    <>
+                      <Check className="h-3 w-3 text-white" />
+                      Apply
+                    </>
                   )}
-                </div>
-              )}
+                </button>
+              </div>
             </div>
-          </div>
-          
-          {/* Instructions Dropdown */}
-          {!isGenerating && (showInstructions || instructionsClosing) && (
+            
+            {/* Instructions Textarea */}
             <div className={`bg-white transition-all duration-200 ease-out ${
               instructionsClosing 
                 ? 'animate-out slide-out-to-top-2' 
@@ -6686,9 +6692,9 @@ const ComposeEmailView = ({
                 </div>
               </div>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Message Content - matches reply module */}
       <div className="flex-1 px-3 py-6 overflow-y-auto custom-scrollbar">

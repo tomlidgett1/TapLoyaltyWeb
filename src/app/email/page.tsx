@@ -6234,14 +6234,86 @@ const EmailViewer = ({
                 })()}</span>
               </div>
               <div className="flex items-center gap-1 text-xs text-gray-600">
-                <span><span className="font-bold">To:</span> {email.to}</span>
+                <span>
+                  <span className="font-bold">To:</span>{" "}
+                  {(() => {
+                    // Safety check for email object
+                    if (!email) {
+                      return <span className="text-gray-500">No email data</span>;
+                    }
+                    // Helper function to extract display names from email addresses
+                    const extractDisplayNames = (emailStr: string | undefined) => {
+                      if (!emailStr) return [];
+                      
+                      return emailStr.split(',').map(email => {
+                        const match = email.trim().match(/(.*?)\s*<(.+?)>/);
+                        return {
+                          displayName: match ? match[1].trim() : email.trim().split('@')[0],
+                          fullEmail: email.trim()
+                        };
+                      });
+                    };
+                    
+                    const recipients = extractDisplayNames(email.to);
+                    
+                    if (recipients.length === 0) {
+                      return <span className="text-gray-500"></span>;
+                    }
+                    
+                    return (
+                      <span className="inline-flex flex-wrap gap-x-1">
+                        {recipients.map((recipient, index) => (
+                          <span key={recipient.fullEmail} className="group relative cursor-default">
+                            {recipient.displayName}
+                            {index < recipients.length - 1 ? "," : ""}
+                            <span className="invisible absolute left-0 top-full z-10 mt-1 whitespace-nowrap rounded-md bg-gray-800 px-2 py-1 text-xs text-white group-hover:visible">
+                              {recipient.fullEmail}
+                            </span>
+                          </span>
+                        ))}
+                      </span>
+                    );
+                  })()}
+                </span>
                 {(() => {
                   const ccRecipients = extractCcRecipients(email);
                   if (ccRecipients) {
+                    // Helper function to extract display names from email addresses
+                    const extractDisplayNames = (emailStr: string | undefined) => {
+                      if (!emailStr) return [];
+                      
+                      return emailStr.split(',').map(email => {
+                        const match = email.trim().match(/(.*?)\s*<(.+?)>/);
+                        return {
+                          displayName: match ? match[1].trim() : email.trim().split('@')[0],
+                          fullEmail: email.trim()
+                        };
+                      });
+                    };
+                    
+                    const ccList = extractDisplayNames(ccRecipients);
+                    
+                    if (ccList.length === 0) {
+                      return null;
+                    }
+                    
                     return (
                       <>
                         <span>•</span>
-                        <span><span className="font-bold">Cc:</span> {ccRecipients}</span>
+                        <span>
+                          <span className="font-bold">Cc:</span>{" "}
+                          <span className="inline-flex flex-wrap gap-x-1">
+                            {ccList.map((recipient, index) => (
+                              <span key={recipient.fullEmail} className="group relative cursor-default">
+                                {recipient.displayName}
+                                {index < ccList.length - 1 ? "," : ""}
+                                <span className="invisible absolute left-0 top-full z-10 mt-1 whitespace-nowrap rounded-md bg-gray-800 px-2 py-1 text-xs text-white group-hover:visible">
+                                  {recipient.fullEmail}
+                                </span>
+                              </span>
+                            ))}
+                          </span>
+                        </span>
                       </>
                     );
                   }

@@ -1,0 +1,12 @@
+7452c7452
+<                       {/* Tap Agent Section - Hidden when generating response */}
+---
+>           {/* Tap Agent Section - Hidden when generating response */}
+7453c7453
+<           {!localIsGenerating && (
+---
+>           {!localIsGenerating && (
+7454d7453
+<           {!localIsGenerating && (
+7725a7725
+>           )}

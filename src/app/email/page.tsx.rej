@@ -1,0 +1,10 @@
+@@ -7449,7 +7449,8 @@
+               </div>
+             </div>
+ 
+-                      {/* Tap Agent Section - Hidden when generating response */}
++          {/* Tap Agent Section - Hidden when generating response */}
++          {!localIsGenerating && (
+             <div className="mx-3 my-2">
+               <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3">
+                 <div>

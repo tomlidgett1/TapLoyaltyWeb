@@ -7015,31 +7015,29 @@ const EmailViewer = ({
             <div className="relative">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                                  <Button 
-                  variant="ghost" 
-                  size="sm"
-                  className="h-7 px-2 text-xs hover:bg-blue-50 rounded-2xl flex items-center gap-1"
-                >
-                  <Sparkles className="h-3 w-3 text-blue-500" />
-                  <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-medium">
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md flex items-center gap-1"
+                  >
+                    <Sparkles className="h-3 w-3" />
                     Quick Reply
-                  </span>
-                </Button>
+                  </Button>
                 </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-56 rounded-2xl border border-gray-200 shadow-md overflow-hidden">
-                <DropdownMenuItem 
-                  className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 focus:bg-gray-50"
-                  onClick={() => {
-                    setShowQuickReplyInstructions(true);
-                  }}
-                >
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem 
+                    className="flex items-center gap-2 cursor-pointer"
+                    onClick={() => {
+                      setShowQuickReplyInstructions(true);
+                    }}
+                  >
                     <MessageSquare className="h-3.5 w-3.5 text-gray-500" />
                     <span>Custom Instructions</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-xs text-gray-500">Select Tone</DropdownMenuLabel>
                   <DropdownMenuItem 
-                    className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 focus:bg-gray-50"
+                    className="flex items-center gap-2 cursor-pointer"
                     onClick={() => {
                       setLocalIsGenerating(true);
                       onStartReply?.(email);
@@ -7047,7 +7045,8 @@ const EmailViewer = ({
                         if (callGenerateEmailResponse && replyEditorRef.current) {
                           callGenerateEmailResponse('tone', 'professional', undefined, replyEditorRef)
                             .finally(() => {
-                              setLocalIsGenerating(false); // Reset loading state when done
+                              // Don't set localIsGenerating to false here as we want to keep the UI in loading state
+                              // It will be cleared when the response is fully generated
                             });
                         } else {
                           setLocalIsGenerating(false); // Reset if something went wrong
@@ -7059,7 +7058,7 @@ const EmailViewer = ({
                     <span>Professional</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem 
-                    className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 focus:bg-gray-50"
+                    className="flex items-center gap-2 cursor-pointer"
                     onClick={() => {
                       setLocalIsGenerating(true);
                       onStartReply?.(email);
@@ -7067,7 +7066,8 @@ const EmailViewer = ({
                         if (callGenerateEmailResponse && replyEditorRef.current) {
                           callGenerateEmailResponse('tone', 'friendly', undefined, replyEditorRef)
                             .finally(() => {
-                              setLocalIsGenerating(false); // Reset loading state when done
+                              // Don't set localIsGenerating to false here as we want to keep the UI in loading state
+                              // It will be cleared when the response is fully generated
                             });
                         } else {
                           setLocalIsGenerating(false); // Reset if something went wrong
@@ -7079,7 +7079,7 @@ const EmailViewer = ({
                     <span>Friendly</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem 
-                    className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 focus:bg-gray-50"
+                    className="flex items-center gap-2 cursor-pointer"
                     onClick={() => {
                       setLocalIsGenerating(true);
                       onStartReply?.(email);
@@ -7087,7 +7087,8 @@ const EmailViewer = ({
                         if (callGenerateEmailResponse && replyEditorRef.current) {
                           callGenerateEmailResponse('tone', 'direct', undefined, replyEditorRef)
                             .finally(() => {
-                              setLocalIsGenerating(false); // Reset loading state when done
+                              // Don't set localIsGenerating to false here as we want to keep the UI in loading state
+                              // It will be cleared when the response is fully generated
                             });
                         } else {
                           setLocalIsGenerating(false); // Reset if something went wrong
@@ -7108,9 +7109,9 @@ const EmailViewer = ({
                     ? 'animate-out fade-out slide-out-to-top-2 duration-200' 
                     : 'animate-in fade-in slide-in-from-top-2 duration-300'
                 }`}>
-                                  <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-md">
-                  {/* Speech bubble pointer */}
-                  <div className="absolute -top-2 right-6 w-4 h-4 bg-white border-t border-l border-gray-200 transform rotate-45"></div>
+                  <div className="bg-white border border-gray-200 rounded-md p-4 shadow-md">
+                    {/* Speech bubble pointer */}
+                    <div className="absolute -top-2 right-6 w-4 h-4 bg-white border-t border-l border-gray-200 transform rotate-45"></div>
                     
                     <div className="space-y-3">
                       
@@ -7118,7 +7119,7 @@ const EmailViewer = ({
                         value={quickReplyPrompt}
                         onChange={(e) => setQuickReplyPrompt(e.target.value)}
                         placeholder="Enter specific instructions for how you'd like the AI to respond..."
-                        className="w-full text-xs bg-white border border-gray-200 rounded-2xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder-gray-500"
+                        className="w-full text-xs bg-white border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder-gray-500"
                         rows={3}
                         autoFocus
                       />
@@ -7126,7 +7127,7 @@ const EmailViewer = ({
                       <div className="flex justify-between items-center">
                         <button
                           onClick={() => closeQuickReplyInstructionsWithAnimation()}
-                          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-2xl transition-colors text-gray-600 hover:text-gray-800 border border-gray-200 hover:bg-gray-50"
+                          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors text-gray-600 hover:text-gray-800 border border-gray-200 hover:bg-gray-50"
                         >
                           <X className="h-3 w-3" strokeWidth="2" />
                           Cancel
@@ -7156,7 +7157,7 @@ const EmailViewer = ({
                               }
                             }, 100);
                           }}
-                          className={`flex items-center gap-1.5 text-xs font-normal px-3 py-1.5 rounded-2xl transition-colors ${
+                          className={`flex items-center gap-1.5 text-xs font-normal px-3 py-1.5 rounded-md transition-colors ${
                             !quickReplyPrompt.trim() || actualIsGenerating
                               ? 'text-white bg-gray-400 cursor-not-allowed' 
                               : 'text-white bg-gray-700 hover:bg-gray-800'
@@ -7448,36 +7449,36 @@ const EmailViewer = ({
               </div>
             </div>
 
-          {/* Tap Agent Section */}
-          <div className="mx-3 my-2">
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3">
-            <div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5">
-                    <WandSparkles className="h-4 w-4 text-blue-500" />
-                    <GradientText
-                      colors={["#ff6b35", "#4079ff", "#ff8500", "#3b82f6", "#ff6b35"]}
-                      animationSpeed={3}
-                      showBorder={false}
-                      className="text-xs font-medium"
-                    >
-                      Tap Agent
-                    </GradientText>
-                  </div>
-                  {(showInstructions || instructionsClosing) && !actualIsGenerating && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-medium text-gray-700">Custom Instructions</span>
+                      {/* Tap Agent Section - Hidden when generating response */}
+          {!localIsGenerating && (
+          {!localIsGenerating && (
+          {!localIsGenerating && (
+            <div className="mx-3 my-2">
+              <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1.5">
+                        <WandSparkles className="h-4 w-4 text-blue-500" />
+                        <GradientText
+                          colors={["#ff6b35", "#4079ff", "#ff8500", "#3b82f6", "#ff6b35"]}
+                          animationSpeed={3}
+                          showBorder={false}
+                          className="text-xs font-medium"
+                        >
+                          Tap Agent
+                        </GradientText>
+                      </div>
+                      {(showInstructions || instructionsClosing) && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-medium text-gray-700">Custom Instructions</span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                                    {actualIsGenerating ? (
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="h-3 w-3 text-blue-500 animate-spin" />
-                      <span className="text-xs text-gray-600">Thinking...</span>
-                    </div>
-                  ) : !showInstructions && !localIsGenerating && (
-                    <div className="flex items-center gap-2">
+                    
+                    {!showInstructions && (
                       <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2">
                                                   <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors">
@@ -7724,6 +7725,8 @@ const EmailViewer = ({
 
             </div>
             </div>
+
+            )}
 
             {/* Message Content */}
           <div className="flex-1 px-5 py-6 overflow-y-auto custom-scrollbar">

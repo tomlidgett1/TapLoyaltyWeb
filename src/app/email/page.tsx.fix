@@ -1,0 +1,19 @@
+#!/bin/bash
+# This script will fix the Tap Agent section in the page.tsx file
+
+# Find the line with "Tap Agent Section"
+line_number=$(grep -n "Tap Agent Section" src/app/email/page.tsx | cut -d':' -f1)
+
+# Find the matching closing brace for the entire section
+# This is complex and would require parsing the file structure
+
+# For now, let's try a simpler approach - wrap the section in a conditional
+sed -i '' "${line_number}s/.*/{\/\* Tap Agent Section - Hidden when generating response \*\/}/" src/app/email/page.tsx
+sed -i '' "$((line_number+1))s/.*/{!localIsGenerating \&\& (/" src/app/email/page.tsx
+
+# Find where the section ends (this is approximate)
+end_line=$(grep -n "\/\* Message Content \*\/" src/app/email/page.tsx | cut -d':' -f1)
+insert_line=$((end_line-3))
+
+# Add the closing parenthesis before Message Content
+sed -i '' "${insert_line}s/.*/)}/" src/app/email/page.tsx

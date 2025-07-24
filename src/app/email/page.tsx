@@ -1222,7 +1222,13 @@ export default function EmailPage() {
       // Get the necessary data from the selected agent task
       const threadId = selectedAgentTask.threadId;
       const response = selectedAgentTask.response;
+      
+      // Use senderEmail field from the agent task document (fallback to sender if not available)
       const recipient = selectedAgentTask.senderEmail || selectedAgentTask.sender || "customer@example.com";
+      console.log("Using recipient email:", recipient, "from fields:", {
+        senderEmail: selectedAgentTask.senderEmail,
+        sender: selectedAgentTask.sender
+      });
       
       // Get the merchant's store name from Firestore for the email signature
       let businessName = "Customer Support";
@@ -1257,7 +1263,7 @@ export default function EmailPage() {
       
       const result = await replyToGmailThread(replyData);
       
-      console.log('Agent response sent successfully:', result.data);
+      console.log('Agent response sent successfully to', recipient, ':', result.data);
       
       // Update the agent task in Firestore to mark it as sent
       const agentTaskRef = doc(db, `merchants/${user.uid}/agentinbox/${selectedAgentTask.id}`);

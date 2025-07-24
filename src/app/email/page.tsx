@@ -1222,7 +1222,7 @@ export default function EmailPage() {
       // Get the necessary data from the selected agent task
       const threadId = selectedAgentTask.threadId;
       const response = selectedAgentTask.response;
-      const recipient = selectedAgentTask.sender || "customer@example.com";
+      const recipient = selectedAgentTask.senderEmail || selectedAgentTask.sender || "customer@example.com";
       
       // Get the merchant's store name from Firestore for the email signature
       let businessName = "Customer Support";

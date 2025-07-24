@@ -116,6 +116,9 @@ import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/
 import { formatMelbourneTime } from "@/lib/date-utils"
 import { formatDistanceToNow } from "date-fns"
 import { cn } from "@/lib/utils"
+import { useVirtualizer } from '@tanstack/react-virtual';
+import AnimatedEmailResponse from "@/components/animated-email-response"
+import * as ReactDOM from 'react-dom/client'
 
 
 
@@ -1741,10 +1744,27 @@ ${content}`;
         // Double-check we have the right element (should be contenteditable)
         if (replyEditor.getAttribute('contenteditable') === 'true' || replyEditor.isContentEditable) {
           
+          // Create a unique ID for the animated response container
+          const animatedResponseId = `animated-response-${Date.now()}`;
+          
           if (requestType === 'createemail') {
-            // For creating new emails, replace entire content with AI response
-            replyEditor.innerHTML = `<div>${response.data.response}</div>`;
-            console.log('AI response applied for new email creation');
+            // For creating new emails, replace entire content with animated response component
+            replyEditor.innerHTML = `<div id="${animatedResponseId}"></div>`;
+            
+            // Render the animated response component into the container
+            const container = document.getElementById(animatedResponseId);
+            if (container) {
+              // Render the animated component with HTML content
+              const root = ReactDOM.createRoot(container);
+              root.render(
+                <AnimatedEmailResponse html={response.data.response} />
+              );
+              
+              console.log('Animated AI response applied for new email creation');
+            } else {
+              // Fallback if container not found
+              replyEditor.innerHTML = `<div>${response.data.response}</div>`;
+            }
           } else {
             console.log('Updating compose area with AI response - preserving email thread');
             
@@ -1756,39 +1776,67 @@ ${content}`;
               // Preserve everything from the <hr> onwards (quoted email thread)
               const quotedContent = currentHTML.substring(hrIndex);
               
-              // Create new content with AI response in compose area + preserved quoted content
-              const newContent = `<div>${response.data.response}</div>${quotedContent}`;
-              replyEditor.innerHTML = newContent;
+              // Create container for animated response + preserved quoted content
+              replyEditor.innerHTML = `<div id="${animatedResponseId}"></div>${quotedContent}`;
               
-              console.log('AI response applied to compose area only - quoted emails preserved');
+              // Render the animated response component into the container
+              const container = document.getElementById(animatedResponseId);
+              if (container) {
+                // Render the animated component with HTML content
+                const root = ReactDOM.createRoot(container);
+                root.render(
+                  <AnimatedEmailResponse html={response.data.response} />
+                );
+                
+                console.log('Animated AI response applied to compose area - quoted emails preserved');
+              } else {
+                // Fallback if container not found
+                replyEditor.innerHTML = `<div>${response.data.response}</div>${quotedContent}`;
+              }
             } else {
-              // No quoted content found, safe to replace entire content
-              replyEditor.innerHTML = `<div>${response.data.response}</div>`;
-              console.log('AI response applied - no quoted content to preserve');
+              // No quoted content found, safe to replace entire content with animated response
+              replyEditor.innerHTML = `<div id="${animatedResponseId}"></div>`;
+              
+              // Render the animated response component into the container
+              const container = document.getElementById(animatedResponseId);
+              if (container) {
+                // Render the animated component with HTML content
+                const root = ReactDOM.createRoot(container);
+                root.render(
+                  <AnimatedEmailResponse html={response.data.response} />
+                );
+                
+                console.log('Animated AI response applied - no quoted content to preserve');
+              } else {
+                // Fallback if container not found
+                replyEditor.innerHTML = `<div>${response.data.response}</div>`;
+              }
             }
           }
           
           // Focus the editor and position cursor at the end of compose area (before quoted content)
-          replyEditor.focus();
-          
-          // Find the first child (compose area) and set cursor there
-          const firstChild = replyEditor.firstChild;
-          if (firstChild) {
-            const range = document.createRange();
-            const selection = window.getSelection();
+          setTimeout(() => {
+            replyEditor.focus();
             
-            // Set cursor at end of first div (compose area)
-            if (firstChild.nodeType === Node.ELEMENT_NODE) {
-              range.selectNodeContents(firstChild);
-              range.collapse(false); // Collapse to end
-            } else {
-              range.setStart(firstChild, firstChild.textContent?.length || 0);
-              range.collapse(true);
+            // Find the first child (compose area) and set cursor there
+            const firstChild = replyEditor.firstChild;
+            if (firstChild) {
+              const range = document.createRange();
+              const selection = window.getSelection();
+              
+              // Set cursor at end of first div (compose area)
+              if (firstChild.nodeType === Node.ELEMENT_NODE) {
+                range.selectNodeContents(firstChild);
+                range.collapse(false); // Collapse to end
+              } else {
+                range.setStart(firstChild, firstChild.textContent?.length || 0);
+                range.collapse(true);
+              }
+              
+              selection?.removeAllRanges();
+              selection?.addRange(range);
             }
-            
-            selection?.removeAllRanges();
-            selection?.addRange(range);
-          }
+          }, 2000); // Delay to allow animation to complete
           
         } else {
           console.error('Invalid target element - not updating to prevent affecting email thread');

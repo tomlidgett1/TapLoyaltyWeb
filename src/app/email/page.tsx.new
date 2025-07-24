@@ -116,6 +116,9 @@ import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/
 import { formatMelbourneTime } from "@/lib/date-utils"
 import { formatDistanceToNow } from "date-fns"
 import { cn } from "@/lib/utils"
+import { useVirtualizer } from '@tanstack/react-virtual';
+import * as ReactDOM from 'react-dom/client'
+import AnimatedEmailResponse from "@/components/animated-email-response"
 
 
 
@@ -1741,10 +1744,27 @@ ${content}`;
         // Double-check we have the right element (should be contenteditable)
         if (replyEditor.getAttribute('contenteditable') === 'true' || replyEditor.isContentEditable) {
           
+          // Create a unique ID for the animated response container
+          const animatedResponseId = `animated-response-${Date.now()}`;
+          
           if (requestType === 'createemail') {
-            // For creating new emails, replace entire content with AI response
-            replyEditor.innerHTML = `<div>${response.data.response}</div>`;
-            console.log('AI response applied for new email creation');
+            // For creating new emails, replace entire content with animated response component
+            replyEditor.innerHTML = `<div id="${animatedResponseId}"></div>`;
+            
+            // Render the animated response component into the container
+            const container = document.getElementById(animatedResponseId);
+            if (container) {
+              // Render the animated component with HTML content
+              const root = ReactDOM.createRoot(container);
+              root.render(
+                <AnimatedEmailResponse html={response.data.response} />
+              );
+              
+              console.log('Animated AI response applied for new email creation');
+            } else {
+              // Fallback if container not found
+              replyEditor.innerHTML = `<div>${response.data.response}</div>`;
+            }
           } else {
             console.log('Updating compose area with AI response - preserving email thread');
             
@@ -1756,39 +1776,67 @@ ${content}`;
               // Preserve everything from the <hr> onwards (quoted email thread)
               const quotedContent = currentHTML.substring(hrIndex);
               
-              // Create new content with AI response in compose area + preserved quoted content
-              const newContent = `<div>${response.data.response}</div>${quotedContent}`;
-              replyEditor.innerHTML = newContent;
+              // Create container for animated response + preserved quoted content
+              replyEditor.innerHTML = `<div id="${animatedResponseId}"></div>${quotedContent}`;
               
-              console.log('AI response applied to compose area only - quoted emails preserved');
+              // Render the animated response component into the container
+              const container = document.getElementById(animatedResponseId);
+              if (container) {
+                // Render the animated component with HTML content
+                const root = ReactDOM.createRoot(container);
+                root.render(
+                  <AnimatedEmailResponse html={response.data.response} />
+                );
+                
+                console.log('Animated AI response applied to compose area - quoted emails preserved');
+              } else {
+                // Fallback if container not found
+                replyEditor.innerHTML = `<div>${response.data.response}</div>${quotedContent}`;
+              }
             } else {
-              // No quoted content found, safe to replace entire content
-              replyEditor.innerHTML = `<div>${response.data.response}</div>`;
-              console.log('AI response applied - no quoted content to preserve');
+              // No quoted content found, safe to replace entire content with animated response
+              replyEditor.innerHTML = `<div id="${animatedResponseId}"></div>`;
+              
+              // Render the animated response component into the container
+              const container = document.getElementById(animatedResponseId);
+              if (container) {
+                // Render the animated component with HTML content
+                const root = ReactDOM.createRoot(container);
+                root.render(
+                  <AnimatedEmailResponse html={response.data.response} />
+                );
+                
+                console.log('Animated AI response applied - no quoted content to preserve');
+              } else {
+                // Fallback if container not found
+                replyEditor.innerHTML = `<div>${response.data.response}</div>`;
+              }
             }
           }
           
           // Focus the editor and position cursor at the end of compose area (before quoted content)
-          replyEditor.focus();
-          
-          // Find the first child (compose area) and set cursor there
-          const firstChild = replyEditor.firstChild;
-          if (firstChild) {
-            const range = document.createRange();
-            const selection = window.getSelection();
+          setTimeout(() => {
+            replyEditor.focus();
             
-            // Set cursor at end of first div (compose area)
-            if (firstChild.nodeType === Node.ELEMENT_NODE) {
-              range.selectNodeContents(firstChild);
-              range.collapse(false); // Collapse to end
-            } else {
-              range.setStart(firstChild, firstChild.textContent?.length || 0);
-              range.collapse(true);
+            // Find the first child (compose area) and set cursor there
+            const firstChild = replyEditor.firstChild;
+            if (firstChild) {
+              const range = document.createRange();
+              const selection = window.getSelection();
+              
+              // Set cursor at end of first div (compose area)
+              if (firstChild.nodeType === Node.ELEMENT_NODE) {
+                range.selectNodeContents(firstChild);
+                range.collapse(false); // Collapse to end
+              } else {
+                range.setStart(firstChild, firstChild.textContent?.length || 0);
+                range.collapse(true);
+              }
+              
+              selection?.removeAllRanges();
+              selection?.addRange(range);
             }
-            
-            selection?.removeAllRanges();
-            selection?.addRange(range);
-          }
+          }, 2000); // Delay to allow animation to complete
           
         } else {
           console.error('Invalid target element - not updating to prevent affecting email thread');
@@ -3582,15 +3630,6 @@ ${content}`;
           ${customScrollbarStyles}
         `
       }} />
-      {/* Hidden SVG for gradient definitions */}
-      <svg width="0" height="0" style={{ position: 'absolute' }}>
-        <defs>
-          <linearGradient id="orange-blue-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#f97316" />
-            <stop offset="100%" stopColor="#3b82f6" />
-          </linearGradient>
-        </defs>
-      </svg>
       
       {/* Top Bar - Combined Header with folder dropdown, toolbar, and connected account */}
       <div className="mx-3 mb-3 bg-white rounded-xl shadow-lg border border-gray-100 flex items-center justify-between px-4 py-3 flex-shrink-0">
@@ -6689,12 +6728,6 @@ const EmptyEmailView = () => (
       <h3 className="text-lg font-medium text-gray-900 mb-2">No Email Selected</h3>
       <p className="text-gray-500 max-w-sm">
         Select an email from the list to view its content here.
-      </p>
-    </div>
-  </div>
-);
-
-
 
 // Single email viewer component with integrated reply
 const EmailViewer = ({ 
@@ -6787,997 +6820,3 @@ const EmailViewer = ({
   
   // Combine local and passed generating states
   const actualIsGenerating = localIsGenerating || isGenerating;
-
-  // Check if reply content is truly empty (ignoring HTML tags and whitespace)
-  const isReplyContentEmpty = (htmlContent: string) => {
-    if (!htmlContent) return true;
-    
-    // For reply mode, we need to check only the new content, not the quoted email chain
-    // The quoted content is separated by an <hr> tag
-    const parts = htmlContent.split('<hr');
-    const newContent = parts[0]; // Everything before the <hr (the new reply)
-    
-    // Remove HTML tags and check if there's actual text content in the new reply
-    const textOnly = newContent.replace(/<[^>]*>/g, '').trim();
-    return textOnly === '';
-  };
-
-  // Close instructions with animation
-  const closeInstructionsWithAnimation = () => {
-    setInstructionsClosing(true);
-    setTimeout(() => {
-      setShowInstructions(false);
-      setInstructionsClosing(false);
-    }, 200);
-  };
-  
-  // Close quick reply instructions with animation
-  const closeQuickReplyInstructionsWithAnimation = () => {
-    setQuickReplyInstructionsClosing(true);
-    setTimeout(() => {
-      setShowQuickReplyInstructions(false);
-      setQuickReplyInstructionsClosing(false);
-    }, 200);
-  };
-
-  useEffect(() => {
-    const loadEmailContent = async () => {
-      try {
-        setLoading(true);
-        setError('');
-        
-        if (email.rawData) {
-          // Extract and decode HTML content from raw email data
-          const extractedHtml = extractHtmlContent(email.rawData);
-          if (extractedHtml) {
-            const sanitisedHtml = sanitiseAndRenderHtml(extractedHtml);
-            setHtmlContent(sanitisedHtml);
-          } else {
-            // Fallback to existing content
-            setHtmlContent(email.content || 'No content available');
-          }
-        } else if (email.content) {
-          // Check if content contains HTML tags (for thread replies with HTML content)
-          const containsHtml = /<[^>]*>/g.test(email.content);
-          if (containsHtml) {
-            // Sanitise HTML content for thread replies
-            const sanitisedHtml = sanitiseAndRenderHtml(email.content);
-            setHtmlContent(sanitisedHtml);
-          } else {
-            // Plain text content
-            setHtmlContent(email.content);
-          }
-        } else {
-          setHtmlContent('No content available');
-        }
-      } catch (error) {
-        console.error('Error loading email content:', error);
-        setError('Failed to load email content');
-        setHtmlContent(email.content || 'Error loading content');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadEmailContent();
-  }, [email]);
-
-  // Reset reply content when reply mode changes (only on mode change, not on every render)
-  const [replyModeKey, setReplyModeKey] = useState<string>('');
-  
-  useEffect(() => {
-    const newKey = replyMode ? `${replyMode.type}-${replyMode.originalEmail.id}` : '';
-    
-    // Only update if the mode actually changed (not just a re-render)
-    if (newKey !== replyModeKey) {
-      setReplyModeKey(newKey);
-      
-      if (replyMode) {
-        // Auto-populate recipients based on reply type
-        if (replyMode.type === 'reply') {
-          setReplyRecipients(replyMode.originalEmail.email);
-          setReplyCc('');
-          // Pre-populate the editor with quoted content
-          const quotedContent = createQuotedReplyContent(replyMode.originalEmail, replyMode.type);
-          const fullContent = `<div><br><br></div><hr style="border: none; border-top: 1px solid #ccc; margin: 20px 0;">${quotedContent}`;
-          setReplyQuotedContent('');
-          setReplyContent('');
-          if (replyEditorRef.current) {
-            replyEditorRef.current.innerHTML = fullContent;
-            // Position cursor at the beginning
-            const range = document.createRange();
-            const selection = window.getSelection();
-            range.setStart(replyEditorRef.current.firstChild!, 0);
-            range.collapse(true);
-            selection?.removeAllRanges();
-            selection?.addRange(range);
-            replyEditorRef.current.focus();
-          }
-        } else if (replyMode.type === 'replyAll') {
-          setReplyRecipients(replyMode.originalEmail.email);
-          setReplyCc('');
-          // Pre-populate the editor with quoted content
-          const quotedContent = createQuotedReplyContent(replyMode.originalEmail, replyMode.type);
-          const fullContent = `<div><br><br></div><hr style="border: none; border-top: 1px solid #ccc; margin: 20px 0;">${quotedContent}`;
-          setReplyQuotedContent('');
-          setReplyContent('');
-          if (replyEditorRef.current) {
-            replyEditorRef.current.innerHTML = fullContent;
-            // Position cursor at the beginning
-            const range = document.createRange();
-            const selection = window.getSelection();
-            range.setStart(replyEditorRef.current.firstChild!, 0);
-            range.collapse(true);
-            selection?.removeAllRanges();
-            selection?.addRange(range);
-            replyEditorRef.current.focus();
-          }
-        } else if (replyMode.type === 'forward') {
-          // For forward, leave the recipients field empty
-          setReplyRecipients('');
-          setReplyCc('');
-          
-          // Pre-populate the editor with quoted content (same as reply)
-          const quotedContent = createQuotedReplyContent(replyMode.originalEmail, replyMode.type);
-          const fullContent = `<div><br><br></div><hr style="border: none; border-top: 1px solid #ccc; margin: 20px 0;">${quotedContent}`;
-          setReplyQuotedContent('');
-          setReplyContent('');
-          
-          if (replyEditorRef.current) {
-            replyEditorRef.current.innerHTML = fullContent;
-            // Position cursor at the beginning
-            const range = document.createRange();
-            const selection = window.getSelection();
-            range.setStart(replyEditorRef.current.firstChild!, 0);
-            range.collapse(true);
-            selection?.removeAllRanges();
-            selection?.addRange(range);
-            replyEditorRef.current.focus();
-          }
-        }
-      } else {
-        setReplyContent('');
-        if (replyEditorRef.current) {
-          replyEditorRef.current.innerHTML = '';
-        }
-        setReplyQuotedContent('');
-        setReplyRecipients('');
-        setReplyCc('');
-        setReplyAttachments([]);
-      }
-    }
-  }, [replyMode, replyModeKey]);
-
-  const isFromCurrentUser = isEmailFromCurrentUser(email.email, userEmail, merchantEmail);
-
-  return (
-    <div className="flex flex-col h-full email-viewer">
-      {/* Email Header - Hidden when replying */}
-      {!replyMode && (
-        <div className="px-4 py-3 bg-white border-b border-gray-200">
-          <div className="flex items-center justify-between mb-2">
-            <h1 className="text-sm font-medium text-gray-900">{email.subject}</h1>
-          <div className="flex items-center gap-2">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                      className="h-6 w-6 p-0 hover:bg-gray-100"
-                    onClick={() => onStartReply?.(email)}
-                  >
-                      <Reply className="h-3 w-3" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Reply</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                      className="h-6 w-6 p-0 hover:bg-gray-100"
-                    onClick={() => onStartReplyAll?.(email)}
-                  >
-                      <ReplyAll className="h-3 w-3" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Reply All</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                      className="h-6 w-6 p-0 hover:bg-gray-100"
-                    onClick={() => onStartForward?.(email)}
-                  >
-                      <Forward className="h-3 w-3" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Forward</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            
-            <div className="relative">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md flex items-center gap-1"
-                  >
-                    <Sparkles className="h-3 w-3" />
-                    Quick Reply
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem 
-                    className="flex items-center gap-2 cursor-pointer"
-                    onClick={() => {
-                      setShowQuickReplyInstructions(true);
-                    }}
-                  >
-                    <MessageSquare className="h-3.5 w-3.5 text-gray-500" />
-                    <span>Custom Instructions</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-xs text-gray-500">Select Tone</DropdownMenuLabel>
-                  <DropdownMenuItem 
-                    className="flex items-center gap-2 cursor-pointer"
-                    onClick={() => {
-                      setLocalIsGenerating(true);
-                      onStartReply?.(email);
-                      setTimeout(() => {
-                        if (callGenerateEmailResponse && replyEditorRef.current) {
-                          callGenerateEmailResponse('tone', 'professional', undefined, replyEditorRef)
-                            .finally(() => {
-                              // Don't set localIsGenerating to false here as we want to keep the UI in loading state
-                              // It will be cleared when the response is fully generated
-                            });
-                        } else {
-                          setLocalIsGenerating(false); // Reset if something went wrong
-                        }
-                      }, 100);
-                    }}
-                  >
-                    <Briefcase className="h-3.5 w-3.5 text-gray-500" />
-                    <span>Professional</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    className="flex items-center gap-2 cursor-pointer"
-                    onClick={() => {
-                      setLocalIsGenerating(true);
-                      onStartReply?.(email);
-                      setTimeout(() => {
-                        if (callGenerateEmailResponse && replyEditorRef.current) {
-                          callGenerateEmailResponse('tone', 'friendly', undefined, replyEditorRef)
-                            .finally(() => {
-                              // Don't set localIsGenerating to false here as we want to keep the UI in loading state
-                              // It will be cleared when the response is fully generated
-                            });
-                        } else {
-                          setLocalIsGenerating(false); // Reset if something went wrong
-                        }
-                      }, 100);
-                    }}
-                  >
-                    <Smile className="h-3.5 w-3.5 text-gray-500" />
-                    <span>Friendly</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    className="flex items-center gap-2 cursor-pointer"
-                    onClick={() => {
-                      setLocalIsGenerating(true);
-                      onStartReply?.(email);
-                      setTimeout(() => {
-                        if (callGenerateEmailResponse && replyEditorRef.current) {
-                          callGenerateEmailResponse('tone', 'direct', undefined, replyEditorRef)
-                            .finally(() => {
-                              // Don't set localIsGenerating to false here as we want to keep the UI in loading state
-                              // It will be cleared when the response is fully generated
-                            });
-                        } else {
-                          setLocalIsGenerating(false); // Reset if something went wrong
-                        }
-                      }, 100);
-                    }}
-                  >
-                    <ArrowRight className="h-3.5 w-3.5 text-gray-500" />
-                    <span>Direct</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              
-              {/* Quick Reply Instructions Speech Bubble */}
-              {(showQuickReplyInstructions || quickReplyInstructionsClosing) && (
-                <div className={`absolute top-full right-0 mt-2 w-80 z-50 ${
-                  quickReplyInstructionsClosing 
-                    ? 'animate-out fade-out slide-out-to-top-2 duration-200' 
-                    : 'animate-in fade-in slide-in-from-top-2 duration-300'
-                }`}>
-                  <div className="bg-white border border-gray-200 rounded-md p-4 shadow-md">
-                    {/* Speech bubble pointer */}
-                    <div className="absolute -top-2 right-6 w-4 h-4 bg-white border-t border-l border-gray-200 transform rotate-45"></div>
-                    
-                    <div className="space-y-3">
-                      
-                      <textarea
-                        value={quickReplyPrompt}
-                        onChange={(e) => setQuickReplyPrompt(e.target.value)}
-                        placeholder="Enter specific instructions for how you'd like the AI to respond..."
-                        className="w-full text-xs bg-white border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder-gray-500"
-                        rows={3}
-                        autoFocus
-                      />
-                      
-                      <div className="flex justify-between items-center">
-                        <button
-                          onClick={() => closeQuickReplyInstructionsWithAnimation()}
-                          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors text-gray-600 hover:text-gray-800 border border-gray-200 hover:bg-gray-50"
-                        >
-                          <X className="h-3 w-3" strokeWidth="2" />
-                          Cancel
-                        </button>
-                        
-                        <button
-                          disabled={!quickReplyPrompt.trim() || actualIsGenerating}
-                          onClick={async () => {
-                            if (!quickReplyPrompt.trim()) return;
-                            
-                            // First start reply mode
-                            onStartReply?.(email);
-                            
-                            // Wait for reply mode to initialize
-                            setLocalIsGenerating(true);
-                            setTimeout(async () => {
-                              if (!callGenerateEmailResponse || !replyEditorRef.current) return;
-                              
-                              try {
-                                await callGenerateEmailResponse('custom', undefined, quickReplyPrompt, replyEditorRef);
-                                closeQuickReplyInstructionsWithAnimation();
-                                setQuickReplyPrompt('');
-                              } catch (error) {
-                                console.error('Error in quick reply AI generation:', error);
-                              } finally {
-                                setLocalIsGenerating(false);
-                              }
-                            }, 100);
-                          }}
-                          className={`flex items-center gap-1.5 text-xs font-normal px-3 py-1.5 rounded-md transition-colors ${
-                            !quickReplyPrompt.trim() || actualIsGenerating
-                              ? 'text-white bg-gray-400 cursor-not-allowed' 
-                              : 'text-white bg-gray-700 hover:bg-gray-800'
-                          }`}
-                        >
-                          {actualIsGenerating ? (
-                            <>
-                              <Loader2 className="h-3 w-3 text-white animate-spin" strokeWidth="2" />
-                              Generating...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="h-3 w-3 text-white" strokeWidth="2" />
-                              Apply
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            {/* Summarise Button - Available for all emails */}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-6 w-6 p-0 hover:bg-gray-100"
-                    onClick={() => onSummariseThread?.()}
-                    disabled={isSummarizing}
-                  >
-                    {isSummarizing ? (
-                      <Loader2 
-                        className="h-3 w-3 animate-spin" 
-                        style={{
-                          stroke: 'url(#orange-blue-gradient)',
-                          strokeWidth: 2
-                        }}
-                      />
-                    ) : (
-                      <NotebookPen 
-                        className="h-3 w-3" 
-                        style={{
-                          stroke: 'url(#orange-blue-gradient)',
-                          fill: 'none'
-                        }}
-                      />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{isSummarizing ? 'Generating Summary...' : `Summarise ${selectedThread && selectedThread.count > 1 ? `Thread (${selectedThread.count} messages)` : 'Email'}`}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        </div>
-
-          {/* From Section */}
-          <div className="flex items-center gap-2 mb-0">
-            <Avatar className="h-6 w-6">
-              <AvatarFallback className="bg-blue-100 text-blue-600 font-semibold text-xs">
-                {email.sender ? email.sender.split(' ').map((n: string) => n[0]).join('').toUpperCase() : '??'}
-              </AvatarFallback>
-            </Avatar>
-            
-            <div className="flex-1">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-900">{email.sender}</span>
-
-                  {email.hasAttachment && (
-                    <Paperclip className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                  )}
-                </div>
-                <span className="text-xs text-gray-600">{(() => {
-                  // Get the appropriate timestamp with proper Firestore handling
-                  const timestamp = email.repliedAt || email.receivedAt || email.time;
-                  if (!timestamp) return 'Unknown time';
-                  
-                  // Handle Firestore Timestamp objects
-                  if (timestamp && typeof timestamp.toDate === 'function') {
-                    return formatMelbourneTime(timestamp.toDate(), 'Unknown time');
-                  }
-                  
-                  // Handle string or Date objects
-                  return formatMelbourneTime(timestamp, 'Unknown time');
-                })()}</span>
-              </div>
-              <div className="flex items-center gap-1 text-xs text-gray-600">
-                <span>
-                  <span className="font-bold">To:</span>{" "}
-                  {(() => {
-                    // Safety check for email object
-                    if (!email) {
-                      return <span className="text-gray-500">No email data</span>;
-                    }
-                    // Helper function to extract display names from email addresses
-                    const extractDisplayNames = (emailStr: string | undefined) => {
-                      if (!emailStr) return [];
-                      
-                      return emailStr.split(',').map(email => {
-                        const match = email.trim().match(/(.*?)\s*<(.+?)>/);
-                        return {
-                          displayName: match ? match[1].trim() : email.trim().split('@')[0],
-                          fullEmail: email.trim()
-                        };
-                      });
-                    };
-                    
-                    const recipients = extractDisplayNames(email.to);
-                    
-                    if (recipients.length === 0) {
-                      return <span className="text-gray-500"></span>;
-                    }
-                    
-                    return (
-                      <span className="inline-flex flex-wrap gap-x-1">
-                        {recipients.map((recipient, index) => (
-                          <span key={recipient.fullEmail} className="group relative cursor-default">
-                            {recipient.displayName}
-                            {index < recipients.length - 1 ? "," : ""}
-                            <span className="invisible absolute left-0 top-full z-10 mt-1 whitespace-nowrap rounded-md bg-gray-800 px-2 py-1 text-xs text-white group-hover:visible">
-                              {recipient.fullEmail}
-                            </span>
-                          </span>
-                        ))}
-                      </span>
-                    );
-                  })()}
-                </span>
-                {(() => {
-                  const ccRecipients = extractCcRecipients(email);
-                  if (ccRecipients) {
-                    // Helper function to extract display names from email addresses
-                    const extractDisplayNames = (emailStr: string | undefined) => {
-                      if (!emailStr) return [];
-                      
-                      return emailStr.split(',').map(email => {
-                        const match = email.trim().match(/(.*?)\s*<(.+?)>/);
-                        return {
-                          displayName: match ? match[1].trim() : email.trim().split('@')[0],
-                          fullEmail: email.trim()
-                        };
-                      });
-                    };
-                    
-                    const ccList = extractDisplayNames(ccRecipients);
-                    
-                    if (ccList.length === 0) {
-                      return null;
-                    }
-                    
-                    return (
-                      <>
-                        <span>•</span>
-                        <span>
-                          <span className="font-bold">Cc:</span>{" "}
-                          <span className="inline-flex flex-wrap gap-x-1">
-                            {ccList.map((recipient, index) => (
-                              <span key={recipient.fullEmail} className="group relative cursor-default">
-                                {recipient.displayName}
-                                {index < ccList.length - 1 ? "," : ""}
-                                <span className="invisible absolute left-0 top-full z-10 mt-1 whitespace-nowrap rounded-md bg-gray-800 px-2 py-1 text-xs text-white group-hover:visible">
-                                  {recipient.fullEmail}
-                                </span>
-                              </span>
-                            ))}
-                          </span>
-                        </span>
-                      </>
-                    );
-                  }
-                  return null;
-                })()}
-              </div>
-            </div>
-          </div>
-          
-          {/* Compact Attachments - Right after header */}
-          <div className="px-3 pb-1">
-            <CompactAttachmentList attachments={extractAttachments(email)} />
-            </div>
-          </div>
-        )}
-
-
-
-      {/* Reply Compose Area - Raw in right panel */}
-        {replyMode && (
-        <div className="flex flex-col h-full bg-white">
-            {/* From Field */}
-          <div className="flex items-center py-2 px-4 border-b border-gray-100">
-            <div className="w-12 text-xs text-gray-600 font-medium">From:</div>
-            <div className="flex-1 text-xs text-gray-900">{selectedAccount}</div>
-            <div className="flex gap-2">
-              {localIsGenerating ? (
-                <div className="flex items-center h-7 px-3 text-xs text-blue-600 font-medium">
-                  <div className="animate-pulse flex items-center">
-                    <Loader2 className="h-3 w-3 mr-1.5 animate-spin text-blue-500" />
-                    <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">
-                      Generating response...
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <Button
-                    onClick={() => {
-                      const currentReplyContent = replyEditorRef.current?.innerHTML || '';
-                      if (currentReplyContent.trim() && (replyMode.type === 'forward' || replyRecipients.trim())) {
-                        // For reply/replyAll, add "Re:" prefix; for forward, add "Fwd:" prefix
-                        let subject;
-                        if (replyMode.type === 'forward') {
-                          subject = replyMode.originalEmail.subject.startsWith('Fwd: ') ? replyMode.originalEmail.subject : `Fwd: ${replyMode.originalEmail.subject}`;
-                        } else {
-                          subject = replyMode.originalEmail.subject.startsWith('Re: ') ? replyMode.originalEmail.subject : `Re: ${replyMode.originalEmail.subject}`;
-                        }
-                        
-                        const recipients = [
-                          ...replyRecipients.split(',').map(email => email.trim()).filter(Boolean),
-                          ...replyCc.split(',').map(email => email.trim()).filter(Boolean)
-                        ];
-                        // Use the full HTML content from the editor (includes both user input and quoted content)
-                        onSendReply?.(currentReplyContent, subject, recipients, replyAttachments);
-                      }
-                    }}
-                    disabled={(replyMode.type !== 'forward' && !replyRecipients.trim()) || isSending}
-                    className="bg-blue-500 hover:bg-blue-600 text-white h-7 px-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
-                  >
-                    {isSending ? (
-                      <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                    ) : (
-                      <Send className="h-3 w-3 mr-1" />
-                    )}
-                    {isSending ? 'Sending...' : 'Send'}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={onCancelReply}
-                    className="h-7 px-2 text-gray-600 hover:text-gray-900 text-xs"
-                  >
-                    Cancel
-                  </Button>
-                </>
-              )}
-              </div>
-            </div>
-
-            {/* To Field */}
-          <div className="flex items-center py-2 px-4 border-b border-gray-100">
-            <div className="w-12 text-xs text-gray-600 font-medium">To:</div>
-            <EmailInputWithChips
-              value={replyRecipients}
-              onChange={setReplyRecipients}
-              placeholder="Enter recipient email addresses"
-              className="flex-1"
-              user={user}
-            />
-          </div>
-
-          {/* CC Field (if populated) */}
-            {replyCc !== undefined && (
-            <div className="flex items-center py-2 px-4 border-b border-gray-100">
-              <div className="w-12 text-xs text-gray-600 font-medium">Cc:</div>
-              <EmailInputWithChips
-                value={replyCc}
-                onChange={setReplyCc}
-                placeholder="Enter CC email addresses"
-                className="flex-1"
-                user={user}
-              />
-            </div>
-            )}
-
-            {/* Subject Field */}
-          <div className="flex items-center py-2 px-4 border-b border-gray-100">
-            <div className="w-12 text-xs text-gray-600 font-medium">Subject:</div>
-            <div className="flex-1 text-xs text-gray-900">
-                {replyMode.type === 'forward' 
-                  ? `Fwd: ${replyMode.originalEmail.subject}`
-                : (replyMode.originalEmail.subject.startsWith('Re: ')
-                    ? replyMode.originalEmail.subject 
-                  : `Re: ${replyMode.originalEmail.subject}`)}
-              </div>
-            </div>
-
-                      {/* Tap Agent Section - Hidden when generating response */}
-          {!localIsGenerating && (
-          {!localIsGenerating && (
-            <div className="mx-3 my-2">
-              <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1.5">
-                        <WandSparkles className="h-4 w-4 text-blue-500" />
-                        <GradientText
-                          colors={["#ff6b35", "#4079ff", "#ff8500", "#3b82f6", "#ff6b35"]}
-                          animationSpeed={3}
-                          showBorder={false}
-                          className="text-xs font-medium"
-                        >
-                          Tap Agent
-                        </GradientText>
-                      </div>
-                      {(showInstructions || instructionsClosing) && (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-medium text-gray-700">Custom Instructions</span>
-                        </div>
-                      )}
-                    </div>
-                    
-                    {!showInstructions && (
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-2">
-                                                  <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors">
-                                <Palette className="h-3 w-3 text-gray-500" />
-                                <span>Tone</span>
-                                <ChevronDown className="h-3 w-3 text-gray-500 ml-1" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-40 z-50">
-                              <DropdownMenuItem onClick={() => {
-                                setLocalIsGenerating(true);
-                                callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)
-                                  .finally(() => setLocalIsGenerating(false));
-                              }}>
-                                <Lightbulb className="h-3 w-3 text-gray-500 mr-2" />
-                                <span className="text-xs">Friendly</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => {
-                                setLocalIsGenerating(true);
-                                callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)
-                                  .finally(() => setLocalIsGenerating(false));
-                              }}>
-                                <Users className="h-3 w-3 text-gray-500 mr-2" />
-                                <span className="text-xs">Professional</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => {
-                                setLocalIsGenerating(true);
-                                callGenerateEmailResponse?.('tone', 'direct', undefined, replyEditorRef)
-                                  .finally(() => setLocalIsGenerating(false));
-                              }}>
-                                <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
-                                <span className="text-xs">Direct</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => {
-                                setLocalIsGenerating(true);
-                                callGenerateEmailResponse?.('tone', 'casual', undefined, replyEditorRef)
-                                  .finally(() => setLocalIsGenerating(false));
-                              }}>
-                                <Eye className="h-3 w-3 text-gray-500 mr-2" />
-                                <span className="text-xs">Casual</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => {
-                                setLocalIsGenerating(true);
-                                callGenerateEmailResponse?.('tone', 'formal', undefined, replyEditorRef)
-                                  .finally(() => setLocalIsGenerating(false));
-                              }}>
-                                <Shield className="h-3 w-3 text-gray-500 mr-2" />
-                                <span className="text-xs">Formal</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => {
-                                setLocalIsGenerating(true);
-                                callGenerateEmailResponse?.('tone', 'persuasive', undefined, replyEditorRef)
-                                  .finally(() => setLocalIsGenerating(false));
-                              }}>
-                                <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
-                                <span className="text-xs">Persuasive</span>
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        <div className="h-4 w-px bg-gray-300 mx-2"></div>
-                      </div>
-                      <button
-                        onClick={() => setShowInstructions(!showInstructions)}
-                        className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                      >
-                        <MessageSquare className="h-3 w-3 text-gray-500" />
-                        Instructions
-                      </button>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Buttons section - show rules when not in instructions, show all buttons when in instructions */}
-                {!actualIsGenerating && (
-                  <div className="flex items-center gap-2">
-                    {(showInstructions || instructionsClosing) ? (
-                      <>
-                        <button
-                          onClick={() => {
-                            actualSetTempEmailRules(emailRules || '');
-                            actualSetShowEmailRulesDialog(true);
-                          }}
-                          className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                        >
-                          <Shield className="h-3 w-3 text-gray-500" />
-                          Rules
-                        </button>
-                        <button
-                          onClick={closeInstructionsWithAnimation}
-                          className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                        >
-                          <X className="h-3 w-3 text-gray-500" />
-                          Cancel
-                        </button>
-                        <button
-                          disabled={actualIsGenerating}
-                          onClick={async () => {
-                            const textarea = document.getElementById('instructions-textarea-reply') as HTMLTextAreaElement;
-                            const customInstructions = textarea?.value || '';
-                            if (customInstructions.trim()) {
-                              // Immediately close instructions without animation for Apply
-                              setShowInstructions(false);
-                              setInstructionsClosing(false);
-                              setLocalIsGenerating(true);
-                              try {
-                                await callGenerateEmailResponse?.('custom', instructionTone, customInstructions, replyEditorRef);
-                              } catch (error) {
-                                console.error('Error in reply AI generation:', error);
-                              } finally {
-                                setLocalIsGenerating(false);
-                              }
-                            }
-                          }}
-                          className={`flex items-center gap-1.5 text-xs font-normal px-3 py-1.5 rounded-md transition-colors ${
-                            actualIsGenerating 
-                              ? 'text-white bg-blue-600 cursor-not-allowed' 
-                              : 'text-white bg-blue-500 hover:bg-blue-600'
-                          }`}
-                        >
-                          {actualIsGenerating ? (
-                            <>
-                              <Loader2 className="h-3 w-3 text-white animate-spin" />
-                              <span className="text-xs font-normal text-white">
-                                Applying...
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <Check className="h-3 w-3 text-white" />
-                              Apply
-                            </>
-                          )}
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => {
-                            actualSetTempEmailRules(emailRules || '');
-                            actualSetShowEmailRulesDialog(true);
-                          }}
-                          className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                        >
-                          <Shield className="h-3 w-3 text-gray-500" />
-                          Rules
-                        </button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-2 py-1.5 rounded-md transition-colors">
-                              {isSummarizing ? (
-                                <Loader2 
-                                  className="h-3 w-3 animate-spin" 
-                                  strokeWidth="2"
-                                  style={{
-                                    stroke: 'url(#orange-blue-gradient)'
-                                  }}
-                                />
-                              ) : (
-                                <MoreHorizontal className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                              )}
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem onClick={() => onSummariseThread?.()}>
-                              <NotebookPen 
-                                className="h-3 w-3 mr-2" 
-                                strokeWidth="2"
-                                style={{
-                                  stroke: 'url(#orange-blue-gradient)',
-                                  fill: 'none'
-                                }}
-                              />
-                              <span className="text-xs">Summarise {selectedThread && selectedThread.count > 1 ? `Thread (${selectedThread.count})` : 'Email'}</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            {/* Instructions Dropdown */}
-            {!actualIsGenerating && (showInstructions || instructionsClosing) && (
-              <div className={`bg-white transition-all duration-200 ease-out ${
-                instructionsClosing 
-                  ? 'animate-out slide-out-to-top-2' 
-                  : 'animate-in slide-in-from-top-2'
-              }`}>
-                <div className="pt-4">
-                  <div className="space-y-3">
-                    <div className="relative">
-                      <textarea
-                        ref={(el) => { if (el) el.id = 'instructions-textarea-reply'; }}
-                        placeholder="Enter specific instructions for how you'd like the AI to respond..."
-                        className="w-full text-xs bg-gray-50 border border-gray-200 rounded-md px-3 py-2 pr-20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder-gray-500"
-                        rows={3}
-                      />
-                      {/* Tone Dropdown positioned on the right */}
-                      <div className="absolute top-2 right-2">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-2 py-1 rounded-md transition-colors">
-                              <Palette className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                              <span className="capitalize">{instructionTone}</span>
-                              <ChevronDown className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-32">
-                            <DropdownMenuItem onClick={() => setInstructionTone('friendly')}>
-                              <Lightbulb className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                              <span className="text-xs">Friendly</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setInstructionTone('professional')}>
-                              <Users className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                              <span className="text-xs">Professional</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setInstructionTone('direct')}>
-                              <ArrowRight className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                              <span className="text-xs">Direct</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setInstructionTone('casual')}>
-                              <Eye className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                              <span className="text-xs">Casual</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setInstructionTone('formal')}>
-                              <Shield className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                              <span className="text-xs">Formal</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setInstructionTone('persuasive')}>
-                              <Wand2 className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                              <span className="text-xs">Persuasive</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-
-            </div>
-            </div>
-
-            {/* Message Content */}
-          <div className="flex-1 px-5 py-6 overflow-y-auto custom-scrollbar">
-              <div 
-              ref={replyEditorRef}
-                contentEditable
-              className="w-full min-h-full text-sm outline-none"
-              onBlur={() => {
-                if (replyEditorRef.current) {
-                  setReplyContent(replyEditorRef.current.innerHTML || '');
-                }
-              }}
-              onInput={() => {
-                if (replyEditorRef.current) {
-                  setReplyContent(replyEditorRef.current.innerHTML || '');
-                }
-              }}
-              onKeyUp={() => {
-                if (replyEditorRef.current) {
-                  setReplyContent(replyEditorRef.current.innerHTML || '');
-                }
-              }}
-              suppressContentEditableWarning={true}
-            />
-                  </div>
-                </div>
-              )}
-
-      {/* Email Content - Hidden when replying */}
-      {!replyMode && (
-        <div className="flex-1 overflow-auto px-1 py-2 bg-white custom-scrollbar">
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <RefreshCw className="h-6 w-6 animate-spin text-gray-400 mr-3" />
-            <span className="text-gray-600">Loading email content...</span>
-          </div>
-        ) : error ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <div className="w-12 h-12 mx-auto mb-4 rounded-md bg-red-100 flex items-center justify-center">
-                <AlertCircle className="h-6 w-6 text-red-500" />
-              </div>
-              <h3 className="font-medium text-gray-900 mb-2">Error Loading Content</h3>
-              <p className="text-gray-500 text-sm">{error}</p>
-            </div>
-          </div>
-        ) : (
-            <div className="prose max-w-none email-content" data-email-content>
-            <IframeEmail html={htmlContent} />
-          </div>
-        )}
-      </div>
-      )}
-
-    </div>
-  );
-};

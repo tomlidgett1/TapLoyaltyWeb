@@ -9,6 +9,31 @@ import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import DOMPurify from 'dompurify';
 
+// Custom animation keyframes for slide up from the very bottom of the screen
+const slideUpAnimation = `
+@keyframes slideUp {
+  0% {
+    transform: translateY(100%);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 750ms cubic-bezier(0.33, 1, 0.68, 1) forwards;
+  transform: translateY(100%); /* Initial position at the very bottom */
+  will-change: transform;
+}
+`;
+
+// Add the animation styles to the document
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.innerHTML = slideUpAnimation;
+  document.head.appendChild(style);
+}
+
 // Function to generate a consistent color based on a string (name or email)
 const getConsistentColor = (str: string): string => {
   if (!str) return 'bg-gray-200';
@@ -1507,7 +1532,9 @@ export default function EmailPage() {
   const [debugDialogOpen, setDebugDialogOpen] = useState(false)
   const [debugResponse, setDebugResponse] = useState<any>(null)
   const [isExtractingWritingStyle, setIsExtractingWritingStyle] = useState(false)
-
+  const [composeAnimating, setComposeAnimating] = useState(false)
+  const [composeClosing, setComposeClosing] = useState(false)
+  
   const [merchantData, setMerchantData] = useState<any>(null)
   const [merchantEmail, setMerchantEmail] = useState("")
   const [decodeTestResults, setDecodeTestResults] = useState<any>(null)
@@ -2932,10 +2959,13 @@ ${content}`;
   }
 
   const handleCancelCompose = () => {
+    // No need for animation when closing
     setComposeMode("none")
     setComposeSubject("")
     setComposeContent("")
     setComposeTo("")
+    setIsComposing(false)
+    setComposeAnimating(false)
   }
 
   const handleArchive = () => {
@@ -3098,6 +3128,9 @@ ${content}`;
     setSelectedEmail(null);
     setSelectedThread(null);
     setReplyMode(null);
+    
+    // Start animation before showing the compose view
+    setComposeAnimating(true);
     setIsComposing(true);
   }
 
@@ -4477,11 +4510,12 @@ ${content}`;
           {isComposing ? (
             <ComposeEmailView
               isSending={isSending}
-              onCancel={() => setIsComposing(false)}
+              onCancel={handleCancelCompose}
               selectedAccount={selectedAccount}
               callGenerateEmailResponse={callGenerateEmailResponse}
               setShowEmailRulesDialog={setShowEmailRulesDialog}
               user={user}
+              isClosing={composeClosing}
               onSend={async (to: string, subject: string, content: string, cc?: string, bcc?: string, attachments?: File[]) => {
                 try {
                   setIsSending(true);
@@ -6380,7 +6414,8 @@ const ComposeEmailView = ({
   selectedAccount,
   callGenerateEmailResponse,
   setShowEmailRulesDialog,
-  user
+  user,
+  isClosing = false
 }: { 
   onSend: (to: string, subject: string, content: string, cc?: string, bcc?: string, attachments?: File[]) => void;
   onCancel: () => void;
@@ -6389,6 +6424,7 @@ const ComposeEmailView = ({
   callGenerateEmailResponse?: (requestType: string, tone?: string, customInstructions?: string, replyEditor?: React.RefObject<HTMLDivElement | null>) => Promise<any>;
   setShowEmailRulesDialog?: (show: boolean) => void;
   user?: any;
+  isClosing?: boolean;
 }) => {
   const [to, setTo] = useState('');
   const [cc, setCc] = useState('');
@@ -6480,8 +6516,26 @@ const ComposeEmailView = ({
     }
   };
 
+  // Add useEffect to handle animation and auto-focus
+  useEffect(() => {
+    // Only auto-focus when opening, not when closing
+    if (!isClosing) {
+      // Auto-focus the 'to' field when component mounts
+      const toInput = document.querySelector('.compose-to-field input');
+      if (toInput) {
+        (toInput as HTMLInputElement).focus();
+      }
+    }
+  }, [isClosing]);
+
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div 
+      className={`flex flex-col h-full bg-white shadow-lg rounded-t-lg ${!isClosing ? 'animate-slide-up' : ''}`}
+      style={{
+        overflow: 'hidden',
+        transformOrigin: 'center bottom'
+      }}
+    >
       {/* From Field */}
       <div className="flex items-center py-2 px-4 border-b border-gray-100">
         <span className="text-xs text-gray-600 font-medium w-12">From:</span>
@@ -6596,7 +6650,7 @@ const ComposeEmailView = ({
       {/* To Field */}
       <div className="flex items-center py-2 px-4 border-b border-gray-100">
         <span className="text-xs text-gray-600 font-medium w-12">To:</span>
-        <div className="flex-1">
+        <div className="flex-1 compose-to-field">
           <EmailInputWithChips
             value={to}
             onChange={setTo}

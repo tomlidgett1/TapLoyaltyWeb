@@ -3872,25 +3872,25 @@ ${content}`;
               {/* Agents Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 px-3 flex items-center gap-2 text-gray-700">
+                  <Button variant="ghost" size="sm" className="h-8 px-3 flex items-center gap-2 text-gray-700 rounded-2xl">
                     <span className="text-sm">Agent Setup</span>
                     <ChevronDown className="h-3.5 w-3.5 text-gray-500" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem onClick={() => handleAgentSelection('customer-service')}>
+                <DropdownMenuContent align="end" className="w-48 rounded-2xl border border-gray-200 shadow-md overflow-hidden">
+                  <DropdownMenuItem onClick={() => handleAgentSelection('customer-service')} className="rounded-xl">
                     <div className="flex items-center gap-2">
                       <MessageSquare className="h-4 w-4 text-gray-600" />
                       <span>Customer Service</span>
                     </div>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleAgentSelection('categorising')}>
+                  <DropdownMenuItem onClick={() => handleAgentSelection('categorising')} className="rounded-xl">
                     <div className="flex items-center gap-2">
                       <Filter className="h-4 w-4 text-gray-600" />
                       <span>Categorising Agent</span>
                     </div>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleAgentSelection('summary')}>
+                  <DropdownMenuItem onClick={() => handleAgentSelection('summary')} className="rounded-xl">
                     <div className="flex items-center gap-2">
                       <FileText className="h-4 w-4 text-gray-600" />
                       <span>Summary Agent</span>
@@ -3898,35 +3898,34 @@ ${content}`;
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-
               {/* Email Tools Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 px-3 flex items-center gap-2 text-gray-700">
+                  <Button variant="ghost" size="sm" className="h-8 px-3 flex items-center gap-2 text-gray-700 rounded-2xl">
                     <span className="text-sm">Email Tools</span>
                     <ChevronDown className="h-3.5 w-3.5 text-gray-500" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem onClick={() => setShowEmailRulesDialog(true)}>
+                <DropdownMenuContent align="end" className="w-48 rounded-2xl border border-gray-200 shadow-md overflow-hidden">
+                  <DropdownMenuItem onClick={() => setShowEmailRulesDialog(true)} className="rounded-xl">
                     <div className="flex items-center gap-2">
                       <Shield className="h-4 w-4 text-gray-600" />
                       <span>Email Rules</span>
                     </div>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleEnableGmailTrigger}>
+                  <DropdownMenuItem onClick={handleEnableGmailTrigger} className="rounded-xl">
                     <div className="flex items-center gap-2">
                       <Bell className="h-4 w-4 text-gray-600" />
                       <span>Email Triggers</span>
                     </div>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleExtractWritingStyle}>
+                  <DropdownMenuItem onClick={handleExtractWritingStyle} className="rounded-xl">
                     <div className="flex items-center gap-2">
                       <Palette className="h-4 w-4 text-gray-600" />
                       <span>Writing Style</span>
                     </div>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => router.push('/email/attachments')}>
+                  <DropdownMenuItem onClick={() => router.push('/email/attachments')} className="rounded-xl">
                     <div className="flex items-center gap-2">
                       <Paperclip className="h-4 w-4 text-gray-600" />
                       <span>Attachments</span>
@@ -6437,6 +6436,7 @@ const ComposeEmailView = ({
   const [instructionsClosing, setInstructionsClosing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [instructionTone, setInstructionTone] = useState('professional');
+  const [customInstructionPrompt, setCustomInstructionPrompt] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composeEditorRef = useRef<HTMLDivElement>(null);
@@ -6527,6 +6527,30 @@ const ComposeEmailView = ({
       }
     }
   }, [isClosing]);
+  
+  // Add useEffect to handle content changes from the editor
+  useEffect(() => {
+    const handleMutations = () => {
+      if (composeEditorRef.current) {
+        setContent(composeEditorRef.current.innerHTML || '');
+      }
+    };
+    
+    // Set up MutationObserver to watch for changes to the editor content
+    if (composeEditorRef.current) {
+      const observer = new MutationObserver(handleMutations);
+      observer.observe(composeEditorRef.current, { 
+        childList: true, 
+        subtree: true, 
+        characterData: true,
+        attributes: false 
+      });
+      
+      return () => {
+        observer.disconnect();
+      };
+    }
+  }, []);
 
   return (
     <div 
@@ -6538,82 +6562,163 @@ const ComposeEmailView = ({
     >
       {/* From Field */}
       <div className="flex items-center py-2 px-4 border-b border-gray-100">
-        <span className="text-xs text-gray-600 font-medium w-12">From:</span>
+        <span className="text-xs text-gray-600 font-medium w-14">From:</span>
         <div className="flex-1 text-xs text-gray-900">{selectedAccount || 'Your Account'}</div>
         <div className="flex items-center gap-2">
           {/* Discreet Tap Agent Section - Only shown when not generating */}
           {!isGenerating && (
-            <div className="flex items-center gap-2 mr-auto">
-              <div className="flex items-center gap-2 w-fit">
-                {/* Main Tap Agent Button */}
-                <div className="flex items-center bg-gradient-to-r from-blue-500 to-orange-500 p-[1px] rounded-md">
-                  <button
-                    onClick={() => {}}
-                    className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-[3px] text-gray-800 bg-white"
+            <div className="relative">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    className="h-7 px-2 text-xs hover:bg-blue-50 rounded-2xl flex items-center gap-1"
                   >
-                    <WandSparkles className="h-3 w-3 text-blue-500" />
+                    <Sparkles className="h-3 w-3 text-blue-500" />
                     <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-medium">
                       Tap Agent
                     </span>
-                  </button>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 rounded-2xl border border-gray-200 shadow-md overflow-hidden">
+                  <DropdownMenuItem 
+                    className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 focus:bg-gray-50"
+                    onClick={() => {
+                      setShowInstructions(true);
+                    }}
+                  >
+                    <MessageSquare className="h-3.5 w-3.5 text-gray-500" />
+                    <span>Custom Instructions</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-gray-500">Select Tone</DropdownMenuLabel>
+                  <DropdownMenuItem 
+                    className={`flex items-center gap-2 ${isContentEmpty(content) ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-gray-50 focus:bg-gray-50"}`}
+                    onClick={() => !isContentEmpty(content) && handleComposeAI('tone', 'professional')}
+                    disabled={isContentEmpty(content)}
+                  >
+                    <Briefcase className="h-3.5 w-3.5 text-gray-500" />
+                    <span className={isContentEmpty(content) ? "text-gray-400" : ""}>Professional</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    className={`flex items-center gap-2 ${isContentEmpty(content) ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-gray-50 focus:bg-gray-50"}`}
+                    onClick={() => !isContentEmpty(content) && handleComposeAI('tone', 'friendly')}
+                    disabled={isContentEmpty(content)}
+                  >
+                    <Smile className="h-3.5 w-3.5 text-gray-500" />
+                    <span className={isContentEmpty(content) ? "text-gray-400" : ""}>Friendly</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    className={`flex items-center gap-2 ${isContentEmpty(content) ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-gray-50 focus:bg-gray-50"}`}
+                    onClick={() => !isContentEmpty(content) && handleComposeAI('tone', 'direct')}
+                    disabled={isContentEmpty(content)}
+                  >
+                    <ArrowRight className="h-3.5 w-3.5 text-gray-500" />
+                    <span className={isContentEmpty(content) ? "text-gray-400" : ""}>Direct</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    className={`flex items-center gap-2 ${isContentEmpty(content) ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-gray-50 focus:bg-gray-50"}`}
+                    onClick={() => !isContentEmpty(content) && handleComposeAI('tone', 'formal')}
+                    disabled={isContentEmpty(content)}
+                  >
+                    <Shield className="h-3.5 w-3.5 text-gray-500" />
+                    <span className={isContentEmpty(content) ? "text-gray-400" : ""}>Formal</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    className={`flex items-center gap-2 ${isContentEmpty(content) ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-gray-50 focus:bg-gray-50"}`}
+                    onClick={() => !isContentEmpty(content) && handleComposeAI('tone', 'persuasive')}
+                    disabled={isContentEmpty(content)}
+                  >
+                    <Wand2 className="h-3.5 w-3.5 text-gray-500" />
+                    <span className={isContentEmpty(content) ? "text-gray-400" : ""}>Persuasive</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 focus:bg-gray-50"
+                    onClick={() => setShowEmailRulesDialog && setShowEmailRulesDialog(true)}
+                  >
+                    <Shield className="h-3.5 w-3.5 text-gray-500" />
+                    <span>Email Rules</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              {/* Custom Instructions Speech Bubble */}
+              {(showInstructions || instructionsClosing) && (
+                <div className={`absolute top-full right-0 mt-2 w-80 z-50 ${
+                  instructionsClosing 
+                    ? 'animate-out fade-out slide-out-to-top-2 duration-200' 
+                    : 'animate-in fade-in slide-in-from-top-2 duration-300'
+                }`}>
+                  <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-md">
+                    {/* Speech bubble pointer */}
+                    <div className="absolute -top-2 right-6 w-4 h-4 bg-white border-t border-l border-gray-200 transform rotate-45"></div>
+                    
+                    <div className="space-y-3">
+                      <textarea
+                        value={customInstructionPrompt}
+                        onChange={(e) => setCustomInstructionPrompt(e.target.value)}
+                        placeholder="Enter specific instructions for how you'd like the AI to respond..."
+                        className="w-full text-xs bg-white border border-gray-200 rounded-2xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder-gray-500"
+                        rows={3}
+                        autoFocus
+                      />
+                      
+                      <div className="flex justify-between items-center">
+                        <button
+                          onClick={() => closeInstructionsWithAnimation()}
+                          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-2xl transition-colors text-gray-600 hover:text-gray-800 border border-gray-200 hover:bg-gray-50"
+                        >
+                          <X className="h-3 w-3" strokeWidth="2" />
+                          Cancel
+                        </button>
+                        
+                        <button
+                          disabled={!customInstructionPrompt.trim() || isGenerating}
+                          onClick={async () => {
+                            if (!customInstructionPrompt.trim()) return;
+                            
+                            // Immediately close instructions without animation for Apply
+                            setShowInstructions(false);
+                            setInstructionsClosing(false);
+                            setIsGenerating(true);
+                            try {
+                              await callGenerateEmailResponse?.('createemail', instructionTone, customInstructionPrompt, composeEditorRef);
+                              // Update content state after AI generation
+                              if (composeEditorRef.current) {
+                                setContent(composeEditorRef.current.innerHTML || '');
+                              }
+                              setCustomInstructionPrompt('');
+                            } catch (error) {
+                              console.error('Error in compose AI generation:', error);
+                            } finally {
+                              setIsGenerating(false);
+                            }
+                          }}
+                          className={`flex items-center gap-1.5 text-xs font-normal px-3 py-1.5 rounded-2xl transition-colors ${
+                            !customInstructionPrompt.trim() || isGenerating
+                              ? 'text-white bg-gray-400 cursor-not-allowed' 
+                              : 'text-white bg-gray-700 hover:bg-gray-800'
+                          }`}
+                        >
+                          {isGenerating ? (
+                            <>
+                              <Loader2 className="h-3 w-3 text-white animate-spin" strokeWidth="2" />
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-3 w-3 text-white" strokeWidth="2" />
+                              Apply
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                
-                {/* Tone Button with Dropdown */}
-                <div className="flex items-center border border-gray-200 rounded-md shadow-sm">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-gray-700 hover:bg-gray-50">
-                        <Palette className="h-3 w-3 text-gray-500" />
-                        Tone
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-40 z-50">
-                      <DropdownMenuItem onClick={() => handleComposeAI('tone', 'friendly')}>
-                        <Lightbulb className="h-3 w-3 text-gray-500 mr-2" />
-                        <span className="text-xs">Friendly</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleComposeAI('tone', 'professional')}>
-                        <Users className="h-3 w-3 text-gray-500 mr-2" />
-                        <span className="text-xs">Professional</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleComposeAI('tone', 'direct')}>
-                        <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
-                        <span className="text-xs">Direct</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleComposeAI('tone', 'casual')}>
-                        <Eye className="h-3 w-3 text-gray-500 mr-2" />
-                        <span className="text-xs">Casual</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleComposeAI('tone', 'formal')}>
-                        <Shield className="h-3 w-3 text-gray-500 mr-2" />
-                        <span className="text-xs">Formal</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleComposeAI('tone', 'persuasive')}>
-                        <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
-                        <span className="text-xs">Persuasive</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                
-                {/* Instructions Button */}
-                <button
-                  onClick={() => setShowInstructions(!showInstructions)}
-                  className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-gray-700 border border-gray-200 hover:bg-gray-50 shadow-sm"
-                >
-                  <MessageSquare className="h-3 w-3 text-gray-500" />
-                  Instructions
-                </button>
-                
-                {/* Rules Button */}
-                <button
-                  onClick={() => setShowEmailRulesDialog && setShowEmailRulesDialog(true)}
-                  className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-gray-700 border border-gray-200 hover:bg-gray-50 shadow-sm"
-                >
-                  <Shield className="h-3 w-3 text-gray-500" />
-                  Rules
-                </button>
-              </div>
+              )}
             </div>
           )}
           
@@ -6778,139 +6883,10 @@ const ComposeEmailView = ({
         </div>
       )}
 
-      {/* Instructions Panel - Only shown when instructions are open */}
-      {(showInstructions || instructionsClosing) && !isGenerating && (
-        <div className="mx-3 my-2">
-          <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5">
-                <MessageSquare className="h-3.5 w-3.5 text-blue-500" />
-                <span className="text-xs font-medium text-gray-700">Custom Instructions</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowEmailRulesDialog && setShowEmailRulesDialog(true)}
-                  className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                >
-                  <Shield className="h-3 w-3 text-gray-500" />
-                  Rules
-                </button>
-                <button
-                  onClick={closeInstructionsWithAnimation}
-                  className="flex items-center gap-1.5 text-xs font-normal text-gray-600 hover:text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-md transition-colors"
-                >
-                  <X className="h-3 w-3 text-gray-500" />
-                  Cancel
-                </button>
-                <button
-                  disabled={isGenerating}
-                  onClick={async () => {
-                    const textarea = document.getElementById('instructions-textarea-compose') as HTMLTextAreaElement;
-                    const customInstructions = textarea?.value || '';
-                    if (customInstructions.trim()) {
-                      // Immediately close instructions without animation for Apply
-                      setShowInstructions(false);
-                      setInstructionsClosing(false);
-                      setIsGenerating(true);
-                      try {
-                        await callGenerateEmailResponse?.('createemail', instructionTone, customInstructions, composeEditorRef);
-                        // Update content state after AI generation
-                        if (composeEditorRef.current) {
-                          setContent(composeEditorRef.current.innerHTML || '');
-                        }
-                      } catch (error) {
-                        console.error('Error in compose AI generation:', error);
-                      } finally {
-                        setIsGenerating(false);
-                      }
-                    }
-                  }}
-                  className={`flex items-center gap-1.5 text-xs font-normal px-3 py-1.5 rounded-md transition-colors ${
-                    isGenerating 
-                      ? 'text-white bg-blue-600 cursor-not-allowed' 
-                      : 'text-white bg-blue-500 hover:bg-blue-600'
-                  }`}
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="h-3 w-3 text-white animate-spin" />
-                      <span className="text-xs font-normal text-white">
-                        Applying...
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <Check className="h-3 w-3 text-white" />
-                      Apply
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-            
-            {/* Instructions Textarea */}
-            <div className={`bg-white transition-all duration-200 ease-out ${
-              instructionsClosing 
-                ? 'animate-out slide-out-to-top-2' 
-                : 'animate-in slide-in-from-top-2'
-            }`}>
-              <div className="pt-4">
-                <div className="space-y-3">
-                  <div className="relative">
-                    <textarea
-                      ref={(el) => { if (el) el.id = 'instructions-textarea-compose'; }}
-                      placeholder="Enter specific instructions for how you'd like the AI to respond..."
-                      className="w-full text-xs bg-gray-50 border border-gray-200 rounded-md px-3 py-2 pr-20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder-gray-500"
-                      rows={3}
-                    />
-                    {/* Tone Dropdown positioned on the right */}
-                    <div className="absolute top-2 right-2">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-2 py-1 rounded-md transition-colors">
-                            <Palette className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                            <span className="capitalize">{instructionTone}</span>
-                            <ChevronDown className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-32">
-                          <DropdownMenuItem onClick={() => setInstructionTone('friendly')}>
-                            <Lightbulb className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                            <span className="text-xs">Friendly</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setInstructionTone('professional')}>
-                            <Users className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                            <span className="text-xs">Professional</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setInstructionTone('direct')}>
-                            <ArrowRight className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                            <span className="text-xs">Direct</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setInstructionTone('casual')}>
-                            <Eye className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                            <span className="text-xs">Casual</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setInstructionTone('formal')}>
-                            <Shield className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                            <span className="text-xs">Formal</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setInstructionTone('persuasive')}>
-                            <Wand2 className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                            <span className="text-xs">Persuasive</span>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      
 
       {/* Message Content - matches reply module */}
-      <div className="flex-1 px-3 py-6 overflow-y-auto custom-scrollbar">
+      <div className="flex-1 px-4 py-6 overflow-y-auto custom-scrollbar">
         <style dangerouslySetInnerHTML={{
           __html: `
             [contenteditable][data-placeholder]:empty:before {
@@ -7338,6 +7314,26 @@ const EmailViewer = ({
                       <ArrowRight className="h-3.5 w-3.5 text-gray-500" />
                       <span>Direct</span>
                     </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 focus:bg-gray-50"
+                      onClick={() => {
+                        setLocalIsGenerating(true);
+                        onStartReply?.(email);
+                        setTimeout(() => {
+                          if (callGenerateEmailResponse && replyEditorRef.current) {
+                            callGenerateEmailResponse('tone', 'concise', undefined, replyEditorRef)
+                              .finally(() => {
+                                setLocalIsGenerating(false); // Reset loading state when done
+                              });
+                          } else {
+                            setLocalIsGenerating(false); // Reset if something went wrong
+                          }
+                        }, 100);
+                      }}
+                    >
+                      <FileText className="h-3.5 w-3.5 text-gray-500" />
+                      <span>Concise</span>
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : null}
@@ -7433,11 +7429,19 @@ const EmailViewer = ({
                     onClick={() => onSummariseThread?.()}
                     disabled={isSummarizing}
                   >
+                    {/* SVG gradient definition for blue/orange gradient */}
+                    <svg width="0" height="0" className="absolute">
+                      <linearGradient id="blue-orange-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#3b82f6" />
+                        <stop offset="100%" stopColor="#f97316" />
+                      </linearGradient>
+                    </svg>
+                    
                     {isSummarizing ? (
                       <Loader2 
                         className="h-3 w-3 animate-spin" 
                         style={{
-                          stroke: 'url(#orange-blue-gradient)',
+                          stroke: 'url(#blue-orange-gradient)',
                           strokeWidth: 2
                         }}
                       />
@@ -7445,8 +7449,8 @@ const EmailViewer = ({
                       <NotebookPen 
                         className="h-3 w-3" 
                         style={{
-                          stroke: 'url(#orange-blue-gradient)',
-                          fill: 'none'
+                          stroke: 'url(#blue-orange-gradient)',
+                          strokeWidth: 2
                         }}
                       />
                     )}
@@ -7600,111 +7604,9 @@ const EmailViewer = ({
              }}>
             {/* From Field */}
           <div className="flex items-center py-2 px-4 border-b border-gray-100">
-            <div className="w-12 text-xs text-gray-600 font-medium">From:</div>
+            <div className="w-14 text-xs text-gray-600 font-medium">From:</div>
             <div className="flex-1 text-xs text-gray-900">{selectedAccount}</div>
             <div className="flex items-center gap-2">
-              {/* Discreet Tap Agent Section - Only shown when not generating */}
-              {!localIsGenerating && !isGenerating && (
-                <div className="flex items-center gap-2 mr-auto">
-                  <div className="flex items-center gap-2 w-fit">
-                    {/* Main Tap Agent Button */}
-                    <div className="flex items-center bg-gradient-to-r from-blue-500 to-orange-500 p-[1px] rounded-md">
-                      <button
-                        onClick={() => {}}
-                        className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-[3px] text-gray-800 bg-white"
-                      >
-                        <WandSparkles className="h-3 w-3 text-blue-500" />
-                        <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-medium">
-                          Quick Reply
-                        </span>
-                      </button>
-                    </div>
-                    
-                    {/* Tone Button with Dropdown */}
-                    <div className="flex items-center border border-gray-200 rounded-md shadow-sm">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-gray-700 hover:bg-gray-50">
-                            <Palette className="h-3 w-3 text-gray-500" />
-                            Tone
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-40 z-50">
-                          <DropdownMenuItem onClick={() => {
-                            setLocalIsGenerating(true);
-                            callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)
-                              .finally(() => setLocalIsGenerating(false));
-                          }}>
-                            <Lightbulb className="h-3 w-3 text-gray-500 mr-2" />
-                            <span className="text-xs">Friendly</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => {
-                            setLocalIsGenerating(true);
-                            callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)
-                              .finally(() => setLocalIsGenerating(false));
-                          }}>
-                            <Users className="h-3 w-3 text-gray-500 mr-2" />
-                            <span className="text-xs">Professional</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => {
-                            setLocalIsGenerating(true);
-                            callGenerateEmailResponse?.('tone', 'direct', undefined, replyEditorRef)
-                              .finally(() => setLocalIsGenerating(false));
-                          }}>
-                            <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
-                            <span className="text-xs">Direct</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => {
-                            setLocalIsGenerating(true);
-                            callGenerateEmailResponse?.('tone', 'casual', undefined, replyEditorRef)
-                              .finally(() => setLocalIsGenerating(false));
-                          }}>
-                            <Eye className="h-3 w-3 text-gray-500 mr-2" />
-                            <span className="text-xs">Casual</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => {
-                            setLocalIsGenerating(true);
-                            callGenerateEmailResponse?.('tone', 'formal', undefined, replyEditorRef)
-                              .finally(() => setLocalIsGenerating(false));
-                          }}>
-                            <Shield className="h-3 w-3 text-gray-500 mr-2" />
-                            <span className="text-xs">Formal</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => {
-                            setLocalIsGenerating(true);
-                            callGenerateEmailResponse?.('tone', 'persuasive', undefined, replyEditorRef)
-                              .finally(() => setLocalIsGenerating(false));
-                          }}>
-                            <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
-                            <span className="text-xs">Persuasive</span>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                    
-                    {/* Instructions Button */}
-                    <button
-                      onClick={() => setShowInstructions(!showInstructions)}
-                      className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-gray-700 border border-gray-200 hover:bg-gray-50 shadow-sm"
-                    >
-                      <MessageSquare className="h-3 w-3 text-gray-500" />
-                      Instructions
-                    </button>
-                    
-                    {/* Rules Button */}
-                    <button
-                      onClick={() => {
-                        actualSetTempEmailRules(emailRules || '');
-                        actualSetShowEmailRulesDialog(true);
-                      }}
-                      className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-gray-700 border border-gray-200 hover:bg-gray-50 shadow-sm"
-                    >
-                      <Shield className="h-3 w-3 text-gray-500" />
-                      Rules
-                    </button>
-                  </div>
-                </div>
-              )}
               
               {localIsGenerating ? (
                 <div className="flex items-center">
@@ -7718,6 +7620,79 @@ const EmailViewer = ({
                 </div>
               ) : (
                 <>
+                  {!localIsGenerating && !isGenerating && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className="h-7 px-2 text-xs hover:bg-blue-50 rounded-2xl flex items-center gap-1 mr-2"
+                        >
+                          <Sparkles className="h-3 w-3 text-blue-500" />
+                          <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-medium">
+                             Tap Agent
+                          </span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-56 rounded-2xl border border-gray-200 shadow-md overflow-hidden">
+                        <DropdownMenuItem 
+                          className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 focus:bg-gray-50"
+                          onClick={() => {
+                            setShowQuickReplyInstructions(true);
+                          }}
+                        >
+                          <MessageSquare className="h-3.5 w-3.5 text-gray-500" />
+                          <span>Custom Instructions</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel className="text-xs text-gray-500">Select Tone</DropdownMenuLabel>
+                        <DropdownMenuItem 
+                          className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 focus:bg-gray-50"
+                          onClick={() => {
+                            setLocalIsGenerating(true);
+                            callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)
+                              .finally(() => setLocalIsGenerating(false));
+                          }}
+                        >
+                          <Briefcase className="h-3.5 w-3.5 text-gray-500" />
+                          <span>Professional</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 focus:bg-gray-50"
+                          onClick={() => {
+                            setLocalIsGenerating(true);
+                            callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)
+                              .finally(() => setLocalIsGenerating(false));
+                          }}
+                        >
+                          <Smile className="h-3.5 w-3.5 text-gray-500" />
+                          <span>Friendly</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 focus:bg-gray-50"
+                          onClick={() => {
+                            setLocalIsGenerating(true);
+                            callGenerateEmailResponse?.('tone', 'direct', undefined, replyEditorRef)
+                              .finally(() => setLocalIsGenerating(false));
+                          }}
+                        >
+                          <ArrowRight className="h-3.5 w-3.5 text-gray-500" />
+                          <span>Direct</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 focus:bg-gray-50"
+                          onClick={() => {
+                            setLocalIsGenerating(true);
+                            callGenerateEmailResponse?.('tone', 'concise', undefined, replyEditorRef)
+                              .finally(() => setLocalIsGenerating(false));
+                          }}
+                        >
+                          <FileText className="h-3.5 w-3.5 text-gray-500" />
+                          <span>Concise</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                   <Button
                     onClick={() => {
                       const currentReplyContent = replyEditorRef.current?.innerHTML || '';
@@ -7787,8 +7762,8 @@ const EmailViewer = ({
             )}
 
             {/* Subject Field */}
-          <div className="flex items-center py-2 px-4 border-b border-gray-100">
-            <div className="w-12 text-xs text-gray-600 font-medium">Subject:</div>
+          <div className="flex items-center py-4 px-4 border-b border-gray-100">
+            <div className="w-14 text-xs text-gray-600 font-medium">Subject:</div>
             <div className="flex-1 text-xs text-gray-900">
                 {replyMode.type === 'forward' 
                   ? `Fwd: ${replyMode.originalEmail.subject}`

@@ -3199,9 +3199,8 @@ ${content}`;
     }
     
     try {
-      // Set selectedEmail immediately for instant highlighting
-      // Use the thread representative for immediate feedback
-      setSelectedEmail(thread.representative || thread)
+      // Don't set selectedEmail immediately - we'll wait for chain data
+      // This prevents showing incomplete data
       setSelectedThread(null)
       setReplyMode(null) // Also clear reply mode
       
@@ -3258,35 +3257,20 @@ ${content}`;
           senderName = "Unknown"
         }
         
-        // Get content from various sources
-        let content = ""
-        if (messageData.htmlMessage) {
-          content = messageData.htmlMessage
-        } else if (messageData.payload) {
-          try {
-            const parts = messageData.payload?.data?.payload?.parts
-            if (parts && Array.isArray(parts) && parts.length > 0) {
-              const firstPart = parts[0]
-              if (firstPart?.body?.data) {
-                content = decodePart(firstPart.body.data)
-              }
-            }
-            if (!content) {
-              const fallbackContent = messageData.payload?.data?.payload?.body?.data
-              if (fallbackContent) {
-                content = decodePart(fallbackContent)
-              }
-            }
-          } catch (error) {
-            console.warn("Error extracting email content:", error)
-          }
-        }
+        // We only care about htmlMessage, not content
+        // This ensures we don't show preview text in the email viewer
 
         // Create preview text from payload.data.preview.body if available
                   const previewText = messageData.payload?.data?.preview?.body 
             ? createPreviewText(messageData.payload.data.preview.body)
-            : createPreviewText(content || "");
+            : createPreviewText(messageData.htmlMessage || "");
           
+        // Skip emails that don't have htmlMessage - this ensures consistent data
+        if (!messageData.htmlMessage) {
+          console.warn(`Email ${doc.id} missing htmlMessage, skipping`);
+          return null;
+        }
+        
         return {
           id: doc.id,
           threadId: thread.threadId,
@@ -3294,7 +3278,7 @@ ${content}`;
           email: senderEmail,
           to: toInfo,
           subject: subject,
-          content: content || "No content available",
+          htmlMessage: messageData.htmlMessage,
           preview: previewText,
           receivedAt: messageData.receivedAt,
           repliedAt: messageData.repliedAt,
@@ -3307,8 +3291,17 @@ ${content}`;
         }
       })
       
+      // Filter out null emails (those without htmlMessage)
+      const validThreadEmails = chainThreadEmails.filter(email => email !== null);
+      
+      // If no valid emails with htmlMessage, show an error
+      if (validThreadEmails.length === 0) {
+        console.error("No valid emails with htmlMessage found in thread:", thread.threadId);
+        return;
+      }
+      
       // Sort emails by timestamp - consider both receivedAt and repliedAt
-      const threadEmails = chainThreadEmails.sort((a, b) => {
+      const threadEmails = validThreadEmails.sort((a, b) => {
         const getEmailDate = (email: any) => {
           // Use repliedAt if available, otherwise use receivedAt, fallback to time
           const dateField = email.repliedAt || email.receivedAt || email.time;
@@ -3370,6 +3363,21 @@ ${content}`;
         hasUnread: threadEmails.some((email: any) => !email.read)
       }
       
+      // Also update the thread representative in the left panel to ensure it has the same htmlMessage
+      // This ensures clicking the main thread item uses the same data as clicking from the dropdown
+      setFetchedEmails(prev => prev.map(item => {
+        if (item.threadId === thread.threadId) {
+          return {
+            ...item,
+            representative: {
+              ...item.representative,
+              htmlMessage: threadEmails[0].htmlMessage
+            }
+          };
+        }
+        return item;
+      }))
+      
       console.log("✅ Multiple emails in thread - setting up dropdown with", threadEmails.length, "emails")
       
       // Set the thread for dropdown functionality
@@ -3379,14 +3387,25 @@ ${content}`;
       setExpandedThreads(prev => new Set([...prev, thread.threadId]))
       
       // Set the most recent email (main button) to show in the right panel
+      // Use a direct state update rather than going through handleEmailSelect for better performance
       const mostRecentEmail = threadEmails[0]
-      handleEmailSelect(mostRecentEmail)
+      setSelectedEmail(mostRecentEmail)
+      
+      // Mark as read if needed
+      if (!mostRecentEmail.read) {
+        markEmailAsReadAndUpdateUI(mostRecentEmail)
+      }
       
     } catch (error) {
       console.error("❌ Error in handleThreadSelect:", error)
       
-      // Fallback - treat as single email
-      setSelectedEmail(thread.representative || thread)
+      // Don't set selectedEmail as fallback - this forces proper data loading
+      // Show an error toast instead
+      toast({
+        title: "Error loading email",
+        description: "Could not load email content. Please try again.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -6868,34 +6887,17 @@ const EmailViewer = ({
     }, 200);
   };
 
+  // Update HTML content when email changes - only use htmlMessage, no fallbacks
   useEffect(() => {
-    const loadEmailContent = async () => {
-      try {
-        // First priority: use htmlMessage if available
-        if (email.htmlMessage) {
-          setHtmlContent(email.htmlMessage);
-          return;
-        }
-        
-        // Second priority: extract from raw data
-        if (email.rawData) {
-          const extractedHtml = extractHtmlContent(email.rawData);
-          if (extractedHtml) {
-            const sanitisedHtml = sanitiseAndRenderHtml(extractedHtml);
-            setHtmlContent(sanitisedHtml);
-            return;
-          }
-        }
-        
-        // Clear any content if nothing is available
-        setHtmlContent('');
-      } catch (error) {
-        console.error('Error loading email content:', error);
-        setHtmlContent('');
-      }
-    };
-
-    loadEmailContent();
+    // Only use htmlMessage - no fallbacks
+    if (email?.htmlMessage) {
+      setHtmlContent(email.htmlMessage);
+    } else {
+      // If htmlMessage is not available, show empty content
+      // This forces proper data loading from the source
+      setHtmlContent('');
+      console.warn('Email missing htmlMessage:', email?.id);
+    }
   }, [email]);
 
   // Reset reply content when reply mode changes (only on mode change, not on every render)

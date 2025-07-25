@@ -21,7 +21,7 @@ const slideUpAnimation = `
 }
 
 .animate-slide-up {
-  animation: slideUp 750ms cubic-bezier(0.33, 1, 0.68, 1) forwards;
+  animation: slideUp 600ms cubic-bezier(0.33, 1, 0.68, 1) forwards;
   transform: translateY(100%); /* Initial position at the very bottom */
   will-change: transform;
 }
@@ -6544,63 +6544,73 @@ const ComposeEmailView = ({
           {/* Discreet Tap Agent Section - Only shown when not generating */}
           {!isGenerating && (
             <div className="flex items-center gap-2 mr-auto">
-              <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
-                <button
-                  onClick={() => {}}
-                  className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md text-gray-800 bg-white shadow-sm"
-                >
-                  <WandSparkles className="h-3 w-3 text-blue-500" />
-                  <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Tap Agent</span>
-                </button>
+              <div className="flex items-center gap-2 w-fit">
+                {/* Main Tap Agent Button */}
+                <div className="flex items-center bg-gradient-to-r from-blue-500 to-orange-500 p-[1px] rounded-md">
+                  <button
+                    onClick={() => {}}
+                    className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-[3px] text-gray-800 bg-white"
+                  >
+                    <WandSparkles className="h-3 w-3 text-blue-500" />
+                    <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-medium">
+                      Tap Agent
+                    </span>
+                  </button>
+                </div>
                 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors text-gray-600 hover:bg-gray-200/70">
-                      <Palette className="h-3 w-3" />
-                      Tone
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-40 z-50">
-                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'friendly')}>
-                      <Lightbulb className="h-3 w-3 text-gray-500 mr-2" />
-                      <span className="text-xs">Friendly</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'professional')}>
-                      <Users className="h-3 w-3 text-gray-500 mr-2" />
-                      <span className="text-xs">Professional</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'direct')}>
-                      <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
-                      <span className="text-xs">Direct</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'casual')}>
-                      <Eye className="h-3 w-3 text-gray-500 mr-2" />
-                      <span className="text-xs">Casual</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'formal')}>
-                      <Shield className="h-3 w-3 text-gray-500 mr-2" />
-                      <span className="text-xs">Formal</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleComposeAI('tone', 'persuasive')}>
-                      <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
-                      <span className="text-xs">Persuasive</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {/* Tone Button with Dropdown */}
+                <div className="flex items-center border border-gray-200 rounded-md shadow-sm">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-gray-700 hover:bg-gray-50">
+                        <Palette className="h-3 w-3 text-gray-500" />
+                        Tone
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-40 z-50">
+                      <DropdownMenuItem onClick={() => handleComposeAI('tone', 'friendly')}>
+                        <Lightbulb className="h-3 w-3 text-gray-500 mr-2" />
+                        <span className="text-xs">Friendly</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleComposeAI('tone', 'professional')}>
+                        <Users className="h-3 w-3 text-gray-500 mr-2" />
+                        <span className="text-xs">Professional</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleComposeAI('tone', 'direct')}>
+                        <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
+                        <span className="text-xs">Direct</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleComposeAI('tone', 'casual')}>
+                        <Eye className="h-3 w-3 text-gray-500 mr-2" />
+                        <span className="text-xs">Casual</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleComposeAI('tone', 'formal')}>
+                        <Shield className="h-3 w-3 text-gray-500 mr-2" />
+                        <span className="text-xs">Formal</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleComposeAI('tone', 'persuasive')}>
+                        <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
+                        <span className="text-xs">Persuasive</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
                 
+                {/* Instructions Button */}
                 <button
                   onClick={() => setShowInstructions(!showInstructions)}
-                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors text-gray-600 hover:bg-gray-200/70"
+                  className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-gray-700 border border-gray-200 hover:bg-gray-50 shadow-sm"
                 >
-                  <MessageSquare className="h-3 w-3" />
+                  <MessageSquare className="h-3 w-3 text-gray-500" />
                   Instructions
                 </button>
                 
+                {/* Rules Button */}
                 <button
                   onClick={() => setShowEmailRulesDialog && setShowEmailRulesDialog(true)}
-                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors text-gray-600 hover:bg-gray-200/70"
+                  className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-gray-700 border border-gray-200 hover:bg-gray-50 shadow-sm"
                 >
-                  <Shield className="h-3 w-3" />
+                  <Shield className="h-3 w-3 text-gray-500" />
                   Rules
                 </button>
               </div>
@@ -7582,7 +7592,12 @@ const EmailViewer = ({
 
       {/* Reply Compose Area - Raw in right panel */}
         {replyMode && (
-        <div className="flex flex-col h-full bg-white">
+        <div className="flex flex-col h-full bg-white shadow-lg rounded-t-lg animate-slide-up"
+             style={{ 
+               overflow: 'hidden', 
+               transformOrigin: 'center bottom',
+               animationDuration: '300ms' 
+             }}>
             {/* From Field */}
           <div className="flex items-center py-2 px-4 border-b border-gray-100">
             <div className="w-12 text-xs text-gray-600 font-medium">From:</div>
@@ -7591,90 +7606,100 @@ const EmailViewer = ({
               {/* Discreet Tap Agent Section - Only shown when not generating */}
               {!localIsGenerating && !isGenerating && (
                 <div className="flex items-center gap-2 mr-auto">
-                  <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
-                    <button
-                      onClick={() => {}}
-                      className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md text-gray-800 bg-white shadow-sm"
-                    >
-                      <WandSparkles className="h-3 w-3 text-blue-500" />
-                      <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Quick Reply</span>
-                    </button>
+                  <div className="flex items-center gap-2 w-fit">
+                    {/* Main Tap Agent Button */}
+                    <div className="flex items-center bg-gradient-to-r from-blue-500 to-orange-500 p-[1px] rounded-md">
+                      <button
+                        onClick={() => {}}
+                        className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-[3px] text-gray-800 bg-white"
+                      >
+                        <WandSparkles className="h-3 w-3 text-blue-500" />
+                        <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-medium">
+                          Quick Reply
+                        </span>
+                      </button>
+                    </div>
                     
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors text-gray-600 hover:bg-gray-200/70">
-                          <Palette className="h-3 w-3" />
-                          Tone
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-40 z-50">
-                        <DropdownMenuItem onClick={() => {
-                          setLocalIsGenerating(true);
-                          callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)
-                            .finally(() => setLocalIsGenerating(false));
-                        }}>
-                          <Lightbulb className="h-3 w-3 text-gray-500 mr-2" />
-                          <span className="text-xs">Friendly</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => {
-                          setLocalIsGenerating(true);
-                          callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)
-                            .finally(() => setLocalIsGenerating(false));
-                        }}>
-                          <Users className="h-3 w-3 text-gray-500 mr-2" />
-                          <span className="text-xs">Professional</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => {
-                          setLocalIsGenerating(true);
-                          callGenerateEmailResponse?.('tone', 'direct', undefined, replyEditorRef)
-                            .finally(() => setLocalIsGenerating(false));
-                        }}>
-                          <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
-                          <span className="text-xs">Direct</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => {
-                          setLocalIsGenerating(true);
-                          callGenerateEmailResponse?.('tone', 'casual', undefined, replyEditorRef)
-                            .finally(() => setLocalIsGenerating(false));
-                        }}>
-                          <Eye className="h-3 w-3 text-gray-500 mr-2" />
-                          <span className="text-xs">Casual</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => {
-                          setLocalIsGenerating(true);
-                          callGenerateEmailResponse?.('tone', 'formal', undefined, replyEditorRef)
-                            .finally(() => setLocalIsGenerating(false));
-                        }}>
-                          <Shield className="h-3 w-3 text-gray-500 mr-2" />
-                          <span className="text-xs">Formal</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => {
-                          setLocalIsGenerating(true);
-                          callGenerateEmailResponse?.('tone', 'persuasive', undefined, replyEditorRef)
-                            .finally(() => setLocalIsGenerating(false));
-                        }}>
-                          <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
-                          <span className="text-xs">Persuasive</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {/* Tone Button with Dropdown */}
+                    <div className="flex items-center border border-gray-200 rounded-md shadow-sm">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-gray-700 hover:bg-gray-50">
+                            <Palette className="h-3 w-3 text-gray-500" />
+                            Tone
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-40 z-50">
+                          <DropdownMenuItem onClick={() => {
+                            setLocalIsGenerating(true);
+                            callGenerateEmailResponse?.('tone', 'friendly', undefined, replyEditorRef)
+                              .finally(() => setLocalIsGenerating(false));
+                          }}>
+                            <Lightbulb className="h-3 w-3 text-gray-500 mr-2" />
+                            <span className="text-xs">Friendly</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            setLocalIsGenerating(true);
+                            callGenerateEmailResponse?.('tone', 'professional', undefined, replyEditorRef)
+                              .finally(() => setLocalIsGenerating(false));
+                          }}>
+                            <Users className="h-3 w-3 text-gray-500 mr-2" />
+                            <span className="text-xs">Professional</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            setLocalIsGenerating(true);
+                            callGenerateEmailResponse?.('tone', 'direct', undefined, replyEditorRef)
+                              .finally(() => setLocalIsGenerating(false));
+                          }}>
+                            <ArrowRight className="h-3 w-3 text-gray-500 mr-2" />
+                            <span className="text-xs">Direct</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            setLocalIsGenerating(true);
+                            callGenerateEmailResponse?.('tone', 'casual', undefined, replyEditorRef)
+                              .finally(() => setLocalIsGenerating(false));
+                          }}>
+                            <Eye className="h-3 w-3 text-gray-500 mr-2" />
+                            <span className="text-xs">Casual</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            setLocalIsGenerating(true);
+                            callGenerateEmailResponse?.('tone', 'formal', undefined, replyEditorRef)
+                              .finally(() => setLocalIsGenerating(false));
+                          }}>
+                            <Shield className="h-3 w-3 text-gray-500 mr-2" />
+                            <span className="text-xs">Formal</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            setLocalIsGenerating(true);
+                            callGenerateEmailResponse?.('tone', 'persuasive', undefined, replyEditorRef)
+                              .finally(() => setLocalIsGenerating(false));
+                          }}>
+                            <Wand2 className="h-3 w-3 text-gray-500 mr-2" />
+                            <span className="text-xs">Persuasive</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                     
+                    {/* Instructions Button */}
                     <button
                       onClick={() => setShowInstructions(!showInstructions)}
-                      className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors text-gray-600 hover:bg-gray-200/70"
+                      className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-gray-700 border border-gray-200 hover:bg-gray-50 shadow-sm"
                     >
-                      <MessageSquare className="h-3 w-3" />
+                      <MessageSquare className="h-3 w-3 text-gray-500" />
                       Instructions
                     </button>
                     
+                    {/* Rules Button */}
                     <button
                       onClick={() => {
                         actualSetTempEmailRules(emailRules || '');
                         actualSetShowEmailRulesDialog(true);
                       }}
-                      className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors text-gray-600 hover:bg-gray-200/70"
+                      className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md text-gray-700 border border-gray-200 hover:bg-gray-50 shadow-sm"
                     >
-                      <Shield className="h-3 w-3" />
+                      <Shield className="h-3 w-3 text-gray-500" />
                       Rules
                     </button>
                   </div>

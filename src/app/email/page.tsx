@@ -2371,7 +2371,6 @@ ${content}`;
           email: senderEmail,
           subject: subject,
           preview: previewText,
-          content: mostRecentContent || "Click to view thread messages",
           time: latestReceivedAt,
           read: mostRecentEmailRead, // Use actual read status from most recent email
           hasAttachment: hasAttachment,
@@ -2389,7 +2388,6 @@ ${content}`;
             email: senderEmail,
             subject: subject,
             preview: previewText,
-            content: "Click to view thread messages",
             time: latestReceivedAt,
             read: mostRecentEmailRead,
             hasAttachment: hasAttachment
@@ -4164,12 +4162,16 @@ ${content}`;
                   </div>
                 ) : (
                   <div className="overflow-y-auto flex-1 custom-scrollbar min-h-0">
-                    <div 
-                      className="text-sm text-gray-700 leading-relaxed"
-                      dangerouslySetInnerHTML={{
-                        __html: threadSummary ? DOMPurify.sanitize(threadSummary) : 'No summary available.'
-                      }}
-                    />
+                    {threadSummary ? (
+                      <AnimatedEmailResponse 
+                        html={DOMPurify.sanitize(threadSummary)} 
+                        className="text-sm text-gray-700 leading-relaxed"
+                      />
+                    ) : (
+                      <div className="text-sm text-gray-700 leading-relaxed">
+                        No summary available.
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -4529,6 +4531,7 @@ ${content}`;
               selectedAccount={selectedAccount}
               replyMode={replyMode}
               isSending={isSending}
+              emailsLoading={emailsLoading}
               onStartReply={(email: any) => setReplyMode({ type: 'reply', originalEmail: email })}
               onStartReplyAll={(email: any) => setReplyMode({ type: 'replyAll', originalEmail: email })}
               onStartForward={(email: any) => setReplyMode({ type: 'forward', originalEmail: email })}
@@ -6756,6 +6759,7 @@ const EmailViewer = ({
   onCancelReply,
   isSending,
   isGenerating,
+  emailsLoading,
   callGenerateEmailResponse,
   emailRules,
   setEmailRules,
@@ -6786,6 +6790,7 @@ const EmailViewer = ({
   onCancelReply?: () => void;
   isSending?: boolean;
   isGenerating?: boolean;
+  emailsLoading?: boolean;
   callGenerateEmailResponse?: (requestType: string, tone?: string, customInstructions?: string, replyEditor?: React.RefObject<HTMLDivElement | null>) => Promise<any>;
   emailRules?: string;
   setEmailRules?: (rules: string) => void;
@@ -6804,8 +6809,6 @@ const EmailViewer = ({
   closeSummaryDropdownWithAnimation?: () => void;
 }) => {
   const [htmlContent, setHtmlContent] = useState<string>('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>('');
   const [replyContent, setReplyContent] = useState('');
   const [replyQuotedContent, setReplyQuotedContent] = useState('');
   const [replyRecipients, setReplyRecipients] = useState('');
@@ -6868,39 +6871,27 @@ const EmailViewer = ({
   useEffect(() => {
     const loadEmailContent = async () => {
       try {
-        setLoading(true);
-        setError('');
+        // First priority: use htmlMessage if available
+        if (email.htmlMessage) {
+          setHtmlContent(email.htmlMessage);
+          return;
+        }
         
+        // Second priority: extract from raw data
         if (email.rawData) {
-          // Extract and decode HTML content from raw email data
           const extractedHtml = extractHtmlContent(email.rawData);
           if (extractedHtml) {
             const sanitisedHtml = sanitiseAndRenderHtml(extractedHtml);
             setHtmlContent(sanitisedHtml);
-          } else {
-            // Fallback to existing content
-            setHtmlContent(email.content || 'No content available');
+            return;
           }
-        } else if (email.content) {
-          // Check if content contains HTML tags (for thread replies with HTML content)
-          const containsHtml = /<[^>]*>/g.test(email.content);
-          if (containsHtml) {
-            // Sanitise HTML content for thread replies
-            const sanitisedHtml = sanitiseAndRenderHtml(email.content);
-            setHtmlContent(sanitisedHtml);
-          } else {
-            // Plain text content
-            setHtmlContent(email.content);
-          }
-        } else {
-          setHtmlContent('No content available');
         }
+        
+        // Clear any content if nothing is available
+        setHtmlContent('');
       } catch (error) {
         console.error('Error loading email content:', error);
-        setError('Failed to load email content');
-        setHtmlContent(email.content || 'Error loading content');
-      } finally {
-        setLoading(false);
+        setHtmlContent('');
       }
     };
 
@@ -6997,6 +6988,16 @@ const EmailViewer = ({
 
   return (
     <div className="flex flex-col h-full email-viewer">
+      {/* SVG Gradient Definition for icons */}
+      <svg width="0" height="0" className="hidden">
+        <defs>
+          <linearGradient id="orange-blue-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#3b82f6" />
+            <stop offset="100%" stopColor="#f97316" />
+          </linearGradient>
+        </defs>
+      </svg>
+      
       {/* Email Header - Hidden when replying */}
       {!replyMode && (
         <div className="px-4 py-3 bg-white border-b border-gray-200">
@@ -7068,7 +7069,7 @@ const EmailViewer = ({
                     >
                       <Sparkles className="h-3 w-3 text-blue-500" />
                       <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-medium">
-                        Tap Agent
+                        Quick Reply
                       </span>
                     </Button>
                   </DropdownMenuTrigger>
@@ -7413,7 +7414,7 @@ const EmailViewer = ({
                       className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md text-gray-800 bg-white shadow-sm"
                     >
                       <WandSparkles className="h-3 w-3 text-blue-500" />
-                      <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Tap Agent</span>
+                      <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent">Quick Reply</span>
                     </button>
                     
                     <DropdownMenu>
@@ -7753,27 +7754,10 @@ const EmailViewer = ({
       {/* Email Content - Hidden when replying */}
       {!replyMode && (
         <div className="flex-1 overflow-auto px-1 py-2 bg-white custom-scrollbar">
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <RefreshCw className="h-6 w-6 animate-spin text-gray-400 mr-3" />
-            <span className="text-gray-600">Loading email content...</span>
+          <div className="prose max-w-none email-content" data-email-content>
+            <IframeEmail html={htmlContent || email.htmlMessage || ""} />
           </div>
-        ) : error ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <div className="w-12 h-12 mx-auto mb-4 rounded-md bg-red-100 flex items-center justify-center">
-                <AlertCircle className="h-6 w-6 text-red-500" />
-              </div>
-              <h3 className="font-medium text-gray-900 mb-2">Error Loading Content</h3>
-              <p className="text-gray-500 text-sm">{error}</p>
-            </div>
-          </div>
-        ) : (
-            <div className="prose max-w-none email-content" data-email-content>
-            <IframeEmail html={htmlContent} />
-          </div>
-        )}
-      </div>
+        </div>
       )}
 
     </div>

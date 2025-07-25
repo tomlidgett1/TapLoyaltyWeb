@@ -6583,7 +6583,14 @@ const ComposeEmailView = ({
               </Button>
               <Button
                 variant="ghost"
-                onClick={onCancel}
+                onClick={() => {
+                  // Start exit animation
+                  setIsAnimating(true);
+                  // Delay actual cancel to allow animation to play
+                  setTimeout(() => {
+                    onCancel();
+                  }, 200);
+                }}
                 className="h-7 px-2 text-gray-600 hover:text-gray-900 text-xs"
               >
                 Cancel

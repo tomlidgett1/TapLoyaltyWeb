@@ -120,6 +120,7 @@ interface AgentAction {
   shortSummary?: string
   isOngoingConversation?: boolean
   completedAt?: Date
+  inquiryType?: string
 }
 
 // Add a gradient text component for Agent branding
@@ -298,6 +299,7 @@ export default function AgentInboxPage() {
           completedAt: data.completedAt?.toDate() || data.updatedAt?.toDate() || null,
           rejectionReason: data.rejectionReason || [],
           rejectionComment: data.rejectionComment || "",
+          inquiryType: data.inquiryType || null,
         }
         
         // Add content based on task type
@@ -1016,6 +1018,13 @@ export default function AgentInboxPage() {
                               </span>
                             </Badge>
                             
+                            {action.inquiryType && (
+                              <Badge variant="outline" className="bg-white text-gray-700 border-gray-200 text-[10px] rounded-md px-1.5 py-0 h-4">
+                                <div className="h-1.5 w-1.5 bg-purple-500 rounded-full flex-shrink-0 mr-1.5"></div>
+                                {action.inquiryType}
+                              </Badge>
+                            )}
+                            
                             <span className="text-[10px] text-gray-400">
                               {action.completedAt ? formatTimeAgo(action.completedAt) : formatTimeAgo(action.timestamp)}
                             </span>
@@ -1103,6 +1112,13 @@ export default function AgentInboxPage() {
                           {action.isOngoingConversation && (
                             <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-100 text-[10px] rounded-full px-1.5 py-0 h-4">
                               Thread
+                            </Badge>
+                          )}
+                          
+                          {action.inquiryType && (
+                            <Badge variant="outline" className="bg-white text-gray-700 border-gray-200 text-[10px] rounded-md px-1.5 py-0 h-4">
+                              <div className="h-1.5 w-1.5 bg-purple-500 rounded-full flex-shrink-0 mr-1.5"></div>
+                              {action.inquiryType}
                             </Badge>
                           )}
                           

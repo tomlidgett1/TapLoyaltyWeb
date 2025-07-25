@@ -240,6 +240,19 @@ export default function AgentInboxPage() {
       textarea.style.height = `${Math.max(200, textarea.scrollHeight)}px`;
     }
   }, [isEditingResponse, editedResponse]);
+  
+  // Debug useEffect to log inquiryType values
+  useEffect(() => {
+    if (pendingActions.length > 0) {
+      console.log("Pending actions with inquiryType:", 
+        pendingActions.map(action => ({
+          id: action.id,
+          inquiryType: action.inquiryType,
+          classification: action.classification
+        }))
+      );
+    }
+  }, [pendingActions]);
 
   // Fetch agent actions from Firestore with real-time updates
   useEffect(() => {
@@ -267,6 +280,11 @@ export default function AgentInboxPage() {
       
       snapshot.forEach(doc => {
         const data = doc.data()
+        
+        // Debug classification and inquiryType
+        console.log(`Document ${doc.id} - classification:`, data.classification);
+        console.log(`Document ${doc.id} - inquiryType from classification:`, data.classification?.inquiryType);
+        console.log(`Document ${doc.id} - direct inquiryType:`, data.inquiryType);
         
         // Map Firestore data to AgentAction format
         const action: AgentAction = {
@@ -299,7 +317,8 @@ export default function AgentInboxPage() {
           completedAt: data.completedAt?.toDate() || data.updatedAt?.toDate() || null,
           rejectionReason: data.rejectionReason || [],
           rejectionComment: data.rejectionComment || "",
-          inquiryType: data.inquiryType || null,
+          // Try both locations for inquiryType
+          inquiryType: data.classification?.inquiryType || data.inquiryType || null,
         }
         
         // Add content based on task type
@@ -1019,8 +1038,8 @@ export default function AgentInboxPage() {
                             </Badge>
                             
                             {action.inquiryType && (
-                              <Badge variant="outline" className="bg-white text-gray-700 border-gray-200 text-[10px] rounded-md px-1.5 py-0 h-4">
-                                <div className="h-1.5 w-1.5 bg-purple-500 rounded-full flex-shrink-0 mr-1.5"></div>
+                              <Badge variant="outline" className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200 w-fit">
+                                <div className="h-1.5 w-1.5 bg-purple-500 rounded-full flex-shrink-0"></div>
                                 {action.inquiryType}
                               </Badge>
                             )}
@@ -1116,11 +1135,12 @@ export default function AgentInboxPage() {
                           )}
                           
                           {action.inquiryType && (
-                            <Badge variant="outline" className="bg-white text-gray-700 border-gray-200 text-[10px] rounded-md px-1.5 py-0 h-4">
-                              <div className="h-1.5 w-1.5 bg-purple-500 rounded-full flex-shrink-0 mr-1.5"></div>
+                            <Badge variant="outline" className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200 w-fit">
+                              <div className="h-1.5 w-1.5 bg-purple-500 rounded-full flex-shrink-0"></div>
                               {action.inquiryType}
                             </Badge>
                           )}
+                          {/* Debug inquiryType - called elsewhere */}
                           
                           <span className="text-[10px] text-gray-400">
                             {formatTimeAgo(action.timestamp)}

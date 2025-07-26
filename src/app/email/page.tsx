@@ -1477,7 +1477,9 @@ export default function EmailPage() {
       await updateDoc(agentTaskRef, {
         status: "approved",
         sentAt: Timestamp.now(),
-        sentBy: user.uid
+        sentBy: user.uid,
+        acknowledgedAt: Timestamp.now(), // Add acknowledgedAt for customerservice tasks
+        acknowledgedBy: user.uid
       });
       
       // Show success message
@@ -5144,9 +5146,28 @@ ${content}`;
                                 Thread
                               </span>
                             )}
-                            <span className="text-xs ml-auto text-gray-500 whitespace-nowrap">
-                              {task.createdAt && formatPreviewTime(task.createdAt.__time__ ? new Date(task.createdAt.__time__) : task.createdAt.toDate())}
-                            </span>
+                            <div className="flex flex-col items-end ml-auto">
+                              {agentTaskStatusFilter === "completed" && (task.acknowledgedAt || task.status === 'approved') ? (
+                                <>
+                                  <span className="text-xs text-green-600 font-medium whitespace-nowrap flex items-center">
+                                    <CheckCircle className="h-2.5 w-2.5 mr-1" />
+                                    Completed
+                                  </span>
+                                  <span className="text-xs text-gray-500 whitespace-nowrap">
+                                    {task.acknowledgedAt ? 
+                                      formatPreviewTime(task.acknowledgedAt.__time__ ? new Date(task.acknowledgedAt.__time__) : task.acknowledgedAt.toDate()) :
+                                      task.sentAt ?
+                                        formatPreviewTime(task.sentAt.__time__ ? new Date(task.sentAt.__time__) : task.sentAt.toDate()) :
+                                        formatPreviewTime(task.createdAt.__time__ ? new Date(task.createdAt.__time__) : task.createdAt.toDate())
+                                    }
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-xs text-gray-500 whitespace-nowrap">
+                                  {task.createdAt && formatPreviewTime(task.createdAt.__time__ ? new Date(task.createdAt.__time__) : task.createdAt.toDate())}
+                                </span>
+                              )}
+                            </div>
                           </div>
                           <div className="text-sm truncate text-gray-700 flex items-center gap-1.5">
                                                           {task.type === 'agent' ? (
@@ -5191,18 +5212,19 @@ ${content}`;
                           </div>
                           <div className="text-xs truncate text-gray-600 flex items-center gap-1.5 mt-1">
                             {task.inquiryType && (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-200 w-fit">
-                                <div className="h-1.5 w-1.5 bg-purple-500 rounded-full flex-shrink-0"></div>
+                              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                <div className="h-1.5 w-1.5 bg-gray-500 rounded-full flex-shrink-0"></div>
                                 {task.inquiryType}
                               </span>
                             )}
                             {task.priority && (
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium w-fit ${
-                                task.priority === 'critical' ? 'bg-red-50 text-red-700 border border-red-200' :
-                                task.priority === 'high' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
-                                task.priority === 'medium' ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
-                                'bg-green-50 text-green-700 border border-green-200'
-                              }`}>
+                              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+                                  task.priority === 'critical' ? 'bg-red-500' :
+                                  task.priority === 'high' ? 'bg-orange-500' :
+                                  task.priority === 'medium' ? 'bg-yellow-500' :
+                                  'bg-green-500'
+                                }`}></div>
                                 {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)} Priority
                               </span>
                             )}
@@ -5300,36 +5322,36 @@ ${content}`;
                       <div className="flex flex-wrap gap-2 mb-1">
                         {selectedAgentTask.classification?.isCustomerInquiry && (
                           <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                            <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                            <div className="h-1.5 w-1.5 bg-gray-500 rounded-full flex-shrink-0"></div>
                             Customer Inquiry
                           </span>
                         )}
                         {selectedAgentTask.priority && (
-                          <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium w-fit ${
-                            selectedAgentTask.priority === 'critical' ? 'bg-red-50 text-red-700 border border-red-200' :
-                            selectedAgentTask.priority === 'high' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
-                            selectedAgentTask.priority === 'medium' ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
-                            'bg-green-50 text-green-700 border border-green-200'
-                          }`}>
-                            <AlertCircle className="h-3 w-3" />
+                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                            <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+                              selectedAgentTask.priority === 'critical' ? 'bg-red-500' :
+                              selectedAgentTask.priority === 'high' ? 'bg-orange-500' :
+                              selectedAgentTask.priority === 'medium' ? 'bg-yellow-500' :
+                              'bg-green-500'
+                            }`}></div>
                             {selectedAgentTask.priority.charAt(0).toUpperCase() + selectedAgentTask.priority.slice(1)} Priority
                           </span>
                         )}
                         {selectedAgentTask.isOngoingConversation && (
-                          <Badge variant="outline" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200">
-                            <MessageSquare className="h-3 w-3 mr-1" />
+                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                            <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
                             Ongoing Thread
-                          </Badge>
+                          </span>
                         )}
                         {agentTaskStatusFilter === "completed" && (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-green-50 text-green-700 border border-green-200 w-fit">
-                            <CheckCircle className="h-3 w-3 mr-1" />
+                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                            <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
                             Completed
                           </span>
                         )}
                         {agentTaskStatusFilter === "rejected" && (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-red-50 text-red-700 border border-red-200 w-fit">
-                            <XCircle className="h-3 w-3 mr-1" />
+                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                            <div className="h-1.5 w-1.5 bg-red-500 rounded-full flex-shrink-0"></div>
                             Rejected
                           </span>
                         )}
@@ -5434,6 +5456,12 @@ ${content}`;
                                   {selectedAgentTask.type === 'agent' || selectedAgentTask.type === 'customerservice' ? (
                                     <div className="mb-4">
                                       <h3 className="text-base font-semibold text-gray-800 mb-2">Agent Response</h3>
+                                      {selectedAgentTask.status === 'approved' && (
+                                        <div className="flex items-center gap-2 mb-2 text-green-600 text-sm">
+                                          <CheckCircle className="h-4 w-4" />
+                                          <span>This task has been completed</span>
+                                        </div>
+                                      )}
                                       <div className="h-px bg-gray-200 w-full my-3"></div>
                                     </div>
                                   ) : (
@@ -5806,6 +5834,41 @@ ${content}`;
                                 <div className="flex flex-col">
                                   <span className="text-xs font-medium text-gray-500">Status</span>
                                   <span className="text-sm text-gray-700 capitalize">{selectedAgentTask.status}</span>
+                                </div>
+                              )}
+                              {selectedAgentTask.status === 'approved' && (selectedAgentTask.acknowledgedAt || selectedAgentTask.sentAt) && (
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-medium text-gray-500">Completed</span>
+                                  <span className="text-sm text-gray-700">
+                                    {(() => {
+                                      const date = selectedAgentTask.acknowledgedAt 
+                                        ? (selectedAgentTask.acknowledgedAt.__time__ 
+                                          ? new Date(selectedAgentTask.acknowledgedAt.__time__) 
+                                          : selectedAgentTask.acknowledgedAt.toDate())
+                                        : (selectedAgentTask.sentAt.__time__
+                                          ? new Date(selectedAgentTask.sentAt.__time__)
+                                          : selectedAgentTask.sentAt.toDate());
+                                      
+                                      const now = new Date();
+                                      const isToday = date.toDateString() === now.toDateString();
+                                      const isYesterday = new Date(now.setDate(now.getDate() - 1)).toDateString() === date.toDateString();
+                                      
+                                      if (isToday) {
+                                        return `Today ${date.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+                                      } else if (isYesterday) {
+                                        return `Yesterday ${date.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+                                      } else {
+                                        return date.toLocaleDateString('en-AU', { 
+                                          day: 'numeric', 
+                                          month: 'short', 
+                                          year: 'numeric',
+                                          hour: 'numeric',
+                                          minute: '2-digit',
+                                          hour12: true
+                                        });
+                                      }
+                                    })()}
+                                  </span>
                                 </div>
                               )}
                               {selectedAgentTask.expectedToolsTotal && (

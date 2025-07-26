@@ -5049,19 +5049,23 @@ ${content}`;
                         <div 
                           className={`transition-opacity duration-300 ${tabChanging ? 'opacity-0' : 'opacity-100'}`}
                         >
-                          {/* Single column layout for response */}
-                          <div className="grid grid-cols-1 gap-4">
+                          {/* Two-column layout for response and original email */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {/* Agent Response Column */}
                             {(selectedAgentTask.finalMessage || selectedAgentTask.agentResponse || selectedAgentTask.response) && (
                               <div 
-                                className="w-full rounded-md h-full"
+                                className="p-[2px] rounded-xl h-full"
+                                style={{ 
+                                  background: 'linear-gradient(90deg, #f97316 0%, #3b82f6 100%)',
+                                  boxShadow: '0 2px 8px -1px rgba(0, 0, 0, 0.1), 0 1px 4px -1px rgba(0, 0, 0, 0.06)'
+                                }}
                               >
-                                <div className="bg-white p-4 rounded-md h-full flex flex-col">
+                                <div className="bg-white p-4 rounded-lg h-full flex flex-col">
                                   <div className="flex items-center justify-between mb-3">
                                     <div className="flex items-center">
                                       <MessageSquare className="h-4 w-4 text-purple-600 mr-2" />
                                       <h3 className="text-sm font-medium">
-                                        {isEditingResponse && !isUsingAiEdit ? "Editing Response" : selectedAgentTask.agentResponse ? "Information" : "Response"}
+                                        {isEditingResponse && !isUsingAiEdit ? "Editing Response" : selectedAgentTask.agentResponse ? "Response" : "Agent Response"}
                                       </h3>
                                       {agentTaskStatusFilter === "completed" && (
                                         <span className="inline-flex items-center gap-1 ml-2 px-2 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
@@ -5075,7 +5079,7 @@ ${content}`;
                                         <Button 
                                           variant="ghost" 
                                           size="sm" 
-                                          className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md"
+                                          className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl"
                                           onClick={() => {
                                             setEditedResponse(selectedAgentTask.response);
                                             setIsEditingResponse(true);
@@ -5088,7 +5092,7 @@ ${content}`;
                                         <Button 
                                           variant="ghost" 
                                           size="sm" 
-                                          className="h-7 px-2 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-md"
+                                          className="h-7 px-2 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-xl"
                                           onClick={() => {
                                             setEditedResponse(selectedAgentTask.response);
                                             setIsEditingResponse(true);
@@ -5301,44 +5305,6 @@ ${content}`;
                                           </div>
                                         </div>
                                       </>
-                                    ) : (
-                                      // Display the response
-                                      isHtmlContent(selectedAgentTask.finalMessage || selectedAgentTask.agentResponse || selectedAgentTask.response) ? (
-                                        <div 
-                                          className="text-sm text-gray-600 email-content prose prose-sm max-w-none"
-                                          dangerouslySetInnerHTML={{ 
-                                            __html: DOMPurify.sanitize(selectedAgentTask.finalMessage || selectedAgentTask.agentResponse || selectedAgentTask.response) 
-                                          }}
-                                        />
-                                      ) : (
-                                        <div className="whitespace-pre-wrap text-sm text-gray-600">
-                                          {selectedAgentTask.finalMessage || selectedAgentTask.agentResponse || selectedAgentTask.response}
-                                        </div>
-                                      )
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Original Email - Only show if needed */}
-                            {selectedAgentTask.originalEmail?.htmlContent && !selectedAgentTask.agentResponse && (
-                              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm h-full flex flex-col">
-                                <div className="flex items-center mb-2">
-                                  <Mail className="h-4 w-4 text-gray-600 mr-2" />
-                                  <h3 className="text-sm font-medium">Original Email</h3>
-                                </div>
-                                <div 
-                                  className="text-sm text-gray-600 email-content prose prose-sm max-w-none overflow-auto"
-                                  dangerouslySetInnerHTML={{ 
-                                    __html: DOMPurify.sanitize(selectedAgentTask.originalEmail.htmlContent) 
-                                  }}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
                                     ) : (
                                       // Display the response
                                       isHtmlContent(selectedAgentTask.finalMessage || selectedAgentTask.agentResponse || selectedAgentTask.response) ? (

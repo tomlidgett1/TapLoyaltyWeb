@@ -479,7 +479,13 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
     const q = query(agentInboxRef, where("status", "==", "new"));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setPendingInboxCount(snapshot.size);
+      // Count only agent and customerservice types
+      const count = snapshot.docs.filter(doc => {
+        const data = doc.data();
+        return data.type === 'agent' || data.type === 'customerservice';
+      }).length;
+      
+      setPendingInboxCount(count);
     }, (error) => {
       console.error("Error fetching agent inbox count:", error);
       setPendingInboxCount(0);
@@ -775,7 +781,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                     )}
                     title={isCollapsed ? item.title : undefined}
                   >
-                    <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+                    <div className="w-4 h-4 flex items-center justify-center flex-shrink-0 relative">
                       <item.icon 
                         className={cn("h-4 w-4", 
                           isActive 
@@ -785,6 +791,11 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                                                  strokeWidth={2.75}
                          style={item.title === "Agents" ? { strokeWidth: 1 } : undefined}
                       />
+                      {(item.title === "Email" || item.title === "Agent Inbox") && pendingInboxCount > 0 && isCollapsed && (
+                        <span className="absolute -top-1 -right-1 bg-white text-blue-600 text-[9px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center border border-blue-200">
+                          {pendingInboxCount > 9 ? '9+' : pendingInboxCount}
+                        </span>
+                      )}
                     </div>
                     <div className="h-full flex items-center overflow-hidden flex-1">
                       <span className={cn(
@@ -795,9 +806,9 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                         {item.title}
                       </span>
                     </div>
-                    {item.title === "Agent Inbox" && pendingInboxCount > 0 && !isCollapsed && (
+                    {(item.title === "Agent Inbox" || item.title === "Email") && pendingInboxCount > 0 && !isCollapsed && (
                       <Badge 
-                        className="ml-auto bg-blue-50 text-blue-600 border-blue-200 rounded-md px-1.5 py-0 h-5 min-w-[20px] flex items-center justify-center transition-all duration-300 ease-in-out"
+                        className="ml-auto bg-white text-blue-500 border-[0.5px] border-blue-100 rounded-md px-1.5 py-0 h-4.5 min-w-[18px] flex items-center justify-center transition-all duration-300 ease-in-out text-[10px]"
                       >
                         {pendingInboxCount}
                       </Badge>

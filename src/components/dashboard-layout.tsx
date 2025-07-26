@@ -947,23 +947,23 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           }
           
           if (shouldShowNotification || docData.type === 'csemail' || docData.type === 'offer' || docData.type === 'program') {
-            // Show toast notification with blue-orange gradient title
-            toast({
-              title: "Agent Notification",
-              description: `New ${actionDescription} requires your approval`,
-              variant: "default",
+          // Show toast notification with blue-orange gradient title
+          toast({
+            title: "Agent Notification",
+            description: `New ${actionDescription} requires your approval`,
+            variant: "default",
               className: "agent-notification-toast",
-              action: (
-                <Button 
-                  onClick={() => router.push('/dashboard/agent-inbox')}
-                  variant="outline" 
+            action: (
+              <Button 
+                onClick={() => router.push('/dashboard/agent-inbox')}
+                variant="outline" 
                   className="h-8 gap-1.5 rounded-xl"
-                  size="sm"
-                >
-                  View
-                </Button>
-              )
-            })
+                size="sm"
+              >
+                View
+              </Button>
+            )
+          })
           }
           
           // Add to notifications array with proper styling

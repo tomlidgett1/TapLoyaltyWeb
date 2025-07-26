@@ -5152,7 +5152,7 @@ ${content}`;
                                   <span className="text-xs text-green-600 font-medium whitespace-nowrap flex items-center">
                                     <CheckCircle className="h-2.5 w-2.5 mr-1" />
                                     Completed
-                                  </span>
+                              </span>
                                   <span className="text-xs text-gray-500 whitespace-nowrap">
                                     {task.acknowledgedAt ? 
                                       formatPreviewTime(task.acknowledgedAt.__time__ ? new Date(task.acknowledgedAt.__time__) : task.acknowledgedAt.toDate()) :
@@ -5164,8 +5164,8 @@ ${content}`;
                                 </>
                               ) : (
                                 <span className="text-xs text-gray-500 whitespace-nowrap">
-                                  {task.createdAt && formatPreviewTime(task.createdAt.__time__ ? new Date(task.createdAt.__time__) : task.createdAt.toDate())}
-                                </span>
+                              {task.createdAt && formatPreviewTime(task.createdAt.__time__ ? new Date(task.createdAt.__time__) : task.createdAt.toDate())}
+                            </span>
                               )}
                             </div>
                           </div>
@@ -5205,8 +5205,8 @@ ${content}`;
                                 : task.type === 'customerservice'
                                 ? "Customer Service Agent"
                                 : task.classification?.isCustomerInquiry 
-                                  ? (task.senderEmail || task.sender || "Unknown sender")
-                                  : ""
+                                ? (task.senderEmail || task.sender || "Unknown sender")
+                                : ""
                               }
                             </span>
                           </div>
@@ -5258,7 +5258,7 @@ ${content}`;
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center justify-between">
                         <h2 className="text-xl font-semibold">
-                          {selectedAgentTask.agentname || selectedAgentTask.emailTitle || "Agent Task"}
+                      {selectedAgentTask.agentname || selectedAgentTask.emailTitle || "Agent Task"}
                         </h2>
                         
                         {/* Acknowledge/Reject buttons moved outside of the badges section */}
@@ -5320,12 +5320,12 @@ ${content}`;
                       
                       {/* All badges moved below the title */}
                       <div className="flex flex-wrap gap-2 mb-1">
-                        {selectedAgentTask.classification?.isCustomerInquiry && (
+                      {selectedAgentTask.classification?.isCustomerInquiry && (
                           <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
                             <div className="h-1.5 w-1.5 bg-gray-500 rounded-full flex-shrink-0"></div>
-                            Customer Inquiry
-                          </span>
-                        )}
+                          Customer Inquiry
+                        </span>
+                      )}
                         {selectedAgentTask.priority && (
                           <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
                             <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
@@ -5337,31 +5337,31 @@ ${content}`;
                             {selectedAgentTask.priority.charAt(0).toUpperCase() + selectedAgentTask.priority.slice(1)} Priority
                           </span>
                         )}
-                        {selectedAgentTask.isOngoingConversation && (
+                      {selectedAgentTask.isOngoingConversation && (
                           <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
                             <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
-                            Ongoing Thread
+                          Ongoing Thread
                           </span>
-                        )}
-                        {agentTaskStatusFilter === "completed" && (
+                      )}
+                      {agentTaskStatusFilter === "completed" && (
                           <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
                             <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
-                            Completed
-                          </span>
-                        )}
-                        {agentTaskStatusFilter === "rejected" && (
+                          Completed
+                        </span>
+                      )}
+                      {agentTaskStatusFilter === "rejected" && (
                           <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
                             <div className="h-1.5 w-1.5 bg-red-500 rounded-full flex-shrink-0"></div>
-                            Rejected
-                          </span>
-                        )}
+                          Rejected
+                        </span>
+                      )}
                                             </div>
                     </div>
                     <div className="flex flex-col md:flex-row md:justify-between gap-2">
                       <div className="text-sm text-muted-foreground">
                         {selectedAgentTask.createdAt && (() => {
                           const date = selectedAgentTask.createdAt.__time__ 
-                            ? new Date(selectedAgentTask.createdAt.__time__) 
+                              ? new Date(selectedAgentTask.createdAt.__time__) 
                             : selectedAgentTask.createdAt.toDate();
                           
                           const now = new Date();
@@ -5465,50 +5465,50 @@ ${content}`;
                                       <div className="h-px bg-gray-200 w-full my-3"></div>
                                     </div>
                                   ) : (
-                                    <div className="flex items-center justify-between mb-3">
-                                      <div className="flex items-center">
-                                        <MessageSquare className="h-4 w-4 text-purple-600 mr-2" />
-                                        <h3 className="text-sm font-medium">
-                                          {isEditingResponse && !isUsingAiEdit ? "Editing Response" : selectedAgentTask.agentResponse ? "Response" : "Agent Response"}
-                                        </h3>
-                                        {agentTaskStatusFilter === "completed" && (
-                                          <span className="inline-flex items-center gap-1 ml-2 px-2 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                                            <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
-                                            Sent
-                                          </span>
-                                        )}
-                                      </div>
-                                      {!isEditingResponse && agentTaskStatusFilter === "pending" && (
-                                        <div className="flex items-center gap-2">
-                                          <Button 
-                                            variant="ghost" 
-                                            size="sm" 
-                                            className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl"
-                                            onClick={() => {
-                                              setEditedResponse(selectedAgentTask.response);
-                                              setIsEditingResponse(true);
-                                              setIsUsingAiEdit(false);
-                                            }}
-                                          >
-                                            <Edit3 className="h-3 w-3 mr-1" />
-                                            Modify
-                                          </Button>
-                                          <Button 
-                                            variant="ghost" 
-                                            size="sm" 
-                                            className="h-7 px-2 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-xl"
-                                            onClick={() => {
-                                              setEditedResponse(selectedAgentTask.response);
-                                              setIsEditingResponse(true);
-                                              setIsUsingAiEdit(true);
-                                            }}
-                                          >
-                                            <Sparkles className="h-3 w-3 mr-1" />
-                                            AI Edit
-                                          </Button>
-                                        </div>
+                                  <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center">
+                                      <MessageSquare className="h-4 w-4 text-purple-600 mr-2" />
+                                      <h3 className="text-sm font-medium">
+                                        {isEditingResponse && !isUsingAiEdit ? "Editing Response" : selectedAgentTask.agentResponse ? "Response" : "Agent Response"}
+                                      </h3>
+                                      {agentTaskStatusFilter === "completed" && (
+                                        <span className="inline-flex items-center gap-1 ml-2 px-2 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                          <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                                          Sent
+                                        </span>
                                       )}
                                     </div>
+                                    {!isEditingResponse && agentTaskStatusFilter === "pending" && (
+                                      <div className="flex items-center gap-2">
+                                        <Button 
+                                          variant="ghost" 
+                                          size="sm" 
+                                          className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl"
+                                          onClick={() => {
+                                            setEditedResponse(selectedAgentTask.response);
+                                            setIsEditingResponse(true);
+                                            setIsUsingAiEdit(false);
+                                          }}
+                                        >
+                                          <Edit3 className="h-3 w-3 mr-1" />
+                                          Modify
+                                        </Button>
+                                        <Button 
+                                          variant="ghost" 
+                                          size="sm" 
+                                          className="h-7 px-2 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-xl"
+                                          onClick={() => {
+                                            setEditedResponse(selectedAgentTask.response);
+                                            setIsEditingResponse(true);
+                                            setIsUsingAiEdit(true);
+                                          }}
+                                        >
+                                          <Sparkles className="h-3 w-3 mr-1" />
+                                          AI Edit
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
                                   )}
                                   
                                   <div className="flex-1 overflow-auto">
@@ -5754,7 +5754,7 @@ ${content}`;
                                     <div className="text-sm text-blue-600 font-medium flex items-center gap-1.5 ml-3">
                                       <Mail className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
                                       {selectedAgentTask.senderEmail}
-                                    </div>
+                                </div>
                                   )}
                                 </div>
                                 )}

@@ -201,6 +201,25 @@ interface ProcessThoughtResult {
 }
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
+  // Add CSS for agent notification gradient
+  useEffect(() => {
+    // Add a style tag for the agent notification gradient if it doesn't exist
+    if (typeof document !== 'undefined' && !document.getElementById('agent-notification-styles')) {
+      const styleTag = document.createElement('style');
+      styleTag.id = 'agent-notification-styles';
+      styleTag.innerHTML = `
+        .agent-notification-gradient {
+          background: linear-gradient(90deg, #3b82f6 0%, #f97316 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          text-fill-color: transparent;
+          font-weight: 600;
+        }
+      `;
+      document.head.appendChild(styleTag);
+    }
+  }, []);
   const pathname = usePathname()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -913,8 +932,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           const docData = change.doc.data()
           const actionType = docData.type || 'task'
           let actionDescription = 'new task'
+          let shouldShowNotification = false
           
-          if (docData.type === 'csemail') {
+          // Only show notifications for agent or customerservice types
+          if (docData.type === 'agent' || docData.type === 'customerservice') {
+            shouldShowNotification = true
+            actionDescription = docData.type === 'agent' ? 'agent task' : 'customer service task'
+          } else if (docData.type === 'csemail') {
             actionDescription = 'email response'
           } else if (docData.type === 'offer') {
             actionDescription = 'discount offer'
@@ -922,22 +946,25 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             actionDescription = 'program recommendation'
           }
           
-          // Show toast notification with blue-orange gradient title
-          toast({
-            title: "Agent Notification",
-            description: `New ${actionDescription} requires your approval`,
-            variant: "default",
-            action: (
-              <Button 
-                onClick={() => router.push('/dashboard/agent-inbox')}
-                variant="outline" 
-                className="h-8 gap-1.5 rounded-md"
-                size="sm"
-              >
-                View
-              </Button>
-            )
-          })
+          if (shouldShowNotification || docData.type === 'csemail' || docData.type === 'offer' || docData.type === 'program') {
+            // Show toast notification with blue-orange gradient title
+            toast({
+              title: "Agent Notification",
+              description: `New ${actionDescription} requires your approval`,
+              variant: "default",
+              className: "agent-notification-toast",
+              action: (
+                <Button 
+                  onClick={() => router.push('/dashboard/agent-inbox')}
+                  variant="outline" 
+                  className="h-8 gap-1.5 rounded-xl"
+                  size="sm"
+                >
+                  View
+                </Button>
+              )
+            })
+          }
           
           // Add to notifications array with proper styling
           const newNotification: Notification = {

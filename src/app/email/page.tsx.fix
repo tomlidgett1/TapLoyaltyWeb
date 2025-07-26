@@ -1,19 +1,88 @@
-#!/bin/bash
-# This script will fix the Tap Agent section in the page.tsx file
+// Fix for the JSX structure issue
+// Replace the problematic section around line 5170-5220 with this:
 
-# Find the line with "Tap Agent Section"
-line_number=$(grep -n "Tap Agent Section" src/app/email/page.tsx | cut -d':' -f1)
-
-# Find the matching closing brace for the entire section
-# This is complex and would require parsing the file structure
-
-# For now, let's try a simpler approach - wrap the section in a conditional
-sed -i '' "${line_number}s/.*/{\/\* Tap Agent Section - Hidden when generating response \*\/}/" src/app/email/page.tsx
-sed -i '' "$((line_number+1))s/.*/{!localIsGenerating \&\& (/" src/app/email/page.tsx
-
-# Find where the section ends (this is approximate)
-end_line=$(grep -n "\/\* Message Content \*\/" src/app/email/page.tsx | cut -d':' -f1)
-insert_line=$((end_line-3))
-
-# Add the closing parenthesis before Message Content
-sed -i '' "${insert_line}s/.*/)}/" src/app/email/page.tsx
+{selectedAgentTask.type === 'agent' ? (
+  <div className="mb-4">
+    <div className="flex items-center justify-between">
+      <h3 className="text-base font-semibold text-gray-800">Agent Response</h3>
+      {agentTaskStatusFilter === "pending" && (
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs border-red-200 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md"
+            onClick={() => {
+              toast({
+                title: "Reject Task",
+                description: "Rejection functionality is being implemented",
+              });
+            }}
+          >
+            <X className="h-3 w-3 mr-1" />
+            Reject
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs border-green-200 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md"
+            onClick={handleSendAgentResponse}
+            disabled={isSendingAgentResponse}
+          >
+            {isSendingAgentResponse ? (
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            ) : (
+              <Check className="h-3 w-3 mr-1" />
+            )}
+            Acknowledge
+          </Button>
+        </div>
+      )}
+    </div>
+    <div className="h-px bg-gray-200 w-full my-3"></div>
+  </div>
+) : (
+  <div className="flex items-center justify-between mb-3">
+    <div className="flex items-center">
+      <MessageSquare className="h-4 w-4 text-purple-600 mr-2" />
+      <h3 className="text-sm font-medium">
+        {isEditingResponse && !isUsingAiEdit ? "Editing Response" : selectedAgentTask.agentResponse ? "Response" : "Agent Response"}
+      </h3>
+      {agentTaskStatusFilter === "completed" && (
+        <span className="inline-flex items-center gap-1 ml-2 px-2 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+          <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+          Sent
+        </span>
+      )}
+    </div>
+    {!isEditingResponse && agentTaskStatusFilter === "pending" && selectedAgentTask.type !== 'agent' && (
+      <div className="flex items-center gap-2">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl"
+          onClick={() => {
+            setEditedResponse(selectedAgentTask.response);
+            setIsEditingResponse(true);
+            setIsUsingAiEdit(false);
+          }}
+        >
+          <Edit3 className="h-3 w-3 mr-1" />
+          Modify
+        </Button>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="h-7 px-2 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-xl"
+          onClick={() => {
+            setEditedResponse(selectedAgentTask.response);
+            setIsEditingResponse(true);
+            setIsUsingAiEdit(true);
+          }}
+        >
+          <Sparkles className="h-3 w-3 mr-1" />
+          AI Edit
+        </Button>
+      </div>
+    )}
+  </div>
+)}

@@ -5235,6 +5235,7 @@ Describe the main purpose and goal of your agent...
                             agentDescription: agentDescription || 'AI agent that executes multi-step tasks',
                             scheduleId: scheduleId, // Store reference to schedule document
                             appsUsed: Array.from(selectedTools), // Add appsUsed field to track connected apps
+                            agentinbox: true, // Enable agent inbox functionality
                             settings: {
                               schedule: {
                                 frequency: createAgentSchedule.frequency,

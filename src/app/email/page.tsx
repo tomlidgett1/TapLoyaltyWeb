@@ -9,31 +9,6 @@ import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import DOMPurify from 'dompurify';
 
-// Custom animation keyframes for slide up from the very bottom of the screen
-const slideUpAnimation = `
-@keyframes slideUp {
-  0% {
-    transform: translateY(100%);
-  }
-  100% {
-    transform: translateY(0);
-  }
-}
-
-.animate-slide-up {
-  animation: slideUp 600ms cubic-bezier(0.33, 1, 0.68, 1) forwards;
-  transform: translateY(100%); /* Initial position at the very bottom */
-  will-change: transform;
-}
-`;
-
-// Add the animation styles to the document
-if (typeof document !== 'undefined') {
-  const style = document.createElement('style');
-  style.innerHTML = slideUpAnimation;
-  document.head.appendChild(style);
-}
-
 // Function to generate a consistent color based on a string (name or email)
 const getConsistentColor = (str: string): string => {
   if (!str) return 'bg-gray-200';
@@ -56,6 +31,7 @@ const getConsistentColor = (str: string): string => {
   const colorIndex = Math.abs(hash) % colors.length;
   return colors[colorIndex];
 };
+
 import { 
   Tooltip,
   TooltipContent,
@@ -167,8 +143,6 @@ import { cn } from "@/lib/utils"
 import { useVirtualizer } from '@tanstack/react-virtual';
 import * as ReactDOM from 'react-dom/client'
 import AnimatedEmailResponse from "@/components/animated-email-response"
-
-
 
 // Email Chip Component for displaying email addresses with light box
 const EmailChip = ({ email, onRemove }: { email: string; onRemove?: (email: string) => void }) => {
@@ -1254,6 +1228,9 @@ export default function EmailPage() {
         limit(50) // Limit to 50 tasks
       ];
       
+      // Add agentinbox filter to only show tasks with agentinbox = true
+      constraints.push(where('agentinbox', '==', true));
+      
       if (statusFilter === "pending") {
         // For the Inbox tab, we want to show all tasks that aren't completed or rejected
         // But we can't directly check for != "approved" in Firestore
@@ -1269,7 +1246,7 @@ export default function EmailPage() {
       
       const agentTasksQuery = query(agentTasksRef, ...constraints);
       const agentTasksSnapshot = await getDocs(agentTasksQuery);
-      console.log(`📊 Found ${agentTasksSnapshot.size} agent tasks with status: ${statusFilter}`);
+      console.log(`📊 Found ${agentTasksSnapshot.size} agent tasks with status: ${statusFilter} and agentinbox: true`);
       
       let tasks = agentTasksSnapshot.docs.map(doc => ({
         id: doc.id,
@@ -3723,7 +3700,7 @@ ${content}`;
             <div className="flex items-center gap-4">
               {/* Main Tab Container */}
               <TooltipProvider>
-                <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit mr-2">
+                <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit mr-1">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
@@ -3772,219 +3749,130 @@ ${content}`;
                   </Tooltip>
                 </div>
               </TooltipProvider>
-              {/* Folder Dropdown */}
-              <Select value={selectedFolder} onValueChange={setSelectedFolder}>
-                <SelectTrigger className="w-24 h-8 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="inbox">
-                    <div className="flex items-center gap-2">
-                      <Inbox className="h-4 w-4" />
-                      <span>Inbox</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="spam">
-                    <div className="flex items-center gap-2">
-                      <Shield className="h-4 w-4" />
-                      <span>Spam</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="trash">
-                    <div className="flex items-center gap-2">
-                      <Trash2 className="h-4 w-4" />
-                      <span>Trash</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="drafts">
-                    <div className="flex items-center gap-2">
-                      <Edit3 className="h-4 w-4" />
-                      <span>Drafts</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="sent">
-                    <div className="flex items-center gap-2">
-                      <Send className="h-4 w-4" />
-                      <span>Sent</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
 
-              {/* Toolbar Actions */}
-              <TooltipProvider>
-                <div className="flex items-center gap-2">
-                  <Button 
-                    onClick={handleComposeNew} 
-                    size="sm" 
-                    className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-3 py-1.5 rounded-md shadow-sm flex items-center gap-1.5 transition-all duration-200 hover:shadow"
-                  >
-                    <MailPlus className="h-3.5 w-3.5" />
-                    <span className="text-xs font-medium">New Email</span>
-                  </Button>
-                  
-                  <div className="h-6 w-px bg-gray-300 mx-1"></div>
-                  
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="sm" onClick={handleDelete} className="text-gray-700 hover:bg-gray-200">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Delete</p>
-                    </TooltipContent>
-                  </Tooltip>
-                  
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="sm" onClick={handleArchive} className="text-gray-700 hover:bg-gray-200">
-                        <Archive className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Archive</p>
-                    </TooltipContent>
-                  </Tooltip>
-                  
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={handleSync} 
-                        disabled={emailsLoading}
-                        className="text-gray-700 hover:bg-gray-200 transition-all duration-200"
-                      >
-                        <RefreshCw className={`h-4 w-4 transition-transform duration-300 ${emailsLoading ? 'animate-spin [animation-duration:2s]' : 'hover:rotate-180'}`} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>{emailsLoading ? 'Refreshing...' : 'Refresh'}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-              </TooltipProvider>
+              {/* Email Title */}
+              <div className="flex items-center">
+                <h1 className="text-lg font-semibold text-black">Email</h1>
+              </div>
+
+              {/* Minimalist Toolbar Actions */}
+              <div className="flex items-center gap-1">
+                <Button 
+                  onClick={handleComposeNew} 
+                  size="sm" 
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-md text-xs font-medium"
+                >
+                  <Mail className="h-3.5 w-3.5 mr-1" />
+                  New Email
+                </Button>
+              </div>
             </div>
 
-            {/* Right Side: Agents, Email Tools, and Account Selector */}
-            <div className="flex items-center gap-2">
-              {/* Agents Dropdown */}
+            {/* Right Side: Consolidated Tools and Account Selector */}
+            <div className="flex items-center gap-1">
+              {/* Refresh Button */}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={handleSync} 
+                      disabled={emailsLoading}
+                      className="text-gray-600 hover:bg-gray-100 p-1.5"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${emailsLoading ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{emailsLoading ? 'Refreshing...' : 'Refresh'}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              {/* Combined Tools Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 px-3 flex items-center gap-2 text-gray-700 rounded-2xl">
-                    <span className="text-sm">Agent Setup</span>
-                    <ChevronDown className="h-3.5 w-3.5 text-gray-500" />
+                  <Button variant="ghost" size="sm" className="h-8 px-2 flex items-center gap-1 text-gray-600 hover:bg-gray-100">
+                    <Settings className="h-4 w-4" />
+                    <ChevronDown className="h-3 w-3" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48 rounded-2xl border border-gray-200 shadow-md overflow-hidden">
-                  <DropdownMenuItem onClick={() => handleAgentSelection('customer-service')} className="rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <MessageSquare className="h-4 w-4 text-gray-600" />
-                      <span>Customer Service</span>
-                    </div>
+                <DropdownMenuContent align="end" className="w-48 rounded-xl border border-gray-200 shadow-md">
+                  <DropdownMenuLabel className="text-xs font-medium text-gray-500 px-3 py-2">Agents</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => handleAgentSelection('customer-service')} className="rounded-lg">
+                    <MessageSquare className="h-4 w-4 text-gray-600 mr-2" />
+                    <span className="text-sm">Customer Service</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleAgentSelection('categorising')} className="rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <Filter className="h-4 w-4 text-gray-600" />
-                      <span>Categorising Agent</span>
-                    </div>
+                  <DropdownMenuItem onClick={() => handleAgentSelection('categorising')} className="rounded-lg">
+                    <Filter className="h-4 w-4 text-gray-600 mr-2" />
+                    <span className="text-sm">Categorising</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleAgentSelection('summary')} className="rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-gray-600" />
-                      <span>Summary Agent</span>
-                    </div>
+                  <DropdownMenuItem onClick={() => handleAgentSelection('summary')} className="rounded-lg">
+                    <FileText className="h-4 w-4 text-gray-600 mr-2" />
+                    <span className="text-sm">Summary</span>
                   </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              {/* Email Tools Dropdown */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 px-3 flex items-center gap-2 text-gray-700 rounded-2xl">
-                    <span className="text-sm">Email Tools</span>
-                    <ChevronDown className="h-3.5 w-3.5 text-gray-500" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48 rounded-2xl border border-gray-200 shadow-md overflow-hidden">
-                  <DropdownMenuItem onClick={() => setShowEmailRulesDialog(true)} className="rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <Shield className="h-4 w-4 text-gray-600" />
-                      <span>Email Rules</span>
-                    </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs font-medium text-gray-500 px-3 py-2">Tools</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => setShowEmailRulesDialog(true)} className="rounded-lg">
+                    <Shield className="h-4 w-4 text-gray-600 mr-2" />
+                    <span className="text-sm">Email Rules</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleEnableGmailTrigger} className="rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <Bell className="h-4 w-4 text-gray-600" />
-                      <span>Email Triggers</span>
-                    </div>
+                  <DropdownMenuItem onClick={handleEnableGmailTrigger} className="rounded-lg">
+                    <Bell className="h-4 w-4 text-gray-600 mr-2" />
+                    <span className="text-sm">Triggers</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleExtractWritingStyle} className="rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <Palette className="h-4 w-4 text-gray-600" />
-                      <span>Writing Style</span>
-                    </div>
+                  <DropdownMenuItem onClick={handleExtractWritingStyle} className="rounded-lg">
+                    <Palette className="h-4 w-4 text-gray-600 mr-2" />
+                    <span className="text-sm">Writing Style</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => router.push('/email/attachments')} className="rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <Paperclip className="h-4 w-4 text-gray-600" />
-                      <span>Attachments</span>
-                    </div>
+                  <DropdownMenuItem onClick={() => router.push('/email/attachments')} className="rounded-lg">
+                    <Paperclip className="h-4 w-4 text-gray-600 mr-2" />
+                    <span className="text-sm">Attachments</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* Connected Account Selector or Connect Button - Now at far right */}
+              {/* Minimalist Account Selector */}
               {gmailEmailAddress ? (
                 <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-                  <SelectTrigger className="w-12 h-8 text-sm focus:outline-none focus:ring-0 border-gray-200 hover:border-gray-300 [&>span]:flex [&>span]:w-full [&>span]:justify-center [&>svg]:hidden">
+                  <SelectTrigger className="w-8 h-8 p-0 border-gray-200 hover:border-gray-300 [&>span]:flex [&>span]:w-full [&>span]:justify-center [&>svg]:hidden">
                     <SelectValue>
                       {loading ? (
-                        <div className="flex items-center justify-center">
-                          <div className="w-4 h-4 bg-gray-200 rounded animate-pulse"></div>
-                        </div>
+                        <div className="w-4 h-4 bg-gray-200 rounded animate-pulse"></div>
                       ) : getCurrentAccount() ? (
-                        <div className="flex items-center justify-center">
-                          <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center">
-                            {(() => {
-                              const account = getCurrentAccount();
-                              console.log('Account button - account:', account);
-                              console.log('Account button - provider:', account?.provider);
-                              const isGmail = account?.provider === "gmail";
-                              console.log('Account button - isGmail:', isGmail);
-                              return (
-                                <Image 
-                                  src={isGmail ? "/gmailnew.png" : "/outlook.png"}
-                                  alt={isGmail ? "Gmail" : "Outlook"}
-                                  width={20}
-                                  height={20}
-                                  className="w-6 h-6 object-scale-down"
-                                />
-                              );
-                            })()}
-                          </div>
+                        <div className="w-5 h-5 flex items-center justify-center">
+                          {(() => {
+                            const account = getCurrentAccount();
+                            const isGmail = account?.provider === "gmail";
+                            return (
+                              <Image 
+                                src={isGmail ? "/gmailnew.png" : "/outlook.png"}
+                                alt={isGmail ? "Gmail" : "Outlook"}
+                                width={16}
+                                height={16}
+                                className="w-4 h-4 object-scale-down"
+                              />
+                            );
+                          })()}
                         </div>
                       ) : (
-                        <div className="flex items-center justify-center">
-                          <Plus className="h-4 w-4 text-gray-400" />
-                        </div>
+                        <Plus className="h-4 w-4 text-gray-400" />
                       )}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {connectedAccounts.map((account) => (
                       <SelectItem key={account.id} value={account.emailAddress}>
-                        <div className="flex items-center gap-3">
-                          <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center">
-                            <Image 
-                              src={account.provider === "gmail" ? "/gmailnew.png" : "/outlook.png"}
-                              alt={account.provider === "gmail" ? "Gmail" : "Outlook"}
-                              width={24}
-                              height={24}
-                              className="w-6 h-6 object-scale-down"
-                            />
-                          </div>
-                          <span>{account.emailAddress}</span>
+                        <div className="flex items-center gap-2">
+                          <Image 
+                            src={account.provider === "gmail" ? "/gmailnew.png" : "/outlook.png"}
+                            alt={account.provider === "gmail" ? "Gmail" : "Outlook"}
+                            width={16}
+                            height={16}
+                            className="w-4 h-4 object-scale-down"
+                          />
+                          <span className="text-sm">{account.emailAddress}</span>
                         </div>
                       </SelectItem>
                     ))}
@@ -3992,7 +3880,7 @@ ${content}`;
                     <SelectItem value="new">
                       <div className="flex items-center gap-2">
                         <Plus className="h-4 w-4" />
-                        <span>Add New Account</span>
+                        <span className="text-sm">Add Account</span>
                       </div>
                     </SelectItem>
                   </SelectContent>
@@ -4001,17 +3889,18 @@ ${content}`;
                 <Button 
                   onClick={handleConnectEmail}
                   disabled={loading || isConnectingEmail}
-                  className="w-44 h-8 text-sm bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  size="sm"
+                  className="h-8 px-3 bg-blue-500 hover:bg-blue-600 text-white text-xs"
                 >
                   {(loading || isConnectingEmail) ? (
                     <>
-                      <div className="h-4 w-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <div className="h-3 w-3 mr-1 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       {isConnectingEmail ? "Connecting..." : ""}
                     </>
                   ) : (
                     <>
-                      <Mail className="h-4 w-4 mr-2" />
-                      Connect Email
+                      <Mail className="h-3 w-3 mr-1" />
+                      Connect
                     </>
                   )}
                 </Button>
@@ -4021,61 +3910,76 @@ ${content}`;
           ) : (
             /* Agent Inbox Top Bar */
             <>
-              <div className="flex items-center gap-4">
-                {/* Main Tab Container */}
-                <TooltipProvider>
-                  <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit mr-2">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          className={cn(
-                            "flex items-center justify-center h-7 w-9 rounded-md transition-colors",
-                            String(currentView) === 'email'
-                              ? "text-gray-800 bg-white shadow-sm"
-                              : "text-gray-600 hover:bg-gray-200/70"
-                          )}
-                          onClick={() => {
-                            const view = 'email';
-                            setCurrentView(view as any);
-                          }}
-                        >
-                          <Mail size={15} />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Inbox</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          className={cn(
-                            "flex items-center justify-center h-7 w-9 rounded-md transition-colors",
-                            String(currentView) === 'agent'
-                              ? "text-gray-800 bg-white shadow-sm"
-                              : "text-gray-600 hover:bg-gray-200/70"
-                          )}
-                          onClick={() => {
-                            const view = 'agent';
-                            setCurrentView(view as any);
-                          }}
-                        >
-                          <RiRobot3Line size={15} />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Agent Inbox</p>
-                      </TooltipContent>
-                    </Tooltip>
+              <div className="flex items-center justify-between w-full">
+                {/* Left Side - Tabs and Title */}
+                <div className="flex items-center gap-4">
+                  {/* Main Tab Container */}
+                  <TooltipProvider>
+                    <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit mr-1">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            className={cn(
+                              "flex items-center justify-center h-7 w-9 rounded-md transition-colors",
+                              String(currentView) === 'email'
+                                ? "text-gray-800 bg-white shadow-sm"
+                                : "text-gray-600 hover:bg-gray-200/70"
+                            )}
+                            onClick={() => {
+                              const view = 'email';
+                              setCurrentView(view as any);
+                            }}
+                          >
+                            <Mail size={15} />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Inbox</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            className={cn(
+                              "flex items-center justify-center h-7 w-9 rounded-md transition-colors",
+                              String(currentView) === 'agent'
+                                ? "text-gray-800 bg-white shadow-sm"
+                                : "text-gray-600 hover:bg-gray-200/70"
+                            )}
+                            onClick={() => {
+                              const view = 'agent';
+                              setCurrentView(view as any);
+                            }}
+                          >
+                            <RiRobot3Line size={15} />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Agent Inbox</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </TooltipProvider>
+
+                  {/* Agent Inbox Title */}
+                  <div className="flex items-center">
+                    <h1 className="text-lg font-medium text-black">Agent Inbox</h1>
                   </div>
-                </TooltipProvider>
-                
+                </div>
 
-
-
+                {/* Right Side - New Agent Button */}
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => router.push('/dashboard/agents')}
+                    className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-md text-xs font-medium"
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    New Agent
+                  </Button>
+                </div>
               </div>
-
-
             </>
           )}
                 </div>
@@ -4093,22 +3997,72 @@ ${content}`;
           {/* Search Bar - Fixed at top, hidden when summary panel is visible */}
           {(!showSummaryDropdown || summaryClosing) && (
             <div className="flex-shrink-0 p-3 border-b border-gray-200 bg-white rounded-t-xl">
-              <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  placeholder="Search emails..."
-                  className="pl-10 pr-8"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
+              {/* Folder Selection - Left of search box */}
+              <div className="flex items-center gap-2 mb-3">
+                <Select value={selectedFolder} onValueChange={setSelectedFolder}>
+                  <SelectTrigger className="h-9 text-sm border-gray-200 hover:border-gray-300 px-2 w-24">
+                    <SelectValue>
+                      <div className="flex items-center">
+                        {selectedFolder === 'inbox' && <Inbox className="h-4 w-4 mr-2" />}
+                        {selectedFolder === 'sent' && <Send className="h-4 w-4 mr-2" />}
+                        {selectedFolder === 'drafts' && <Edit3 className="h-4 w-4 mr-2" />}
+                        {selectedFolder === 'spam' && <Shield className="h-4 w-4 mr-2" />}
+                        {selectedFolder === 'trash' && <Trash2 className="h-4 w-4 mr-2" />}
+                        <span>{selectedFolder.charAt(0).toUpperCase() + selectedFolder.slice(1)}</span>
+                      </div>
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="inbox">
+                      <div className="flex items-center gap-2">
+                        <Inbox className="h-4 w-4" />
+                        <span>Inbox</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="sent">
+                      <div className="flex items-center gap-2">
+                        <Send className="h-4 w-4" />
+                        <span>Sent</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="drafts">
+                      <div className="flex items-center gap-2">
+                        <Edit3 className="h-4 w-4" />
+                        <span>Drafts</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="spam">
+                      <div className="flex items-center gap-2">
+                        <Shield className="h-4 w-4" />
+                        <span>Spam</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="trash">
+                      <div className="flex items-center gap-2">
+                        <Trash2 className="h-4 w-4" />
+                        <span>Trash</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
+                    placeholder="Search emails..."
+                    className="pl-10 pr-8"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
               </div>
               
               {/* Filter Pills */}
@@ -5465,6 +5419,30 @@ ${content}`;
                             </div>
                           )}
                           
+                          {/* Final Message Section */}
+                          {selectedAgentTask.finalMessage && (
+                            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm mb-4">
+                              <div className="flex items-center mb-3">
+                                <MessageSquare className="h-4 w-4 text-gray-600 mr-2" />
+                                <h3 className="text-sm font-medium">Final Message</h3>
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                {isHtmlContent(selectedAgentTask.finalMessage) ? (
+                                  <div 
+                                    className="prose prose-sm max-w-none"
+                                    dangerouslySetInnerHTML={{ 
+                                      __html: DOMPurify.sanitize(selectedAgentTask.finalMessage) 
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="whitespace-pre-wrap">
+                                    {selectedAgentTask.finalMessage}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          
                           {/* Thread History */}
                           {selectedAgentTask.isOngoingConversation && selectedAgentTask.threadSummary && (
                             <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4">
@@ -6554,11 +6532,7 @@ const ComposeEmailView = ({
 
   return (
     <div 
-      className={`flex flex-col h-full bg-white shadow-lg rounded-t-lg ${!isClosing ? 'animate-slide-up' : ''}`}
-      style={{
-        overflow: 'hidden',
-        transformOrigin: 'center bottom'
-      }}
+      className="flex flex-col h-full bg-white shadow-lg rounded-t-lg"
     >
       {/* From Field */}
       <div className="flex items-center py-2 px-4 border-b border-gray-100">
@@ -6644,77 +6618,68 @@ const ComposeEmailView = ({
                 </DropdownMenuContent>
               </DropdownMenu>
               
-              {/* Custom Instructions Speech Bubble */}
+              {/* Custom Instructions Input */}
               {(showInstructions || instructionsClosing) && (
-                <div className={`absolute top-full right-0 mt-2 w-80 z-50 ${
+                <div className={`absolute top-full right-0 mt-2 w-96 z-50 ${
                   instructionsClosing 
                     ? 'animate-out fade-out slide-out-to-top-2 duration-200' 
-                    : 'animate-in fade-in slide-in-from-top-2 duration-300'
+                    : 'animate-in fade-in-from-top-2 duration-300'
                 }`}>
-                  <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-md">
-                    {/* Speech bubble pointer */}
-                    <div className="absolute -top-2 right-6 w-4 h-4 bg-white border-t border-l border-gray-200 transform rotate-45"></div>
+                  <div className="relative">
+                    <textarea
+                      value={customInstructionPrompt}
+                      onChange={(e) => setCustomInstructionPrompt(e.target.value)}
+                      placeholder="What do you want your email to be about?"
+                      className="w-full text-xs bg-white border border-gray-200 rounded-2xl px-3 py-2 pr-16 focus:outline-none resize-none placeholder-gray-500 shadow-md"
+                      rows={4}
+                      autoFocus
+                    />
                     
-                    <div className="space-y-3">
-                      <textarea
-                        value={customInstructionPrompt}
-                        onChange={(e) => setCustomInstructionPrompt(e.target.value)}
-                        placeholder="Enter specific instructions for how you'd like the AI to respond..."
-                        className="w-full text-xs bg-white border border-gray-200 rounded-2xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder-gray-500"
-                        rows={3}
-                        autoFocus
-                      />
+                    {/* Action buttons inside the input */}
+                    <div className="absolute top-2 right-2 flex items-center gap-1">
+                      <button
+                        onClick={() => closeInstructionsWithAnimation()}
+                        className="p-1 hover:bg-gray-100 rounded-md transition-colors"
+                        title="Cancel"
+                      >
+                        <X className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                      </button>
                       
-                      <div className="flex justify-between items-center">
-                        <button
-                          onClick={() => closeInstructionsWithAnimation()}
-                          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-2xl transition-colors text-gray-600 hover:text-gray-800 border border-gray-200 hover:bg-gray-50"
-                        >
-                          <X className="h-3 w-3" strokeWidth="2" />
-                          Cancel
-                        </button>
-                        
-                        <button
-                          disabled={!customInstructionPrompt.trim() || isGenerating}
-                          onClick={async () => {
-                            if (!customInstructionPrompt.trim()) return;
-                            
-                            // Immediately close instructions without animation for Apply
-                            setShowInstructions(false);
-                            setInstructionsClosing(false);
-                            setIsGenerating(true);
-                            try {
-                              await callGenerateEmailResponse?.('createemail', instructionTone, customInstructionPrompt, composeEditorRef);
-                              // Update content state after AI generation
-                              if (composeEditorRef.current) {
-                                setContent(composeEditorRef.current.innerHTML || '');
-                              }
-                              setCustomInstructionPrompt('');
-                            } catch (error) {
-                              console.error('Error in compose AI generation:', error);
-                            } finally {
-                              setIsGenerating(false);
+                      <button
+                        disabled={!customInstructionPrompt.trim() || isGenerating}
+                        onClick={async () => {
+                          if (!customInstructionPrompt.trim()) return;
+                          
+                          // Immediately close instructions without animation for Apply
+                          setShowInstructions(false);
+                          setInstructionsClosing(false);
+                          setIsGenerating(true);
+                          try {
+                            await callGenerateEmailResponse?.('createemail', instructionTone, customInstructionPrompt, composeEditorRef);
+                            // Update content state after AI generation
+                            if (composeEditorRef.current) {
+                              setContent(composeEditorRef.current.innerHTML || '');
                             }
-                          }}
-                          className={`flex items-center gap-1.5 text-xs font-normal px-3 py-1.5 rounded-2xl transition-colors ${
-                            !customInstructionPrompt.trim() || isGenerating
-                              ? 'text-white bg-gray-400 cursor-not-allowed' 
-                              : 'text-white bg-gray-700 hover:bg-gray-800'
-                          }`}
-                        >
-                          {isGenerating ? (
-                            <>
-                              <Loader2 className="h-3 w-3 text-white animate-spin" strokeWidth="2" />
-                              Generating...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="h-3 w-3 text-white" strokeWidth="2" />
-                              Apply
-                            </>
-                          )}
-                        </button>
-                      </div>
+                            setCustomInstructionPrompt('');
+                          } catch (error) {
+                            console.error('Error in compose AI generation:', error);
+                          } finally {
+                            setIsGenerating(false);
+                          }
+                        }}
+                        className={`p-1 rounded-md transition-colors ${
+                          !customInstructionPrompt.trim() || isGenerating
+                            ? 'text-gray-400 cursor-not-allowed' 
+                            : 'text-green-600 hover:bg-green-50'
+                        }`}
+                        title="Apply"
+                      >
+                        {isGenerating ? (
+                          <Loader2 className="h-3 w-3 animate-spin" strokeWidth="2" />
+                        ) : (
+                          <Check className="h-3 w-3" strokeWidth="2" />
+                        )}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -7338,80 +7303,70 @@ const EmailViewer = ({
                 </DropdownMenu>
               ) : null}
               
-              {/* Quick Reply Instructions Speech Bubble */}
+              {/* Quick Reply Instructions Input */}
               {(showQuickReplyInstructions || quickReplyInstructionsClosing) && (
-                <div className={`absolute top-full right-0 mt-2 w-80 z-50 ${
+                <div className={`absolute top-full right-0 mt-2 w-96 z-50 ${
                   quickReplyInstructionsClosing 
                     ? 'animate-out fade-out slide-out-to-top-2 duration-200' 
                     : 'animate-in fade-in slide-in-from-top-2 duration-300'
                 }`}>
-                                  <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-md">
-                  {/* Speech bubble pointer */}
-                  <div className="absolute -top-2 right-6 w-4 h-4 bg-white border-t border-l border-gray-200 transform rotate-45"></div>
+                  <div className="relative">
+                    <textarea
+                      value={quickReplyPrompt}
+                      onChange={(e) => setQuickReplyPrompt(e.target.value)}
+                      placeholder="Enter specific instructions for how you'd like the AI to respond..."
+                      className="w-full text-xs bg-white border border-gray-200 rounded-2xl px-3 py-2 pr-16 focus:outline-none resize-none placeholder-gray-500 shadow-md"
+                      rows={4}
+                      autoFocus
+                    />
                     
-                    <div className="space-y-3">
+                    {/* Action buttons inside the input */}
+                    <div className="absolute top-2 right-2 flex items-center gap-1">
+                      <button
+                        onClick={() => closeQuickReplyInstructionsWithAnimation()}
+                        className="p-1 hover:bg-gray-100 rounded-md transition-colors"
+                        title="Cancel"
+                      >
+                        <X className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                      </button>
                       
-                      <textarea
-                        value={quickReplyPrompt}
-                        onChange={(e) => setQuickReplyPrompt(e.target.value)}
-                        placeholder="Enter specific instructions for how you'd like the AI to respond..."
-                        className="w-full text-xs bg-white border border-gray-200 rounded-2xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder-gray-500"
-                        rows={3}
-                        autoFocus
-                      />
-                      
-                      <div className="flex justify-between items-center">
-                        <button
-                          onClick={() => closeQuickReplyInstructionsWithAnimation()}
-                          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-2xl transition-colors text-gray-600 hover:text-gray-800 border border-gray-200 hover:bg-gray-50"
-                        >
-                          <X className="h-3 w-3" strokeWidth="2" />
-                          Cancel
-                        </button>
-                        
-                        <button
-                          disabled={!quickReplyPrompt.trim() || actualIsGenerating}
-                          onClick={async () => {
-                            if (!quickReplyPrompt.trim()) return;
+                      <button
+                        disabled={!quickReplyPrompt.trim() || actualIsGenerating}
+                        onClick={async () => {
+                          if (!quickReplyPrompt.trim()) return;
+                          
+                          // First start reply mode
+                          onStartReply?.(email);
+                          
+                          // Wait for reply mode to initialize
+                          setLocalIsGenerating(true);
+                          setTimeout(async () => {
+                            if (!callGenerateEmailResponse || !replyEditorRef.current) return;
                             
-                            // First start reply mode
-                            onStartReply?.(email);
-                            
-                            // Wait for reply mode to initialize
-                            setLocalIsGenerating(true);
-                            setTimeout(async () => {
-                              if (!callGenerateEmailResponse || !replyEditorRef.current) return;
-                              
-                              try {
-                                await callGenerateEmailResponse('custom', undefined, quickReplyPrompt, replyEditorRef);
-                                closeQuickReplyInstructionsWithAnimation();
-                                setQuickReplyPrompt('');
-                              } catch (error) {
-                                console.error('Error in quick reply AI generation:', error);
-                              } finally {
-                                setLocalIsGenerating(false);
-                              }
-                            }, 100);
-                          }}
-                          className={`flex items-center gap-1.5 text-xs font-normal px-3 py-1.5 rounded-2xl transition-colors ${
-                            !quickReplyPrompt.trim() || actualIsGenerating
-                              ? 'text-white bg-gray-400 cursor-not-allowed' 
-                              : 'text-white bg-gray-700 hover:bg-gray-800'
-                          }`}
-                        >
-                          {actualIsGenerating ? (
-                            <>
-                              <Loader2 className="h-3 w-3 text-white animate-spin" strokeWidth="2" />
-                              Generating...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="h-3 w-3 text-white" strokeWidth="2" />
-                              Apply
-                            </>
-                          )}
-                        </button>
-                      </div>
+                            try {
+                              await callGenerateEmailResponse('custom', undefined, quickReplyPrompt, replyEditorRef);
+                              closeQuickReplyInstructionsWithAnimation();
+                              setQuickReplyPrompt('');
+                            } catch (error) {
+                              console.error('Error in quick reply AI generation:', error);
+                            } finally {
+                              setLocalIsGenerating(false);
+                            }
+                          }, 100);
+                        }}
+                        className={`p-1 rounded-md transition-colors ${
+                          !quickReplyPrompt.trim() || actualIsGenerating
+                            ? 'text-gray-400 cursor-not-allowed' 
+                            : 'text-green-600 hover:bg-green-50'
+                        }`}
+                        title="Apply"
+                      >
+                        {actualIsGenerating ? (
+                          <Loader2 className="h-3 w-3 animate-spin" strokeWidth="2" />
+                        ) : (
+                          <Check className="h-3 w-3" strokeWidth="2" />
+                        )}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -7596,7 +7551,7 @@ const EmailViewer = ({
 
       {/* Reply Compose Area - Raw in right panel */}
         {replyMode && (
-        <div className="flex flex-col h-full bg-white shadow-lg rounded-t-lg animate-slide-up"
+        <div className="flex flex-col h-full bg-white shadow-lg rounded-t-lg"
              style={{ 
                overflow: 'hidden', 
                transformOrigin: 'center bottom',
@@ -7842,65 +7797,59 @@ const EmailViewer = ({
                   </div>
                 </div>
               
-              {/* Instructions Dropdown */}
+              {/* Instructions Input */}
               {!actualIsGenerating && (showInstructions || instructionsClosing) && (
-                <div className={`bg-white transition-all duration-200 ease-out ${
+                <div className={`absolute top-full left-0 mt-2 w-96 z-50 ${
                   instructionsClosing 
-                    ? 'animate-out slide-out-to-top-2' 
-                    : 'animate-in slide-in-from-top-2'
+                    ? 'animate-out fade-out slide-out-to-top-2 duration-200' 
+                    : 'animate-in fade-in slide-in-from-top-2 duration-300'
                 }`}>
-                  <div className="pt-4">
-                    <div className="space-y-3">
-                      <div className="relative">
-                        <textarea
-                          ref={(el) => { if (el) el.id = 'instructions-textarea-reply'; }}
-                          placeholder="Enter specific instructions for how you'd like the AI to respond..."
-                          className="w-full text-xs bg-gray-50 border border-gray-200 rounded-md px-3 py-2 pr-20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder-gray-500"
-                          rows={3}
-                        />
-                        {/* Tone Dropdown positioned on the right */}
-                        <div className="absolute top-2 right-2">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button className="flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 bg-white hover:bg-blue-50 border border-gray-200 px-2 py-1 rounded-md transition-colors">
-                                <Palette className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                                <span className="capitalize">{instructionTone}</span>
-                                <ChevronDown className="h-3 w-3 text-gray-500" strokeWidth="2" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-32">
-                              <DropdownMenuItem onClick={() => setInstructionTone('friendly')}>
-                                <Lightbulb className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                                <span className="text-xs">Friendly</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setInstructionTone('professional')}>
-                                <Users className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                                <span className="text-xs">Professional</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setInstructionTone('direct')}>
-                                <ArrowRight className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                                <span className="text-xs">Direct</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setInstructionTone('casual')}>
-                                <Eye className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                                <span className="text-xs">Casual</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setInstructionTone('formal')}>
-                                <Shield className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                                <span className="text-xs">Formal</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setInstructionTone('persuasive')}>
-                                <Wand2 className="h-3 w-3 text-gray-500 mr-2" strokeWidth="2" />
-                                <span className="text-xs">Persuasive</span>
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
+                  <div className="relative">
+                    <textarea
+                      ref={(el) => { if (el) el.id = 'instructions-textarea-reply'; }}
+                      placeholder="Enter specific instructions for how you'd like the AI to respond..."
+                      className="w-full text-sm bg-white border border-gray-200 rounded-2xl px-3 py-2 pr-16 focus:outline-none resize-none placeholder-gray-500 shadow-md"
+                      rows={4}
+                    />
+                    
+                    {/* Action buttons inside the input */}
+                    <div className="absolute top-2 right-2 flex items-center gap-1">
+                      <button
+                        onClick={() => closeInstructionsWithAnimation()}
+                        className="p-1 hover:bg-gray-100 rounded-md transition-colors"
+                        title="Cancel"
+                      >
+                        <X className="h-3 w-3 text-gray-500" strokeWidth="2" />
+                      </button>
+                      
+                      <button
+                        onClick={async () => {
+                          const textarea = document.getElementById('instructions-textarea-reply') as HTMLTextAreaElement;
+                          const customInstructions = textarea?.value || '';
+                          if (!customInstructions.trim()) return;
+                          
+                          closeInstructionsWithAnimation();
+                          setLocalIsGenerating(true);
+                          try {
+                            await callGenerateEmailResponse?.('custom', instructionTone, customInstructions, replyEditorRef);
+                            textarea.value = '';
+                          } catch (error) {
+                            console.error('Error in reply AI generation:', error);
+                          } finally {
+                            setLocalIsGenerating(false);
+                          }
+                        }}
+                        className="p-1 rounded-md transition-colors text-green-600 hover:bg-green-50"
+                        title="Apply"
+                      >
+                        <Check className="h-3 w-3" strokeWidth="2" />
+                      </button>
                     </div>
                   </div>
                 </div>
               )}
+
+
               
 
               </div>

@@ -5144,16 +5144,6 @@ ${content}`;
                                 Thread
                               </span>
                             )}
-                            {task.priority && (
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium w-fit ${
-                                task.priority === 'critical' ? 'bg-red-50 text-red-700 border border-red-200' :
-                                task.priority === 'high' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
-                                task.priority === 'medium' ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
-                                'bg-green-50 text-green-700 border border-green-200'
-                              }`}>
-                                {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
-                              </span>
-                            )}
                             <span className="text-xs ml-auto text-gray-500 whitespace-nowrap">
                               {task.createdAt && formatPreviewTime(task.createdAt.__time__ ? new Date(task.createdAt.__time__) : task.createdAt.toDate())}
                             </span>
@@ -5192,21 +5182,31 @@ ${content}`;
                               {task.type === 'agent' 
                                 ? "Merchant Agent Task"
                                 : task.type === 'customerservice'
-                                ? "Customer Service AI"
+                                ? "Customer Service Agent"
                                 : task.classification?.isCustomerInquiry 
                                   ? (task.senderEmail || task.sender || "Unknown sender")
                                   : ""
                               }
                             </span>
                           </div>
-                          {task.inquiryType && (
-                            <div className="text-xs truncate text-gray-600 flex items-center gap-1.5 mt-1">
+                          <div className="text-xs truncate text-gray-600 flex items-center gap-1.5 mt-1">
+                            {task.inquiryType && (
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-200 w-fit">
                                 <div className="h-1.5 w-1.5 bg-purple-500 rounded-full flex-shrink-0"></div>
                                 {task.inquiryType}
                               </span>
-                            </div>
-                          )}
+                            )}
+                            {task.priority && (
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium w-fit ${
+                                task.priority === 'critical' ? 'bg-red-50 text-red-700 border border-red-200' :
+                                task.priority === 'high' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
+                                task.priority === 'medium' ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
+                                'bg-green-50 text-green-700 border border-green-200'
+                              }`}>
+                                {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)} Priority
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -5262,32 +5262,35 @@ ${content}`;
                         {selectedAgentTask.type === 'customerservice' && agentTaskStatusFilter === "pending" && (
                           <div className="flex items-center gap-2">
                             <Button
-                              variant="outline"
+                              variant="ghost"
                               size="sm"
-                              className="h-7 text-xs border-red-200 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md"
+                              className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-transparent rounded-md p-0 mr-3"
                               onClick={handleRejectAgentTask}
                               disabled={isSendingAgentResponse}
                             >
                               {isSendingAgentResponse ? (
                                 <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                               ) : (
-                                <X className="h-3 w-3 mr-1" />
+                                <>Reject</>
                               )}
-                              Reject
                             </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 text-xs border-green-200 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md"
-                              onClick={handleAcknowledgeAgentTask}
-                              disabled={isSendingAgentResponse}
+                            <Button 
+                              size="sm" 
+                              className="h-7 text-xs bg-blue-500 hover:bg-blue-600 rounded-md"
+                              onClick={handleSendAgentResponse}
+                              disabled={isSendingAgentResponse || !(selectedAgentTask?.finalMessage || selectedAgentTask?.agentResponse || selectedAgentTask?.response)}
                             >
                               {isSendingAgentResponse ? (
-                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                <>
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  Sending...
+                                </>
                               ) : (
-                                <Check className="h-3 w-3 mr-1" />
+                                <>
+                                  <Send className="h-3 w-3 mr-1" />
+                                  Send Response
+                                </>
                               )}
-                              Acknowledge
                             </Button>
                           </div>
                         )}
@@ -5299,6 +5302,17 @@ ${content}`;
                           <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
                             <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
                             Customer Inquiry
+                          </span>
+                        )}
+                        {selectedAgentTask.priority && (
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium w-fit ${
+                            selectedAgentTask.priority === 'critical' ? 'bg-red-50 text-red-700 border border-red-200' :
+                            selectedAgentTask.priority === 'high' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
+                            selectedAgentTask.priority === 'medium' ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
+                            'bg-green-50 text-green-700 border border-green-200'
+                          }`}>
+                            <AlertCircle className="h-3 w-3" />
+                            {selectedAgentTask.priority.charAt(0).toUpperCase() + selectedAgentTask.priority.slice(1)} Priority
                           </span>
                         )}
                         {selectedAgentTask.isOngoingConversation && (
@@ -5317,17 +5331,6 @@ ${content}`;
                           <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-red-50 text-red-700 border border-red-200 w-fit">
                             <XCircle className="h-3 w-3 mr-1" />
                             Rejected
-                          </span>
-                        )}
-                        {selectedAgentTask.priority && (
-                          <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium w-fit ${
-                            selectedAgentTask.priority === 'critical' ? 'bg-red-50 text-red-700 border border-red-200' :
-                            selectedAgentTask.priority === 'high' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
-                            selectedAgentTask.priority === 'medium' ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
-                            'bg-green-50 text-green-700 border border-green-200'
-                          }`}>
-                            <AlertCircle className="h-3 w-3" />
-                            {selectedAgentTask.priority.charAt(0).toUpperCase() + selectedAgentTask.priority.slice(1)} Priority
                           </span>
                         )}
                                             </div>

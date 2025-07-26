@@ -1828,7 +1828,7 @@ ${content}`;
             
             if (hrIndex !== -1) {
               // Preserve everything from the <hr> onwards (quoted email thread)
-              const quotedContent = currentHTML.indexOf('<hr');
+              const quotedContent = currentHTML.substring(hrIndex);
               
               // Create container for animated response + preserved quoted content
               replyEditor.innerHTML = `<div id="${animatedResponseId}"></div>${quotedContent}`;

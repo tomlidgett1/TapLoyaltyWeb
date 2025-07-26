@@ -59,11 +59,11 @@ import {
 } from "@/components/ui/select"
 import {
   DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
   DropdownMenuLabel,
+  DropdownMenuContent,
 } from "@/components/ui/dropdown-menu"
 import {
   Search, 
@@ -1224,7 +1224,6 @@ export default function EmailPage() {
       
       // Create query constraints based on status filter
       let constraints: QueryConstraint[] = [
-        orderBy('timestamp', 'desc'),
         limit(50) // Limit to 50 tasks
       ];
       
@@ -1261,6 +1260,23 @@ export default function EmailPage() {
         tasks = tasks.filter(task => task.status !== "approved" && task.status !== "rejected");
         console.log(`📊 Filtered to ${tasks.length} pending tasks for inbox tab`);
       }
+      
+      // Sort tasks by timestamp (handle both timestamp and createdAt fields)
+      tasks.sort((a, b) => {
+        const getDate = (task: any) => {
+          if (task.timestamp) {
+            return task.timestamp.__time__ ? new Date(task.timestamp.__time__) : task.timestamp.toDate();
+          }
+          if (task.createdAt) {
+            return task.createdAt.__time__ ? new Date(task.createdAt.__time__) : task.createdAt.toDate();
+          }
+          return new Date(0); // Fallback for tasks without timestamp
+        };
+        
+        const dateA = getDate(a);
+        const dateB = getDate(b);
+        return dateB.getTime() - dateA.getTime(); // Sort newest first
+      });
       
       setAgentTasks(tasks);
       setAgentTaskStatusFilter(statusFilter);
@@ -1812,7 +1828,7 @@ ${content}`;
             
             if (hrIndex !== -1) {
               // Preserve everything from the <hr> onwards (quoted email thread)
-              const quotedContent = currentHTML.substring(hrIndex);
+              const quotedContent = currentHTML.indexOf('<hr');
               
               // Create container for animated response + preserved quoted content
               replyEditor.innerHTML = `<div id="${animatedResponseId}"></div>${quotedContent}`;
@@ -4885,7 +4901,7 @@ ${content}`;
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
                             <span className="text-sm truncate font-medium text-gray-900">
-                              {task.emailTitle || "Agent Task"}
+                              {task.agentname || task.emailTitle || "Agent Task"}
                             </span>
                             {task.isOngoingConversation && (
                               <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200 w-fit">
@@ -4902,8 +4918,8 @@ ${content}`;
                                 {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
                               </span>
                             )}
-                            <span className="text-xs ml-auto text-gray-500">
-                              {task.timestamp && formatPreviewTime(task.timestamp.__time__ ? new Date(task.timestamp.__time__) : task.timestamp.toDate())}
+                            <span className="text-xs ml-auto text-gray-500 whitespace-nowrap">
+                              {task.createdAt && formatPreviewTime(task.createdAt.__time__ ? new Date(task.createdAt.__time__) : task.createdAt.toDate())}
                             </span>
                           </div>
                           <div className="text-sm truncate text-gray-700 flex items-center gap-1.5">
@@ -4913,7 +4929,7 @@ ${content}`;
                             <span>
                               {task.classification?.isCustomerInquiry 
                                 ? (task.senderEmail || task.sender || "Unknown sender")
-                                : (task.shortSummary || "No summary available")
+                                : ""
                               }
                             </span>
                           </div>
@@ -4944,7 +4960,7 @@ ${content}`;
                   {/* Header */}
                   <div className="p-4 border-b">
                     <h2 className="text-xl font-semibold mb-2 flex items-center flex-wrap">
-                      {selectedAgentTask.emailTitle || "Agent Task"}
+                      {selectedAgentTask.agentname || selectedAgentTask.emailTitle || "Agent Task"}
                       {selectedAgentTask.classification?.isCustomerInquiry && (
                         <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit ml-2">
                           <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
@@ -4982,20 +4998,12 @@ ${content}`;
                       )}
                     </h2>
                     <div className="flex flex-col md:flex-row md:justify-between gap-2">
-                      <div>
-                        <div className="font-medium text-sm">
-                          From: {selectedAgentTask.senderEmail || selectedAgentTask.sender || "Unknown"}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {selectedAgentTask.shortSummary || "No summary available"}
-                        </div>
-                      </div>
                       <div className="text-sm text-muted-foreground">
-                        {selectedAgentTask.timestamp && 
+                        {selectedAgentTask.createdAt && 
                           formatMelbourneTime(
-                            selectedAgentTask.timestamp.__time__ 
-                              ? new Date(selectedAgentTask.timestamp.__time__) 
-                              : selectedAgentTask.timestamp.toDate()
+                            selectedAgentTask.createdAt.__time__ 
+                              ? new Date(selectedAgentTask.createdAt.__time__) 
+                              : selectedAgentTask.createdAt.toDate()
                           )
                         }
                       </div>
@@ -5017,7 +5025,7 @@ ${content}`;
                           )}
                         >
                           <MessageSquare size={15} />
-                          Response
+                          {selectedAgentTask.agentResponse ? "Information" : "Response"}
                         </button>
                         <button
                           onClick={() => handleTabChange("details")}
@@ -5041,23 +5049,19 @@ ${content}`;
                         <div 
                           className={`transition-opacity duration-300 ${tabChanging ? 'opacity-0' : 'opacity-100'}`}
                         >
-                          {/* Two-column layout for response and original email */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Single column layout for response */}
+                          <div className="grid grid-cols-1 gap-4">
                             {/* Agent Response Column */}
-                            {selectedAgentTask.response && (
+                            {(selectedAgentTask.finalMessage || selectedAgentTask.agentResponse || selectedAgentTask.response) && (
                               <div 
-                                className="p-[2px] rounded-xl h-full"
-                                style={{ 
-                                  background: 'linear-gradient(90deg, #f97316 0%, #3b82f6 100%)',
-                                  boxShadow: '0 2px 8px -1px rgba(0, 0, 0, 0.1), 0 1px 4px -1px rgba(0, 0, 0, 0.06)'
-                                }}
+                                className="w-full rounded-md h-full"
                               >
-                                <div className="bg-white p-4 rounded-lg h-full flex flex-col">
+                                <div className="bg-white p-4 rounded-md h-full flex flex-col">
                                   <div className="flex items-center justify-between mb-3">
                                     <div className="flex items-center">
                                       <MessageSquare className="h-4 w-4 text-purple-600 mr-2" />
                                       <h3 className="text-sm font-medium">
-                                        {isEditingResponse && !isUsingAiEdit ? "Editing Response" : "Agent Response"}
+                                        {isEditingResponse && !isUsingAiEdit ? "Editing Response" : selectedAgentTask.agentResponse ? "Information" : "Response"}
                                       </h3>
                                       {agentTaskStatusFilter === "completed" && (
                                         <span className="inline-flex items-center gap-1 ml-2 px-2 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
@@ -5071,7 +5075,7 @@ ${content}`;
                                         <Button 
                                           variant="ghost" 
                                           size="sm" 
-                                          className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl"
+                                          className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md"
                                           onClick={() => {
                                             setEditedResponse(selectedAgentTask.response);
                                             setIsEditingResponse(true);
@@ -5084,7 +5088,7 @@ ${content}`;
                                         <Button 
                                           variant="ghost" 
                                           size="sm" 
-                                          className="h-7 px-2 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-xl"
+                                          className="h-7 px-2 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-md"
                                           onClick={() => {
                                             setEditedResponse(selectedAgentTask.response);
                                             setIsEditingResponse(true);
@@ -5138,7 +5142,7 @@ ${content}`;
                                                     const aiModifiedResponse = `<div style="color: #1e40af; font-weight: 500; margin-bottom: 8px;">
                                                       AI has modified this response based on your instructions: "${editPrompt}"
                                                     </div>
-                                                    ${selectedAgentTask.response}
+                                                    ${selectedAgentTask.agentResponse || selectedAgentTask.response}
                                                     <div style="border-top: 1px solid #e5e7eb; margin-top: 12px; padding-top: 8px; color: #4b5563; font-style: italic;">
                                                       Additional information added by AI based on your instructions.
                                                     </div>`;
@@ -5212,7 +5216,7 @@ ${content}`;
                                         <div 
                                           className="text-sm text-gray-600 email-content prose prose-sm max-w-none"
                                           dangerouslySetInnerHTML={{ 
-                                            __html: DOMPurify.sanitize(selectedAgentTask.response) 
+                                            __html: DOMPurify.sanitize(selectedAgentTask.finalMessage || selectedAgentTask.agentResponse || selectedAgentTask.response) 
                                           }}
                                         />
                                       </>
@@ -5299,16 +5303,54 @@ ${content}`;
                                       </>
                                     ) : (
                                       // Display the response
-                                      isHtmlContent(selectedAgentTask.response) ? (
+                                      isHtmlContent(selectedAgentTask.finalMessage || selectedAgentTask.agentResponse || selectedAgentTask.response) ? (
                                         <div 
                                           className="text-sm text-gray-600 email-content prose prose-sm max-w-none"
                                           dangerouslySetInnerHTML={{ 
-                                            __html: DOMPurify.sanitize(selectedAgentTask.response) 
+                                            __html: DOMPurify.sanitize(selectedAgentTask.finalMessage || selectedAgentTask.agentResponse || selectedAgentTask.response) 
                                           }}
                                         />
                                       ) : (
                                         <div className="whitespace-pre-wrap text-sm text-gray-600">
-                                          {selectedAgentTask.response}
+                                          {selectedAgentTask.finalMessage || selectedAgentTask.agentResponse || selectedAgentTask.response}
+                                        </div>
+                                      )
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Original Email - Only show if needed */}
+                            {selectedAgentTask.originalEmail?.htmlContent && !selectedAgentTask.agentResponse && (
+                              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm h-full flex flex-col">
+                                <div className="flex items-center mb-2">
+                                  <Mail className="h-4 w-4 text-gray-600 mr-2" />
+                                  <h3 className="text-sm font-medium">Original Email</h3>
+                                </div>
+                                <div 
+                                  className="text-sm text-gray-600 email-content prose prose-sm max-w-none overflow-auto"
+                                  dangerouslySetInnerHTML={{ 
+                                    __html: DOMPurify.sanitize(selectedAgentTask.originalEmail.htmlContent) 
+                                  }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                                    ) : (
+                                      // Display the response
+                                      isHtmlContent(selectedAgentTask.finalMessage || selectedAgentTask.agentResponse || selectedAgentTask.response) ? (
+                                        <div 
+                                          className="text-sm text-gray-600 email-content prose prose-sm max-w-none"
+                                          dangerouslySetInnerHTML={{ 
+                                            __html: DOMPurify.sanitize(selectedAgentTask.finalMessage || selectedAgentTask.agentResponse || selectedAgentTask.response) 
+                                          }}
+                                        />
+                                      ) : (
+                                        <div className="whitespace-pre-wrap text-sm text-gray-600">
+                                          {selectedAgentTask.finalMessage || selectedAgentTask.agentResponse || selectedAgentTask.response}
                                         </div>
                                       )
                                     )}
@@ -5360,14 +5402,55 @@ ${content}`;
                                   <span className="text-sm text-gray-700">{selectedAgentTask.messageId}</span>
                                 </div>
                               )}
-                              {selectedAgentTask.timestamp && (
+                              {selectedAgentTask.createdAt && (
                                 <div className="flex flex-col">
                                   <span className="text-xs font-medium text-gray-500">Created</span>
                                   <span className="text-sm text-gray-700">
                                     {formatMelbourneTime(
-                                      selectedAgentTask.timestamp.__time__ 
-                                        ? new Date(selectedAgentTask.timestamp.__time__) 
-                                        : selectedAgentTask.timestamp.toDate()
+                                      selectedAgentTask.createdAt.__time__ 
+                                        ? new Date(selectedAgentTask.createdAt.__time__) 
+                                        : selectedAgentTask.createdAt.toDate()
+                                    )}
+                                  </span>
+                                </div>
+                              )}
+                              {selectedAgentTask.executedAt && (
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-medium text-gray-500">Executed</span>
+                                  <span className="text-sm text-gray-700">
+                                    {formatMelbourneTime(
+                                      selectedAgentTask.executedAt.__time__ 
+                                        ? new Date(selectedAgentTask.executedAt.__time__) 
+                                        : selectedAgentTask.executedAt.toDate()
+                                    )}
+                                  </span>
+                                </div>
+                              )}
+                              {selectedAgentTask.agentId && (
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-medium text-gray-500">Agent ID</span>
+                                  <span className="text-sm text-gray-700">{selectedAgentTask.agentId}</span>
+                                </div>
+                              )}
+                              {selectedAgentTask.agentname && (
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-medium text-gray-500">Agent Name</span>
+                                  <span className="text-sm text-gray-700">{selectedAgentTask.agentname}</span>
+                                </div>
+                              )}
+                              {selectedAgentTask.status && (
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-medium text-gray-500">Status</span>
+                                  <span className="text-sm text-gray-700 capitalize">{selectedAgentTask.status}</span>
+                                </div>
+                              )}
+                              {selectedAgentTask.expectedToolsTotal && (
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-medium text-gray-500">Tools</span>
+                                  <span className="text-sm text-gray-700">
+                                    {selectedAgentTask.toolsExecuted || selectedAgentTask.successfulTools || 0} / {selectedAgentTask.expectedToolsTotal} executed
+                                    {selectedAgentTask.failedTools > 0 && (
+                                      <span className="text-red-600 ml-1">({selectedAgentTask.failedTools} failed)</span>
                                     )}
                                   </span>
                                 </div>
@@ -5516,17 +5599,17 @@ ${content}`;
                             size="sm" 
                             className="text-xs bg-blue-500 hover:bg-blue-600"
                             onClick={handleSendAgentResponse}
-                            disabled={isSendingAgentResponse || !selectedAgentTask?.response}
+                            disabled={isSendingAgentResponse || !(selectedAgentTask?.finalMessage || selectedAgentTask?.agentResponse || selectedAgentTask?.response)}
                           >
                             {isSendingAgentResponse ? (
                               <>
                                 <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                Sending...
+                                {selectedAgentTask.agentResponse ? "Acknowledging..." : "Sending..."}
                               </>
                             ) : (
                               <>
                                 <Send className="h-3 w-3 mr-1" />
-                                Send Response
+                                {selectedAgentTask.agentResponse ? "Acknowledge" : "Send Response"}
                               </>
                             )}
                           </Button>

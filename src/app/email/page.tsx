@@ -1638,6 +1638,7 @@ export default function EmailPage() {
   const [fetchedEmails, setFetchedEmails] = useState<any[]>([])
   const [gmailEmailAddress, setGmailEmailAddress] = useState<string | null>(null)
   const [emailsLoading, setEmailsLoading] = useState(false)
+  const [newEmailIds, setNewEmailIds] = useState<Set<string>>(new Set())
   const [debugDialogOpen, setDebugDialogOpen] = useState(false)
   const [debugResponse, setDebugResponse] = useState<any>(null)
   const [isExtractingWritingStyle, setIsExtractingWritingStyle] = useState(false)
@@ -2621,7 +2622,31 @@ ${content}`;
       })
         
       console.log("All threads sorted by latest activity:", sortedThreads)
-      setFetchedEmails(sortedThreads) // Using the same state variable for consistency
+      
+      // Track new emails for animation
+      setFetchedEmails(prevEmails => {
+        const prevThreadIds = new Set(prevEmails.map(email => email.threadId))
+        const newThreadIds = new Set<string>()
+        
+        // Identify new threads
+        sortedThreads.forEach(thread => {
+          if (!prevThreadIds.has(thread.threadId)) {
+            newThreadIds.add(thread.threadId)
+          }
+        })
+        
+        // Set new email IDs for animation
+        if (newThreadIds.size > 0) {
+          setNewEmailIds(newThreadIds)
+          
+          // Clear the animation after 3 seconds
+          setTimeout(() => {
+            setNewEmailIds(new Set())
+          }, 3000)
+        }
+        
+        return sortedThreads
+      })
       
       // Store debug response
       setDebugResponse({
@@ -2897,6 +2922,8 @@ ${content}`;
         console.error("❌ Error in Firestore listener:", error)
       })
     }
+
+
     
     // Cleanup function
     return () => {
@@ -2907,6 +2934,67 @@ ${content}`;
       }
     }
   }, [user?.uid, selectedFolder])
+
+  // Set up email read status listeners when emails are fetched
+  useEffect(() => {
+    if (!user?.uid || selectedFolder === "sent" || fetchedEmails.length === 0) return
+
+    console.log("📡 Setting up email read status listeners for", fetchedEmails.length, "threads")
+    
+    const emailReadListeners: (() => void)[] = []
+    
+    fetchedEmails.forEach(thread => {
+      const chainRef = collection(db, 'merchants', user.uid, 'fetchedemails', thread.threadId, 'chain')
+      const chainQuery = query(chainRef)
+      
+      const unsubscribe = onSnapshot(chainQuery, (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'modified') {
+            const messageData = change.doc.data()
+            const isRead = messageData.read === true
+            
+            console.log(`📧 Email read status changed: ${change.doc.id}, read: ${isRead}`)
+            
+            // Update the fetchedEmails state to reflect the read status change
+            setFetchedEmails(prev => prev.map(item => {
+              if (item.threadId === thread.threadId) {
+                // If this is the representative email, update its read status
+                if (item.representative?.id === change.doc.id) {
+                  return {
+                    ...item,
+                    representative: {
+                      ...item.representative,
+                      read: isRead
+                    }
+                  }
+                }
+                
+                // Also update the thread's overall read status if needed
+                return {
+                  ...item,
+                  representative: {
+                    ...item.representative,
+                    read: isRead
+                  }
+                }
+              }
+              return item
+            }))
+          }
+        })
+      }, (error) => {
+        console.error(`❌ Error in email read listener for thread ${thread.threadId}:`, error)
+      })
+      
+      emailReadListeners.push(unsubscribe)
+    })
+    
+    // Cleanup function
+    return () => {
+      console.log("🧹 Cleaning up email read listeners")
+      emailReadListeners.forEach(unsubscribe => unsubscribe())
+    }
+  }, [user?.uid, selectedFolder, fetchedEmails])
 
   // Fetch notifications from Firestore
   useEffect(() => {
@@ -3665,8 +3753,33 @@ ${content}`;
       // This ensures clicking the main thread item uses the same data as clicking from the dropdown
       setFetchedEmails(prev => prev.map(item => {
         if (item.threadId === thread.threadId) {
+          // Check if this thread has new emails (count increased)
+          const hasNewEmails = threadEmails.length > item.count
+          
+          if (hasNewEmails) {
+            // Add animation for new emails in existing thread
+            setNewEmailIds(prevIds => {
+              const newIds = new Set(prevIds)
+              newIds.add(thread.threadId)
+              
+              // Clear the animation after 3 seconds
+              setTimeout(() => {
+                setNewEmailIds(prev => {
+                  const updated = new Set(prev)
+                  updated.delete(thread.threadId)
+                  return updated
+                })
+              }, 3000)
+              
+              return newIds
+            })
+          }
+          
           return {
             ...item,
+            count: threadEmails.length,
+            unreadCount: threadEmails.filter((email: any) => !email.read).length,
+            hasUnread: threadEmails.some((email: any) => !email.read),
             representative: {
               ...item.representative,
               htmlMessage: threadEmails[0].htmlMessage
@@ -4487,18 +4600,18 @@ ${content}`;
             <div className={`flex-1 overflow-y-auto min-h-0 custom-scrollbar rounded-bl-xl transition-all duration-300 ease-out ${
               summaryClosing ? 'animate-in fade-in-0 slide-in-from-top-1 duration-300' : ''
             }`} style={{ height: 'auto' }}>
-            {emailsLoading && (
-              <div className="flex items-center justify-center h-32">
-                <div className="flex flex-col items-center gap-2">
-                  <RefreshCw className="h-6 w-6 animate-spin text-gray-400" />
-                  <span className="text-sm text-gray-500">Fetching emails...</span>
-                </div>
-              </div>
-            )}
+
             
             <div className="divide-y divide-gray-200">
               {emailThreads.map((thread) => (
-                <div key={thread.threadId}>
+                <div 
+                  key={thread.threadId}
+                  className={`transition-all duration-500 ease-out ${
+                    newEmailIds.has(thread.threadId) 
+                      ? 'animate-in slide-in-from-top-4 fade-in-0 bg-blue-50 border-l-4 border-l-blue-500' 
+                      : ''
+                  }`}
+                >
                   {/* Main email button - always shown */}
                   <div
                     className={`flex items-start gap-1.5 py-2 pr-2 pl-1.5 cursor-pointer ${
@@ -4545,13 +4658,19 @@ ${content}`;
                       onClick={() => handleThreadSelect(thread)}
                     >
                         <div className="flex items-center gap-1.5">
-                          <span className={`text-sm truncate ${!thread.representative?.read ? 'font-bold text-gray-900' : 'font-normal text-gray-600'}`}>
+                          <span className={`text-sm truncate transition-all duration-300 ${
+                            !thread.representative?.read ? 'font-bold text-gray-900' : 'font-normal text-gray-600'
+                          } ${
+                            newEmailIds.has(thread.threadId) ? 'text-blue-700' : ''
+                          }`}>
                           {thread.representative?.sender || 'Unknown Sender'}
                         </span>
                         
                         {/* Thread count badge */}
                         {thread.count > 1 && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit transition-all duration-300 ${
+                            newEmailIds.has(thread.threadId) ? 'scale-110 bg-blue-50 border-blue-200' : ''
+                          }`}>
                             <Users className="h-2.5 w-2.5" />
                             {thread.count}
                           </span>
@@ -4559,7 +4678,9 @@ ${content}`;
                         
                         {/* Unread count badge */}
                         {thread.unreadCount > 0 && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-white text-blue-700 border border-blue-200 w-fit">
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-white text-blue-700 border border-blue-200 w-fit transition-all duration-300 ${
+                            newEmailIds.has(thread.threadId) ? 'scale-110 bg-blue-50' : ''
+                          }`}>
                             <div className="h-1 w-1 bg-blue-500 rounded-full flex-shrink-0"></div>
                             {thread.unreadCount}
                           </span>
@@ -4571,17 +4692,27 @@ ${content}`;
                         )}
                           <span className={`text-xs ml-auto ${!thread.representative?.read ? 'text-blue-600 font-semibold' : 'text-gray-500'}`}>{formatPreviewTime(thread.representative?.time)}</span>
                       </div>
-                        <div className={`text-sm truncate ${!thread.representative?.read ? 'font-bold text-gray-900' : 'font-normal text-gray-700'}`}>
+                        <div className={`text-sm truncate transition-all duration-300 ${
+                          !thread.representative?.read ? 'font-bold text-gray-900' : 'font-normal text-gray-700'
+                        } ${
+                          newEmailIds.has(thread.threadId) ? 'text-blue-800' : ''
+                        }`}>
                         {thread.representative?.subject || 'No Subject'}
                       </div>
-                        <div className={`text-xs truncate ${!thread.representative?.read ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
+                        <div className={`text-xs truncate transition-all duration-300 ${
+                          !thread.representative?.read ? 'text-gray-700 font-medium' : 'text-gray-500'
+                        } ${
+                          newEmailIds.has(thread.threadId) ? 'text-blue-600' : ''
+                        }`}>
                         {thread.representative?.preview || 'No preview available'}
                       </div>
                     </div>
 
                     {/* Unread indicator */}
                     {!thread.representative?.read && (
-                      <div className="h-2 w-2 bg-blue-500 rounded-full flex-shrink-0 shadow-sm unread-indicator"></div>
+                      <div className={`h-2 w-2 bg-blue-500 rounded-full flex-shrink-0 shadow-sm unread-indicator ${
+                        newEmailIds.has(thread.threadId) ? 'animate-pulse' : ''
+                      }`}></div>
                     )}
                   </div>
 

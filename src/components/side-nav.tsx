@@ -475,9 +475,11 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       // Count only agent and customerservice types
+      // and only if classification.isCustomerInquiry is not false
       const count = snapshot.docs.filter(doc => {
         const data = doc.data();
-        return data.type === 'agent' || data.type === 'customerservice';
+        const isCustomerInquiry = data.classification?.isCustomerInquiry !== false;
+        return (data.type === 'agent' || data.type === 'customerservice') && isCustomerInquiry;
       }).length;
       
       setPendingInboxCount(count);

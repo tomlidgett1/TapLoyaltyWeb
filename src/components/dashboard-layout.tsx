@@ -946,7 +946,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             actionDescription = 'program recommendation'
           }
           
-          if (shouldShowNotification || docData.type === 'csemail' || docData.type === 'offer' || docData.type === 'program') {
+          // Check if this is a customer inquiry before showing notification
+          const classification = docData.classification || {}
+          const isCustomerInquiry = classification.isCustomerInquiry !== false
+          
+          if ((shouldShowNotification || docData.type === 'csemail' || docData.type === 'offer' || docData.type === 'program') && isCustomerInquiry) {
           // Show toast notification with blue-orange gradient title
           toast({
             title: "Agent Notification",

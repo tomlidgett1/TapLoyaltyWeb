@@ -1640,6 +1640,11 @@ export default function EmailPage() {
   const [emailsLoading, setEmailsLoading] = useState(false)
   const [newEmailIds, setNewEmailIds] = useState<Set<string>>(new Set())
   const [deletingThreadIds, setDeletingThreadIds] = useState<Set<string>>(new Set())
+  const [showAttachmentsPopup, setShowAttachmentsPopup] = useState(false)
+  const [allAttachments, setAllAttachments] = useState<any[]>([])
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false)
+  const [sortColumn, setSortColumn] = useState<string>('emailDate')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [debugDialogOpen, setDebugDialogOpen] = useState(false)
   const [debugResponse, setDebugResponse] = useState<any>(null)
   const [isExtractingWritingStyle, setIsExtractingWritingStyle] = useState(false)
@@ -3524,6 +3529,70 @@ ${content}`;
     setIsComposing(true);
   }
 
+  const handleViewAttachments = async () => {
+    if (!user?.uid) return
+    
+    setAttachmentsLoading(true)
+    setShowAttachmentsPopup(true)
+    
+    try {
+      const attachments: any[] = []
+      
+      // Query all threads in fetchedemails collection
+      const threadsRef = collection(db, 'merchants', user.uid, 'fetchedemails')
+      const threadsSnapshot = await getDocs(threadsRef)
+      
+      for (const threadDoc of threadsSnapshot.docs) {
+        const threadId = threadDoc.id
+        
+        // Query chain subcollection for each thread
+        const chainRef = collection(db, 'merchants', user.uid, 'fetchedemails', threadId, 'chain')
+        const chainSnapshot = await getDocs(chainRef)
+        
+        for (const messageDoc of chainSnapshot.docs) {
+          const messageData = messageDoc.data()
+          
+          // Check if message has payload.data.attachment_list
+          if (messageData.payload?.data?.attachment_list && Array.isArray(messageData.payload.data.attachment_list)) {
+            for (const attachment of messageData.payload.data.attachment_list) {
+              if (attachment.s3url) {
+                attachments.push({
+                  id: `${threadId}_${messageDoc.id}_${attachment.filename || 'unknown'}`,
+                  threadId,
+                  messageId: messageDoc.id,
+                  filename: attachment.filename || 'Unknown File',
+                  s3url: attachment.s3url,
+                  mimeType: attachment.mimeType || attachment.mimetype || 'application/octet-stream',
+                  extractedAt: attachment.extractedAt,
+                  extractedFileName: attachment.extractedFileName,
+                  extractionStatus: attachment.extractionStatus,
+                  fileSize: attachment.fileSize,
+                  // Email context
+                  emailSubject: messageData.subject || 'No Subject',
+                  emailSender: messageData.sender || messageData.from || 'Unknown Sender',
+                  emailDate: messageData.receivedAt?.toDate?.() || messageData.receivedAt
+                })
+              }
+            }
+          }
+        }
+      }
+      
+      console.log(`Found ${attachments.length} attachments across all emails`)
+      setAllAttachments(attachments)
+      
+    } catch (error) {
+      console.error('Error fetching attachments:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load attachments. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setAttachmentsLoading(false)
+    }
+  }
+
 
 
   const handleEmailSelect = useCallback((email: any) => {
@@ -4219,7 +4288,7 @@ ${content}`;
               </div>
 
               {/* Minimalist Toolbar Actions */}
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2">
                 <Button 
                   onClick={handleComposeNew} 
                   size="sm" 
@@ -4227,6 +4296,15 @@ ${content}`;
                 >
                   <Mail className="h-3.5 w-3.5 mr-1" />
                   New Email
+                </Button>
+                <Button 
+                  onClick={handleViewAttachments} 
+                  size="sm" 
+                  variant="outline"
+                  className="px-3 py-1.5 rounded-md text-xs font-medium"
+                >
+                  <Paperclip className="h-3.5 w-3.5 mr-1" />
+                  View Attachments
                 </Button>
               </div>
             </div>
@@ -6959,6 +7037,155 @@ ${content}`;
             </div>
           </DialogPrimitive.Content>
         </DialogPortal>
+      </Dialog>
+
+      {/* Attachments Popup */}
+      <Dialog open={showAttachmentsPopup} onOpenChange={setShowAttachmentsPopup}>
+        <DialogContent className="max-w-6xl max-h-[85vh] overflow-hidden animate-in fade-in duration-200">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Paperclip className="h-5 w-5" />
+              All Email Attachments
+              {!attachmentsLoading && (
+                <Badge variant="secondary" className="ml-2">
+                  {allAttachments.length} files
+                </Badge>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex flex-col h-full max-h-[70vh]">
+            {attachmentsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
+                <span className="ml-2 text-sm text-gray-600">Loading attachments...</span>
+              </div>
+            ) : allAttachments.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <Paperclip className="h-12 w-12 text-gray-300 mb-3" />
+                <h3 className="text-lg font-medium text-gray-700">No Attachments Found</h3>
+                <p className="text-sm text-gray-500 max-w-sm mt-1">
+                  No email attachments have been processed yet. Attachments will appear here after emails are processed.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-y-auto custom-scrollbar">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
+                    <tr>
+                      <th className="text-left py-2 px-3 font-medium text-gray-700">File</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-700">From</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-700">Email Subject</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-700">Date</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-700">Size</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-700">Status</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {allAttachments.map((attachment) => (
+                      <tr
+                        key={attachment.id}
+                        className="hover:bg-gray-50 transition-colors"
+                      >
+                        {/* File column with icon and name */}
+                        <td className="py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-shrink-0">
+                              {attachment.mimeType?.startsWith('image/') ? (
+                                <FileImage className="h-4 w-4 text-blue-500" />
+                              ) : attachment.filename?.toLowerCase().endsWith('.pdf') ? (
+                                <FileText className="h-4 w-4 text-red-500" />
+                              ) : attachment.mimeType?.startsWith('video/') ? (
+                                <FileVideo className="h-4 w-4 text-purple-500" />
+                              ) : attachment.mimeType?.startsWith('audio/') ? (
+                                <FileAudio className="h-4 w-4 text-green-500" />
+                              ) : (
+                                <File className="h-4 w-4 text-gray-500" />
+                              )}
+                            </div>
+                            <span className="font-medium text-gray-900 truncate max-w-[200px]" title={attachment.filename}>
+                              {attachment.filename}
+                            </span>
+                          </div>
+                        </td>
+                        
+                        {/* From column */}
+                        <td className="py-2 px-3 text-gray-600 max-w-[180px] truncate" title={attachment.emailSender}>
+                          {attachment.emailSender}
+                        </td>
+                        
+                        {/* Email Subject column */}
+                        <td className="py-2 px-3 text-gray-600 max-w-[250px] truncate" title={attachment.emailSubject}>
+                          {attachment.emailSubject}
+                        </td>
+                        
+                        {/* Date column */}
+                        <td className="py-2 px-3 text-gray-500">
+                          {attachment.emailDate ? 
+                            new Date(attachment.emailDate).toLocaleDateString('en-AU', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric'
+                            }) : 
+                            '—'
+                          }
+                        </td>
+                        
+                        {/* Size column */}
+                        <td className="py-2 px-3 text-gray-500">
+                          {attachment.fileSize ? 
+                            `${(attachment.fileSize / 1024 / 1024).toFixed(1)} MB` : 
+                            '—'
+                          }
+                        </td>
+                        
+                        {/* Status column */}
+                        <td className="py-2 px-3">
+                          {attachment.extractionStatus ? (
+                            <div className="flex items-center gap-1.5">
+                              <div className={`h-2 w-2 rounded-full ${
+                                attachment.extractionStatus === 'completed' 
+                                  ? 'bg-green-500' 
+                                  : 'bg-yellow-500'
+                              }`}></div>
+                              <span className="text-xs text-gray-600 capitalize">
+                                {attachment.extractionStatus}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
+                        
+                        {/* Actions column */}
+                        <td className="py-2 px-3">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 hover:bg-gray-100"
+                                  onClick={() => window.open(attachment.s3url, '_blank')}
+                                >
+                                  <Download className="h-3 w-3" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Download</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </DialogContent>
       </Dialog>
     </div>
   )

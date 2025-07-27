@@ -2,7 +2,7 @@
 
 import { SideNav } from "@/components/side-nav"
 import { usePathname } from "next/navigation"
-import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu, Mic, Menu, Pencil, Loader2, ExternalLink, Plug, PanelRight, Send, Activity, Clock, Wrench, Code, Layers, Cog } from "lucide-react"
+import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu, Mic, Menu, Pencil, Loader2, ExternalLink, Plug, PanelRight, Send, Activity, Clock, Wrench, Code, Layers, Cog, Info } from "lucide-react"
 import { AuthGuard } from "@/components/auth-guard"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -1079,6 +1079,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     // Handle specific cases for proper capitalization
     if (lastSegment === 'agent-inbox') {
       return 'Agent Inbox'
+    }
+    
+    if (lastSegment === 'getstarted') {
+      return 'Get Started'
     }
     
     // Convert path to title case (e.g., "agents" -> "Agents")
@@ -2243,21 +2247,31 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   </div>
                   
                   <div className="flex items-center gap-3">
+                    {/* Learn how Tap works button - only show on getstarted page */}
+                    {pathname?.includes('/getstarted') && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        className="text-sm font-medium text-gray-900 hover:text-gray-900 hover:bg-gray-100"
+                      >
+                        Learn how Tap works
+                      </Button>
+                    )}
+                    
                     {/* Setup Dropdown */}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:ring-0 focus:ring-offset-0"
+                          className="text-sm font-medium text-gray-900 hover:text-gray-900 hover:bg-gray-100 focus:ring-0 focus:ring-offset-0"
                         >
-                          <Wrench className="h-4 w-4 mr-1.5" />
                           Setup
                           <ChevronDown className="h-3 w-3 ml-1.5" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="rounded-2xl">
-                        <DropdownMenuLabel>Things to do</DropdownMenuLabel>
+                        <DropdownMenuLabel className="text-xs text-gray-500 font-medium">Things to do</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => setShowTapAgentSheet(true)}>
                           <Sparkles className="h-4 w-4 mr-2" />

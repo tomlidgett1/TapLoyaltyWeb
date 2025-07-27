@@ -21,7 +21,8 @@ import {
   Bot,
   ExternalLink,
   MessageSquare,
-  FileText
+  FileText,
+  Info
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
@@ -223,9 +224,9 @@ export default function GetStartedPage() {
           
                     {/* Header with Progress */}
                       <div className="mb-6">
-              <h1 className="text-lg font-medium text-gray-900 mb-1 text-center">Welcome to <span className="font-bold text-[#007aff]">Tap</span></h1>
-              <p className="text-sm text-gray-600 mb-3 text-center">Let's get started</p>
-              <div className="flex items-center gap-3 justify-center">
+              <h1 className="text-xl font-medium text-gray-900 mb-1 text-center">Welcome to <span className="font-bold text-[#007aff]">Tap</span></h1>
+              <p className="text-base text-gray-600 mb-3 text-center">Let's get started</p>
+              <div className="flex items-center gap-3 justify-center mb-4">
                 <div className="w-64 bg-gray-100 rounded-full h-1">
                   <div
                     className="bg-[#007aff] h-1 rounded-full transition-all duration-300"
@@ -236,6 +237,7 @@ export default function GetStartedPage() {
                   {completedCount} of {checklistItems.length}
                 </span>
               </div>
+
             </div>
 
           {/* Simple Task List */}

@@ -1210,6 +1210,63 @@ const formatPreviewTime = (timestamp: any) => {
   }
 }
 
+// Detailed date/time formatting for the right panel email viewer
+const formatDetailedDateTime = (timestamp: any) => {
+  if (!timestamp) return 'Unknown time';
+  
+  try {
+    let dateToFormat: Date;
+    
+    if (timestamp && typeof timestamp.toDate === 'function') {
+      // Firestore timestamp - convert to Date
+      dateToFormat = timestamp.toDate();
+    } else if (timestamp && typeof timestamp === 'string') {
+      // String timestamp
+      dateToFormat = new Date(timestamp);
+    } else if (timestamp instanceof Date) {
+      // Already a Date object
+      dateToFormat = timestamp;
+    } else {
+      console.warn('Unknown timestamp format:', timestamp);
+      return 'Invalid time';
+    }
+    
+    if (isNaN(dateToFormat.getTime())) {
+      console.warn('Invalid date:', timestamp);
+      return 'Invalid time';
+    }
+    
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+    const emailDate = new Date(dateToFormat.getFullYear(), dateToFormat.getMonth(), dateToFormat.getDate());
+    
+    // Format time consistently
+    const timeStr = dateToFormat.toLocaleTimeString('en-AU', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+    
+    if (emailDate.getTime() === today.getTime()) {
+      return `Today at ${timeStr}`;
+    } else if (emailDate.getTime() === yesterday.getTime()) {
+      return `Yesterday at ${timeStr}`;
+    } else {
+      // For older dates, show the date and time
+      const dateStr = dateToFormat.toLocaleDateString('en-AU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+      return `${dateStr} at ${timeStr}`;
+    }
+  } catch (e) {
+    console.error('Error formatting detailed date time:', timestamp, e);
+    return 'Invalid time';
+  }
+}
+
 export default function EmailPage() {
   const { toast } = useToast()
   const { user } = useAuth()
@@ -8595,15 +8652,7 @@ const EmailViewer = ({
                 <span className="text-xs text-gray-600">{(() => {
                   // Get the appropriate timestamp with proper Firestore handling
                   const timestamp = email.repliedAt || email.receivedAt || email.time;
-                  if (!timestamp) return 'Unknown time';
-                  
-                  // Handle Firestore Timestamp objects
-                  if (timestamp && typeof timestamp.toDate === 'function') {
-                    return formatMelbourneTime(timestamp.toDate(), 'Unknown time');
-                  }
-                  
-                  // Handle string or Date objects
-                  return formatMelbourneTime(timestamp, 'Unknown time');
+                  return formatDetailedDateTime(timestamp);
                 })()}</span>
               </div>
               <div className="flex items-center gap-1 text-xs text-gray-600">

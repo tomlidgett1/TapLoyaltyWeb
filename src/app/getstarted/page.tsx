@@ -27,7 +27,9 @@ import {
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, getDocs, query, where, limit } from "firebase/firestore"
+import { collection, getDocs, query, where, limit, doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"
+import { v4 as uuidv4 } from "uuid"
 import { toast } from "@/components/ui/use-toast"
 import Link from "next/link"
 import { IntroductoryRewardPopup } from "@/components/introductory-reward-popup"
@@ -54,6 +56,13 @@ export default function GetStartedPage() {
   const { user } = useAuth()
   const [openItems, setOpenItems] = useState<string[]>([])
   const [accountType, setAccountType] = useState<'standard' | 'network'>('standard')
+  
+  // Logo upload states
+  const [merchantLogoUrl, setMerchantLogoUrl] = useState<string | null>(null)
+  const [uploadedLogo, setUploadedLogo] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null)
   
   // Popup states
   const [showIntroductoryReward, setShowIntroductoryReward] = useState(false)
@@ -169,19 +178,44 @@ export default function GetStartedPage() {
       if (!user?.uid) return
 
       try {
-        // Check for existing rewards, programs, etc.
         const merchantId = user.uid
+        
+        // Get merchant document to check for introductory rewards and programs
+        const merchantDoc = await getDoc(doc(db, 'merchants', merchantId))
+        let hasIntroRewards = false
+        let hasActivePrograms = false
+        
+        if (merchantDoc.exists()) {
+          const data = merchantDoc.data()
+          
+          // Check for introductory rewards
+          if (data.introductoryRewardIds && Array.isArray(data.introductoryRewardIds) && data.introductoryRewardIds.length > 0) {
+            hasIntroRewards = true
+          }
+          
+          // Check for active programs
+          const hasActiveTransactionRewards = data.transactionRewards && Array.isArray(data.transactionRewards) && 
+            data.transactionRewards.some(program => program.active === true)
+          const hasActiveVoucherPrograms = data.voucherPrograms && Array.isArray(data.voucherPrograms) && 
+            data.voucherPrograms.some(program => program.active === true)
+          const hasActiveCoffeePrograms = data.coffeePrograms && Array.isArray(data.coffeePrograms) && 
+            data.coffeePrograms.some(program => program.active === true)
+          
+          if (hasActiveTransactionRewards || hasActiveVoucherPrograms || hasActiveCoffeePrograms) {
+            hasActivePrograms = true
+          }
+        }
         
         setChecklistItems(prev => prev.map(item => {
           switch (item.id) {
             case 'intro-reward':
+              return { ...item, completed: hasIntroRewards }
             case 'individual-reward':
             case 'network-reward':
               // Check for rewards in Firestore
               return { ...item, completed: false } // You can add actual Firestore checks here
             case 'create-program':
-              // Check for loyalty programs
-              return { ...item, completed: false } // You can add actual Firestore checks here
+              return { ...item, completed: hasActivePrograms }
             case 'create-banner':
               // Check for banners
               return { ...item, completed: false } // You can add actual Firestore checks here
@@ -201,7 +235,144 @@ export default function GetStartedPage() {
     }
 
     checkCompletionStatus()
+    fetchMerchantLogo()
   }, [user?.uid])
+
+  // Fetch merchant logo from Firestore
+  const fetchMerchantLogo = async () => {
+    if (!user?.uid) return
+
+    try {
+      const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
+      if (merchantDoc.exists()) {
+        const data = merchantDoc.data()
+        if (data.logoUrl) {
+          setMerchantLogoUrl(data.logoUrl)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching merchant logo:', error)
+    }
+  }
+
+  // Logo upload functions from setup-popup.tsx
+  const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast({
+          title: "Invalid file type",
+          description: "Please select an image file (PNG, JPG, or SVG)",
+          variant: "destructive"
+        })
+        return
+      }
+      
+      // Validate file size (5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "File too large",
+          description: "File size must be less than 5MB",
+          variant: "destructive"
+        })
+        return
+      }
+
+      setUploadedLogo(file)
+      
+      // Create preview URL
+      const previewUrl = URL.createObjectURL(file)
+      setLogoPreview(previewUrl)
+    }
+  }
+
+  const triggerFileUpload = () => {
+    const fileInput = document.getElementById('logo-upload-getstarted') as HTMLInputElement
+    fileInput?.click()
+  }
+
+  const uploadToFirebaseStorage = async () => {
+    if (!uploadedLogo || !user?.uid) {
+      toast({
+        title: "Upload failed",
+        description: !uploadedLogo ? 'Please select a logo first' : 'Authentication required',
+        variant: "destructive"
+      })
+      return
+    }
+
+    setIsUploading(true)
+    
+    try {
+      const logoId = uuidv4()
+      const storagePath = `merchants/${user.uid}/files/${logoId}`
+      
+      // Upload to Firebase Storage
+      const storageRef = ref(getStorage(), storagePath)
+      const uploadTask = uploadBytesResumable(storageRef, uploadedLogo, { 
+        contentType: uploadedLogo.type || 'application/octet-stream' 
+      })
+      
+      await new Promise<void>((resolve, reject) => {
+        uploadTask.on('state_changed',
+          (snapshot) => {
+            // Handle progress if needed
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+            console.log(`Upload progress: ${progress}%`)
+          },
+          (error) => {
+            console.error('Upload error:', error)
+            toast({
+              title: "Upload failed",
+              description: "Please try again",
+              variant: "destructive"
+            })
+            reject(error)
+          },
+          async () => {
+            try {
+              // Get download URL after successful upload
+              const downloadURL = await getDownloadURL(storageRef)
+              
+              // Save logo URL to Firestore in merchants/{merchantId} document
+              const merchantDocRef = doc(db, `merchants/${user.uid}`)
+              await setDoc(merchantDocRef, {
+                logoUrl: downloadURL,
+                logoUpdatedAt: serverTimestamp()
+              }, { merge: true })
+              
+              setUploadedUrl(downloadURL)
+              setMerchantLogoUrl(downloadURL)
+              toast({
+                title: "Logo uploaded successfully!",
+                description: "Your logo has been saved to your account",
+              })
+              resolve()
+            } catch (e) {
+              console.error('Error saving logo URL to Firestore:', e)
+              toast({
+                title: "Upload completed but failed to save",
+                description: "Please try again",
+                variant: "destructive"
+              })
+              reject(e)
+            }
+          }
+        )
+      })
+      
+    } catch (error) {
+      console.error('Upload error:', error)
+      toast({
+        title: "Upload failed",
+        description: "Please try again",
+        variant: "destructive"
+      })
+    } finally {
+      setIsUploading(false)
+    }
+  }
 
   const toggleItem = (itemId: string) => {
     setOpenItems(prev => 
@@ -239,8 +410,8 @@ export default function GetStartedPage() {
 
           {/* Two Column Layout with Separator */}
           <div className="relative">
-            {/* Vertical Separator Line - starts at task cards level */}
-            <div className="absolute left-1/2 w-px bg-gray-200 transform -translate-x-1/2 hidden lg:block" style={{ top: '400px', bottom: '0' }}></div>
+            {/* Vertical Separator Line - starts at first card level */}
+            <div className="absolute left-1/2 w-px bg-gray-200 transform -translate-x-1/2 hidden lg:block" style={{ top: '75px', bottom: '0' }}></div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               
@@ -256,24 +427,71 @@ export default function GetStartedPage() {
               
               {/* Logo Upload Section */}
               <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-md">
+                {/* Hidden file input */}
+                <input
+                  id="logo-upload-getstarted"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  className="hidden"
+                />
+                
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gray-100 border-2 border-dashed border-gray-300 rounded-md flex items-center justify-center">
-                      <ImageIcon className="h-5 w-5 text-gray-400" />
-                    </div>
+                    {merchantLogoUrl || logoPreview ? (
+                      <div className="w-12 h-12 bg-white border-2 border-gray-200 rounded-md overflow-hidden flex items-center justify-center">
+                        <img 
+                          src={logoPreview || merchantLogoUrl || ''} 
+                          alt="Business logo" 
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-12 h-12 bg-gray-100 border-2 border-dashed border-gray-300 rounded-md flex items-center justify-center">
+                        <ImageIcon className="h-5 w-5 text-gray-400" />
+                      </div>
+                    )}
                     <div>
-                      <h4 className="text-sm font-medium text-gray-900">Add Your Logo</h4>
-                      <p className="text-xs text-gray-500">Upload your business logo for the loyalty program</p>
+                      <h4 className="text-sm font-medium text-gray-900">
+                        {merchantLogoUrl ? 'Your Logo' : 'Add Your Logo'}
+                      </h4>
+                      <p className="text-xs text-gray-500">
+                        {merchantLogoUrl 
+                          ? 'Your business logo is uploaded' 
+                          : 'Upload your business logo for the loyalty program'
+                        }
+                      </p>
                     </div>
                   </div>
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    className="text-xs"
-                  >
-                    Upload Logo
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {uploadedLogo && !uploadedUrl && (
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        className="text-xs"
+                        onClick={uploadToFirebaseStorage}
+                        disabled={isUploading}
+                      >
+                        {isUploading ? "Uploading..." : "Upload"}
+                      </Button>
+                    )}
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      className="text-xs"
+                      onClick={triggerFileUpload}
+                    >
+                      {merchantLogoUrl ? 'Change Logo' : 'Upload Logo'}
+                    </Button>
+                  </div>
                 </div>
+                
+                {/* Upload status */}
+                {uploadedUrl && (
+                  <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded-md">
+                    <p className="text-xs text-green-700 font-medium">✓ Logo uploaded successfully!</p>
+                  </div>
+                )}
               </div>
               
               {/* Account Type Selection */}
@@ -281,8 +499,12 @@ export default function GetStartedPage() {
                 <Collapsible>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-gray-100 border-2 border-dashed border-gray-300 rounded-md flex items-center justify-center">
-                        <Users className="h-5 w-5 text-gray-400" />
+                      <div className="w-12 h-12 bg-white border-2 border-gray-200 rounded-md flex items-center justify-center overflow-hidden">
+                        <img 
+                          src={accountType === 'standard' ? '/taplogo.png' : '/tappro.png'} 
+                          alt={accountType === 'standard' ? 'Tap Standard' : 'Tap Network'} 
+                          className="w-full h-full object-cover"
+                        />
                       </div>
                       <div>
                         <h4 className="text-sm font-medium text-gray-900">Select Account Type</h4>

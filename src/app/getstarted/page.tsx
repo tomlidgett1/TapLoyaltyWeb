@@ -391,22 +391,22 @@ export default function GetStartedPage() {
       <div className="min-h-screen bg-white">
         <div className="max-w-6xl mx-auto px-6 py-8">
           
-          {/* Header with Progress */}
+                    {/* Header with Progress */}
           <div className="mb-8">
-            <h1 className="text-xl font-medium text-gray-900 mb-1 text-center">Welcome to <span className="font-bold text-[#007aff]">Tap</span></h1>
-            <p className="text-base text-gray-600 mb-3 text-center">Let's get started</p>
-            <div className="flex items-center gap-3 justify-center mb-4">
-              <div className="w-64 bg-gray-100 rounded-full h-1">
-                <div
-                  className="bg-[#007aff] h-1 rounded-full transition-all duration-300"
-                  style={{ width: `${(completedCount / checklistItems.length) * 100}%` }}
-                />
+              <h1 className="text-xl font-medium text-gray-900 mb-1 text-center">Welcome to <span className="font-bold text-[#007aff]">Tap</span></h1>
+              <p className="text-base text-gray-600 mb-3 text-center">Let's get started</p>
+              <div className="flex items-center gap-3 justify-center mb-4">
+                <div className="w-64 bg-gray-100 rounded-full h-1">
+                  <div
+                    className="bg-[#007aff] h-1 rounded-full transition-all duration-300"
+                    style={{ width: `${(completedCount / checklistItems.length) * 100}%` }}
+                  />
+                </div>
+                <span className="text-xs text-gray-500 min-w-fit">
+                  {completedCount} of {checklistItems.length}
+                </span>
               </div>
-              <span className="text-xs text-gray-500 min-w-fit">
-                {completedCount} of {checklistItems.length}
-              </span>
             </div>
-          </div>
 
           {/* Two Column Layout with Separator */}
           <div className="relative">
@@ -422,10 +422,10 @@ export default function GetStartedPage() {
                   <div className="flex items-center gap-3 px-6 py-3 bg-white rounded-full border border-gray-200 shadow-sm relative z-10">
                     <img src="/taplogo.png" alt="Tap" className="w-5 h-5 object-contain rounded-[2px]" />
                     <span className="text-sm font-semibold text-gray-900">Tap Loyalty</span>
-                  </div>
-                </div>
-              
-              {/* Logo Upload Section */}
+                       </div>
+                     </div>
+                     
+                     {/* Logo Upload Section */}
               <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-md">
                 {/* Hidden file input */}
                 <input
@@ -436,8 +436,8 @@ export default function GetStartedPage() {
                   className="hidden"
                 />
                 
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                       <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-3">
                     {merchantLogoUrl || logoPreview ? (
                       <div className="w-12 h-12 bg-white border-2 border-gray-200 rounded-md overflow-hidden flex items-center justify-center">
                         <img 
@@ -447,11 +447,11 @@ export default function GetStartedPage() {
                         />
                       </div>
                     ) : (
-                      <div className="w-12 h-12 bg-gray-100 border-2 border-dashed border-gray-300 rounded-md flex items-center justify-center">
-                        <ImageIcon className="h-5 w-5 text-gray-400" />
-                      </div>
+                           <div className="w-12 h-12 bg-gray-100 border-2 border-dashed border-gray-300 rounded-md flex items-center justify-center">
+                             <ImageIcon className="h-5 w-5 text-gray-400" />
+                           </div>
                     )}
-                    <div>
+                           <div>
                       <h4 className="text-sm font-medium text-gray-900">
                         {merchantLogoUrl ? 'Your Logo' : 'Add Your Logo'}
                       </h4>
@@ -461,8 +461,8 @@ export default function GetStartedPage() {
                           : 'Upload your business logo for the loyalty program'
                         }
                       </p>
-                    </div>
-                  </div>
+                           </div>
+                         </div>
                   <div className="flex items-center gap-2">
                     {uploadedLogo && !uploadedUrl && (
                       <Button 
@@ -475,15 +475,15 @@ export default function GetStartedPage() {
                         {isUploading ? "Uploading..." : "Upload"}
                       </Button>
                     )}
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      className="text-xs"
+                         <Button 
+                           size="sm" 
+                           variant="outline"
+                           className="text-xs"
                       onClick={triggerFileUpload}
-                    >
+                         >
                       {merchantLogoUrl ? 'Change Logo' : 'Upload Logo'}
-                    </Button>
-                  </div>
+                         </Button>
+                       </div>
                 </div>
                 
                 {/* Upload status */}
@@ -492,97 +492,97 @@ export default function GetStartedPage() {
                     <p className="text-xs text-green-700 font-medium">✓ Logo uploaded successfully!</p>
                   </div>
                 )}
-              </div>
-              
-              {/* Account Type Selection */}
+                     </div>
+                     
+                     {/* Account Type Selection */}
               <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-md">
-                <Collapsible>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                       <Collapsible>
+                         <div className="flex items-center justify-between">
+                           <div className="flex items-center gap-3">
                       <div className="w-12 h-12 bg-white border-2 border-gray-200 rounded-md flex items-center justify-center overflow-hidden">
                         <img 
                           src={accountType === 'standard' ? '/taplogo.png' : '/tappro.png'} 
                           alt={accountType === 'standard' ? 'Tap Standard' : 'Tap Network'} 
                           className="w-full h-full object-cover"
                         />
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-900">Select Account Type</h4>
-                        <p className="text-xs text-gray-500">Choose between Standard or Network for your business</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center bg-gray-100 p-0.5 rounded-md">
-                        <button
-                          onClick={() => setAccountType('standard')}
-                          className={cn(
+                             </div>
+                             <div>
+                               <h4 className="text-sm font-medium text-gray-900">Select Account Type</h4>
+                               <p className="text-xs text-gray-500">Choose between Standard or Network for your business</p>
+                             </div>
+                           </div>
+                           <div className="flex items-center gap-2">
+                             <div className="flex items-center bg-gray-100 p-0.5 rounded-md">
+                               <button
+                                 onClick={() => setAccountType('standard')}
+                                 className={cn(
                             "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
-                            accountType === 'standard'
-                              ? "text-gray-800 bg-white shadow-sm"
-                              : "text-gray-600 hover:bg-gray-200/70"
-                          )}
-                        >
-                          Standard
-                        </button>
-                        <button
-                          onClick={() => setAccountType('network')}
-                          className={cn(
+                                   accountType === 'standard'
+                                     ? "text-gray-800 bg-white shadow-sm"
+                                     : "text-gray-600 hover:bg-gray-200/70"
+                                 )}
+                               >
+                                 Standard
+                               </button>
+                               <button
+                                 onClick={() => setAccountType('network')}
+                                 className={cn(
                             "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
-                            accountType === 'network'
-                              ? "text-gray-800 bg-white shadow-sm"
-                              : "text-gray-600 hover:bg-gray-200/70"
-                          )}
-                        >
-                          Network
-                        </button>
-                      </div>
-                      <CollapsibleTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="p-1 h-8 w-8"
-                        >
-                          <ChevronDown className="h-4 w-4 text-gray-400" />
-                        </Button>
-                      </CollapsibleTrigger>
-                    </div>
-                  </div>
-                  
-                  <CollapsibleContent 
-                    className="overflow-hidden data-[state=closed]:animate-out data-[state=closed]:slide-out-to-top-1 data-[state=open]:animate-in data-[state=open]:slide-in-from-top-1"
-                    style={{
-                      transition: 'all 350ms linear(0, 0.3566, 0.7963, 1.0045, 1.0459, 1.0287, 1.0088, 0.9996, 1, 0.9987, 0.9996, 1)'
-                    }}
-                  >
-                    <div className="px-3 pb-3 border-t border-gray-100 mt-3">
-                      <div className="space-y-3">
-                        <div className="p-3 bg-white rounded-md border border-gray-200">
-                          <h5 className="text-xs font-medium text-gray-900 mb-2">Tap Standard</h5>
-                          <p className="text-xs text-gray-600 mb-2">Perfect for individual businesses and single locations.</p>
-                          <ul className="text-xs text-gray-600 space-y-1">
-                            <li>• Single business management</li>
-                            <li>• Basic loyalty features</li>
-                            <li>• Customer analytics</li>
-                            <li>• Email marketing tools</li>
-                          </ul>
-                        </div>
-                        
-                        <div className="p-3 bg-white rounded-md border border-gray-200">
-                          <h5 className="text-xs font-medium text-gray-900 mb-2">Tap Network</h5>
-                          <p className="text-xs text-gray-600 mb-2">Ideal for multi-location chains, franchises, and business networks.</p>
-                          <ul className="text-xs text-gray-600 space-y-1">
-                            <li>• Multi-location management</li>
-                            <li>• Advanced network features</li>
-                            <li>• Cross-location rewards</li>
-                            <li>• Centralized reporting</li>
-                            <li>• Franchise management tools</li>
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              </div>
+                                   accountType === 'network'
+                                     ? "text-gray-800 bg-white shadow-sm"
+                                     : "text-gray-600 hover:bg-gray-200/70"
+                                 )}
+                               >
+                                 Network
+                               </button>
+                             </div>
+                             <CollapsibleTrigger asChild>
+                               <Button
+                                 variant="ghost"
+                                 size="sm"
+                                 className="p-1 h-8 w-8"
+                               >
+                                 <ChevronDown className="h-4 w-4 text-gray-400" />
+                               </Button>
+                             </CollapsibleTrigger>
+                           </div>
+                         </div>
+                         
+                         <CollapsibleContent 
+                           className="overflow-hidden data-[state=closed]:animate-out data-[state=closed]:slide-out-to-top-1 data-[state=open]:animate-in data-[state=open]:slide-in-from-top-1"
+                           style={{
+                             transition: 'all 350ms linear(0, 0.3566, 0.7963, 1.0045, 1.0459, 1.0287, 1.0088, 0.9996, 1, 0.9987, 0.9996, 1)'
+                           }}
+                         >
+                           <div className="px-3 pb-3 border-t border-gray-100 mt-3">
+                             <div className="space-y-3">
+                               <div className="p-3 bg-white rounded-md border border-gray-200">
+                                 <h5 className="text-xs font-medium text-gray-900 mb-2">Tap Standard</h5>
+                                 <p className="text-xs text-gray-600 mb-2">Perfect for individual businesses and single locations.</p>
+                                 <ul className="text-xs text-gray-600 space-y-1">
+                                   <li>• Single business management</li>
+                                   <li>• Basic loyalty features</li>
+                                   <li>• Customer analytics</li>
+                                   <li>• Email marketing tools</li>
+                                 </ul>
+                               </div>
+                               
+                               <div className="p-3 bg-white rounded-md border border-gray-200">
+                                 <h5 className="text-xs font-medium text-gray-900 mb-2">Tap Network</h5>
+                                 <p className="text-xs text-gray-600 mb-2">Ideal for multi-location chains, franchises, and business networks.</p>
+                                 <ul className="text-xs text-gray-600 space-y-1">
+                                   <li>• Multi-location management</li>
+                                   <li>• Advanced network features</li>
+                                   <li>• Cross-location rewards</li>
+                                   <li>• Centralized reporting</li>
+                                   <li>• Franchise management tools</li>
+                                 </ul>
+                               </div>
+                             </div>
+                           </div>
+                         </CollapsibleContent>
+                       </Collapsible>
+                     </div>
               
               {/* Loyalty Tasks */}
               <div className="space-y-3">
@@ -667,9 +667,9 @@ export default function GetStartedPage() {
                 <div className="flex items-center gap-3 px-6 py-3 bg-white rounded-full border border-gray-200 shadow-sm relative z-10">
                   <img src="/gmailnew.png" alt="Gmail" className="w-5 h-5 object-contain" />
                   <span className="text-sm font-semibold text-gray-900">Tap Merchant</span>
-                </div>
-              </div>
-              
+                     </div>
+                   </div>
+                 
               {/* Merchant Tasks */}
               <div className="space-y-3">
                 {merchantItems.map((item) => (
@@ -679,49 +679,49 @@ export default function GetStartedPage() {
                       onOpenChange={() => toggleItem(item.id)}
                     >
                       <div className="flex items-center gap-3 p-4">
-                        <div className="w-10 h-5 flex items-center justify-center">
-                          {item.completed ? (
-                            <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                              <Check className="h-3 w-3 text-white" />
-                            </div>
-                          ) : item.icon === 'gmail' ? (
-                            <div className="relative w-10 h-5">
-                              <div className="absolute left-0 top-0 w-5 h-5 bg-white rounded-full border border-gray-200 flex items-center justify-center z-10">
-                                <img src="/gmailnew.png" alt="Gmail" className="w-4 h-4 object-contain" />
-                              </div>
-                              <div className="absolute right-0 top-0 w-5 h-5 bg-white rounded-full border border-gray-200 flex items-center justify-center">
-                                <img src="/outlook.png" alt="Outlook" className="w-4 h-4 object-contain" />
-                              </div>
-                            </div>
-                          ) : item.icon === 'outlook' ? (
-                            <div className="relative w-10 h-5">
-                              <div className="absolute left-0 top-0 w-5 h-5 bg-white rounded-full border border-gray-200 flex items-center justify-center z-10">
-                                <img src="/gmailnew.png" alt="Gmail" className="w-4 h-4 object-contain" />
-                              </div>
-                              <div className="absolute right-0 top-0 w-5 h-5 bg-white rounded-full border border-gray-200 flex items-center justify-center">
-                                <img src="/outlook.png" alt="Outlook" className="w-4 h-4 object-contain" />
-                              </div>
-                            </div>
-                          ) : (
-                            <item.icon className="h-5 w-5 text-gray-400" />
-                          )}
-                        </div>
-                       
-                        <div className="flex-1 text-left">
-                          <h3 className="text-sm font-medium text-gray-900">{item.title}</h3>
-                          <p className="text-xs text-gray-500">Click to learn more</p>
-                        </div>
-                       
+                                                 <div className="w-10 h-5 flex items-center justify-center">
+                           {item.completed ? (
+                             <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                               <Check className="h-3 w-3 text-white" />
+                             </div>
+                           ) : item.icon === 'gmail' ? (
+                             <div className="relative w-10 h-5">
+                               <div className="absolute left-0 top-0 w-5 h-5 bg-white rounded-full border border-gray-200 flex items-center justify-center z-10">
+                                 <img src="/gmailnew.png" alt="Gmail" className="w-4 h-4 object-contain" />
+                               </div>
+                               <div className="absolute right-0 top-0 w-5 h-5 bg-white rounded-full border border-gray-200 flex items-center justify-center">
+                                 <img src="/outlook.png" alt="Outlook" className="w-4 h-4 object-contain" />
+                               </div>
+                             </div>
+                           ) : item.icon === 'outlook' ? (
+                             <div className="relative w-10 h-5">
+                               <div className="absolute left-0 top-0 w-5 h-5 bg-white rounded-full border border-gray-200 flex items-center justify-center z-10">
+                                 <img src="/gmailnew.png" alt="Gmail" className="w-4 h-4 object-contain" />
+                               </div>
+                               <div className="absolute right-0 top-0 w-5 h-5 bg-white rounded-full border border-gray-200 flex items-center justify-center">
+                                 <img src="/outlook.png" alt="Outlook" className="w-4 h-4 object-contain" />
+                               </div>
+                             </div>
+                           ) : (
+                             <item.icon className="h-5 w-5 text-gray-400" />
+                           )}
+                         </div>
+                        
+                                                 <div className="flex-1 text-left">
+                           <h3 className="text-sm font-medium text-gray-900">{item.title}</h3>
+                           <p className="text-xs text-gray-500">Click to learn more</p>
+                         </div>
+                        
                         <div className="flex items-center gap-2">
-                          <Button 
-                            size="sm" 
-                            asChild
-                            className="bg-[#007aff] hover:bg-[#339fff] text-xs px-3 py-1.5 text-white"
-                          >
-                            <Link href={item.actionUrl!}>
-                              {item.actionText}
-                            </Link>
-                          </Button>
+                            <Button 
+                              size="sm" 
+                              asChild
+                              className="bg-[#007aff] hover:bg-[#339fff] text-xs px-3 py-1.5 text-white"
+                            >
+                              <Link href={item.actionUrl!}>
+                                {item.actionText}
+                              </Link>
+                            </Button>
                           
                           <CollapsibleTrigger asChild>
                             <Button
@@ -747,43 +747,43 @@ export default function GetStartedPage() {
                         }}
                       >
                         <div className="px-4 pb-4 border-t border-gray-100">
-                          <p className="text-xs text-gray-600 mb-4 mt-3">
-                            {item.description}
-                          </p>
-                          <Button 
-                            size="sm" 
-                            asChild
-                            className="bg-[#007aff] hover:bg-[#339fff] text-white"
-                          >
-                            <Link href={item.actionUrl!} className="inline-flex items-center gap-2">
-                              {item.actionText}
-                              <ExternalLink className="h-3 w-3" />
-                            </Link>
-                          </Button>
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  </div>
-                ))}
+                         <p className="text-xs text-gray-600 mb-4 mt-3">
+                           {item.description}
+                         </p>
+                           <Button 
+                             size="sm" 
+                             asChild
+                             className="bg-[#007aff] hover:bg-[#339fff] text-white"
+                           >
+                             <Link href={item.actionUrl!} className="inline-flex items-center gap-2">
+                               {item.actionText}
+                               <ExternalLink className="h-3 w-3" />
+                             </Link>
+                           </Button>
+                       </div>
+                     </CollapsibleContent>
+                   </Collapsible>
+               </div>
+             ))}
               </div>
             </div>
           </div>
-          </div>
+           </div>
 
-          {/* Simple Completion Message */}
-          {completedCount === checklistItems.length && (
-            <div className="mt-8 p-6 bg-green-50 border border-green-200 rounded-md">
-              <div className="flex items-center gap-3">
-                <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-                  <Check className="h-4 w-4 text-white" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-green-800">All done!</h3>
-                  <p className="text-sm text-green-700">Your loyalty program is ready to go.</p>
-                </div>
-              </div>
-            </div>
-          )}
+           {/* Simple Completion Message */}
+           {completedCount === checklistItems.length && (
+             <div className="mt-8 p-6 bg-green-50 border border-green-200 rounded-md">
+               <div className="flex items-center gap-3">
+                 <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                   <Check className="h-4 w-4 text-white" />
+                 </div>
+                 <div>
+                   <h3 className="font-medium text-green-800">All done!</h3>
+                   <p className="text-sm text-green-700">Your loyalty program is ready to go.</p>
+                 </div>
+               </div>
+             </div>
+           )}
         </div>
       </div>
       

@@ -124,7 +124,9 @@ import {
   AlignLeft,
   Code,
   XCircle,
-  List
+  List,
+  ArrowUp,
+  ArrowDown
 } from "lucide-react"
 import { RiRobot3Line } from "react-icons/ri"
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
@@ -1645,6 +1647,7 @@ export default function EmailPage() {
   const [attachmentsLoading, setAttachmentsLoading] = useState(false)
   const [sortColumn, setSortColumn] = useState<string>('emailDate')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [emailFilter, setEmailFilter] = useState<'all' | 'unread'>('all')
   const [debugDialogOpen, setDebugDialogOpen] = useState(false)
   const [debugResponse, setDebugResponse] = useState<any>(null)
   const [isExtractingWritingStyle, setIsExtractingWritingStyle] = useState(false)
@@ -2189,6 +2192,11 @@ ${content}`;
     else if (selectedFolder === "sent") folderMatch = email.folder === "sent"
     
     if (!folderMatch) return false
+    
+    // Then filter by read/unread status
+    if (emailFilter === 'unread') {
+      if (email.read) return false
+    }
     
     // Then filter by category
     if (selectedFilter !== 'all') {
@@ -3529,6 +3537,57 @@ ${content}`;
     setIsComposing(true);
   }
 
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortColumn(column)
+      setSortDirection('asc')
+    }
+  }
+
+  const filteredAndSortedEmails = useMemo(() => {
+    if (!fetchedEmails.length) return []
+    
+    // First filter by read/unread status
+    let filtered = fetchedEmails
+    if (emailFilter === 'unread') {
+      filtered = fetchedEmails.filter(email => !email.read)
+    }
+    
+    // Then sort by date (newest first)
+    return filtered.sort((a, b) => {
+      const aDate = a.receivedAt?.toDate?.() || a.receivedAt || new Date(0)
+      const bDate = b.receivedAt?.toDate?.() || b.receivedAt || new Date(0)
+      return bDate.getTime() - aDate.getTime()
+    })
+  }, [fetchedEmails, emailFilter])
+
+  const sortedAttachments = useMemo(() => {
+    if (!allAttachments.length) return []
+    
+    return [...allAttachments].sort((a, b) => {
+      let aValue = a[sortColumn]
+      let bValue = b[sortColumn]
+      
+      // Handle different data types
+      if (sortColumn === 'emailDate') {
+        aValue = aValue ? new Date(aValue).getTime() : 0
+        bValue = bValue ? new Date(bValue).getTime() : 0
+      } else if (sortColumn === 'fileSize') {
+        aValue = aValue || 0
+        bValue = bValue || 0
+      } else {
+        aValue = String(aValue || '').toLowerCase()
+        bValue = String(bValue || '').toLowerCase()
+      }
+      
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
+      return 0
+    })
+  }, [allAttachments, sortColumn, sortDirection])
+
   const handleViewAttachments = async () => {
     if (!user?.uid) return
     
@@ -4542,7 +4601,7 @@ ${content}`;
           {/* Search Bar - Fixed at top, hidden when summary panel is visible */}
           {(!showSummaryDropdown || summaryClosing) && (
             <div className="flex-shrink-0 p-3 border-b border-gray-200 bg-white rounded-t-xl">
-              {/* Folder Selection - Left of search box */}
+              {/* Folder Selection and Read/Unread Filter */}
               <div className="flex items-center gap-2 mb-3">
                 <Select value={selectedFolder} onValueChange={setSelectedFolder}>
                   <SelectTrigger className="h-9 text-sm border-gray-200 hover:border-gray-300 px-2 w-24">
@@ -4590,6 +4649,30 @@ ${content}`;
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                
+                {/* Read/Unread Filter Switch */}
+                <div className="flex items-center bg-gray-100 p-0.5 rounded-md">
+                  <button
+                    onClick={() => setEmailFilter('all')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                      emailFilter === 'all'
+                        ? 'text-gray-800 bg-white shadow-sm'
+                        : 'text-gray-600 hover:bg-gray-200/70'
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setEmailFilter('unread')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                      emailFilter === 'unread'
+                        ? 'text-gray-800 bg-white shadow-sm'
+                        : 'text-gray-600 hover:bg-gray-200/70'
+                    }`}
+                  >
+                    Unread
+                  </button>
+                </div>
                 
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -7041,7 +7124,7 @@ ${content}`;
 
       {/* Attachments Popup */}
       <Dialog open={showAttachmentsPopup} onOpenChange={setShowAttachmentsPopup}>
-        <DialogContent className="max-w-6xl max-h-[85vh] overflow-hidden animate-in fade-in duration-200">
+        <DialogContent className="max-w-6xl h-[85vh] overflow-hidden animate-in fade-in duration-200">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Paperclip className="h-5 w-5" />
@@ -7054,7 +7137,7 @@ ${content}`;
             </DialogTitle>
           </DialogHeader>
           
-          <div className="flex flex-col h-full max-h-[70vh]">
+          <div className="flex flex-col h-full flex-1 min-h-0">
             {attachmentsLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
@@ -7073,17 +7156,77 @@ ${content}`;
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
                     <tr>
-                      <th className="text-left py-2 px-3 font-medium text-gray-700">File</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-700">From</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-700">Email Subject</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-700">Date</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-700">Size</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-700">Status</th>
+                      <th 
+                        className="text-left py-2 px-3 font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                        onClick={() => handleSort('filename')}
+                      >
+                        <div className="flex items-center gap-1">
+                          File
+                          {sortColumn === 'filename' && (
+                            sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                          )}
+                        </div>
+                      </th>
+                      <th 
+                        className="text-left py-2 px-3 font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                        onClick={() => handleSort('emailSender')}
+                      >
+                        <div className="flex items-center gap-1">
+                          From
+                          {sortColumn === 'emailSender' && (
+                            sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                          )}
+                        </div>
+                      </th>
+                      <th 
+                        className="text-left py-2 px-3 font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                        onClick={() => handleSort('emailSubject')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Email Subject
+                          {sortColumn === 'emailSubject' && (
+                            sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                          )}
+                        </div>
+                      </th>
+                      <th 
+                        className="text-left py-2 px-3 font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                        onClick={() => handleSort('emailDate')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Date
+                          {sortColumn === 'emailDate' && (
+                            sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                          )}
+                        </div>
+                      </th>
+                      <th 
+                        className="text-left py-2 px-3 font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                        onClick={() => handleSort('fileSize')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Size
+                          {sortColumn === 'fileSize' && (
+                            sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                          )}
+                        </div>
+                      </th>
+                      <th 
+                        className="text-left py-2 px-3 font-medium text-gray-700 cursor-pointer hover:bg-gray-100 select-none"
+                        onClick={() => handleSort('extractionStatus')}
+                      >
+                        <div className="flex items-center gap-1">
+                          Status
+                          {sortColumn === 'extractionStatus' && (
+                            sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                          )}
+                        </div>
+                      </th>
                       <th className="text-left py-2 px-3 font-medium text-gray-700">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {allAttachments.map((attachment) => (
+                    {sortedAttachments.map((attachment) => (
                       <tr
                         key={attachment.id}
                         className="hover:bg-gray-50 transition-colors"

@@ -1561,6 +1561,8 @@ export default function EmailPage() {
   const [selectedFolder, setSelectedFolder] = useState("inbox")
   const [selectedEmail, setSelectedEmail] = useState<any>(null)
   const [selectedThread, setSelectedThread] = useState<any>(null)
+  // Thread data cache to avoid redundant Firestore queries
+  const [threadCache, setThreadCache] = useState<Map<string, any>>(new Map())
   const [replyMode, setReplyMode] = useState<{
     type: 'reply' | 'replyAll' | 'forward'
     originalEmail: any
@@ -2079,8 +2081,8 @@ ${content}`;
   // Use only fetched Gmail emails
   const allEmails = fetchedEmails
   
-  // Group emails by threadId
-  const groupEmailsByThread = (emails: any[]) => {
+  // Memoized email grouping function to prevent expensive recalculations
+  const groupEmailsByThread = useCallback((emails: any[]) => {
     const threads = new Map<string, any[]>()
     
     emails.forEach(email => {
@@ -2135,7 +2137,7 @@ ${content}`;
         hasUnread: unreadCount > 0
       }
     })
-  }
+  }, [])
   
   // Function to categorize emails based on content
   const categorizeEmail = (email: any): string => {
@@ -2199,12 +2201,14 @@ ${content}`;
     )
   })
 
-  // Group filtered emails into threads and sort by most recent
-  const emailThreads = groupEmailsByThread(filteredEmails).sort((a, b) => {
-    const timeA = new Date(a.representative.time || 0).getTime()
-    const timeB = new Date(b.representative.time || 0).getTime()
-    return timeB - timeA
-  })
+  // Memoized email threads calculation to improve performance
+  const emailThreads = useMemo(() => {
+    return groupEmailsByThread(filteredEmails).sort((a, b) => {
+      const timeA = new Date(a.representative.time || 0).getTime()
+      const timeB = new Date(b.representative.time || 0).getTime()
+      return timeB - timeA
+    })
+  }, [filteredEmails, groupEmailsByThread])
 
 
 
@@ -3345,20 +3349,20 @@ ${content}`;
 
 
 
-  const handleEmailSelect = (email: any) => {
+  const handleEmailSelect = useCallback((email: any) => {
     console.log("📧 Email selected:", email.id, email.sender)
     console.log("🎯 Previous selectedEmail:", selectedEmail?.id)
     console.log("🎯 Setting selectedEmail to:", email.id)
     
-    // Set the selected email - this will trigger re-render and update highlighting
+    // Batch state updates for better performance
     setSelectedEmail(email)
     setReplyMode(null)
     
-    // Mark email as read when clicked
+    // Mark email as read when clicked (async operation in background)
     if (!email.read) {
       markEmailAsReadAndUpdateUI(email)
     }
-  }
+  }, [selectedEmail?.id])
 
   // Helper function to clean HTML and create preview text
   const createPreviewText = (htmlContent: string, maxLength: number = 80): string => {
@@ -3383,8 +3387,8 @@ ${content}`;
       : cleanText;
   };
 
-  // Helper function to determine if a thread representative should be highlighted
-  const isThreadRepresentativeHighlighted = (thread: any) => {
+  // Memoized helper function to determine if a thread representative should be highlighted
+  const isThreadRepresentativeHighlighted = useCallback((thread: any) => {
     if (!selectedEmail) return false
     
     // If this is a single email thread, highlight if the selected email belongs to this thread
@@ -3414,7 +3418,7 @@ ${content}`;
     }
     
     return false
-  }
+  }, [selectedEmail, selectedThread])
 
   // Simplified function to mark email as read and update all relevant UI state
   const markEmailAsReadAndUpdateUI = (email: any) => {
@@ -3474,11 +3478,29 @@ ${content}`;
       return; // Exit early to just collapse, don't reload
     }
     
+    // Optimistic update: show the thread immediately for instant feedback
+    setSelectedEmail(thread.representative)
+    setReplyMode(null)
+    
+    // Check cache first to avoid redundant queries
+    const cachedThread = threadCache.get(thread.threadId)
+    if (cachedThread) {
+      console.log("📋 Using cached thread data for:", thread.threadId)
+      setSelectedThread(cachedThread)
+      
+      // Clear expansion state for previously selected threads
+      if (selectedThread && selectedThread.threadId !== thread.threadId) {
+        setExpandedThreads(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(selectedThread.threadId);
+          return newSet;
+        });
+      }
+      
+      return
+    }
+    
     try {
-      // Don't set selectedEmail immediately - we'll wait for chain data
-      // This prevents showing incomplete data
-      setSelectedThread(null)
-      setReplyMode(null) // Also clear reply mode
       
       // Clear expansion state for previously selected threads
       if (selectedThread && selectedThread.threadId !== thread.threadId) {
@@ -3658,6 +3680,9 @@ ${content}`;
       
       // Set the thread for dropdown functionality
       setSelectedThread(completeThread)
+      
+      // Cache the thread data for future use to avoid redundant queries
+      setThreadCache(prev => new Map(prev).set(thread.threadId, completeThread))
       
       // Automatically expand the dropdown for multiple emails
       setExpandedThreads(prev => new Set([...prev, thread.threadId]))

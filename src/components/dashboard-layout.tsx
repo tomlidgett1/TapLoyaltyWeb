@@ -2274,42 +2274,40 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           <ChevronDown className="h-3 w-3 ml-1.5" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="rounded-2xl">
+                      <DropdownMenuContent align="end" className="rounded-2xl" forceMount={false}>
                         <DropdownMenuLabel className="text-xs text-gray-500 font-medium">Things to do</DropdownMenuLabel>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => setShowTapAgentSheet(true)}>
+                        <DropdownMenuItem onClick={() => setShowTapAgentSheet(true)} className="cursor-pointer">
                           <Sparkles className="h-4 w-4 mr-2" />
                           Get Started with AI
                           <Check className="h-4 w-4 ml-auto text-green-500" />
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem className="cursor-pointer">
                           <Plug className="h-4 w-4 mr-2" />
                           Connect Integrations
                           <Check className="h-4 w-4 ml-auto text-green-500" />
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem className="cursor-pointer">
                           <Gift className="h-4 w-4 mr-2" />
                           Create Rewards
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem className="cursor-pointer">
                           <Target className="h-4 w-4 mr-2" />
                           Set Up Rules
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem className="cursor-pointer">
                           <BarChart className="h-4 w-4 mr-2" />
                           Configure Analytics
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem className="cursor-pointer">
                           <Cog className="h-4 w-4 mr-2" />
                           Account Settings
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem asChild>
-                          <Link href="/getstarted" className="flex items-center">
-                            <Cog className="h-4 w-4 mr-2" />
-                            Setup
-                            <ExternalLink className="h-4 w-4 ml-auto text-gray-400" />
-                          </Link>
+                        <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/getstarted')}>
+                          <Cog className="h-4 w-4 mr-2" />
+                          Setup
+                          <ExternalLink className="h-4 w-4 ml-auto text-gray-400" />
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>

@@ -31,6 +31,7 @@ interface IntegrationState {
 
 interface IntegrationsState {
   square: IntegrationState;
+  square_composio: IntegrationState;
   clover: IntegrationState;
   shopify: IntegrationState;
   lightspeed_new: IntegrationState;
@@ -48,6 +49,7 @@ export default function IntegrationsPage() {
   const [connecting, setConnecting] = useState<string | null>(null)
   const [integrations, setIntegrations] = useState<IntegrationsState>({
     square: { connected: false, data: null },
+    square_composio: { connected: false, data: null },
     clover: { connected: false, data: null },
     shopify: { connected: false, data: null },
     lightspeed_new: { connected: false, data: null },
@@ -125,6 +127,11 @@ export default function IntegrationsPage() {
       const squareDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/square`));
       const squareConnected = squareDoc.exists() && squareDoc.data()?.connected === true;
       console.log('Square integration status:', squareConnected ? 'Connected' : 'Not connected');
+      
+      // Check Square Composio integration status
+      const squareComposioDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/square_composio`));
+      const squareComposioConnected = squareComposioDoc.exists() && squareComposioDoc.data()?.connected === true;
+      console.log('Square Composio integration status:', squareComposioConnected ? 'Connected' : 'Not connected');
 
       // Check Lightspeed New integration status
       const lightspeedNewDoc = await getDoc(doc(db, `merchants/${user.uid}/integrations/lightspeed_new`));
@@ -174,6 +181,10 @@ export default function IntegrationsPage() {
           square: {
             connected: squareConnected,
             data: squareDoc.exists() ? squareDoc.data() : null
+          },
+          square_composio: {
+            connected: squareComposioConnected,
+            data: squareComposioDoc.exists() ? squareComposioDoc.data() : null
           },
           lightspeed_new: {
             connected: lightspeedNewConnected,
@@ -252,6 +263,10 @@ export default function IntegrationsPage() {
             connected: squareConnected,
             data: squareDoc.exists() ? squareDoc.data() : null
           },
+          square_composio: {
+            connected: squareComposioConnected,
+            data: squareComposioDoc.exists() ? squareComposioDoc.data() : null
+          },
           lightspeed_new: {
             connected: false,
             data: null
@@ -319,6 +334,21 @@ export default function IntegrationsPage() {
               data: squareDoc.data() 
             }
           }))
+        }
+        
+        // Check Square Composio integration status
+        const squareComposioDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'square_composio'))
+        if (squareComposioDoc.exists() && squareComposioDoc.data().connected) {
+          console.log('Square Composio integration found:', squareComposioDoc.data())
+          setIntegrations(prev => ({
+            ...prev,
+            square_composio: { 
+              connected: true, 
+              data: squareComposioDoc.data() 
+            }
+          }))
+        } else {
+          console.log('Square Composio integration not connected or not found')
         }
         
         // Check Lightspeed New integration status
@@ -526,6 +556,136 @@ export default function IntegrationsPage() {
       })
     }
   }
+  
+  // Square Composio integration
+  const connectSquareComposio = () => {
+    if (!user?.uid) return
+
+    setConnecting("square_composio")
+
+    try {
+      // Go directly to the Square Composio connect route
+      window.location.href = `/api/auth/square/composio?merchantId=${user.uid}`
+    } catch (error) {
+      console.error("Error redirecting to Square Composio connect route:", error)
+      toast({
+        title: "Connection Failed",
+        description: "Failed to initiate Square Composio connection. Please try again.",
+        variant: "destructive",
+      })
+      setConnecting(null)
+    }
+  }
+
+  // Disconnect Square Composio
+  const disconnectSquareComposio = async () => {
+    if (!user) return
+    
+    try {
+      // Call the deleteConnectedAccounts Firebase function if needed
+      if (integrations.square_composio.data?.connectedAccountId) {
+        const deleteConnectedAccounts = httpsCallable(functions, 'deleteConnectedAccounts');
+        await deleteConnectedAccounts({
+          merchantId: user.uid,
+          slug: 'square_composio',
+          connectedAccountId: integrations.square_composio.data.connectedAccountId
+        });
+      }
+      
+      // Delete the integration from Firestore
+      const integrationRef = doc(db, `merchants/${user.uid}/integrations/square_composio`);
+      await deleteDoc(integrationRef);
+      
+      // Update local state
+      setIntegrations(prev => ({
+        ...prev,
+        square_composio: { connected: false, data: null }
+      }))
+      
+      toast({
+        title: "Disconnected",
+        description: "Your Square Composio account has been disconnected."
+      })
+    } catch (error) {
+      console.error("Error disconnecting Square Composio:", error)
+      toast({
+        title: "Error",
+        description: "Failed to disconnect Square Composio. Please try again.",
+        variant: "destructive"
+      })
+    }
+  }
+
+  // Manual Square Composio status check function
+  const checkSquareComposioStatus = async () => {
+    if (!user?.uid) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to check status",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setConnecting("square_composio");
+    
+    try {
+      const response = await fetch(`/api/auth/square/composio/check-status?merchantId=${user.uid}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update local state based on the response
+        if (data.connection.connected) {
+          setIntegrations(prev => ({
+            ...prev,
+            square_composio: {
+              connected: true,
+              data: {
+                connectedAccountId: data.connection.id,
+                connectionStatus: data.connection.status,
+                provider: 'composio',
+                connectedAt: { toDate: () => new Date() } // Mock timestamp for display
+              }
+            }
+          }));
+          
+          toast({
+            title: "Success",
+            description: "Square Composio connection is active and updated successfully",
+          });
+        } else {
+          setIntegrations(prev => ({
+            ...prev,
+            square_composio: {
+              connected: false,
+              data: null
+            }
+          }));
+          
+          toast({
+            title: "Not Connected",
+            description: "No active Square Composio connection found",
+            variant: "destructive"
+          });
+        }
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Failed to check Square Composio status",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error checking Square Composio status:', error);
+      toast({
+        title: "Error", 
+        description: "Failed to check Square Composio connection status",
+        variant: "destructive"
+      });
+    } finally {
+      setConnecting(null);
+    }
+  };
 
   // Lightspeed New integration
   const connectLightspeedNew = async () => {
@@ -1619,6 +1779,40 @@ export default function IntegrationsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 auto-rows-fr integration-grid">
           {/* Connected Apps First */}
           {[
+            // Square Composio
+            integrations.square_composio.connected && (
+              <Card key="square_composio" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors h-full">
+                <CardHeader className="pb-2 px-3 sm:px-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <img src="/squarepro.png" alt="Square Composio" className="w-6 h-6 sm:w-8 sm:h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium line-clamp-1">Square Composio</CardTitle>
+                        <CardDescription className="text-xs line-clamp-1">Advanced POS Integration</CardDescription>
+                      </div>
+                    </div>
+                    <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0 px-3 sm:px-4 pb-3">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">
+                      <span className="text-green-600 font-medium">Connected</span>
+                    </div>
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      className="rounded-md h-7 px-2 sm:px-3 text-xs"
+                      onClick={disconnectSquareComposio}
+                      disabled={connecting === "square_composio"}
+                    >
+                      {connecting === "square_composio" ? "..." : "Disconnect"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ),
+            
             // Gmail Composio
             integrations.gmail_composio.connected && (
               <Card key="gmail_composio" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors h-full">
@@ -1797,8 +1991,8 @@ export default function IntegrationsPage() {
                     <div className="flex items-center space-x-3">
                       <img src="/squarepro.png" alt="Square" className="w-8 h-8 object-contain" />
                       <div>
-                        <CardTitle className="text-sm font-medium">Square</CardTitle>
-                        <CardDescription className="text-xs">Point of Sale</CardDescription>
+                        <CardTitle className="text-sm font-medium line-clamp-1">Square (Gmail Test)</CardTitle>
+                        <CardDescription className="text-xs line-clamp-1">Using Gmail ID for testing</CardDescription>
                       </div>
                     </div>
                     <CheckCircle className="h-4 w-4 text-green-500" />
@@ -1894,6 +2088,36 @@ export default function IntegrationsPage() {
           
           {/* Not Connected Apps */}
           {[
+            // Square Composio
+            !integrations.square_composio.connected && (
+              <Card key="square_composio" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors h-full">
+                <CardHeader className="pb-2 px-3 sm:px-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <img src="/squarepro.png" alt="Square Composio" className="w-6 h-6 sm:w-8 sm:h-8 object-contain" />
+                      <div>
+                        <CardTitle className="text-sm font-medium line-clamp-1">Square Composio</CardTitle>
+                        <CardDescription className="text-xs line-clamp-1">Advanced POS Integration</CardDescription>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0 px-3 sm:px-4 pb-3">
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-muted-foreground">Connect your Square account with Composio</div>
+                    <Button 
+                      size="sm"
+                      className="rounded-md h-7 px-2 sm:px-3 text-xs"
+                      onClick={connectSquareComposio}
+                      disabled={connecting === "square_composio"}
+                    >
+                      {connecting === "square_composio" ? "..." : "Connect"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ),
+            
             // Gmail Composio
             !integrations.gmail_composio.connected && (
               <Card key="gmail_composio" className="rounded-md border border-gray-200 hover:border-gray-300 transition-colors h-full">
@@ -2052,8 +2276,8 @@ export default function IntegrationsPage() {
                     <div className="flex items-center space-x-3">
                       <img src="/squarepro.png" alt="Square" className="w-8 h-8 object-contain" />
                       <div>
-                        <CardTitle className="text-sm font-medium">Square</CardTitle>
-                        <CardDescription className="text-xs">Point of Sale</CardDescription>
+                        <CardTitle className="text-sm font-medium line-clamp-1">Square (Gmail Test)</CardTitle>
+                        <CardDescription className="text-xs line-clamp-1">Using Gmail ID for testing</CardDescription>
                       </div>
                     </div>
                   </div>

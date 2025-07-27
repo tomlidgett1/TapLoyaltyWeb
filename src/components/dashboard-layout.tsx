@@ -2305,7 +2305,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem asChild>
-                          <Link href="/setup" className="flex items-center">
+                          <Link href="/getstarted" className="flex items-center">
                             <Cog className="h-4 w-4 mr-2" />
                             Setup
                             <ExternalLink className="h-4 w-4 ml-auto text-gray-400" />

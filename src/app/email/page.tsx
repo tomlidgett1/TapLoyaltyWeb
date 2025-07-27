@@ -133,7 +133,7 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import GradientText from "@/components/GradientText"
 import { db } from "@/lib/firebase"
-import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnapshot, updateDoc, setDoc, addDoc, Timestamp, QueryConstraint } from "firebase/firestore"
+import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnapshot, updateDoc, setDoc, addDoc, deleteDoc, Timestamp, QueryConstraint } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
 import { functions } from "@/lib/firebase"
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"
@@ -1639,6 +1639,7 @@ export default function EmailPage() {
   const [gmailEmailAddress, setGmailEmailAddress] = useState<string | null>(null)
   const [emailsLoading, setEmailsLoading] = useState(false)
   const [newEmailIds, setNewEmailIds] = useState<Set<string>>(new Set())
+  const [deletingThreadIds, setDeletingThreadIds] = useState<Set<string>>(new Set())
   const [debugDialogOpen, setDebugDialogOpen] = useState(false)
   const [debugResponse, setDebugResponse] = useState<any>(null)
   const [isExtractingWritingStyle, setIsExtractingWritingStyle] = useState(false)
@@ -3276,11 +3277,99 @@ ${content}`;
     }
   }
 
-  const handleDelete = () => {
-    if (selectedEmail) {
+  const handleDelete = async () => {
+    if (!selectedEmail || !user?.uid) {
+      console.log("No email selected or user not authenticated")
+      return
+    }
+
+    // Show confirmation dialog
+    if (!confirm("Are you sure you want to permanently delete this email? This action cannot be undone.")) {
+      return
+    }
+
+    const threadId = selectedEmail.threadId || selectedEmail.id
+
+    try {
       console.log("Deleting email:", selectedEmail.id)
-      // Here you would typically move the email to trash or delete it
+      
+      // Skip deleting sent messages (they're locally generated and don't exist in Firestore)
+      if (selectedEmail.id.startsWith('sent-')) {
+        console.log("Skipping delete for locally generated sent message:", selectedEmail.id)
+        setSelectedEmail(null)
+        return
+      }
+
+      // Start the delete animation
+      setDeletingThreadIds(prev => new Set(prev).add(threadId))
+      
+      // Wait for animation to complete
+      await new Promise(resolve => setTimeout(resolve, 300))
+
+      // Check if this is the only email in the thread
+      const threadRef = doc(db, 'merchants', user.uid, 'fetchedemails', threadId)
+      const threadDoc = await getDoc(threadRef)
+      
+      if (threadDoc.exists()) {
+        const threadData = threadDoc.data()
+        const chainCollection = collection(db, 'merchants', user.uid, 'fetchedemails', threadId, 'chain')
+        const chainQuery = query(chainCollection)
+        const chainDocs = await getDocs(chainQuery)
+        
+        if (chainDocs.size === 1) {
+          // Only one email in thread - delete the entire thread document
+          console.log("Deleting entire thread as it contains only one email:", threadId)
+          await deleteDoc(threadRef)
+        } else {
+          // Multiple emails in thread - delete only the specific email
+          console.log("Deleting individual email from thread:", selectedEmail.id)
+          const emailRef = doc(db, 'merchants', user.uid, 'fetchedemails', threadId, 'chain', selectedEmail.id)
+          await deleteDoc(emailRef)
+        }
+      } else {
+        // Thread doesn't exist, try to delete the email directly
+        console.log("Thread not found, attempting to delete email directly:", selectedEmail.id)
+        const emailRef = doc(db, 'merchants', user.uid, 'fetchedemails', threadId, 'chain', selectedEmail.id)
+        await deleteDoc(emailRef)
+      }
+      
+      console.log("Successfully deleted email:", selectedEmail.id)
+      toast({
+        title: "Email deleted",
+        description: "The email has been permanently deleted.",
+      })
+      
+      // Clear the selected email
       setSelectedEmail(null)
+      
+      // Remove the deleted thread from the fetched emails immediately
+      setFetchedEmails(prev => prev.filter(email => email.threadId !== threadId))
+      
+      // Remove from deleting state
+      setDeletingThreadIds(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(threadId)
+        return newSet
+      })
+      
+      // Refresh the email list in the background to sync with Firestore
+      setTimeout(() => {
+        fetchGmailEmails()
+      }, 500)
+      
+    } catch (error) {
+      console.error("Error deleting email:", error)
+      // Remove from deleting state if there was an error
+      setDeletingThreadIds(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(threadId)
+        return newSet
+      })
+      toast({
+        title: "Error",
+        description: "Failed to delete the email. Please try again.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -4606,9 +4695,11 @@ ${content}`;
               {emailThreads.map((thread) => (
                 <div 
                   key={thread.threadId}
-                  className={`transition-all duration-500 ease-out ${
+                  className={`transition-all duration-300 ease-out ${
                     newEmailIds.has(thread.threadId) 
                       ? 'animate-in slide-in-from-top-4 fade-in-0 bg-blue-50 border-l-4 border-l-blue-500' 
+                      : deletingThreadIds.has(thread.threadId)
+                      ? 'transform -translate-x-full opacity-0 bg-red-50 border-l-4 border-l-red-500'
                       : ''
                   }`}
                 >
@@ -5155,6 +5246,7 @@ ${content}`;
               threadSummary={threadSummary}
               isSummarizing={isSummarizing}
               closeSummaryDropdownWithAnimation={closeSummaryDropdownWithAnimation}
+              onDelete={handleDelete}
             />
           ) : (
             <EmptyEmailView />
@@ -7600,7 +7692,8 @@ const EmailViewer = ({
   summaryClosing,
   threadSummary,
   isSummarizing,
-  closeSummaryDropdownWithAnimation
+  closeSummaryDropdownWithAnimation,
+  onDelete
 }: {
   email: any;
   merchantData: any;
@@ -7632,6 +7725,7 @@ const EmailViewer = ({
   threadSummary?: string;
   isSummarizing?: boolean;
   closeSummaryDropdownWithAnimation?: () => void;
+  onDelete?: (email: any) => void;
 }) => {
   const [htmlContent, setHtmlContent] = useState<string>('');
   const [replyContent, setReplyContent] = useState('');
@@ -7862,6 +7956,24 @@ const EmailViewer = ({
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Forward</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                      className="h-6 w-6 p-0 hover:bg-gray-100 hover:text-red-600"
+                    onClick={() => onDelete?.(email)}
+                  >
+                      <Trash2 className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Delete</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

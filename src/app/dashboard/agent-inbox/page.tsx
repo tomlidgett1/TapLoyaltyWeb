@@ -766,11 +766,11 @@ export default function AgentInboxPage() {
   const getPriorityDotColor = (priority: string) => {
     switch (priority) {
       case "high":
-        return "bg-red-500"
-      case "medium":
         return "bg-orange-500"
+      case "medium":
+        return "bg-yellow-500"
       case "low":
-        return "bg-blue-500"
+        return "bg-green-500"
       default:
         return "bg-gray-500"
     }
@@ -1110,11 +1110,31 @@ export default function AgentInboxPage() {
                         <p className="text-xs text-gray-500 truncate mt-0.5">
                           {action.shortSummary || action.description}
                         </p>
-                        <div className="flex items-center gap-1.5 mt-2">
-                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                            <div className={cn("h-1.5 w-1.5 rounded-full flex-shrink-0", getPriorityDotColor(action.priority))}></div>
-                            {action.priority.charAt(0).toUpperCase() + action.priority.slice(1)}
-                          </span>
+                                                <div className="flex items-center gap-1 mt-1">
+                          {action.priority && (
+                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium w-fit ${
+                              action.priority === 'high' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
+                              action.priority === 'medium' ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
+                              'bg-green-50 text-green-700 border border-green-200'
+                            }`}>
+                              <div className={`h-1.5 w-1.5 rounded-sm flex-shrink-0 ${getPriorityDotColor(action.priority)}`}></div>
+                              {action.priority.charAt(0).toUpperCase() + action.priority.slice(1)} Priority
+                            </span>
+                          )}
+                          
+                          {action.inquiryType && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-gray-50 text-gray-700 border border-gray-200 w-fit">
+                              <div className="h-1 w-1 bg-blue-500 rounded-full flex-shrink-0"></div>
+                              {action.inquiryType}
+                            </span>
+                          )}
+                          
+                          {action.isOngoingConversation && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-200 w-fit">
+                              <div className="h-1 w-1 bg-purple-500 rounded-full flex-shrink-0"></div>
+                              Thread
+                            </span>
+                          )}
                           
                           <Badge 
                             variant="outline" 
@@ -1127,19 +1147,6 @@ export default function AgentInboxPage() {
                                action.agent === "loyalty" ? "Loyalty" : "AI Agent"}
                             </span>
                           </Badge>
-                          
-                          {action.isOngoingConversation && (
-                            <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-100 text-[10px] rounded-full px-1.5 py-0 h-4">
-                              Thread
-                            </Badge>
-                          )}
-                          
-                          {action.inquiryType && (
-                            <Badge variant="outline" className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200 w-fit">
-                              <div className="h-1.5 w-1.5 bg-purple-500 rounded-full flex-shrink-0"></div>
-                              {action.inquiryType}
-                            </Badge>
-                          )}
                           {/* Debug inquiryType - called elsewhere */}
                           
                           <span className="text-[10px] text-gray-400">

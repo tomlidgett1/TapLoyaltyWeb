@@ -2,7 +2,7 @@
 
 import { SideNav } from "@/components/side-nav"
 import { usePathname } from "next/navigation"
-import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu, Mic, Menu, Pencil, Loader2, ExternalLink, Plug, PanelRight, Send, Activity, Clock, Wrench, Code, Layers } from "lucide-react"
+import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu, Mic, Menu, Pencil, Loader2, ExternalLink, Plug, PanelRight, Send, Activity, Clock, Wrench, Code, Layers, Cog } from "lucide-react"
 import { AuthGuard } from "@/components/auth-guard"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -2239,77 +2239,62 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               {!pathname?.includes('/email') && (
                 <div className="h-16 px-6 border-b border-gray-200 flex items-center justify-between bg-white">
                   <div className="flex items-center gap-4">
-                    <h1 className="text-lg font-semibold text-gray-900">{getPageTitle()}</h1>
+                    <h1 className="text-lg font-medium text-gray-900">{getPageTitle()}</h1>
                   </div>
                   
                   <div className="flex items-center gap-3">
-                    {/* Get Started Button */}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-sm"
-                      onClick={() => setShowTapAgentSheet(true)}
-                    >
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Get Started
-                    </Button>
-                    
-                    {/* Quick Note Button */}
-                    <div className="relative" ref={quickNoteContainerRef}>
-                      <DropdownMenu open={quickNoteOpen} onOpenChange={setQuickNoteOpen}>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-sm"
-                          >
-                            <Pencil className="h-4 w-4 mr-2" />
-                            Note
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-80 p-0">
-                          <div className="p-4">
-                            <div className="mb-3">
-                              <h4 className="font-medium text-sm">Quick Note</h4>
-                              <p className="text-xs text-gray-500 mt-1">Jot down something important</p>
-                            </div>
-                            <Textarea
-                              ref={quickNoteInputRef}
-                              value={quickNoteText}
-                              onChange={(e) => setQuickNoteText(e.target.value)}
-                              placeholder="Write your note here..."
-                              className="min-h-[100px] text-sm"
-                              onKeyDown={handleQuickNoteKeyDown}
-                            />
-                            <div className="flex justify-between items-center mt-3">
-                              <div className="text-xs text-gray-400">
-                                Press Cmd+Enter to save
-                              </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => {
-                                    setQuickNoteText('')
-                                    setQuickNoteOpen(false)
-                                  }}
-                                >
-                                  Cancel
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  onClick={saveQuickNote}
-                                  disabled={!quickNoteText.trim() || isSavingQuickNote}
-                                >
-                                  {isSavingQuickNote && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-                                  Save
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
+                    {/* Setup Dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:ring-0 focus:ring-offset-0"
+                        >
+                          <Wrench className="h-4 w-4 mr-1.5" />
+                          Setup
+                          <ChevronDown className="h-3 w-3 ml-1.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="rounded-2xl">
+                        <DropdownMenuLabel>Things to do</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => setShowTapAgentSheet(true)}>
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          Get Started with AI
+                          <Check className="h-4 w-4 ml-auto text-green-500" />
+                        </DropdownMenuItem>
+                        <DropdownMenuItem>
+                          <Plug className="h-4 w-4 mr-2" />
+                          Connect Integrations
+                          <Check className="h-4 w-4 ml-auto text-green-500" />
+                        </DropdownMenuItem>
+                        <DropdownMenuItem>
+                          <Gift className="h-4 w-4 mr-2" />
+                          Create Rewards
+                        </DropdownMenuItem>
+                        <DropdownMenuItem>
+                          <Target className="h-4 w-4 mr-2" />
+                          Set Up Rules
+                        </DropdownMenuItem>
+                        <DropdownMenuItem>
+                          <BarChart className="h-4 w-4 mr-2" />
+                          Configure Analytics
+                        </DropdownMenuItem>
+                        <DropdownMenuItem>
+                          <Cog className="h-4 w-4 mr-2" />
+                          Account Settings
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem asChild>
+                          <Link href="/setup" className="flex items-center">
+                            <Cog className="h-4 w-4 mr-2" />
+                            Setup
+                            <ExternalLink className="h-4 w-4 ml-auto text-gray-400" />
+                          </Link>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     
                     {/* Notifications */}
                     <DropdownMenu>

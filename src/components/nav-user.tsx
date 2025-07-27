@@ -122,7 +122,7 @@ export function NavUser({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="w-56 rounded-lg ml-4"
+        className="w-56 rounded-2xl ml-4"
         side="top"
         align="end"
         sideOffset={4}

@@ -68,7 +68,7 @@ export function NavCreate({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="w-56 rounded-lg"
+        className="w-56 rounded-2xl"
         side={isCollapsed ? "right" : "bottom"}
         align="start"
         sideOffset={4}

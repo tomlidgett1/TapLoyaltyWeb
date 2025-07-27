@@ -56,7 +56,9 @@ import {
   Repeat,
   Loader2,
   Heart,
-  MoreVertical
+  MoreVertical,
+  RefreshCw,
+  MailIcon
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -64,7 +66,7 @@ import { format, formatDistanceToNow } from "date-fns"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs, where, Timestamp, onSnapshot, addDoc, updateDoc } from "firebase/firestore"
+import { doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs, where, Timestamp, onSnapshot, addDoc, updateDoc, QueryConstraint } from "firebase/firestore"
 import { toast } from "@/components/ui/use-toast"
 import { TapAiButton } from "@/components/tap-ai-button"
 import { PageHeader } from "@/components/page-header"
@@ -260,6 +262,13 @@ export default function DashboardPage() {
   const [isAdvancedActivity, setIsAdvancedActivity] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
   const [pageVisible, setPageVisible] = useState(false)
+  
+  // Agent inbox states
+  const [agentTasks, setAgentTasks] = useState<any[]>([])
+  const [selectedAgentTask, setSelectedAgentTask] = useState<any>(null)
+  const [agentTasksLoading, setAgentTasksLoading] = useState(false)
+  const [agentTaskStatusFilter, setAgentTaskStatusFilter] = useState<"pending" | "completed" | "rejected">("pending")
+  const [agentTaskDetailOpen, setAgentTaskDetailOpen] = useState(false)
 
 
   const [metricsLoading, setMetricsLoading] = useState(false)
@@ -499,6 +508,13 @@ export default function DashboardPage() {
   useEffect(() => {
     if (user?.uid) {
       loadMetricPreferences()
+    }
+  }, [user?.uid])
+  
+  // Fetch agent tasks when user is available
+  useEffect(() => {
+    if (user?.uid) {
+      fetchAgentTasks()
     }
   }, [user?.uid])
 
@@ -1350,6 +1366,191 @@ export default function DashboardPage() {
         return { start: defaultYesterdayStart, end: defaultYesterdayEnd }
     }
   }
+  
+  // Format Melbourne time
+  const formatMelbourneTime = (timestamp: any, fallback = 'Unknown date') => {
+    if (!timestamp) return fallback;
+    
+    try {
+      // Convert Firestore timestamp to Date if needed
+      let dateToFormat;
+      if (timestamp.__time__) {
+        dateToFormat = new Date(timestamp.__time__);
+      } else if (typeof timestamp.toDate === 'function') {
+        dateToFormat = timestamp.toDate();
+      } else if (timestamp instanceof Date) {
+        dateToFormat = timestamp;
+      } else if (typeof timestamp === 'number') {
+        dateToFormat = new Date(timestamp);
+      } else if (typeof timestamp === 'string') {
+        dateToFormat = new Date(timestamp);
+      } else {
+        return fallback;
+      }
+      
+      // Format the date in Melbourne time
+      return format(dateToFormat, 'MMM d, yyyy h:mm a');
+    } catch (e) {
+      console.error('Error formatting Melbourne time:', timestamp, e);
+      return fallback;
+    }
+  };
+  
+  // Fetch agent tasks from Firestore
+  const fetchAgentTasks = async (statusFilter: "pending" | "completed" | "rejected" = agentTaskStatusFilter) => {
+    if (!user?.uid) return;
+    
+    try {
+      setAgentTasksLoading(true);
+      console.log("Fetching agent tasks from Firestore for merchant:", user.uid, "with status filter:", statusFilter);
+      
+      const agentTasksRef = collection(db, 'merchants', user.uid, 'agentinbox');
+      
+      // Create query constraints based on status filter
+      let constraints: QueryConstraint[] = [
+        limit(50) // Limit to 50 tasks
+      ];
+      
+      // Add agentinbox filter to only show tasks with agentinbox = true
+      constraints.push(where('agentinbox', '==', true));
+      
+      if (statusFilter === "pending") {
+        // For the Inbox tab, we want to show all tasks that aren't completed or rejected
+        // But we can't directly check for != "approved" in Firestore
+        // So we'll fetch all tasks and filter client-side
+        // No additional constraint needed for inbox view
+      } else if (statusFilter === "completed") {
+        // Completed: Show only approved/sent tasks
+        constraints.push(where('status', '==', "approved"));
+      } else if (statusFilter === "rejected") {
+        // Rejected: Show only rejected tasks
+        constraints.push(where('status', '==', "rejected"));
+      }
+      
+      const agentTasksQuery = query(agentTasksRef, ...constraints);
+      const agentTasksSnapshot = await getDocs(agentTasksQuery);
+      console.log(`📊 Found ${agentTasksSnapshot.size} agent tasks with status: ${statusFilter} and agentinbox: true`);
+      
+      let tasks = agentTasksSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        // Ensure status is defined for filtering
+        status: doc.data().status || "pending"
+      }));
+      
+      // Apply client-side filtering for inbox tab
+      if (statusFilter === "pending") {
+        // For inbox tab, show all tasks that aren't approved/completed or rejected
+        tasks = tasks.filter(task => task.status !== "approved" && task.status !== "rejected");
+        console.log(`📊 Filtered to ${tasks.length} pending tasks for inbox tab`);
+      }
+      
+      // Sort tasks by timestamp (handle both timestamp and createdAt fields)
+      tasks.sort((a, b) => {
+        const getDate = (task: any) => {
+          if (task.timestamp) {
+            return task.timestamp.__time__ ? new Date(task.timestamp.__time__) : task.timestamp.toDate();
+          }
+          if (task.createdAt) {
+            return task.createdAt.__time__ ? new Date(task.createdAt.__time__) : task.createdAt.toDate();
+          }
+          return new Date(0); // Fallback for tasks without timestamp
+        };
+        
+        const dateA = getDate(a);
+        const dateB = getDate(b);
+        return dateB.getTime() - dateA.getTime(); // Sort newest first
+      });
+      
+      setAgentTasks(tasks);
+      setAgentTaskStatusFilter(statusFilter);
+    } catch (error) {
+      console.error("Error fetching agent tasks:", error);
+    } finally {
+      setAgentTasksLoading(false);
+    }
+  };
+  
+  // Handle agent task selection
+  const handleAgentTaskSelect = (task: any) => {
+    console.log("Selected agent task:", task.id);
+    setSelectedAgentTask(task);
+    setAgentTaskDetailOpen(true);
+  };
+  
+  // Handle agent task acknowledgment
+  const handleAcknowledgeAgentTask = async () => {
+    if (!user?.uid || !selectedAgentTask) return;
+    
+    try {
+      // Update the agent task in Firestore to mark it as acknowledged
+      const agentTaskRef = doc(db, `merchants/${user.uid}/agentinbox/${selectedAgentTask.id}`);
+      await updateDoc(agentTaskRef, {
+        status: "approved",
+        acknowledgedAt: Timestamp.now(),
+        acknowledgedBy: user.uid
+      });
+      
+      // Show success message
+      toast({
+        title: "Task Acknowledged",
+        description: "The task has been marked as completed",
+      });
+      
+      // Refresh the current view to update the task list
+      fetchAgentTasks(agentTaskStatusFilter);
+      
+      // Close the detail view
+      setAgentTaskDetailOpen(false);
+      setSelectedAgentTask(null);
+      
+    } catch (error) {
+      console.error("Error acknowledging agent task:", error);
+      
+      toast({
+        title: "Error",
+        description: "Failed to acknowledge task. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle agent task rejection
+  const handleRejectAgentTask = async () => {
+    if (!user?.uid || !selectedAgentTask) return;
+    
+    try {
+      // Update the agent task in Firestore to mark it as rejected
+      const agentTaskRef = doc(db, `merchants/${user.uid}/agentinbox/${selectedAgentTask.id}`);
+      await updateDoc(agentTaskRef, {
+        status: "rejected",
+        rejectedAt: Timestamp.now(),
+        rejectedBy: user.uid
+      });
+      
+      // Show success message
+      toast({
+        title: "Task Rejected",
+        description: "The task has been marked as rejected",
+      });
+      
+      // Refresh the current view to update the task list
+      fetchAgentTasks(agentTaskStatusFilter);
+      
+      // Close the detail view
+      setAgentTaskDetailOpen(false);
+      setSelectedAgentTask(null);
+      
+    } catch (error) {
+      console.error("Error rejecting agent task:", error);
+      
+      toast({
+        title: "Error",
+        description: "Failed to reject task. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   useEffect(() => {
     const fetchRecentActivity = async () => {
@@ -4839,7 +5040,7 @@ export default function DashboardPage() {
               {/* Activity and Analytics Section for Loyalty */}
           <div className={cn(
             "grid grid-cols-1 gap-6 overflow-hidden transition-all duration-500 ease-in-out",
-            isAdvancedActivity ? "md:grid-cols-[2fr_1fr]" : "md:grid-cols-[1.2fr_0.9fr_0.9fr]"
+            isAdvancedActivity ? "md:grid-cols-[2fr_1fr]" : "md:grid-cols-[1.2fr_0.9fr]"
           )}>
             {/* Recent Activity */}
                 <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
@@ -5043,170 +5244,104 @@ export default function DashboardPage() {
               </div>
             </div>
 
-                {/* Metrics */}
-                {!isAdvancedActivity && (
-                <div className="bg-white rounded-md border border-gray-200 overflow-hidden relative">
-                  {/* Loading bar at top */}
-                  {(metricsLoading || metricsCompleting) && (
-                    <div className="absolute top-0 left-0 right-0 h-1 bg-gray-100 overflow-hidden">
-                                             <div className={`h-full bg-[#007AFF] origin-left ${
-                         metricsCompleting 
-                           ? 'animate-[loading-complete_0.5s_ease-out_forwards]' 
-                           : 'animate-[loading-to-75_0.8s_ease-out_forwards,loading-pulse_2s_ease-in-out_infinite]'
-                       }`}></div>
-                    </div>
-                  )}
-                  
-                  <div className="px-6 py-3.5 border-b border-gray-200 bg-gray-50">
-                <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-medium text-gray-900">Metrics</h3>
-                      {/* Metrics Tab and Filter Container */}
-                      <div className="flex items-center gap-4">
-                        <button
-                          className={cn(
-                            "flex items-center gap-1 text-xs font-medium transition-colors",
-                            metricsTab === 'platform'
-                              ? "text-blue-600"
-                              : "text-gray-600 hover:text-gray-800"
-                          )}
-                          onClick={() => handleMetricsTabChange('platform')}
-                        >
-                          <BarChart3 className="h-3 w-3" strokeWidth={2.75} />
-                          Platform
-                        </button>
-                        <button
-                          className={cn(
-                            "flex items-center gap-1 text-xs font-medium transition-colors",
-                            metricsTab === 'loyalty'
-                              ? "text-blue-600"
-                              : "text-gray-600 hover:text-gray-800"
-                          )}
-                          onClick={() => handleMetricsTabChange('loyalty')}
-                        >
-                          <Gift className="h-3 w-3" strokeWidth={2.75} />
-                          Loyalty
-                        </button>
-
-                  </div>
+                {/* Agent Inbox */}
+                <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-medium text-gray-900">Agent Inbox</h3>
+                      <Link href="/email" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors">
+                        View all
+                        <ChevronRight className="h-3 w-3" strokeWidth={2.75} />
+                      </Link>
                     </div>
                   </div>
-                  <div className={`overflow-x-auto tab-content-transition ${
-                    isMetricsTransitioning ? 'tab-content-fade-out' : 'tab-content-fade-in'
-                  }`}>
-                    <table className="w-full">
-                      <tbody className="divide-y divide-gray-100">
-                        {metricsTab === 'platform' ? (
-                          <>
-                            <tr className="hover:bg-gray-100/50 transition-colors">
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-3">
-                                  <Eye className="h-4 w-4 text-blue-500" strokeWidth={2.75} />
-                                  <span className="text-sm font-medium text-gray-800">Store Views</span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-800">{metrics.totalStoreViews}</span>
-                              </td>
-                            </tr>
-                            <tr className="hover:bg-gray-100/50 transition-colors">
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-3">
-                                  <Gift className="h-4 w-4 text-blue-500" strokeWidth={2.75} />
-                                  <span className="text-sm font-medium text-gray-800">Reward Views</span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-800">{metrics.totalRewardViews}</span>
-                              </td>
-                            </tr>
-                            <tr className="hover:bg-gray-100/50 transition-colors">
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-3">
-                                  <ShoppingCart className="h-4 w-4 text-blue-500" strokeWidth={2.75} />
-                                  <span className="text-sm font-medium text-gray-800">Transactions</span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-800">{metrics.totalTransactions}</span>
-                              </td>
-                            </tr>
-
-                          </>
-                        ) : (
-                          <>
-                            <tr className="hover:bg-gray-100/50 transition-colors">
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-3">
-                                  <Users className="h-4 w-4 text-blue-500" strokeWidth={2.75} />
-                                  <span className="text-sm font-medium text-gray-800">Total Customers</span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-800">{metrics.totalCustomers}</span>
-                              </td>
-                            </tr>
-                            <tr className="hover:bg-gray-100/50 transition-colors">
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-3">
-                                  <Users className="h-4 w-4 text-blue-500" strokeWidth={2.75} />
-                                  <span className="text-sm font-medium text-gray-800">Active Customers</span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-800">{metrics.activeCustomers}</span>
-                              </td>
-                            </tr>
-                            <tr className="hover:bg-gray-100/50 transition-colors">
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-3">
-                                  <Star className="h-4 w-4 text-blue-500" strokeWidth={2.75} />
-                                  <span className="text-sm font-medium text-gray-800">Points Issued</span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-800">{metrics.totalPointsIssued.toLocaleString()}</span>
-                              </td>
-                            </tr>
-                            <tr className="hover:bg-gray-100/50 transition-colors">
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-3">
-                                  <Gift className="h-4 w-4 text-blue-500" strokeWidth={2.75} />
-                                  <span className="text-sm font-medium text-gray-800">Total Redemptions</span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-800">{metrics.totalRedemptions}</span>
-                              </td>
-                            </tr>
-                            <tr className="hover:bg-gray-100/50 transition-colors">
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-3">
-                                  <Percent className="h-4 w-4 text-blue-500" strokeWidth={2.75} />
-                                  <span className="text-sm font-medium text-gray-800">Redemption Rate</span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-800">{metrics.redemptionRate}%</span>
-                              </td>
-                            </tr>
-                            <tr className="hover:bg-gray-100/50 transition-colors">
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-3">
-                                  <Zap className="h-4 w-4 text-blue-500" strokeWidth={2.75} />
-                                  <span className="text-sm font-medium text-gray-800">Active Rewards</span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <span className="text-sm font-medium text-gray-800">{metrics.activeRewards}</span>
-                              </td>
-                            </tr>
-                          </>
-                        )}
-                      </tbody>
-                    </table>
+                  <div className="px-4 py-3 border-b border-gray-100">
+                    <div className="flex space-x-1">
+                      <Button
+                        variant={agentTaskStatusFilter === "pending" ? "default" : "outline"}
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => fetchAgentTasks("pending")}
+                      >
+                        Pending
+                      </Button>
+                      <Button
+                        variant={agentTaskStatusFilter === "completed" ? "default" : "outline"}
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => fetchAgentTasks("completed")}
+                      >
+                        Completed
+                      </Button>
+                      <Button
+                        variant={agentTaskStatusFilter === "rejected" ? "default" : "outline"}
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => fetchAgentTasks("rejected")}
+                      >
+                        Rejected
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="max-h-[350px] overflow-y-auto scrollbar-subtle">
+                    {agentTasksLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></div>
+                      </div>
+                    ) : agentTasks.length === 0 ? (
+                      <div className="py-8 text-center">
+                        <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
+                          <Inbox className="h-6 w-6 text-gray-400" strokeWidth={2.75} />
+                        </div>
+                        <p className="text-sm font-medium text-gray-700">No tasks</p>
+                        <p className="text-xs text-gray-500 mt-1">There are no {agentTaskStatusFilter} tasks in your agent inbox</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 p-3">
+                        {agentTasks.map((task) => (
+                          <div
+                            key={task.id}
+                            className={cn(
+                              "p-3 border border-gray-200 rounded-md cursor-pointer transition-colors",
+                              selectedAgentTask?.id === task.id ? "bg-blue-50 border-blue-200" : "bg-white hover:bg-gray-50"
+                            )}
+                            onClick={() => handleAgentTaskSelect(task)}
+                          >
+                            <div className="flex justify-between items-start mb-1">
+                              <div className="flex items-center">
+                                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                  <div className={`h-1.5 w-1.5 ${
+                                    task.type === 'customerservice' ? 'bg-blue-500' : 
+                                    task.type === 'agent' ? 'bg-purple-500' : 
+                                    'bg-gray-500'
+                                  } rounded-full flex-shrink-0`}></div>
+                                  {task.type === 'customerservice' ? 'Customer Service' : 
+                                   task.type === 'agent' ? 'Agent Task' : 
+                                   'Task'}
+                                </span>
+                              </div>
+                              <span className="text-xs text-gray-500">
+                                {task.timestamp || task.createdAt ? 
+                                  formatDistanceToNow((task.timestamp?.__time__ ? new Date(task.timestamp.__time__) : 
+                                                     task.timestamp?.toDate ? task.timestamp.toDate() : 
+                                                     task.createdAt?.__time__ ? new Date(task.createdAt.__time__) : 
+                                                     task.createdAt?.toDate ? task.createdAt.toDate() : 
+                                                     new Date()), { addSuffix: true }) : 
+                                  'Unknown time'}
+                              </span>
+                            </div>
+                            <h4 className="font-medium text-sm text-gray-900 mb-1 truncate">
+                              {task.emailTitle || task.shortSummary || 'Untitled Task'}
+                            </h4>
+                            <p className="text-xs text-gray-600 line-clamp-2">
+                              {task.conversationSummary || task.shortSummary || 'No description available'}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
-                )}
               </div>
 
               {/* Live Programs and Live Rewards Section */}
@@ -7607,6 +7742,131 @@ export default function DashboardPage() {
       <CreateManualProgramDialog open={createManualProgramOpen} onOpenChange={setCreateManualProgramOpen} />
       <CreateBannerDialog open={createBannerDialogOpen} onOpenChange={setCreateBannerDialogOpen} />
       <CreateRecurringRewardDialog open={createRecurringRewardOpen} onOpenChange={setCreateRecurringRewardOpen} />
+      
+      {/* Agent Task Detail Sheet */}
+      <Sheet open={agentTaskDetailOpen} onOpenChange={setAgentTaskDetailOpen}>
+        <SheetContent className="w-full sm:max-w-lg md:max-w-xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Task Details</SheetTitle>
+            <SheetDescription>
+              {selectedAgentTask?.type === 'customerservice' ? 'Customer Service Request' : 
+               selectedAgentTask?.type === 'agent' ? 'Agent Task' : 
+               'Task'}
+            </SheetDescription>
+          </SheetHeader>
+          
+          {selectedAgentTask && (
+            <div className="mt-6 space-y-6">
+              <div className="space-y-2">
+                <h3 className="text-base font-medium">{selectedAgentTask.emailTitle || selectedAgentTask.shortSummary || 'Untitled Task'}</h3>
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Clock className="h-4 w-4" />
+                  <span>
+                    {selectedAgentTask.timestamp || selectedAgentTask.createdAt ? 
+                      formatMelbourneTime(
+                        selectedAgentTask.timestamp || selectedAgentTask.createdAt, 
+                        'Unknown time'
+                      ) : 
+                      'Unknown time'}
+                  </span>
+                </div>
+              </div>
+              
+              <Separator />
+              
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium">Summary</h4>
+                <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                  {selectedAgentTask.conversationSummary || selectedAgentTask.shortSummary || 'No summary available'}
+                </p>
+              </div>
+              
+              {selectedAgentTask.response && (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium">Suggested Response</h4>
+                    <div className="text-sm text-gray-600 p-3 bg-gray-50 rounded-md border border-gray-200 whitespace-pre-wrap">
+                      {selectedAgentTask.response}
+                    </div>
+                  </div>
+                </>
+              )}
+              
+              <Separator />
+              
+              <div className="flex justify-end gap-2">
+                {agentTaskStatusFilter === "pending" && (
+                  <>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setAgentTaskDetailOpen(false);
+                        setSelectedAgentTask(null);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      onClick={handleRejectAgentTask}
+                    >
+                      Reject
+                    </Button>
+                    <Button 
+                      onClick={handleAcknowledgeAgentTask}
+                    >
+                      Acknowledge
+                    </Button>
+                  </>
+                )}
+                
+                {agentTaskStatusFilter === "rejected" && (
+                  <Button 
+                    variant="outline" 
+                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                    onClick={() => {
+                      if (selectedAgentTask && user?.uid) {
+                        const agentTaskRef = doc(db, `merchants/${user.uid}/agentinbox/${selectedAgentTask.id}`);
+                        updateDoc(agentTaskRef, {
+                          status: "pending",
+                          rejectedAt: null
+                        }).then(() => {
+                          toast({
+                            title: "Task restored",
+                            description: "The task has been moved back to pending",
+                          });
+                          // Refresh the current view
+                          fetchAgentTasks(agentTaskStatusFilter);
+                          // Close the detail view
+                          setAgentTaskDetailOpen(false);
+                          setSelectedAgentTask(null);
+                        });
+                      }
+                    }}
+                  >
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    Restore to Pending
+                  </Button>
+                )}
+                
+                {agentTaskStatusFilter === "completed" && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setAgentTaskDetailOpen(false);
+                      setSelectedAgentTask(null);
+                    }}
+                  >
+                    Close
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
       
       {/* Add Metrics Popup */}
       {addMetricsPopupOpen && (

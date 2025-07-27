@@ -152,11 +152,6 @@ const navItems: NavItem[] = [
     icon: RiRobot3Line,
   },
   {
-    title: "Inbox",
-    href: "/dashboard/agent-inbox",
-    icon: Inbox,
-  },
-  {
     title: "Email",
     href: "/email",
     icon: Mail

@@ -5171,20 +5171,8 @@ ${content}`;
                           </div>
                           <div className="text-sm truncate text-gray-700 flex items-center gap-1.5">
                                                           {task.type === 'agent' ? (
-                              <span className="relative h-4 w-4 flex-shrink-0 mt-1">
-                                <span className="absolute inset-0 rounded-full" style={{ 
-                                  background: 'linear-gradient(90deg, #3b82f6 0%, #f97316 100%)',
-                                  padding: '1.5px',
-                                }}>
-                                  <span className="h-full w-full bg-white rounded-full flex items-center justify-center">
-                                    <RiRobot3Line className="h-3 w-3" style={{ 
-                                      background: 'linear-gradient(90deg, #3b82f6 0%, #f97316 100%)',
-                                      WebkitBackgroundClip: 'text',
-                                      WebkitTextFillColor: 'transparent',
-                                      backgroundClip: 'text'
-                                    }} />
-                                  </span>
-                                </span>
+                              <span className="h-4 w-4 flex-shrink-0 mt-1">
+                                <RiRobot3Line className="h-3.5 w-3.5 text-gray-900" />
                               </span>
                                                           ) : task.type === 'customerservice' ? (
                               <span className="relative h-4 w-4 flex-shrink-0 mt-1">
@@ -5210,22 +5198,33 @@ ${content}`;
                               }
                             </span>
                           </div>
-                          <div className="text-xs truncate text-gray-600 flex items-center gap-1.5 mt-1">
-                            {task.inquiryType && (
-                              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                                <div className="h-1.5 w-1.5 bg-gray-500 rounded-full flex-shrink-0"></div>
-                                {task.inquiryType}
-                              </span>
-                            )}
+                          <div className="flex items-center gap-1 mt-1">
                             {task.priority && (
-                              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                                <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium w-fit ${
+                                task.priority === 'critical' ? 'bg-red-50 text-red-700 border border-red-200' :
+                                task.priority === 'high' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
+                                task.priority === 'medium' ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
+                                'bg-green-50 text-green-700 border border-green-200'
+                              }`}>
+                                <div className={`h-1.5 w-1.5 rounded-sm flex-shrink-0 ${
                                   task.priority === 'critical' ? 'bg-red-500' :
                                   task.priority === 'high' ? 'bg-orange-500' :
                                   task.priority === 'medium' ? 'bg-yellow-500' :
                                   'bg-green-500'
                                 }`}></div>
                                 {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)} Priority
+                              </span>
+                            )}
+                            {task.inquiryType && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-gray-50 text-gray-700 border border-gray-200 w-fit">
+                                <div className="h-1 w-1 bg-blue-500 rounded-full flex-shrink-0"></div>
+                                {task.inquiryType}
+                              </span>
+                            )}
+                            {task.isOngoingConversation && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-200 w-fit">
+                                <div className="h-1 w-1 bg-purple-500 rounded-full flex-shrink-0"></div>
+                                Thread
                               </span>
                             )}
                           </div>
@@ -5321,14 +5320,19 @@ ${content}`;
                       {/* All badges moved below the title */}
                       <div className="flex flex-wrap gap-2 mb-1">
                       {selectedAgentTask.classification?.isCustomerInquiry && (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                            <div className="h-1.5 w-1.5 bg-gray-500 rounded-full flex-shrink-0"></div>
+                          <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-gray-50 text-gray-700 border border-gray-200 w-fit">
+                            <div className="h-1 w-1 bg-gray-500 rounded-full flex-shrink-0"></div>
                           Customer Inquiry
                         </span>
                       )}
                         {selectedAgentTask.priority && (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                            <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium w-fit ${
+                            selectedAgentTask.priority === 'critical' ? 'bg-red-50 text-red-700 border border-red-200' :
+                            selectedAgentTask.priority === 'high' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
+                            selectedAgentTask.priority === 'medium' ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
+                            'bg-green-50 text-green-700 border border-green-200'
+                          }`}>
+                            <div className={`h-1.5 w-1.5 rounded-sm flex-shrink-0 ${
                               selectedAgentTask.priority === 'critical' ? 'bg-red-500' :
                               selectedAgentTask.priority === 'high' ? 'bg-orange-500' :
                               selectedAgentTask.priority === 'medium' ? 'bg-yellow-500' :
@@ -5338,20 +5342,20 @@ ${content}`;
                           </span>
                         )}
                       {selectedAgentTask.isOngoingConversation && (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                            <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+                          <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-200 w-fit">
+                            <div className="h-1 w-1 bg-purple-500 rounded-full flex-shrink-0"></div>
                           Ongoing Thread
                           </span>
                       )}
                       {agentTaskStatusFilter === "completed" && (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                            <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                          <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-green-50 text-green-700 border border-green-200 w-fit">
+                            <div className="h-1 w-1 bg-green-500 rounded-full flex-shrink-0"></div>
                           Completed
                         </span>
                       )}
                       {agentTaskStatusFilter === "rejected" && (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                            <div className="h-1.5 w-1.5 bg-red-500 rounded-full flex-shrink-0"></div>
+                          <span className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-red-50 text-red-700 border border-red-200 w-fit">
+                            <div className="h-1 w-1 bg-red-500 rounded-full flex-shrink-0"></div>
                           Rejected
                         </span>
                       )}
@@ -5395,8 +5399,8 @@ ${content}`;
                   
                   {/* Content with Tabs */}
                   <div className="flex-1 overflow-hidden flex flex-col">
-                                          {/* Tabs */}
-                    <div className="px-4 pt-4 pb-0">
+                    {/* Tabs */}
+                    <div className="px-4 pt-4 pb-2">
                       <div className="flex items-center bg-gray-100 p-0.5 rounded-xl w-fit">
                         <button
                           onClick={() => handleTabChange("response")}
@@ -5437,32 +5441,33 @@ ${content}`;
                             {/* Agent Response Column */}
                             {(selectedAgentTask.finalMessage || selectedAgentTask.agentResponse || selectedAgentTask.response) && (
                               <div 
-                                className="rounded-xl h-full relative"
+                                className={`rounded-xl h-full relative ${selectedAgentTask.type === 'customerservice' ? 'p-0.5' : ''}`}
                                 style={{ 
-                                  boxShadow: '0 2px 8px -1px rgba(0, 0, 0, 0.1), 0 1px 4px -1px rgba(0, 0, 0, 0.06)'
+                                  boxShadow: selectedAgentTask.type === 'agent' 
+                                    ? 'none'
+                                    : '0 2px 8px -1px rgba(0, 0, 0, 0.1), 0 1px 4px -1px rgba(0, 0, 0, 0.06)',
+                                  background: selectedAgentTask.type === 'customerservice' 
+                                    ? 'linear-gradient(90deg, #f97316 0%, #3b82f6 100%)'
+                                    : 'transparent'
                                 }}
                               >
-                                {/* Gradient border that covers the full border including corners */}
-                                <div className="absolute inset-0 rounded-xl" style={{ 
-                                  background: 'linear-gradient(90deg, #f97316 0%, #3b82f6 100%)',
-                                  padding: '3px',
-                                  borderRadius: '0.75rem',
-                                  WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-                                  WebkitMaskComposite: 'xor',
-                                  maskComposite: 'exclude',
-                                }}></div>
-                                
-                                <div className="bg-white p-4 rounded-lg h-full flex flex-col relative z-10">
+                                <div 
+                                  className={`p-4 h-full flex flex-col ${selectedAgentTask.type === 'customerservice' ? 'rounded-[11px] bg-white' : 'rounded-xl'}`}
+                                  style={{
+                                    border: selectedAgentTask.type === 'agent' ? '1px solid #e5e7eb' : 'none',
+                                    background: 'white'
+                                  }}
+                                >
                                   {selectedAgentTask.type === 'agent' || selectedAgentTask.type === 'customerservice' ? (
                                     <div className="mb-4">
                                       <h3 className="text-base font-semibold text-gray-800 mb-2">Agent Response</h3>
-                                      {selectedAgentTask.status === 'approved' && (
+                                      {selectedAgentTask.status === 'approved' && agentTaskStatusFilter === "completed" && (
                                         <div className="flex items-center gap-2 mb-2 text-green-600 text-sm">
                                           <CheckCircle className="h-4 w-4" />
                                           <span>This task has been completed</span>
                                         </div>
                                       )}
-                                      <div className="h-px bg-gray-200 w-full my-3"></div>
+                                      <div className="h-px bg-gray-200 w-[calc(100%+2rem)] -mx-4 my-3"></div>
                                     </div>
                                   ) : (
                                   <div className="flex items-center justify-between mb-3">
@@ -5733,18 +5738,19 @@ ${content}`;
                             {/* Original Email Column - only show for customerservice type tasks */}
                             {selectedAgentTask.originalEmail?.htmlContent && selectedAgentTask.type !== 'agent' && (
                               <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm h-full flex flex-col">
-                                                                {selectedAgentTask.type === 'customerservice' ? (
+                                {selectedAgentTask.type === 'customerservice' ? (
                                   <div className="mb-4">
-                                    <div className="flex items-center mb-2">
+                                    <div className="flex items-center justify-between mb-2">
                                       <h3 className="text-base font-semibold text-gray-800">Original Email</h3>
                                       {selectedAgentTask.senderEmail && (
-                                        <div className="text-sm text-blue-600 font-medium flex items-center gap-1.5 ml-3">
-                                          <Mail className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+                                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                          <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+                                          <Mail className="h-3 w-3 text-gray-500 flex-shrink-0" />
                                           {selectedAgentTask.senderEmail}
-                                        </div>
+                                        </span>
                                       )}
                                     </div>
-                                    <div className="h-px bg-gray-200 w-full my-3"></div>
+                                    <div className="h-px bg-gray-200 w-[calc(100%+2rem)] -mx-4 my-3"></div>
                                   </div>
                                 ) : (
                                 <div className="flex items-center mb-2">
@@ -6024,7 +6030,7 @@ ${content}`;
                         <div className="flex gap-2">
                           <Button 
                             size="sm" 
-                            className="text-xs bg-blue-500 hover:bg-blue-600"
+                            className="text-xs bg-blue-600 hover:bg-blue-700 text-white"
                             onClick={handleSendAgentResponse}
                             disabled={isSendingAgentResponse || !(selectedAgentTask?.finalMessage || selectedAgentTask?.agentResponse || selectedAgentTask?.response)}
                           >
@@ -6075,7 +6081,7 @@ ${content}`;
                       <div className="w-full flex justify-center">
                         <span className="text-xs text-gray-500 flex items-center">
                           <CheckCircle className="h-3.5 w-3.5 text-green-500 mr-1.5" />
-                          {selectedAgentTask.sentAt ? (
+                          {selectedAgentTask.sentAt && agentTaskStatusFilter === "completed" ? (
                             <>
                               Completed on {formatMelbourneTime(
                                 selectedAgentTask.sentAt.__time__ 
@@ -6083,8 +6089,10 @@ ${content}`;
                                   : selectedAgentTask.sentAt.toDate()
                               )}
                             </>
-                          ) : (
+                          ) : agentTaskStatusFilter === "completed" ? (
                             <>This task has been completed</>
+                          ) : (
+                            <>Task pending</>
                           )}
                         </span>
                       </div>

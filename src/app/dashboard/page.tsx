@@ -314,7 +314,7 @@ export default function DashboardPage() {
   }
 
   // Handle metrics tab transition with fade effect
-  const handleMetricsTabChange = (newTab: 'platform' | 'loyalty') => {
+  const handleMetricsTabChange = (newTab: 'platforms' | 'loyalty') => {
     if (newTab === metricsTab) return
     
     setIsMetricsTransitioning(true)

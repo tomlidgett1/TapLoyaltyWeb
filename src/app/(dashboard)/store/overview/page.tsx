@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, query, getDocs, orderBy, limit, where, doc, getDoc, Timestamp, serverTimestamp } from "firebase/firestore"
+import { collection, query, getDocs, orderBy, limit, where, doc, getDoc, Timestamp, serverTimestamp, startAfter } from "firebase/firestore"
 import { format, formatDistanceToNow, isToday, isYesterday } from "date-fns"
 import Link from "next/link"
 import { useCustomers } from "@/hooks/use-customers"
@@ -2184,6 +2184,10 @@ const RewardsTabContent = () => {
   const [viewMode, setViewMode] = useState<"preview" | "text">("text")
   const [selectedRewardIds, setSelectedRewardIds] = useState<Set<string>>(new Set())
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [lastDoc, setLastDoc] = useState<any>(null)
+  const [hasMoreRewards, setHasMoreRewards] = useState(true)
+  const [allRewardsLoaded, setAllRewardsLoaded] = useState(false)
 
     // Function to get customer name by ID from top-level customers collection
   const getCustomerName = async (customerId: string): Promise<string> => {
@@ -2244,20 +2248,30 @@ const RewardsTabContent = () => {
     loadCustomerNames()
   }, [rewardsData, user?.uid])
 
-  // Fetch rewards data
+  // Fetch initial rewards data with pagination
   useEffect(() => {
     const fetchRewardsData = async () => {
       if (!user?.uid) return
       
       try {
         setLoadingRewards(true)
+        // Reset pagination state
+        setRewardsData([])
+        setLastDoc(null)
+        setHasMoreRewards(true)
+        setAllRewardsLoaded(false)
+        
         const rewardsRef = collection(db, 'merchants', user.uid, 'rewards')
-        const q = query(rewardsRef, orderBy('createdAt', 'desc'))
+        const q = query(rewardsRef, orderBy('createdAt', 'desc'), limit(20))
         const querySnapshot = await getDocs(q)
         
         const fetchedRewards: Reward[] = []
+        let newLastDoc = null
         
-        querySnapshot.forEach(doc => {
+        querySnapshot.docs.forEach((doc, index) => {
+          if (index === querySnapshot.docs.length - 1) {
+            newLastDoc = doc
+          }
           try {
             const data = doc.data()
             
@@ -2317,6 +2331,13 @@ const RewardsTabContent = () => {
         });
         
         setRewardsData(fetchedRewards)
+        setLastDoc(newLastDoc)
+        
+        // Check if we have more rewards to load
+        if (querySnapshot.docs.length < 20) {
+          setHasMoreRewards(false)
+          setAllRewardsLoaded(true)
+        }
       } catch (error) {
         console.error("Error fetching rewards:", error)
       } finally {
@@ -2447,6 +2468,96 @@ const RewardsTabContent = () => {
     })
   }
 
+  const fetchMoreRewards = async () => {
+    if (!user?.uid || !hasMoreRewards || loadingMore || !lastDoc) return
+    
+    setLoadingMore(true)
+    
+    try {
+      const rewardsRef = collection(db, 'merchants', user.uid, 'rewards')
+      const q = query(
+        rewardsRef, 
+        orderBy('createdAt', 'desc'),
+        startAfter(lastDoc),
+        limit(20)
+      )
+      const querySnapshot = await getDocs(q)
+      
+      if (querySnapshot.empty) {
+        setHasMoreRewards(false)
+        setAllRewardsLoaded(true)
+        setLoadingMore(false)
+        return
+      }
+      
+      const newRewards: Reward[] = []
+      let newLastDoc = null
+      
+      querySnapshot.docs.forEach((doc, index) => {
+        if (index === querySnapshot.docs.length - 1) {
+          newLastDoc = doc
+        }
+        
+        try {
+          const data = doc.data()
+          
+          let createdAt, updatedAt, lastRedeemed;
+          try {
+            createdAt = data.createdAt || null;
+            updatedAt = data.updatedAt || data.createdAt || null;
+            lastRedeemed = data.lastRedeemed ? data.lastRedeemed.toDate() : null;
+          } catch (dateError) {
+            createdAt = data.createdAt || null;
+            updatedAt = data.updatedAt || data.createdAt || null;
+            lastRedeemed = null;
+          }
+          
+          newRewards.push({
+            ...data,
+            id: doc.id,
+            rewardName: data.rewardName || data.name || 'Unnamed Reward',
+            description: data.description || '',
+            type: data.type || 'gift',
+            programtype: data.programtype || '',
+            programType: data.programType || '',
+            category: data.category || 'individual',
+            pointsCost: data.pointsCost || 0,
+            redemptionCount: data.redemptionCount || 0,
+            status: data.status || 'active',
+            createdAt,
+            updatedAt,
+            lastRedeemed,
+            isActive: !!data.isActive,
+            impressions: data.impressions || 0,
+            hasActivePeriod: !!data.hasActivePeriod,
+            activePeriod: data.activePeriod || { startDate: '', endDate: '' },
+            customers: data.customers || [],
+            uniqueCustomerIds: data.uniqueCustomerIds || [],
+          } as Reward);
+        } catch (err) {
+          console.error("Error processing reward document:", err, "Document ID:", doc.id);
+        }
+      })
+      
+      setRewardsData(prev => [...prev, ...newRewards])
+      setLastDoc(newLastDoc)
+      
+      if (querySnapshot.docs.length < 20) {
+        setHasMoreRewards(false)
+        setAllRewardsLoaded(true)
+      }
+      
+    } catch (error) {
+      console.error("Error fetching more rewards:", error)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
+  const handleLoadMore = () => {
+    fetchMoreRewards()
+  }
+
   const toggleRewardStatus = async (rewardId: string, currentStatus: boolean) => {
     if (!user?.uid) return;
     
@@ -2510,7 +2621,7 @@ const RewardsTabContent = () => {
       // Deselect all
       setSelectedRewardIds(new Set())
     } else {
-      // Select all
+      // Select all currently loaded and filtered rewards
       setSelectedRewardIds(new Set(filteredRewards.map(r => r.id)))
     }
   }
@@ -3266,6 +3377,34 @@ const RewardsTabContent = () => {
                 </TableBody>
               </Table>
             </div>
+            
+            {/* Load More Button */}
+            {!loadingRewards && hasMoreRewards && !allRewardsLoaded && (
+              <div className="border-t border-gray-200 px-6 py-4 bg-gray-50">
+                <div className="flex items-center justify-center">
+                  <Button
+                    variant="outline"
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="gap-2 rounded-md"
+                  >
+                    {loadingMore ? (
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        Load More Rewards
+                        <span className="text-xs text-gray-500">
+                          (Showing {getFilteredRewards().length} rewards)
+                        </span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
           )}
         </TabsContent>

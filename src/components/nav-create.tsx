@@ -9,7 +9,6 @@ import {
   Image,
   MessageSquare,
   Sparkles,
-  Settings,
 } from "lucide-react"
 
 import {
@@ -33,7 +32,6 @@ interface NavCreateProps {
   onNewMessage: () => void
   onNewPointsRule: () => void
   onIntroReward: () => void
-  onSetupPopup: () => void
 }
 
 export function NavCreate({
@@ -45,7 +43,6 @@ export function NavCreate({
   onNewMessage,
   onNewPointsRule,
   onIntroReward,
-  onSetupPopup,
 }: NavCreateProps) {
   return (
     <DropdownMenu modal={false}>
@@ -118,15 +115,7 @@ export function NavCreate({
           </DropdownMenuItem>
         </DropdownMenuGroup>
 
-        <DropdownMenuSeparator />
 
-        {/* Development Section */}
-        <DropdownMenuGroup>
-          <DropdownMenuItem onClick={onSetupPopup} className="cursor-pointer text-purple-600">
-            <Settings className="h-4 w-4 mr-2 text-gray-500" strokeWidth={2.75} />
-            Setup Popup (Dev)
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   )

@@ -277,6 +277,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const audioChunksRef = useRef<Blob[]>([])
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null)
   
+  // Progress tracking states for getstarted page
+  const [completedCount, setCompletedCount] = useState(0)
+  const [totalItems, setTotalItems] = useState(12)
+  
   // Add state for quick note dropdown and input
   const [quickNoteOpen, setQuickNoteOpen] = useState(false)
   const [showQuickNoteInput, setShowQuickNoteInput] = useState(false)
@@ -765,6 +769,50 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       fetchTodayMetrics()
     }
   }, [user?.uid, isOnboarding])
+
+  // Add useEffect to fetch checklist progress for getstarted page
+  useEffect(() => {
+    const fetchChecklistProgress = async () => {
+      if (!user?.uid || !pathname?.includes('/getstarted')) return
+      
+      try {
+        const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
+        let completed = 0
+        const total = 12 // Total number of checklist items
+        
+        if (merchantDoc.exists()) {
+          const data = merchantDoc.data()
+          
+          // Check for introductory rewards
+          if (data.introductoryRewardIds && Array.isArray(data.introductoryRewardIds) && data.introductoryRewardIds.length > 0) {
+            completed += 1
+          }
+          
+          // Check for active programs  
+          const hasActiveTransactionRewards = data.transactionRewards && Array.isArray(data.transactionRewards) && 
+            data.transactionRewards.some((program: any) => program.active === true)
+          const hasActiveVoucherPrograms = data.voucherPrograms && Array.isArray(data.voucherPrograms) && 
+            data.voucherPrograms.some((program: any) => program.active === true)
+          const hasActiveCoffeePrograms = data.coffeePrograms && Array.isArray(data.coffeePrograms) && 
+            data.coffeePrograms.some((program: any) => program.active === true)
+          
+          if (hasActiveTransactionRewards || hasActiveVoucherPrograms || hasActiveCoffeePrograms) {
+            completed += 1
+          }
+          
+          // You can add more completion checks here as needed
+          // For now, we'll just count these main ones
+        }
+        
+        setCompletedCount(completed)
+        setTotalItems(total)
+      } catch (error) {
+        console.error('Error fetching checklist progress:', error)
+      }
+    }
+    
+    fetchChecklistProgress()
+  }, [user?.uid, pathname])
 
   // Add useEffect to fetch notifications from Firestore
   useEffect(() => {
@@ -2248,6 +2296,20 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <div className="h-16 px-6 border-b border-gray-200 flex items-center justify-between bg-white">
                   <div className="flex items-center gap-4">
                     <h1 className="text-lg font-medium text-gray-900">{getPageTitle()}</h1>
+                    {/* Progress Bar for getstarted page */}
+                    {pathname?.includes('/getstarted') && (
+                      <div className="flex items-center gap-3 ml-6">
+                        <div className="w-48 bg-gray-100 rounded-full h-1">
+                          <div
+                            className="bg-[#007aff] h-1 rounded-full transition-all duration-300"
+                            style={{ width: `${totalItems > 0 ? (completedCount / totalItems) * 100 : 0}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-gray-500 min-w-fit">
+                          {completedCount} of {totalItems}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="flex items-center gap-3">
@@ -2274,7 +2336,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           <ChevronDown className="h-3 w-3 ml-1.5" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="rounded-2xl" forceMount={false}>
+                      <DropdownMenuContent align="end" className="rounded-2xl">
                         <DropdownMenuLabel className="text-xs text-gray-500 font-medium">Things to do</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => setShowTapAgentSheet(true)} className="cursor-pointer">

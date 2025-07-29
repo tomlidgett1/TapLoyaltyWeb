@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { DashboardLayout } from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -387,26 +386,9 @@ export default function GetStartedPage() {
   const completedCount = checklistItems.filter(item => item.completed).length
 
   return (
-    <DashboardLayout>
+    <>
       <div className="min-h-screen bg-white">
         <div className="max-w-6xl mx-auto px-6 py-8">
-          
-                    {/* Header with Progress */}
-          <div className="mb-8">
-              <h1 className="text-xl font-medium text-gray-900 mb-1 text-center">Welcome to <span className="font-bold text-[#007aff]">Tap</span></h1>
-              <p className="text-base text-gray-600 mb-3 text-center">Let's get started</p>
-              <div className="flex items-center gap-3 justify-center mb-4">
-                <div className="w-64 bg-gray-100 rounded-full h-1">
-                  <div
-                    className="bg-[#007aff] h-1 rounded-full transition-all duration-300"
-                    style={{ width: `${(completedCount / checklistItems.length) * 100}%` }}
-                  />
-                </div>
-                <span className="text-xs text-gray-500 min-w-fit">
-                  {completedCount} of {checklistItems.length}
-                </span>
-              </div>
-            </div>
 
           {/* Two Column Layout with Separator */}
           <div className="relative">
@@ -817,6 +799,6 @@ export default function GetStartedPage() {
         open={showNetworkReward} 
         onOpenChange={setShowNetworkReward} 
       />
-    </DashboardLayout>
+    </>
   )
 } 

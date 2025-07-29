@@ -63,7 +63,7 @@ import { SendBroadcastSheet } from "@/components/send-broadcast-sheet"
 import { CreatePointsRuleSheet } from "@/components/create-points-rule-sheet"
 import { IntroductoryRewardSheet } from "@/components/introductory-reward-sheet"
 import { Badge } from "@/components/ui/badge"
-import { SetupPopup } from "@/components/setup-popup"
+
 import { NetworkRewardSheet } from "@/components/network-reward-sheet"
 import { NetworkRewardPopup } from "@/components/network-reward-popup"
 import { SendBroadcastPopup } from "@/components/send-broadcast-popup"
@@ -245,7 +245,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   const [createRuleOpen, setCreateRuleOpen] = useState(false)
   const [introRewardOpen, setIntroRewardOpen] = useState(false)
   const [pendingInboxCount, setPendingInboxCount] = useState(0)
-  const [setupPopupOpen, setSetupPopupOpen] = useState(false)
+
   const [networkRewardOpen, setNetworkRewardOpen] = useState(false)
   const [networkRewardPopupOpen, setNetworkRewardPopupOpen] = useState(false)
   const [sendBroadcastPopupOpen, setSendBroadcastPopupOpen] = useState(false)
@@ -280,12 +280,12 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
     // Close the create dropdown when any dialog/sheet opens
     if (createSheetOpen || createRewardSheetOpen || createRewardPopupOpen || createRecurringOpen || 
         createBannerOpen || broadcastDialogOpen || createRuleOpen || introRewardOpen || 
-        setupPopupOpen || networkRewardOpen || networkRewardPopupOpen || sendBroadcastPopupOpen || 
+        networkRewardOpen || networkRewardPopupOpen || sendBroadcastPopupOpen || 
         createPointsRulePopupOpen || introductoryRewardPopupOpen || programTypeSelectorOpen || 
         createManualProgramOpen || settingsDialogOpen) {
 
     }
-  }, [createSheetOpen, createRewardSheetOpen, createRewardPopupOpen, createRecurringOpen, createBannerOpen, broadcastDialogOpen, createRuleOpen, introRewardOpen, setupPopupOpen, networkRewardOpen, networkRewardPopupOpen, sendBroadcastPopupOpen, createPointsRulePopupOpen, introductoryRewardPopupOpen, programTypeSelectorOpen, createManualProgramOpen, settingsDialogOpen])
+  }, [createSheetOpen, createRewardSheetOpen, createRewardPopupOpen, createRecurringOpen, createBannerOpen, broadcastDialogOpen, createRuleOpen, introRewardOpen, networkRewardOpen, networkRewardPopupOpen, sendBroadcastPopupOpen, createPointsRulePopupOpen, introductoryRewardPopupOpen, programTypeSelectorOpen, createManualProgramOpen, settingsDialogOpen])
 
   // Notify parent component when collapse state changes (only for internal changes)
   useEffect(() => {
@@ -650,7 +650,6 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
           onNewMessage={() => isCollapsed ? setBroadcastDialogOpen(true) : setSendBroadcastPopupOpen(true)}
           onNewPointsRule={() => isCollapsed ? setCreateRuleOpen(true) : setCreatePointsRulePopupOpen(true)}
           onIntroReward={() => isCollapsed ? setIntroRewardOpen(true) : setIntroductoryRewardPopupOpen(true)}
-          onSetupPopup={() => setSetupPopupOpen(true)}
         />
       </div>
       
@@ -876,8 +875,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
       {/* IntroductoryRewardSheet component */}
       <IntroductoryRewardSheet open={introRewardOpen} onOpenChange={setIntroRewardOpen} />
 
-      {/* SetupPopup component */}
-      <SetupPopup open={setupPopupOpen} onOpenChange={setSetupPopupOpen} />
+
 
       {/* NetworkRewardSheet component */}
       <NetworkRewardSheet open={networkRewardOpen} onOpenChange={setNetworkRewardOpen} />

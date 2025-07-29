@@ -19,7 +19,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { DashboardLayout } from "@/components/dashboard-layout"
 import { cn } from "@/lib/utils"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
@@ -2987,7 +2986,7 @@ export default function NotesPage() {
 
   // --- JSX Structure --- 
   return (
-    <DashboardLayout>
+    <>
       <style dangerouslySetInnerHTML={{ __html: transitionStyles }} />
       <div className="flex flex-col h-full max-w-full">
         {/* Header Section - ensure all rounded-md */}
@@ -4253,6 +4252,6 @@ export default function NotesPage() {
           </div>
         </div>
       </div>
-    </DashboardLayout>
+    </>
   );
 } 

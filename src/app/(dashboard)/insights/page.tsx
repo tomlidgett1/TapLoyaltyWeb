@@ -25,7 +25,7 @@ import {
   Database
 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
-import { DashboardLayout } from "@/components/dashboard-layout"
+
 import { cn } from "@/lib/utils"
 import { toast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/auth-context"
@@ -1568,7 +1568,7 @@ export default function InsightsPage() {
   };
   
   return (
-    <DashboardLayout>
+    <>
       <style dangerouslySetInnerHTML={{ __html: transitionStyles }} />
       <div className="flex flex-col h-full max-w-full">
         {/* Header Section */}
@@ -1808,6 +1808,6 @@ export default function InsightsPage() {
           )}
         </div>
       </div>
-    </DashboardLayout>
+    </>
   );
 } 

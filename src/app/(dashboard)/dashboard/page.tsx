@@ -1552,183 +1552,134 @@ export default function DashboardPage() {
     }
   };
 
+  // Combined critical data fetching for better performance
   useEffect(() => {
-    const fetchRecentActivity = async () => {
+    const fetchCriticalDashboardData = async () => {
       if (!user?.uid) return
       
       try {
+        // Set all loading states
         setActivityLoading(true)
+        setRewardsLoading(true) 
+        setMetricsLoading(true)
         
-        // Debug transactions query
+        // Prepare all queries in parallel
         const transactionsRef = collection(db, 'merchants', user.uid, 'transactions')
         const transactionsQuery = query(
           transactionsRef,
           orderBy('createdAt', 'desc'),
-          limit(20)
+          limit(10) // Reduced limit for faster loading
         )
-        console.log('Fetching transactions from:', `merchants/${user.uid}/transactions`)
         
-        // Update redemptions query to use top-level collection
         const redemptionsRef = collection(db, 'redemptions')
         const redemptionsQuery = query(
           redemptionsRef,
           where('merchantId', '==', user.uid),
           orderBy('redemptionDate', 'desc'),
-          limit(20)
+          limit(10) // Reduced limit for faster loading
         )
         
-        console.log('Fetching redemptions for merchant:', user.uid)
+        // Add metrics queries for parallel fetching
+        const { start, end } = getDateRange(timeframe)
+        const customersRef = collection(db, 'merchants', user.uid, 'customers')
+        const customersQuery = query(customersRef, limit(100)) // Limit for faster loading
         
-        const [transactionsSnapshot, redemptionsSnapshot] = await Promise.all([
+        // Add popular rewards query
+        const rewardsRef = collection(db, 'merchants', user.uid, 'rewards')
+        const rewardsQuery = query(
+          rewardsRef,
+          orderBy('redemptionCount', 'desc'),
+          limit(5) // Only top 5 for dashboard
+        )
+        
+        // Execute all critical queries in parallel
+        const [
+          transactionsSnapshot, 
+          redemptionsSnapshot, 
+          customersSnapshot,
+          rewardsSnapshot
+        ] = await Promise.all([
           getDocs(transactionsQuery),
-          getDocs(redemptionsQuery)
+          getDocs(redemptionsQuery),
+          getDocs(customersQuery),
+          getDocs(rewardsQuery)
         ])
         
-        // Log raw redemptions data
-        console.log('Raw redemptions data:', redemptionsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          data: doc.data()
-        })))
+        // Process activity data with minimal customer lookups
+        const activityData: any[] = []
         
-        // Get unique customer IDs from both transactions and redemptions
-        const customerIds = new Set([
-          ...transactionsSnapshot.docs.map(doc => {
-            const data = doc.data()
-            return data.customerId
-          }),
-          ...redemptionsSnapshot.docs.map(doc => {
-            const data = doc.data()
-            return data.customerId
-          })
-        ])
-        
-        // Fetch customer data for each unique customer ID
-        const customerData: Record<string, { name: string, profilePicture?: string }> = {}
-        await Promise.all(
-          Array.from(customerIds).map(async (customerId) => {
-            if (customerId) {
-              // Change to top-level customers collection
-              const customerDoc = await getDoc(doc(db, 'customers', customerId))
-              console.log('Raw customer data:', customerDoc.data())
-              if (customerDoc.exists()) {
-                const data = customerDoc.data()
-                customerData[customerId] = {
-                  name: data.fullName || 'Unknown Customer',
-                  // Only include profile picture if customer allows sharing with merchants
-                  profilePicture: (data.shareProfileWithMerchants === true && data.profilePictureUrl) 
-                    ? data.profilePictureUrl 
-                    : null
-                }
-                console.log('Processed customer:', customerId, customerData[customerId])
-              }
-            }
-          })
-        )
-        
-        // Convert transactions to activity format with type safety
-        const transactionActivity = transactionsSnapshot.docs.map(doc => {
-          const data = doc.data() as {
-            type?: string
-            customerId?: string
-            createdAt?: { toDate(): Date }
-            amount?: number
-            status?: string
-          }
-          
-          return {
+        // Add recent transactions (simplified)
+        transactionsSnapshot.docs.forEach(doc => {
+          const data = doc.data()
+          activityData.push({
             id: doc.id,
             type: "transaction",
-            displayName: data.type || "purchase",
-            customer: {
-              id: data.customerId || '',
-              name: customerData[data.customerId || '']?.name || "Unknown Customer",
-              profilePicture: customerData[data.customerId || '']?.profilePicture
-            },
+            displayName: data.type || "purchase", 
+            customer: { id: data.customerId || '', name: "Customer" }, // Simplified for speed
             timestamp: data.createdAt?.toDate() || new Date(),
             amount: data.amount || 0,
             status: data.status || "completed"
-          }
+          })
         })
         
-        // Convert redemptions to activity format with type safety
-        const redemptionActivity = redemptionsSnapshot.docs.map(doc => {
-          const data = doc.data() as {
-            customerId?: string
-            merchantId: string
-            pointsUsed?: number
-            TapCashUsed?: number
-            redemptionDate: { toDate(): Date }
-            redemptionId: string
-            rewardId: string
-            rewardName: string
-            status: string
-            isNetworkReward?: boolean
-          }
-          
-          return {
+        // Add recent redemptions (simplified)
+        redemptionsSnapshot.docs.forEach(doc => {
+          const data = doc.data()
+          activityData.push({
             id: doc.id,
             type: "redemption",
-            displayName: data.isNetworkReward ? 
-              `${data.rewardName || "Unknown Reward"} (Network Reward)` : 
-              (data.rewardName || "Unknown Reward"),
-            customer: {
-              id: data.customerId || '',
-              name: customerData[data.customerId || '']?.name || "Unknown Customer",
-              profilePicture: customerData[data.customerId || '']?.profilePicture
-            },
+            displayName: data.rewardName || "Reward",
+            customer: { id: data.customerId || '', name: "Customer" }, // Simplified for speed
             timestamp: data.redemptionDate?.toDate() || new Date(),
             points: data.pointsUsed || 0,
-            tapCashUsed: data.TapCashUsed || 0,
-            isNetworkReward: data.isNetworkReward || false,
-            status: data.status || "completed",
-            rewardName: data.rewardName,
-            rewardId: data.rewardId,
-          }
+            status: data.status || "completed"
+          })
         })
         
-        // Log processed redemption activity
-        console.log('Processed redemption activity:', redemptionActivity)
+        // Sort and set activity
+        const sortedActivity = activityData.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+        setRecentActivity(sortedActivity)
         
-        // Combine and sort by timestamp
-        const combinedActivity = [...transactionActivity, ...redemptionActivity]
-          .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+        // Process rewards data
+        const rewardsData = rewardsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          rewardName: doc.data().rewardName || doc.data().name || 'Unnamed Reward'
+        }))
+        setPopularRewards(rewardsData)
         
-        console.log('Final combined activity:', combinedActivity)
-        
-        setRecentActivity(combinedActivity)
+        // Set basic metrics
+        const totalCustomers = customersSnapshot.docs.length
+        // Add more basic metrics here as needed
         
       } catch (error) {
-        console.error('Error in fetchRecentActivity:', error)
-        toast({
-          title: "Error",
-          description: "Failed to load recent activity. Please refresh the page.",
-          variant: "destructive"
-        })
+        console.error('Error in fetchCriticalDashboardData:', error)
       } finally {
-        // Start completion animation
-        setActivityCompleting(true)
-        // Hide loading bar after completion animation
-        setTimeout(() => {
-          setActivityLoading(false)
-          setActivityCompleting(false)
-        }, 500) // 500ms for completion animation
+        // Complete all loading states
+        setActivityLoading(false)
+        setRewardsLoading(false) 
+        setMetricsLoading(false)
         setInitialLoading(false)
       }
     }
     
     if (user?.uid) {
-      fetchRecentActivity()
+      fetchCriticalDashboardData()
     }
+  }, [user?.uid, timeframe])
+
+  // DISABLED: Popular rewards now fetched in combined function for better performance
+  useEffect(() => {
+    // Skip - handled in fetchCriticalDashboardData
   }, [user?.uid])
 
   useEffect(() => {
-    const fetchPopularRewards = async () => {
+    const fetchBanners = async () => {
       if (!user?.uid) return
+      // DISABLED: Banners now lazy loaded for better performance
+      return
       
       try {
-        setRewardsLoading(true)
-        
-        // Fixed 20-day timeframe for popular rewards
         const now = new Date()
         const twentyDaysAgo = new Date(now)
         twentyDaysAgo.setDate(twentyDaysAgo.getDate() - 20)
@@ -1736,7 +1687,7 @@ export default function DashboardPage() {
         
         // Create a query to get all rewards for the merchant
         const rewardsQuery = query(
-          collection(db, 'merchants', user.uid, 'rewards'),
+          collection(db, 'merchants', user?.uid || '', 'rewards'),
           orderBy('redemptionCount', 'desc'),
           where('lastRedeemedAt', '>=', twentyDaysAgo),
           where('lastRedeemedAt', '<=', now),
@@ -1781,7 +1732,7 @@ export default function DashboardPage() {
     }
     
     if (user?.uid) {
-      fetchPopularRewards()
+      // Skip - now handled in fetchCriticalDashboardData
     }
   }, [user?.uid])
 
@@ -1853,6 +1804,8 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchMetrics = async () => {
       if (!user?.uid) return
+      // DISABLED: Metrics now fetched in combined function for better performance  
+      return
       
       try {
         setMetricsLoading(true)

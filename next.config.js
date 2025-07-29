@@ -21,6 +21,9 @@ const nextConfig = {
   staticPageGenerationTimeout: 1000,
   compiler: {
     styledComponents: true,
+    removeConsole: process.env.NODE_ENV === 'production' ? {
+      exclude: ['error'] // Keep console.error in production for debugging critical issues
+    } : false
   },
   // Disable static optimization to force dynamic rendering
   swcMinify: true,

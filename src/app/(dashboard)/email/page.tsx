@@ -2846,47 +2846,100 @@ ${content}`;
   }
 
   // Fetch connected accounts and Gmail emails on component mount
-  // Use effect to fetch merchant data when component loads
+  // Combined critical data fetching for better performance
   useEffect(() => {
-    async function fetchMerchantData() {
+    const fetchCriticalEmailData = async () => {
       if (!user?.uid) return;
       
       try {
-        const merchantDoc = await getDoc(doc(db, 'merchants', user.uid));
+        // Set all loading states
+        setAgentTasksLoading(true);
+        setNotificationsLoading(true);
+        setEmailsLoading(true);
+        
+        // Prepare all critical queries in parallel
+        const merchantDocPromise = getDoc(doc(db, 'merchants', user.uid));
+        
+        const agentTasksQuery = query(
+          collection(db, 'merchants', user?.uid || '', 'agentinbox'),
+          where('status', '==', agentTaskStatusFilter),
+          orderBy('dateCreated', 'desc'),
+          limit(10) // Reduced limit for faster loading
+        );
+        
+        const notificationsQuery = query(
+          collection(db, 'merchants', user?.uid || '', 'notifications'),
+          orderBy('dateCreated', 'desc'),
+          limit(5) // Reduced limit for faster loading
+        );
+        
+        // Execute all critical queries in parallel
+        const [
+          merchantDoc,
+          agentTasksSnapshot,
+          notificationsSnapshot
+        ] = await Promise.all([
+          merchantDocPromise,
+          getDocs(agentTasksQuery),
+          getDocs(notificationsQuery)
+        ]);
+        
+        // Process merchant data
         if (merchantDoc.exists()) {
           const data = merchantDoc.data();
           setMerchantData(data);
-          
-          // Get merchant email - try different possible field names
           const email = data.businessEmail || data.email || data.contactEmail || user.email || '';
           setMerchantEmail(email);
-          
-          console.log("🏢 Merchant data loaded:", { 
-            hasLogo: !!data.logoUrl, 
-            logoUrl: data.logoUrl, 
-            merchantEmail: email,
-            allMerchantData: data 
-          });
-          
-          // Also log what fields are available
-          console.log("📋 Available merchant data fields:", Object.keys(data));
         }
+        
+        // Process agent tasks
+        const agentTasksData = agentTasksSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setAgentTasks(agentTasksData);
+        
+        // Process notifications
+        const notificationsData = notificationsSnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            message: data.message || 'No message provided',
+            type: data.type || 'INFO',
+            customerId: data.customerId,
+            dateCreated: data.dateCreated?.toDate(),
+            timestamp: data.dateCreated?.toDate() || new Date(),
+            read: data.read || false
+          };
+        });
+        setNotifications(notificationsData);
+        setUnreadCount(notificationsData.filter(n => !n.read).length);
+        
       } catch (error) {
-        console.error("Error fetching merchant data:", error);
+        console.error('Error fetching critical email data:', error);
+      } finally {
+        // Complete all loading states
+        setAgentTasksLoading(false);
+        setNotificationsLoading(false);
+        setEmailsLoading(false);
       }
-    }
+    };
     
-    fetchMerchantData();
-  }, [user?.uid, user?.email]);
+    if (user?.uid) {
+      fetchCriticalEmailData();
+    }
+  }, [user?.uid, agentTaskStatusFilter]);
 
   useEffect(() => {
     if (!user?.uid) return;
     
-    fetchConnectedAccounts()
+    // Delayed fetch for non-critical data to improve initial load performance
+    const delayedFetch = setTimeout(() => {
+      fetchConnectedAccounts();
+      // Don't fetch all emails immediately - let user trigger this
+    }, 1000); // 1 second delay
     
-    // Initial fetch of emails
-    console.log("🚀 Initial fetch of emails on component mount or folder change")
-    fetchGmailEmails()
+    return () => clearTimeout(delayedFetch);
     
     // Check if we need to trigger Gmail integration setup
     const checkAndTriggerGmailIntegration = async () => {
@@ -3067,62 +3120,9 @@ ${content}`;
     }
   }, [user?.uid, selectedFolder, fetchedEmails])
 
-  // Fetch notifications from Firestore
+  // DISABLED: Notifications now fetched in combined function for better performance
   useEffect(() => {
-    const fetchNotifications = async () => {
-      if (!user?.uid) return
-      
-      try {
-        setNotificationsLoading(true)
-        
-        // Create reference to merchant's notifications collection
-        const notificationsRef = collection(db, 'merchants', user.uid, 'notifications')
-        const notificationsQuery = query(
-          notificationsRef,
-          orderBy('dateCreated', 'desc'),
-          limit(10)
-        )
-        
-        const notificationsSnapshot = await getDocs(notificationsQuery)
-        
-        // Get notifications data
-        const notificationsData = notificationsSnapshot.docs.map(doc => {
-          const data = doc.data()
-          return {
-            id: doc.id,
-            message: data.message || 'No message provided',
-            type: data.type || 'INFO',
-            customerId: data.customerId,
-            dateCreated: data.dateCreated?.toDate(),
-            timestamp: data.dateCreated?.toDate() || new Date(),
-            read: data.read || false
-          }
-        })
-        
-        setNotifications(notificationsData)
-        setUnreadCount(notificationsData.filter(n => !n.read).length)
-      } catch (error) {
-        console.error('Error fetching notifications:', error)
-        // Set fallback notifications if there's an error
-        const fallbackNotifications: Notification[] = [
-          {
-            id: "fallback-1",
-            message: "Welcome to your email dashboard",
-            timestamp: new Date(),
-            read: false,
-            type: "INFO"
-          }
-        ]
-        setNotifications(fallbackNotifications)
-        setUnreadCount(1)
-      } finally {
-        setNotificationsLoading(false)
-      }
-    }
-    
-    if (user?.uid) {
-      fetchNotifications()
-    }
+    // Skip - handled in fetchCriticalEmailData
   }, [user?.uid])
   
   // Set up real-time listener for agent inbox tasks
@@ -3137,7 +3137,7 @@ ${content}`;
     // Create query constraints based on status filter and agentinbox flag
     let constraints: QueryConstraint[] = [
       where('agentinbox', '==', true),
-      limit(50) // Limit to 50 tasks
+      limit(10) // Reduced limit for better performance
     ];
     
     if (agentTaskStatusFilter === "completed") {

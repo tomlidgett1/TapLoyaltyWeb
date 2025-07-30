@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, getDocs, doc, getDoc, updateDoc, deleteDoc, addDoc } from "firebase/firestore"
+import { collection, getDocs, doc, getDoc, updateDoc, deleteDoc, addDoc, setDoc, arrayUnion } from "firebase/firestore"
 import { db } from "@/lib/firebase"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "@/components/ui/use-toast"
@@ -31,9 +32,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ChevronDown, Edit, MoreHorizontal, Plus, Trash, ArrowLeft, ArrowUp, ArrowDown, CheckCircle, XCircle, User } from "lucide-react"
+import { ChevronDown, Edit, MoreHorizontal, Plus, Trash, ArrowLeft, ArrowUp, ArrowDown, CheckCircle, XCircle, User, Coffee, DollarSign, ShoppingBag, Award, Gift, Sparkles, TrendingUp, Zap, Globe, ChevronUp, Users, Info } from "lucide-react"
 import Link from "next/link"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Textarea } from "@/components/ui/textarea"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { 
   Select, 
@@ -248,7 +252,7 @@ export default function AdminMerchants() {
   const [passwordError, setPasswordError] = useState("");
   const [checkingAuth, setCheckingAuth] = useState(true);
   
-  const [currentView, setCurrentView] = useState<'merchants' | 'customers' | 'functions' | 'rewards'>('merchants');
+  const [currentView, setCurrentView] = useState<'merchants' | 'customers' | 'functions' | 'rewards' | 'programs' | 'introRewards' | 'createRewards' | 'networkRewards'>('merchants');
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [rewards, setRewards] = useState<Reward[]>([]);
@@ -553,6 +557,227 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
     redeemable: 'all', // 'all', 'true', 'false'
   });
   const [maxRewardsToShow, setMaxRewardsToShow] = useState(1000);
+
+  // Programs state (copied from create-recurring-reward-dialog.tsx)
+  const [selectedMerchantForProgram, setSelectedMerchantForProgram] = useState<string>("");
+  const [activeTab, setActiveTab] = useState("coffee");
+  const [showCoffeeForm, setShowCoffeeForm] = useState(false);
+  const [showVoucherForm, setShowVoucherForm] = useState(false);
+  const [showTransactionForm, setShowTransactionForm] = useState(false);
+  const [showCashbackForm, setShowCashbackForm] = useState(false);
+  const [coffeeFormData, setCoffeeFormData] = useState({
+    pin: '',
+    frequency: '5',
+    minimumSpend: '0',
+    minimumTimeBetween: '0',
+  });
+  const [voucherFormData, setVoucherFormData] = useState({
+    rewardName: '',
+    description: '',
+    pin: '',
+    spendRequired: '100',
+    discountAmount: '10',
+    isActive: true,
+  });
+  const [transactionFormData, setTransactionFormData] = useState({
+    pin: '',
+    rewardName: '',
+    description: '',
+    transactionThreshold: '5',
+    rewardType: 'dollar_voucher' as 'dollar_voucher' | 'free_item',
+    voucherAmount: '10',
+    freeItemName: '',
+    conditions: '',
+    iterations: '15',
+    isActive: true
+  });
+  const [cashbackFormData, setCashbackFormData] = useState({
+    cashbackRate: '2',
+    programName: 'Tap Cash',
+    description: 'Earn cashback on every purchase',
+    isActive: true
+  });
+  
+  // Intro Rewards state
+  const [selectedMerchantForIntroReward, setSelectedMerchantForIntroReward] = useState<string>("");
+  const [showIntroRewardForm, setShowIntroRewardForm] = useState(false);
+  const [introRewardFormData, setIntroRewardFormData] = useState({
+    rewardName: "",
+    description: "",
+    rewardType: "voucher" as "voucher" | "freeItem",
+    itemName: "",
+    pin: ""
+  });
+  
+  // Create Rewards state (copied from create-reward-popup.tsx)
+  const [selectedMerchantForReward, setSelectedMerchantForReward] = useState<string>("");
+  const [showRewardForm, setShowRewardForm] = useState(false);
+  const [currentRewardStep, setCurrentRewardStep] = useState(1);
+  const [rewardFormData, setRewardFormData] = useState({
+    // Basic Details
+    rewardName: "",
+    description: "",
+    type: "",
+    rewardVisibility: "all",
+    specificCustomerIds: [] as string[],
+    specificCustomerNames: [] as string[],
+    pin: "",
+    pointsCost: "",
+    isActive: true,
+    delayedVisibility: false,
+    delayedVisibilityType: "transactions",
+    delayedVisibilityTransactions: "",
+    delayedVisibilitySpend: "",
+    
+    // Reward type specific fields
+    discountValue: "",
+    discountAppliesTo: "",
+    minimumPurchase: "",
+    itemName: "",
+    itemDescription: "",
+    requiredPurchase: "",
+    bonusItem: "",
+    bundleDiscountType: "free",
+    bundleDiscountValue: "",
+    mysteryOptions: "",
+    revealAtCheckout: false,
+    customRewardDetails: "",
+    voucherAmount: "",
+    
+    // Conditions
+    conditions: {
+      useTransactionRequirements: false,
+      useSpendingRequirements: false,
+      useTimeRequirements: false,
+      minimumTransactions: "",
+      maximumTransactions: "",
+      daysSinceJoined: "",
+      daysSinceLastVisit: "",
+      minimumLifetimeSpend: "",
+      minimumPointsBalance: "",
+      membershipLevel: "Bronze",
+      newCustomer: false,
+      useMembershipRequirements: true
+    },
+
+    // Limitations
+    limitations: {
+      totalRedemptionLimit: "",
+      perCustomerLimit: "1",
+      useTimeRestrictions: false,
+      startTime: "",
+      endTime: "",
+      dayRestrictions: [] as string[],
+      useDateRestrictions: false,
+      dateRestrictionStart: "",
+      dateRestrictionEnd: ""
+    },
+
+    // Active Period
+    hasActivePeriod: false,
+    activePeriod: {
+      startDate: "",
+      endDate: ""
+    },
+    
+    // Summary text for the reward
+    rewardSummary: "",
+  });
+
+  // Network Rewards state (copied from network-reward-popup.tsx)
+  const [selectedMerchantForNetworkReward, setSelectedMerchantForNetworkReward] = useState<string>("");
+  const [showNetworkRewardForm, setShowNetworkRewardForm] = useState(false);
+  const [currentNetworkRewardStep, setCurrentNetworkRewardStep] = useState(1);
+  const [networkRewardType, setNetworkRewardType] = useState<"dollarOff" | "percentOff">("dollarOff");
+  const [currentInfoSlide, setCurrentInfoSlide] = useState(0);
+  const [infoBoxesVisible, setInfoBoxesVisible] = useState(true);
+  const [networkRewardFormData, setNetworkRewardFormData] = useState({
+    rewardName: "",
+    description: "",
+    discountValue: "10",
+    minimumSpend: "50.00",
+    networkPointsCost: "100",
+    pin: ""
+  });
+  
+  // Program status checking
+  const [merchantPrograms, setMerchantPrograms] = useState<Record<string, any>>({});
+
+  // Function to check existing programs for selected merchant
+  const checkMerchantPrograms = async (merchantId: string) => {
+    if (!merchantId) return {};
+    
+    try {
+      const merchantRef = doc(db, 'merchants', merchantId);
+      const merchantDoc = await getDoc(merchantRef);
+      
+      if (merchantDoc.exists()) {
+        const data = merchantDoc.data();
+        return {
+          coffeeProgram: data.coffeeprogram || false,
+          coffeePrograms: data.coffeePrograms || [],
+          voucherPrograms: data.voucherPrograms || [],
+          transactionPrograms: data.transactionPrograms || [],
+          isCashback: data.isCashback || false,
+          cashbackProgram: data.cashbackProgram || null,
+          introductoryRewardCount: data.introductoryRewardCount || 0,
+          introductoryRewardIds: data.introductoryRewardIds || []
+        };
+      }
+      return {};
+    } catch (error) {
+      console.error("Error checking merchant programs:", error);
+      return {};
+    }
+  };
+  
+  // Update merchant programs when merchant is selected
+  useEffect(() => {
+    if (selectedMerchantForProgram) {
+      checkMerchantPrograms(selectedMerchantForProgram).then(programs => {
+        setMerchantPrograms(prev => ({
+          ...prev,
+          [selectedMerchantForProgram]: programs
+        }));
+      });
+    }
+  }, [selectedMerchantForProgram]);
+
+  // Update merchant programs when intro reward merchant is selected
+  useEffect(() => {
+    if (selectedMerchantForIntroReward) {
+      checkMerchantPrograms(selectedMerchantForIntroReward).then(programs => {
+        setMerchantPrograms(prev => ({
+          ...prev,
+          [selectedMerchantForIntroReward]: programs
+        }));
+      });
+    }
+  }, [selectedMerchantForIntroReward]);
+
+  // Update merchant programs when reward creation merchant is selected
+  useEffect(() => {
+    if (selectedMerchantForReward) {
+      checkMerchantPrograms(selectedMerchantForReward).then(programs => {
+        setMerchantPrograms(prev => ({
+          ...prev,
+          [selectedMerchantForReward]: programs
+        }));
+      });
+    }
+  }, [selectedMerchantForReward]);
+
+  // Update merchant programs when network reward merchant is selected
+  useEffect(() => {
+    if (selectedMerchantForNetworkReward) {
+      checkMerchantPrograms(selectedMerchantForNetworkReward).then(programs => {
+        setMerchantPrograms(prev => ({
+          ...prev,
+          [selectedMerchantForNetworkReward]: programs
+        }));
+      });
+    }
+  }, [selectedMerchantForNetworkReward]);
 
   // Check authentication on component mount
   useEffect(() => {
@@ -1602,6 +1827,949 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
     }
   };
 
+  // Reward creation functions (copied and adapted from create-reward-popup.tsx)
+  const validateRewardBasicDetails = () => {
+    const nameValid = rewardFormData.rewardName?.trim() !== '';
+    const descriptionValid = rewardFormData.description?.trim() !== '';
+    const typeValid = rewardFormData.type?.trim() !== '';
+    const pinValid = rewardFormData.pin?.trim() !== '' && rewardFormData.pin?.trim().length === 4;
+    const pointsCostValid = rewardFormData.pointsCost?.trim() !== '';
+    
+    return nameValid && descriptionValid && pointsCostValid && typeValid && pinValid;
+  };
+
+  const handleRewardStepChange = (step: number) => {
+    if (step < currentRewardStep) {
+      setCurrentRewardStep(step);
+      return;
+    }
+
+    if (step === 2 && !validateRewardBasicDetails()) {
+      const missingFields = [];
+      
+      if (!rewardFormData.rewardName?.trim()) missingFields.push("Reward Name");
+      if (!rewardFormData.description?.trim()) missingFields.push("Description");
+      if (!rewardFormData.type?.trim()) missingFields.push("Reward Type");
+      if (!rewardFormData.pin?.trim() || rewardFormData.pin?.trim().length !== 4) missingFields.push("4-digit PIN");
+      if (!rewardFormData.pointsCost?.toString().trim()) missingFields.push("Points Cost");
+      
+      toast({
+        title: "Complete Basic Details",
+        description: `Please fill in all required fields before proceeding: ${missingFields.join(", ")}`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setCurrentRewardStep(step);
+  };
+
+  // Generate reward summary
+  const generateRewardSummary = () => {
+    let summary = "";
+    
+    switch(rewardFormData.type) {
+      case 'percentageDiscount':
+        summary = `Get ${rewardFormData.discountValue}% off`;
+        if (rewardFormData.discountAppliesTo) {
+          summary += ` ${rewardFormData.discountAppliesTo}`;
+        } else {
+          summary += " your purchase";
+        }
+        break;
+        
+      case 'fixedDiscount':
+        summary = `$${rewardFormData.discountValue} off`;
+        if (rewardFormData.minimumPurchase && Number(rewardFormData.minimumPurchase) > 0) {
+          summary += ` when you spend $${rewardFormData.minimumPurchase} or more`;
+        } else {
+          summary += " your purchase";
+        }
+        break;
+        
+      case 'freeItem':
+        summary = `Get a free ${rewardFormData.itemName}`;
+        if (rewardFormData.itemDescription) {
+          summary += ` (${rewardFormData.itemDescription})`;
+        }
+        break;
+        
+      case 'bundleOffer':
+        summary = `Buy ${rewardFormData.requiredPurchase}, get ${rewardFormData.bonusItem}`;
+        if (rewardFormData.bundleDiscountType === 'free') {
+          summary += " free";
+        } else if (rewardFormData.bundleDiscountType === 'percentage') {
+          summary += ` ${rewardFormData.bundleDiscountValue}% off`;
+        } else if (rewardFormData.bundleDiscountType === 'fixed') {
+          summary += ` $${rewardFormData.bundleDiscountValue} off`;
+        }
+        break;
+        
+      case 'mysterySurprise':
+        summary = "Surprise reward - redeem to reveal your prize!";
+        break;
+        
+      case 'other':
+        const firstLine = rewardFormData.customRewardDetails.split('\n')[0];
+        summary = firstLine || "Custom reward";
+        break;
+        
+      default:
+        summary = "Reward";
+        break;
+    }
+    
+    return summary;
+  };
+
+  const saveRewardForMerchant = async () => {
+    if (!selectedMerchantForReward) {
+      toast({
+        title: "No Merchant Selected",
+        description: "Please select a merchant first",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Transform conditions into array of objects
+      const conditions = []
+
+      // Transaction conditions
+      if (rewardFormData.conditions.minimumTransactions) {
+        conditions.push({
+          type: "minimumTransactions",
+          value: Number(rewardFormData.conditions.minimumTransactions)
+        })
+      }
+
+      // Membership level condition (always enabled for non-new customers)
+      if (rewardFormData.conditions.membershipLevel && rewardFormData.rewardVisibility !== 'new') {
+        conditions.push({
+          type: "membershipLevel",
+          value: rewardFormData.conditions.membershipLevel
+        })
+      }
+
+      // Transform limitations into array of objects
+      const limitations = []
+
+      // Ensure Per Customer Limit is always at least 1
+      const perCustomerLimit = rewardFormData.limitations.perCustomerLimit 
+        ? Math.max(1, Number(rewardFormData.limitations.perCustomerLimit)) 
+        : 1;
+      
+      limitations.push({
+        type: "customerLimit",
+        value: perCustomerLimit
+      });
+
+      const timestamp = new Date()
+      const utcTimestamp = new Date(Date.UTC(
+        timestamp.getFullYear(),
+        timestamp.getMonth(),
+        timestamp.getDate(),
+        timestamp.getHours(),
+        timestamp.getMinutes()
+      ))
+
+      // Create the base reward data object
+      const rewardData: any = {
+        rewardName: rewardFormData.rewardName,
+        description: rewardFormData.description,
+        programtype: "points",
+        isActive: rewardFormData.isActive,
+        pointsCost: Math.max(0, Number(rewardFormData.pointsCost)),
+        rewardVisibility: rewardFormData.rewardVisibility === 'all' ? 'global' : 
+                          rewardFormData.rewardVisibility === 'specific' ? 'specific' : 
+                          rewardFormData.rewardVisibility === 'new' ? 'new' : 'conditional',
+        newcx: rewardFormData.rewardVisibility === 'new',
+        
+        // Add reward type specific data
+        rewardTypeDetails: {
+          type: rewardFormData.type,
+        },
+        
+        delayedVisibility: rewardFormData.rewardVisibility === 'new' ? false : rewardFormData.delayedVisibility,
+        conditions,
+        limitations,
+        pin: rewardFormData.pin,
+        createdAt: utcTimestamp,
+        status: rewardFormData.isActive ? 'active' : 'inactive',
+        merchantId: selectedMerchantForReward,
+        updatedAt: utcTimestamp,
+        minSpend: 0,
+        reason: '',
+        customers: [],
+        redemptionCount: 0,
+        uniqueCustomersCount: 0,
+        lastRedeemedAt: null,
+        uniqueCustomerIds: [],
+        
+        // Add the reward summary
+        rewardSummary: generateRewardSummary(),
+      }
+      
+      // Add type-specific details
+      switch(rewardFormData.type) {
+        case 'percentageDiscount':
+          rewardData.rewardTypeDetails = {
+            ...rewardData.rewardTypeDetails,
+            discountValue: Number(rewardFormData.discountValue) || 0,
+            discountType: 'percentage',
+            appliesTo: rewardFormData.discountAppliesTo || 'Any purchase'
+          };
+          break;
+          
+        case 'fixedDiscount':
+          rewardData.rewardTypeDetails = {
+            ...rewardData.rewardTypeDetails,
+            discountValue: Number(rewardFormData.discountValue) || 0,
+            discountType: 'fixed',
+            minimumPurchase: Number(rewardFormData.minimumPurchase) || 0
+          };
+          break;
+          
+        case 'freeItem':
+          rewardData.rewardTypeDetails = {
+            ...rewardData.rewardTypeDetails,
+            itemName: rewardFormData.itemName,
+            itemDescription: rewardFormData.itemDescription || ''
+          };
+          break;
+          
+        case 'other':
+          rewardData.rewardTypeDetails = {
+            ...rewardData.rewardTypeDetails,
+            details: rewardFormData.customRewardDetails
+          };
+          break;
+      }
+
+      // Create in merchant's rewards subcollection
+      const merchantRewardsRef = collection(db, 'merchants', selectedMerchantForReward, 'rewards');
+      const newRewardRef = await addDoc(merchantRewardsRef, {
+        ...rewardData,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      
+      // Add the ID to the reward data
+      const rewardWithId = {
+        ...rewardData,
+        id: newRewardRef.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Update the merchant's reward with the ID
+      await updateDoc(
+        doc(db, 'merchants', selectedMerchantForReward, 'rewards', newRewardRef.id),
+        { id: newRewardRef.id }
+      );
+
+      // Also save to top-level rewards collection
+      await setDoc(
+        doc(db, 'rewards', newRewardRef.id),
+        rewardWithId
+      );
+      
+      toast({
+        title: "Reward Created",
+        description: "The reward has been successfully created for the selected merchant.",
+      });
+      
+      // Reset form
+      setRewardFormData({
+        rewardName: "",
+        description: "",
+        type: "",
+        rewardVisibility: "all",
+        specificCustomerIds: [],
+        specificCustomerNames: [],
+        pin: "",
+        pointsCost: "",
+        isActive: true,
+        delayedVisibility: false,
+        delayedVisibilityType: "transactions",
+        delayedVisibilityTransactions: "",
+        delayedVisibilitySpend: "",
+        discountValue: "",
+        discountAppliesTo: "",
+        minimumPurchase: "",
+        itemName: "",
+        itemDescription: "",
+        requiredPurchase: "",
+        bonusItem: "",
+        bundleDiscountType: "free",
+        bundleDiscountValue: "",
+        mysteryOptions: "",
+        revealAtCheckout: false,
+        customRewardDetails: "",
+        voucherAmount: "",
+        conditions: {
+          useTransactionRequirements: false,
+          useSpendingRequirements: false,
+          useTimeRequirements: false,
+          minimumTransactions: "",
+          maximumTransactions: "",
+          daysSinceJoined: "",
+          daysSinceLastVisit: "",
+          minimumLifetimeSpend: "",
+          minimumPointsBalance: "",
+          membershipLevel: "Bronze",
+          newCustomer: false,
+          useMembershipRequirements: true
+        },
+        limitations: {
+          totalRedemptionLimit: "",
+          perCustomerLimit: "1",
+          useTimeRestrictions: false,
+          startTime: "",
+          endTime: "",
+          dayRestrictions: [],
+          useDateRestrictions: false,
+          dateRestrictionStart: "",
+          dateRestrictionEnd: ""
+        },
+        hasActivePeriod: false,
+        activePeriod: {
+          startDate: "",
+          endDate: ""
+        },
+        rewardSummary: "",
+      });
+      setShowRewardForm(false);
+      setCurrentRewardStep(1);
+      
+    } catch (error: any) {
+      console.error("Error creating reward:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create reward",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Helper function to capitalize first letter
+  function capitalizeFirstLetter(string: string) {
+    return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
+  }
+
+  // Network Reward functions (adapted from network-reward-popup.tsx)
+  const handleNetworkRewardStepChange = (step: number) => {
+    // Basic validation for step 1
+    if (step > 1 && currentNetworkRewardStep === 1) {
+      if (!networkRewardFormData.rewardName.trim()) {
+        toast({
+          title: "Missing information",
+          description: "Please enter a reward name",
+          variant: "destructive"
+        });
+        return;
+      }
+      if (!networkRewardFormData.description.trim()) {
+        toast({
+          title: "Missing information",
+          description: "Please enter a reward description",
+          variant: "destructive"
+        });
+        return;
+      }
+      if (!networkRewardFormData.discountValue.trim() || parseFloat(networkRewardFormData.discountValue) <= 0) {
+        toast({
+          title: "Invalid discount",
+          description: "Please enter a valid discount value",
+          variant: "destructive"
+        });
+        return;
+      }
+      if (!networkRewardFormData.minimumSpend.trim() || parseFloat(networkRewardFormData.minimumSpend) <= 0) {
+        toast({
+          title: "Invalid minimum spend",
+          description: "Please enter a valid minimum spend amount",
+          variant: "destructive"
+        });
+        return;
+      }
+      if (!networkRewardFormData.networkPointsCost.trim() || parseFloat(networkRewardFormData.networkPointsCost) <= 0) {
+        toast({
+          title: "Invalid network points cost",
+          description: "Please enter a valid network points cost",
+          variant: "destructive"
+        });
+        return;
+      }
+      if (!networkRewardFormData.pin.trim() || networkRewardFormData.pin.length !== 4 || !/^\d+$/.test(networkRewardFormData.pin)) {
+        toast({
+          title: "Invalid PIN",
+          description: "Please enter a 4-digit PIN code",
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+
+    setCurrentNetworkRewardStep(step);
+  };
+
+  const saveNetworkRewardForMerchant = async () => {
+    if (!selectedMerchantForNetworkReward) {
+      toast({
+        title: "No Merchant Selected",
+        description: "Please select a merchant first",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const timestamp = new Date();
+      
+      // Create the network reward data
+      const rewardData = {
+        rewardName: networkRewardFormData.rewardName,
+        description: networkRewardFormData.description,
+        type: "discount",
+        isNetworkReward: true,
+        discountType: networkRewardType,
+        discountValue: parseFloat(networkRewardFormData.discountValue),
+        minimumSpend: parseFloat(networkRewardFormData.minimumSpend),
+        networkPointsCost: parseFloat(networkRewardFormData.networkPointsCost),
+        pin: networkRewardFormData.pin,
+        isActive: true,
+        status: "active",
+        createdAt: timestamp.toISOString(),
+        updatedAt: timestamp.toISOString(),
+        merchantId: selectedMerchantForNetworkReward,
+        rewardVisibility: "global",
+        pointsCost: 0,
+        redemptionCount: 0,
+        uniqueCustomersCount: 0,
+        eligibility: "networkCustomers"
+      };
+
+      // Create in merchant's rewards subcollection
+      const merchantRewardsRef = collection(db, 'merchants', selectedMerchantForNetworkReward, 'rewards');
+      const newRewardRef = await addDoc(merchantRewardsRef, rewardData);
+      
+      // Add the ID to the reward data
+      const rewardWithId = {
+        ...rewardData,
+        id: newRewardRef.id
+      };
+      
+      // Update the merchant's reward with the ID
+      await setDoc(
+        doc(db, 'merchants', selectedMerchantForNetworkReward, 'rewards', newRewardRef.id),
+        { ...rewardWithId }
+      );
+
+      // Also save to top-level rewards collection
+      await setDoc(
+        doc(db, 'rewards', newRewardRef.id),
+        rewardWithId
+      );
+      
+      toast({
+        title: "Network Reward Created",
+        description: "The network reward has been successfully created for the selected merchant.",
+      });
+      
+      // Reset form
+      setNetworkRewardFormData({
+        rewardName: "",
+        description: "",
+        discountValue: "10",
+        minimumSpend: "50.00",
+        networkPointsCost: "100",
+        pin: ""
+      });
+      setShowNetworkRewardForm(false);
+      setCurrentNetworkRewardStep(1);
+      setNetworkRewardType("dollarOff");
+      setCurrentInfoSlide(0);
+      setInfoBoxesVisible(true);
+      
+    } catch (error: any) {
+      console.error("Error creating network reward:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create network reward",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Intro Reward save function (adapted from introductory-reward-popup.tsx)
+  const saveIntroRewardForMerchant = async () => {
+    if (!selectedMerchantForIntroReward) {
+      toast({
+        title: "No Merchant Selected",
+        description: "Please select a merchant first",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Validate required fields
+    if (!introRewardFormData.rewardName || !introRewardFormData.description || !introRewardFormData.pin) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (introRewardFormData.rewardType === "freeItem" && !introRewardFormData.itemName) {
+      toast({
+        title: "Missing Information",
+        description: "Please enter the free item name",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Validate PIN is exactly 4 digits
+    if (!/^\d{4}$/.test(introRewardFormData.pin)) {
+      toast({
+        title: "Invalid PIN",
+        description: "PIN must be exactly 4 digits",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setLoading(true);
+
+    try {
+      // Check current introductory rewards for this merchant
+      const merchantRef = doc(db, 'merchants', selectedMerchantForIntroReward);
+      const merchantDoc = await getDoc(merchantRef);
+      const merchantData = merchantDoc.data();
+      const currentIntroRewardIds = merchantData?.introductoryRewardIds || [];
+      
+      if (currentIntroRewardIds.length >= 3) {
+        toast({
+          title: "Maximum Introductory Rewards Reached",
+          description: "This merchant already has the maximum of 3 introductory rewards.",
+          variant: "destructive"
+        });
+        setLoading(false);
+        return;
+      }
+
+      const timestamp = new Date();
+      
+      // Create the reward data
+      const rewardData = {
+        rewardName: introRewardFormData.rewardName,
+        description: introRewardFormData.description,
+        type: introRewardFormData.rewardType,
+        isIntroductoryReward: true,
+        fundedByTapLoyalty: true,
+        maxValue: 5.00,
+        itemName: introRewardFormData.rewardType === "freeItem" ? introRewardFormData.itemName : "",
+        voucherAmount: introRewardFormData.rewardType === "voucher" ? 5.00 : 0,
+        itemValue: introRewardFormData.rewardType === "freeItem" ? 5.00 : 0,
+        pin: introRewardFormData.pin,
+        isActive: true,
+        status: "active",
+        createdAt: timestamp.toISOString(),
+        updatedAt: timestamp.toISOString(),
+        merchantId: selectedMerchantForIntroReward,
+        rewardVisibility: "global",
+        pointsCost: 0,
+        redemptionCount: 0,
+        uniqueCustomersCount: 0,
+        limitations: [
+          {
+            type: "customerLimit",
+            value: 1
+          }
+        ]
+      };
+
+      // Create in merchant's rewards subcollection
+      const merchantRewardsRef = collection(db, 'merchants', selectedMerchantForIntroReward, 'rewards');
+      const newRewardRef = await addDoc(merchantRewardsRef, rewardData);
+      
+      // Add the ID to the reward data
+      const rewardWithId = {
+        ...rewardData,
+        id: newRewardRef.id
+      };
+      
+      // Update the merchant's reward with the ID
+      await setDoc(
+        doc(db, 'merchants', selectedMerchantForIntroReward, 'rewards', newRewardRef.id),
+        { ...rewardWithId }
+      );
+
+      // Also save to top-level rewards collection
+      await setDoc(
+        doc(db, 'rewards', newRewardRef.id),
+        rewardWithId
+      );
+      
+      // Update merchant document with introductory rewards info
+      const updatedIntroRewardIds = [...currentIntroRewardIds, newRewardRef.id];
+      
+      await setDoc(
+        merchantRef,
+        { 
+          hasIntroductoryReward: true,
+          introductoryRewardIds: updatedIntroRewardIds,
+          introductoryRewardCount: updatedIntroRewardIds.length
+        },
+        { merge: true }
+      );
+      
+      toast({
+        title: "Introductory Reward Created",
+        description: "The introductory reward has been successfully created for the selected merchant.",
+      });
+      
+      // Reset form
+      setIntroRewardFormData({
+        rewardName: "",
+        description: "",
+        rewardType: "voucher",
+        itemName: "",
+        pin: ""
+      });
+      setShowIntroRewardForm(false);
+      
+    } catch (error: any) {
+      console.error("Error creating introductory reward:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create introductory reward",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Program save functions (copied and modified from create-recurring-reward-dialog.tsx)
+  const saveCoffeeProgramForMerchant = async () => {
+    if (!selectedMerchantForProgram) {
+      toast({
+        title: "No Merchant Selected",
+        description: "Please select a merchant first",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Validate required fields
+    if (!coffeeFormData.pin || !coffeeFormData.frequency) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in both PIN code and frequency",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Validate PIN is exactly 4 digits
+    if (!/^\d{4}$/.test(coffeeFormData.pin)) {
+      toast({
+        title: "Invalid PIN",
+        description: "PIN must be exactly 4 digits",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setLoading(true);
+
+    try {
+      // Check if coffee program exists
+      const merchantDocRef = doc(db, 'merchants', selectedMerchantForProgram);
+      const merchantDoc = await getDoc(merchantDocRef);
+
+      if (merchantDoc.exists() && merchantDoc.data().coffeeprogram === true) {
+        toast({
+          title: "Error",
+          description: "Coffee program already exists for this merchant",
+          variant: "destructive"
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Create the coffee program data object
+      const coffeeProgram = {
+        pin: coffeeFormData.pin,
+        frequency: parseInt(coffeeFormData.frequency),
+        minspend: parseInt(coffeeFormData.minimumSpend) || 0,
+        mintime: parseInt(coffeeFormData.minimumTimeBetween) || 0,
+        createdAt: new Date(),
+        active: true
+      };
+      
+      // Update the merchant document to add the coffee program to an array
+      await setDoc(merchantDocRef, {
+        coffeeprogram: true,
+        coffeePrograms: arrayUnion(coffeeProgram)
+      }, { merge: true });
+      
+      toast({
+        title: "Success",
+        description: "Coffee program created successfully for selected merchant",
+      });
+      setShowCoffeeForm(false);
+    } catch (error: any) {
+      console.error("Error creating coffee program:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create coffee program",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveVoucherProgramForMerchant = async () => {
+    if (!selectedMerchantForProgram) {
+      toast({
+        title: "No Merchant Selected",
+        description: "Please select a merchant first",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Validate required fields
+    if (!voucherFormData.rewardName || !voucherFormData.pin || !voucherFormData.spendRequired || !voucherFormData.discountAmount) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Validate PIN is exactly 4 digits
+    if (!/^\d{4}$/.test(voucherFormData.pin)) {
+      toast({
+        title: "Invalid PIN",
+        description: "PIN must be exactly 4 digits",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setLoading(true);
+
+    try {
+      const merchantDocRef = doc(db, 'merchants', selectedMerchantForProgram);
+      
+      // Create the voucher program data object
+      const voucherProgram = {
+        rewardName: voucherFormData.rewardName,
+        description: voucherFormData.description,
+        pin: voucherFormData.pin,
+        spendRequired: parseInt(voucherFormData.spendRequired),
+        discountAmount: parseInt(voucherFormData.discountAmount),
+        isActive: voucherFormData.isActive,
+        createdAt: new Date(),
+        type: 'recurring_voucher'
+      };
+      
+      // Update the merchant document to add the voucher program
+      await setDoc(merchantDocRef, {
+        voucherPrograms: arrayUnion(voucherProgram)
+      }, { merge: true });
+      
+      toast({
+        title: "Success",
+        description: "Recurring voucher program created successfully for selected merchant",
+      });
+      setShowVoucherForm(false);
+    } catch (error: any) {
+      console.error("Error creating voucher program:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create voucher program",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveTransactionProgramForMerchant = async () => {
+    if (!selectedMerchantForProgram) {
+      toast({
+        title: "No Merchant Selected",
+        description: "Please select a merchant first",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Validate required fields
+    const requiredFields = [
+      transactionFormData.rewardName,
+      transactionFormData.pin,
+      transactionFormData.transactionThreshold
+    ];
+    
+    if (transactionFormData.rewardType === 'dollar_voucher' && !transactionFormData.voucherAmount) {
+      requiredFields.push(transactionFormData.voucherAmount);
+    }
+    
+    if (transactionFormData.rewardType === 'free_item' && !transactionFormData.freeItemName) {
+      requiredFields.push(transactionFormData.freeItemName);
+    }
+    
+    if (requiredFields.some(field => !field)) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Validate PIN is exactly 4 digits
+    if (!/^\d{4}$/.test(transactionFormData.pin)) {
+      toast({
+        title: "Invalid PIN",
+        description: "PIN must be exactly 4 digits",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setLoading(true);
+
+    try {
+      const merchantDocRef = doc(db, 'merchants', selectedMerchantForProgram);
+      
+      // Create the transaction program data object
+      const transactionProgram = {
+        rewardName: transactionFormData.rewardName,
+        description: transactionFormData.description,
+        pin: transactionFormData.pin,
+        transactionThreshold: parseInt(transactionFormData.transactionThreshold),
+        rewardType: transactionFormData.rewardType,
+        voucherAmount: transactionFormData.rewardType === 'dollar_voucher' ? parseInt(transactionFormData.voucherAmount) : null,
+        freeItemName: transactionFormData.rewardType === 'free_item' ? transactionFormData.freeItemName : null,
+        conditions: transactionFormData.conditions,
+        iterations: parseInt(transactionFormData.iterations),
+        isActive: transactionFormData.isActive,
+        createdAt: new Date(),
+        type: 'transaction_reward'
+      };
+      
+      // Update the merchant document to add the transaction program
+      await setDoc(merchantDocRef, {
+        transactionPrograms: arrayUnion(transactionProgram)
+      }, { merge: true });
+      
+      toast({
+        title: "Success",
+        description: "Transaction reward program created successfully for selected merchant",
+      });
+      setShowTransactionForm(false);
+    } catch (error: any) {
+      console.error("Error creating transaction program:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create transaction program",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveCashbackProgramForMerchant = async () => {
+    if (!selectedMerchantForProgram) {
+      toast({
+        title: "No Merchant Selected",
+        description: "Please select a merchant first",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Validate required fields
+    if (!cashbackFormData.cashbackRate || !cashbackFormData.programName) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Validate cashback rate is a valid percentage
+    const rate = parseFloat(cashbackFormData.cashbackRate);
+    if (isNaN(rate) || rate <= 0 || rate > 100) {
+      toast({
+        title: "Invalid Rate",
+        description: "Cashback rate must be between 0.1% and 100%",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setLoading(true);
+
+    try {
+      const merchantDocRef = doc(db, 'merchants', selectedMerchantForProgram);
+      
+      // Create the cashback program data object
+      const cashbackProgram = {
+        programName: cashbackFormData.programName,
+        description: cashbackFormData.description,
+        cashbackRate: rate,
+        isActive: cashbackFormData.isActive,
+        createdAt: new Date(),
+        type: 'cashback'
+      };
+      
+      // Update the merchant document to enable cashback
+      await setDoc(merchantDocRef, {
+        isCashback: true,
+        cashbackRate: rate,
+        cashbackProgram: cashbackProgram
+      }, { merge: true });
+      
+      toast({
+        title: "Success",
+        description: "Tap Cash program created successfully for selected merchant",
+      });
+      setShowCashbackForm(false);
+    } catch (error: any) {
+      console.error("Error creating cashback program:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create cashback program",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Reward sorting functions
   const handleRewardSort = (key: string) => {
     let direction: 'ascending' | 'descending' = 'ascending';
@@ -1746,25 +2914,168 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
           </Button>
         </div>
 
-        {/* Entity type tabs */}
-        <Tabs 
-          defaultValue="merchants" 
-          className="mb-8" 
-          onValueChange={(value) => {
-            setCurrentView(value as 'merchants' | 'customers' | 'functions' | 'rewards');
-            // Clear all selections when changing views
-            setSelectedMerchants([]);
-            setSelectedCustomers([]);
-            setSelectedRewards([]);
-          }}
-        >
-          <TabsList className="grid w-full max-w-lg grid-cols-4">
-            <TabsTrigger value="merchants">Merchants</TabsTrigger>
-            <TabsTrigger value="customers">Customers</TabsTrigger>
-            <TabsTrigger value="functions">Functions</TabsTrigger>
-            <TabsTrigger value="rewards">Rewards</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        {/* Main Tab Container */}
+        <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit mb-8 flex-wrap gap-1">
+          <button
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+              currentView === 'merchants'
+                ? "text-gray-800 bg-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-200/70"
+            )}
+            onClick={() => {
+              setCurrentView('merchants');
+              setSelectedMerchants([]);
+              setSelectedCustomers([]);
+              setSelectedRewards([]);
+            }}
+          >
+            <User size={15} />
+            Merchants
+          </button>
+          
+          <button
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+              currentView === 'customers'
+                ? "text-gray-800 bg-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-200/70"
+            )}
+            onClick={() => {
+              setCurrentView('customers');
+              setSelectedMerchants([]);
+              setSelectedCustomers([]);
+              setSelectedRewards([]);
+            }}
+          >
+            <Users size={15} />
+            Customers
+          </button>
+          
+          <button
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+              currentView === 'functions'
+                ? "text-gray-800 bg-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-200/70"
+            )}
+            onClick={() => {
+              setCurrentView('functions');
+              setSelectedMerchants([]);
+              setSelectedCustomers([]);
+              setSelectedRewards([]);
+            }}
+          >
+            <CheckCircle size={15} />
+            Functions
+          </button>
+          
+          <button
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+              currentView === 'rewards'
+                ? "text-gray-800 bg-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-200/70"
+            )}
+            onClick={() => {
+              setCurrentView('rewards');
+              setSelectedMerchants([]);
+              setSelectedCustomers([]);
+              setSelectedRewards([]);
+            }}
+          >
+            <Gift size={15} />
+            Rewards
+          </button>
+          
+          <button
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+              currentView === 'programs'
+                ? "text-gray-800 bg-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-200/70"
+            )}
+            onClick={() => {
+              setCurrentView('programs');
+              setSelectedMerchants([]);
+              setSelectedCustomers([]);
+              setSelectedRewards([]);
+              setActiveTab("coffee");
+              setShowCoffeeForm(false);
+              setShowVoucherForm(false);
+              setShowTransactionForm(false);
+              setShowCashbackForm(false);
+            }}
+          >
+            <Coffee size={15} />
+            Programs
+          </button>
+          
+          <button
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+              currentView === 'introRewards'
+                ? "text-gray-800 bg-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-200/70"
+            )}
+            onClick={() => {
+              setCurrentView('introRewards');
+              setSelectedMerchants([]);
+              setSelectedCustomers([]);
+              setSelectedRewards([]);
+              setShowIntroRewardForm(false);
+              setSelectedMerchantForIntroReward("");
+            }}
+          >
+            <Sparkles size={15} />
+            Intro Rewards
+          </button>
+          
+          <button
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+              currentView === 'createRewards'
+                ? "text-gray-800 bg-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-200/70"
+            )}
+            onClick={() => {
+              setCurrentView('createRewards');
+              setSelectedMerchants([]);
+              setSelectedCustomers([]);
+              setSelectedRewards([]);
+              setShowRewardForm(false);
+              setSelectedMerchantForReward("");
+              setCurrentRewardStep(1);
+            }}
+          >
+            <Award size={15} />
+            Create Rewards
+          </button>
+          
+          <button
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+              currentView === 'networkRewards'
+                ? "text-gray-800 bg-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-200/70"
+            )}
+            onClick={() => {
+              setCurrentView('networkRewards');
+              setSelectedMerchants([]);
+              setSelectedCustomers([]);
+              setSelectedRewards([]);
+              setShowNetworkRewardForm(false);
+              setSelectedMerchantForNetworkReward("");
+              setCurrentNetworkRewardStep(1);
+              setNetworkRewardType("dollarOff");
+              setCurrentInfoSlide(0);
+              setInfoBoxesVisible(true);
+            }}
+          >
+            <Globe size={15} />
+            Network Rewards
+          </button>
+        </div>
 
         {/* Display the appropriate content based on currentView */}
         {currentView === 'merchants' && (
@@ -2818,6 +4129,1755 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
                   </TableBody>
                 </Table>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* Programs Tab View */}
+        {currentView === 'programs' && (
+          <div className="bg-white p-6 rounded-lg shadow mb-8">
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-2">
+                <span className="text-[#007AFF]">Create</span> Recurring Programs
+              </h2>
+              <p className="text-sm text-gray-600">
+                Set up automatic reward programs for specific merchants
+              </p>
+            </div>
+
+            {/* Merchant Selector */}
+            <div className="mb-6">
+              <Label className="text-sm font-medium">Select Merchant <span className="text-red-500">*</span></Label>
+              <Select value={selectedMerchantForProgram} onValueChange={setSelectedMerchantForProgram}>
+                <SelectTrigger className="w-full mt-1">
+                  <SelectValue placeholder="Choose a merchant to create programs for..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>Available Merchants</SelectLabel>
+                    {merchants.map((merchant) => (
+                      <SelectItem key={merchant.id} value={merchant.id}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 rounded border overflow-hidden flex-shrink-0 bg-gray-50">
+                            {merchant.logoUrl ? (
+                              <img 
+                                src={merchant.logoUrl} 
+                                alt=""
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-gray-200"></div>
+                            )}
+                          </div>
+                          <span>{merchant.merchantName || merchant.tradingName || merchant.id}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              {!selectedMerchantForProgram && (
+                <p className="text-xs text-gray-500 mt-1">
+                  You must select a merchant before creating any programs
+                </p>
+              )}
+            </div>
+
+            {selectedMerchantForProgram && (
+              <>
+                {/* Program Type Tabs */}
+                <div className="mb-6">
+                  <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+                    <button
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                        activeTab === "coffee"
+                          ? "text-gray-800 bg-white shadow-sm"
+                          : "text-gray-600 hover:bg-gray-200/70"
+                      )}
+                      onClick={() => setActiveTab("coffee")}
+                    >
+                      <Coffee size={15} />
+                      Coffee Program
+                    </button>
+                    <button
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                        activeTab === "discount"
+                          ? "text-gray-800 bg-white shadow-sm"
+                          : "text-gray-600 hover:bg-gray-200/70"
+                      )}
+                      onClick={() => setActiveTab("discount")}
+                    >
+                      <Gift size={15} />
+                      Recurring Voucher
+                    </button>
+                    <button
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                        activeTab === "transaction"
+                          ? "text-gray-800 bg-white shadow-sm"
+                          : "text-gray-600 hover:bg-gray-200/70"
+                      )}
+                      onClick={() => setActiveTab("transaction")}
+                    >
+                      <ShoppingBag size={15} />
+                      Transaction Reward
+                    </button>
+                    <button
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                        activeTab === "cashback"
+                          ? "text-gray-800 bg-white shadow-sm"
+                          : "text-gray-600 hover:bg-gray-200/70"
+                      )}
+                      onClick={() => setActiveTab("cashback")}
+                    >
+                      <DollarSign size={15} />
+                      Tap Cash
+                    </button>
+                  </div>
+                </div>
+
+                {/* Coffee Program */}
+                {activeTab === "coffee" && (
+                  <div className="space-y-6">
+                    {merchantPrograms[selectedMerchantForProgram]?.coffeeProgram ? (
+                      <div className="border border-green-200 rounded-md p-6 bg-green-50">
+                        <div className="flex items-center gap-3 mb-3">
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                          <h3 className="text-md font-semibold text-green-800">Coffee Program Active</h3>
+                        </div>
+                        <p className="text-sm text-green-700 mb-4">
+                          This merchant already has a coffee loyalty program set up.
+                        </p>
+                        {merchantPrograms[selectedMerchantForProgram]?.coffeePrograms?.length > 0 && (
+                          <div className="bg-white rounded border p-3">
+                            <p className="text-xs font-medium text-gray-700 mb-2">Current Coffee Program:</p>
+                            {merchantPrograms[selectedMerchantForProgram].coffeePrograms.map((program: any, index: number) => (
+                              <div key={index} className="text-xs text-gray-600">
+                                <p>• Frequency: Buy {program.frequency - 1}, get 1 free</p>
+                                <p>• PIN: {program.pin}</p>
+                                {program.minspend > 0 && <p>• Minimum spend: ${program.minspend}</p>}
+                                {program.mintime > 0 && <p>• Minimum time between: {program.mintime} minutes</p>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : !showCoffeeForm ? (
+                      <div className="border border-gray-200 rounded-md p-6 bg-gray-50">
+                        <div className="flex items-center gap-3 mb-3">
+                          <Coffee className="h-5 w-5 text-[#007AFF]" />
+                          <h3 className="text-md font-semibold">Coffee Loyalty Program</h3>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-4">
+                          Create a digital stamp card where customers buy X drinks and get 1 free
+                        </p>
+                        <Button
+                          onClick={() => setShowCoffeeForm(true)}
+                          variant="outline"
+                          className="rounded-md"
+                        >
+                          Set Up Program
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="mb-4">
+                          <h2 className="text-lg font-semibold">Configure Coffee Program</h2>
+                          <p className="text-sm text-gray-600">Set up your digital stamp card program</p>
+                        </div>
+                      
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">PIN Code <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="text"
+                              maxLength={4}
+                              value={coffeeFormData.pin}
+                              onChange={(e) => setCoffeeFormData({ ...coffeeFormData, pin: e.target.value })}
+                              placeholder="e.g., 1234"
+                              className="h-10 rounded-md"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Staff will enter this PIN when redeeming free coffees
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Frequency <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={coffeeFormData.frequency}
+                              onChange={(e) => setCoffeeFormData({ ...coffeeFormData, frequency: e.target.value })}
+                              placeholder="e.g., 10"
+                              className="h-10 rounded-md"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Total coffees in reward cycle (e.g., "10" means buy 9, get 10th free)
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Minimum Spend ($)</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={coffeeFormData.minimumSpend}
+                              onChange={(e) => setCoffeeFormData({ ...coffeeFormData, minimumSpend: e.target.value })}
+                              placeholder="e.g., 5"
+                              className="h-10 rounded-md"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Minimum transaction amount to qualify (0 for no minimum)
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Time Between Purchases (minutes)</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={coffeeFormData.minimumTimeBetween}
+                              onChange={(e) => setCoffeeFormData({ ...coffeeFormData, minimumTimeBetween: e.target.value })}
+                              placeholder="e.g., 30"
+                              className="h-10 rounded-md"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Minimum time between purchases to earn stamps (0 for no limit)
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-3 pt-4">
+                          <Button 
+                            variant="outline" 
+                            onClick={() => setShowCoffeeForm(false)}
+                            className="rounded-md"
+                          >
+                            Cancel
+                          </Button>
+                          <Button 
+                            onClick={saveCoffeeProgramForMerchant}
+                            disabled={loading}
+                            className="rounded-md"
+                          >
+                            {loading ? "Saving..." : "Save Program"}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Recurring Voucher Program */}
+                {activeTab === "discount" && (
+                  <div className="space-y-6">
+                    {merchantPrograms[selectedMerchantForProgram]?.voucherPrograms?.length > 0 ? (
+                      <div className="border border-green-200 rounded-md p-6 bg-green-50">
+                        <div className="flex items-center gap-3 mb-3">
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                          <h3 className="text-md font-semibold text-green-800">Voucher Program(s) Active</h3>
+                        </div>
+                        <p className="text-sm text-green-700 mb-4">
+                          This merchant has {merchantPrograms[selectedMerchantForProgram].voucherPrograms.length} voucher program(s) set up.
+                        </p>
+                        <div className="bg-white rounded border p-3 space-y-2">
+                          <p className="text-xs font-medium text-gray-700 mb-2">Current Voucher Programs:</p>
+                          {merchantPrograms[selectedMerchantForProgram].voucherPrograms.map((program: any, index: number) => (
+                            <div key={index} className="text-xs text-gray-600 border-b border-gray-100 pb-2 last:border-b-0">
+                              <p className="font-medium">• {program.rewardName}</p>
+                              <p>  Spend ${program.spendRequired} → Get ${program.discountAmount} voucher</p>
+                              <p>  PIN: {program.pin} | Status: {program.isActive ? 'Active' : 'Inactive'}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : !showVoucherForm ? (
+                      <div className="border border-gray-200 rounded-md p-6 bg-gray-50">
+                        <div className="flex items-center gap-3 mb-3">
+                          <DollarSign className="h-5 w-5 text-[#007AFF]" />
+                          <h3 className="text-md font-semibold">Recurring Voucher Program</h3>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-4">
+                          Create automatic vouchers that customers earn based on their spending
+                        </p>
+                        <Button
+                          onClick={() => setShowVoucherForm(true)}
+                          variant="outline"
+                          className="rounded-md"
+                        >
+                          Set Up Program
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="mb-4">
+                          <h2 className="text-lg font-semibold">Configure Recurring Voucher Program</h2>
+                          <p className="text-sm text-gray-600">Set up automatic voucher rewards based on spending</p>
+                        </div>
+                      
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Reward Name <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="text"
+                              value={voucherFormData.rewardName}
+                              onChange={(e) => setVoucherFormData({ ...voucherFormData, rewardName: e.target.value })}
+                              placeholder="e.g., Loyalty Voucher"
+                              className="h-10 rounded-md"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Name that will appear to customers
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">PIN Code <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="text"
+                              maxLength={4}
+                              value={voucherFormData.pin}
+                              onChange={(e) => setVoucherFormData({ ...voucherFormData, pin: e.target.value })}
+                              placeholder="e.g., 1234"
+                              className="h-10 rounded-md"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Staff will enter this PIN when redeeming vouchers
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Spend Required ($) <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={voucherFormData.spendRequired}
+                              onChange={(e) => setVoucherFormData({ ...voucherFormData, spendRequired: e.target.value })}
+                              placeholder="e.g., 100"
+                              className="h-10 rounded-md"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Amount customer needs to spend to earn voucher
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Voucher Amount ($) <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={voucherFormData.discountAmount}
+                              onChange={(e) => setVoucherFormData({ ...voucherFormData, discountAmount: e.target.value })}
+                              placeholder="e.g., 10"
+                              className="h-10 rounded-md"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Dollar amount of the voucher reward
+                            </p>
+                          </div>
+
+                          <div className="col-span-2 space-y-2">
+                            <Label className="text-sm font-medium">Description</Label>
+                            <Textarea
+                              value={voucherFormData.description}
+                              onChange={(e) => setVoucherFormData({ ...voucherFormData, description: e.target.value })}
+                              placeholder="e.g., Spend $100 and get a $10 voucher for your next visit"
+                              className="rounded-md"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Description shown to customers
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-3 pt-4">
+                          <Button 
+                            variant="outline" 
+                            onClick={() => setShowVoucherForm(false)}
+                            className="rounded-md"
+                          >
+                            Cancel
+                          </Button>
+                          <Button 
+                            onClick={saveVoucherProgramForMerchant}
+                            disabled={loading}
+                            className="rounded-md"
+                          >
+                            {loading ? "Saving..." : "Save Program"}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Transaction Reward Program */}
+                {activeTab === "transaction" && (
+                  <div className="space-y-6">
+                    {merchantPrograms[selectedMerchantForProgram]?.transactionPrograms?.length > 0 ? (
+                      <div className="border border-green-200 rounded-md p-6 bg-green-50">
+                        <div className="flex items-center gap-3 mb-3">
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                          <h3 className="text-md font-semibold text-green-800">Transaction Program(s) Active</h3>
+                        </div>
+                        <p className="text-sm text-green-700 mb-4">
+                          This merchant has {merchantPrograms[selectedMerchantForProgram].transactionPrograms.length} transaction program(s) set up.
+                        </p>
+                        <div className="bg-white rounded border p-3 space-y-2">
+                          <p className="text-xs font-medium text-gray-700 mb-2">Current Transaction Programs:</p>
+                          {merchantPrograms[selectedMerchantForProgram].transactionPrograms.map((program: any, index: number) => (
+                            <div key={index} className="text-xs text-gray-600 border-b border-gray-100 pb-2 last:border-b-0">
+                              <p className="font-medium">• {program.rewardName}</p>
+                              <p>  After {program.transactionThreshold} purchases → {program.rewardType === 'dollar_voucher' ? `$${program.voucherAmount} voucher` : program.freeItemName}</p>
+                              <p>  PIN: {program.pin} | Status: {program.isActive ? 'Active' : 'Inactive'}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : !showTransactionForm ? (
+                      <div className="border border-gray-200 rounded-md p-6 bg-gray-50">
+                        <div className="flex items-center gap-3 mb-3">
+                          <ShoppingBag className="h-5 w-5 text-[#007AFF]" />
+                          <h3 className="text-md font-semibold">Transaction Reward Program</h3>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-4">
+                          Reward customers after a certain number of transactions
+                        </p>
+                        <Button
+                          onClick={() => setShowTransactionForm(true)}
+                          variant="outline"
+                          className="rounded-md"
+                        >
+                          Set Up Program
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="mb-4">
+                          <h2 className="text-lg font-semibold">Configure Transaction Reward Program</h2>
+                          <p className="text-sm text-gray-600">Set up rewards based on transaction count</p>
+                        </div>
+                      
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Reward Name <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="text"
+                              value={transactionFormData.rewardName}
+                              onChange={(e) => setTransactionFormData({ ...transactionFormData, rewardName: e.target.value })}
+                              placeholder="e.g., 5 Visit Reward"
+                              className="h-10 rounded-md"
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">PIN Code <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="text"
+                              maxLength={4}
+                              value={transactionFormData.pin}
+                              onChange={(e) => setTransactionFormData({ ...transactionFormData, pin: e.target.value })}
+                              placeholder="e.g., 1234"
+                              className="h-10 rounded-md"
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Transactions Required <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={transactionFormData.transactionThreshold}
+                              onChange={(e) => setTransactionFormData({ ...transactionFormData, transactionThreshold: e.target.value })}
+                              placeholder="e.g., 5"
+                              className="h-10 rounded-md"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Number of purchases needed to earn reward
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Reward Type <span className="text-red-500">*</span></Label>
+                            <RadioGroup
+                              value={transactionFormData.rewardType}
+                              onValueChange={(value: 'dollar_voucher' | 'free_item') => 
+                                setTransactionFormData({ ...transactionFormData, rewardType: value })
+                              }
+                              className="flex gap-4"
+                            >
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="dollar_voucher" id="dollar_voucher" />
+                                <Label htmlFor="dollar_voucher" className="text-sm">Dollar Voucher</Label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="free_item" id="free_item" />
+                                <Label htmlFor="free_item" className="text-sm">Free Item</Label>
+                              </div>
+                            </RadioGroup>
+                          </div>
+
+                          {transactionFormData.rewardType === 'dollar_voucher' && (
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">Voucher Amount ($) <span className="text-red-500">*</span></Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={transactionFormData.voucherAmount}
+                                onChange={(e) => setTransactionFormData({ ...transactionFormData, voucherAmount: e.target.value })}
+                                placeholder="e.g., 10"
+                                className="h-10 rounded-md"
+                              />
+                            </div>
+                          )}
+
+                          {transactionFormData.rewardType === 'free_item' && (
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">Free Item Name <span className="text-red-500">*</span></Label>
+                              <Input
+                                type="text"
+                                value={transactionFormData.freeItemName}
+                                onChange={(e) => setTransactionFormData({ ...transactionFormData, freeItemName: e.target.value })}
+                                placeholder="e.g., Free Coffee"
+                                className="h-10 rounded-md"
+                              />
+                            </div>
+                          )}
+
+                          <div className="col-span-2 space-y-2">
+                            <Label className="text-sm font-medium">Description</Label>
+                            <Textarea
+                              value={transactionFormData.description}
+                              onChange={(e) => setTransactionFormData({ ...transactionFormData, description: e.target.value })}
+                              placeholder="e.g., Make 5 purchases and get a $10 voucher"
+                              className="rounded-md"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex gap-3 pt-4">
+                          <Button 
+                            variant="outline" 
+                            onClick={() => setShowTransactionForm(false)}
+                            className="rounded-md"
+                          >
+                            Cancel
+                          </Button>
+                          <Button 
+                            onClick={saveTransactionProgramForMerchant}
+                            disabled={loading}
+                            className="rounded-md"
+                          >
+                            {loading ? "Saving..." : "Save Program"}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Tap Cash Program */}
+                {activeTab === "cashback" && (
+                  <div className="space-y-6">
+                    {merchantPrograms[selectedMerchantForProgram]?.isCashback ? (
+                      <div className="border border-green-200 rounded-md p-6 bg-green-50">
+                        <div className="flex items-center gap-3 mb-3">
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                          <h3 className="text-md font-semibold text-green-800">Tap Cash Program Active</h3>
+                        </div>
+                        <p className="text-sm text-green-700 mb-4">
+                          This merchant already has a Tap Cash program set up.
+                        </p>
+                        {merchantPrograms[selectedMerchantForProgram]?.cashbackProgram && (
+                          <div className="bg-white rounded border p-3">
+                            <p className="text-xs font-medium text-gray-700 mb-2">Current Tap Cash Program:</p>
+                            <div className="text-xs text-gray-600">
+                              <p>• Program: {merchantPrograms[selectedMerchantForProgram].cashbackProgram.programName}</p>
+                              <p>• Cashback Rate: {merchantPrograms[selectedMerchantForProgram].cashbackProgram.cashbackRate}%</p>
+                              <p>• Status: {merchantPrograms[selectedMerchantForProgram].cashbackProgram.isActive ? 'Active' : 'Inactive'}</p>
+                              <p>• Description: {merchantPrograms[selectedMerchantForProgram].cashbackProgram.description}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : !showCashbackForm ? (
+                      <div className="border border-gray-200 rounded-md p-6 bg-gray-50">
+                        <div className="flex items-center gap-3 mb-3">
+                          <Award className="h-5 w-5 text-[#007AFF]" />
+                          <h3 className="text-md font-semibold">Tap Cash Program</h3>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-4">
+                          Give customers cashback percentage on every purchase
+                        </p>
+                        <Button
+                          onClick={() => setShowCashbackForm(true)}
+                          variant="outline"
+                          className="rounded-md"
+                        >
+                          Set Up Program
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="mb-4">
+                          <h2 className="text-lg font-semibold">Configure Tap Cash Program</h2>
+                          <p className="text-sm text-gray-600">Set up cashback percentage for all purchases</p>
+                        </div>
+                      
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Program Name <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="text"
+                              value={cashbackFormData.programName}
+                              onChange={(e) => setCashbackFormData({ ...cashbackFormData, programName: e.target.value })}
+                              placeholder="e.g., Tap Cash"
+                              className="h-10 rounded-md"
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Cashback Rate (%) <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="number"
+                              min="0.1"
+                              max="100"
+                              step="0.1"
+                              value={cashbackFormData.cashbackRate}
+                              onChange={(e) => setCashbackFormData({ ...cashbackFormData, cashbackRate: e.target.value })}
+                              placeholder="e.g., 2.5"
+                              className="h-10 rounded-md"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Percentage of purchase amount returned as cashback
+                            </p>
+                          </div>
+
+                          <div className="col-span-2 space-y-2">
+                            <Label className="text-sm font-medium">Description</Label>
+                            <Textarea
+                              value={cashbackFormData.description}
+                              onChange={(e) => setCashbackFormData({ ...cashbackFormData, description: e.target.value })}
+                              placeholder="e.g., Earn cashback on every purchase"
+                              className="rounded-md"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex gap-3 pt-4">
+                          <Button 
+                            variant="outline" 
+                            onClick={() => setShowCashbackForm(false)}
+                            className="rounded-md"
+                          >
+                            Cancel
+                          </Button>
+                          <Button 
+                            onClick={saveCashbackProgramForMerchant}
+                            disabled={loading}
+                            className="rounded-md"
+                          >
+                            {loading ? "Saving..." : "Save Program"}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Intro Rewards Tab View */}
+        {currentView === 'introRewards' && (
+          <div className="bg-white p-6 rounded-lg shadow mb-8">
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-2">
+                <span className="text-[#007AFF]">Create</span> Introductory Rewards
+              </h2>
+              <p className="text-sm text-gray-600">
+                Create special introductory rewards for new customers on any merchant (funded by Tap Loyalty)
+              </p>
+            </div>
+
+            {/* Merchant Selector */}
+            <div className="mb-6">
+              <Label className="text-sm font-medium">Select Merchant <span className="text-red-500">*</span></Label>
+              <Select value={selectedMerchantForIntroReward} onValueChange={setSelectedMerchantForIntroReward}>
+                <SelectTrigger className="w-full mt-1">
+                  <SelectValue placeholder="Choose a merchant to create introductory reward for..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>Available Merchants</SelectLabel>
+                    {merchants.map((merchant) => (
+                      <SelectItem key={merchant.id} value={merchant.id}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 rounded border overflow-hidden flex-shrink-0 bg-gray-50">
+                            {merchant.logoUrl ? (
+                              <img 
+                                src={merchant.logoUrl} 
+                                alt=""
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-gray-200"></div>
+                            )}
+                          </div>
+                          <span>{merchant.merchantName || merchant.tradingName || merchant.id}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              {!selectedMerchantForIntroReward && (
+                <p className="text-xs text-gray-500 mt-1">
+                  You must select a merchant before creating an introductory reward
+                </p>
+              )}
+            </div>
+
+            {selectedMerchantForIntroReward && (
+              <>
+                {/* Check intro rewards first and update the check */}
+                {(() => {
+                  const merchantData = merchantPrograms[selectedMerchantForIntroReward];
+                  const hasIntroRewards = merchantData?.introductoryRewardCount > 0;
+                  const introRewardCount = merchantData?.introductoryRewardCount || 0;
+                  
+                  if (hasIntroRewards) {
+                    return (
+                      <div className="border border-green-200 rounded-md p-6 bg-green-50">
+                        <div className="flex items-center gap-3 mb-3">
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                          <h3 className="text-md font-semibold text-green-800">
+                            Introductory Rewards Active ({introRewardCount}/3)
+                          </h3>
+                        </div>
+                        <p className="text-sm text-green-700 mb-4">
+                          This merchant has {introRewardCount} introductory reward{introRewardCount > 1 ? 's' : ''} set up.
+                        </p>
+                        <div className="bg-white rounded border p-3">
+                          <p className="text-xs font-medium text-gray-700 mb-2">
+                            Introductory Reward IDs: {merchantData.introductoryRewardIds.join(', ')}
+                          </p>
+                        </div>
+                        {introRewardCount < 3 && (
+                          <Button
+                            onClick={() => setShowIntroRewardForm(true)}
+                            variant="outline"
+                            className="rounded-md mt-3"
+                          >
+                            Add Another Introductory Reward ({introRewardCount}/3)
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  } else if (!showIntroRewardForm) {
+                    return (
+                      <div className="border border-gray-200 rounded-md p-6 bg-gray-50">
+                        <div className="flex items-center gap-3 mb-3">
+                          <Gift className="h-5 w-5 text-[#007AFF]" />
+                          <h3 className="text-md font-semibold">Introductory Reward</h3>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-4">
+                          Create a special reward for new customers (up to $5 value, funded by Tap Loyalty)
+                        </p>
+                        <Button
+                          onClick={() => setShowIntroRewardForm(true)}
+                          variant="outline"
+                          className="rounded-md"
+                        >
+                          Create Introductory Reward
+                        </Button>
+                      </div>
+                    );
+                                     }
+                   return null;
+                 })()}
+                
+                {showIntroRewardForm && (
+                  <div className="space-y-4">
+                    <div className="mb-4">
+                      <h2 className="text-lg font-semibold">Configure Introductory Reward</h2>
+                      <p className="text-sm text-gray-600">Create a special welcome reward for new customers</p>
+                    </div>
+
+                    {/* Reward Type Selection */}
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium">Reward Type</Label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div
+                          className={cn(
+                            "border rounded-md p-3 cursor-pointer transition-all",
+                            introRewardFormData.rewardType === "voucher" 
+                              ? "border-blue-500 bg-blue-50" 
+                              : "border-gray-200 hover:border-gray-300"
+                          )}
+                          onClick={() => setIntroRewardFormData({ ...introRewardFormData, rewardType: "voucher" })}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className={cn(
+                              "h-6 w-6 rounded-full flex items-center justify-center",
+                              introRewardFormData.rewardType === "voucher" ? "bg-blue-500 text-white" : "bg-gray-100"
+                            )}>
+                              <DollarSign className="h-3 w-3" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm">Gift Voucher</p>
+                              <p className="text-xs text-gray-500">$5 credit toward purchase</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div
+                          className={cn(
+                            "border rounded-md p-3 cursor-pointer transition-all",
+                            introRewardFormData.rewardType === "freeItem" 
+                              ? "border-blue-500 bg-blue-50" 
+                              : "border-gray-200 hover:border-gray-300"
+                          )}
+                          onClick={() => setIntroRewardFormData({ ...introRewardFormData, rewardType: "freeItem" })}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className={cn(
+                              "h-6 w-6 rounded-full flex items-center justify-center",
+                              introRewardFormData.rewardType === "freeItem" ? "bg-blue-500 text-white" : "bg-gray-100"
+                            )}>
+                              <Coffee className="h-3 w-3" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm">Free Item</p>
+                              <p className="text-xs text-gray-500">Item up to $5 value</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Reward Name <span className="text-red-500">*</span></Label>
+                        <Input
+                          type="text"
+                          value={introRewardFormData.rewardName}
+                          onChange={(e) => setIntroRewardFormData({ ...introRewardFormData, rewardName: e.target.value })}
+                          placeholder={introRewardFormData.rewardType === "voucher" ? "e.g., Welcome $5 Voucher" : "e.g., Free Coffee for New Customers"}
+                          className="h-10 rounded-md"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">PIN Code <span className="text-red-500">*</span></Label>
+                        <Input
+                          type="text"
+                          maxLength={4}
+                          value={introRewardFormData.pin}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, '');
+                            setIntroRewardFormData({ ...introRewardFormData, pin: value });
+                          }}
+                          placeholder="4-digit PIN"
+                          className="h-10 rounded-md"
+                        />
+                        <p className="text-xs text-gray-500">
+                          Staff will enter this PIN when redeeming the reward
+                        </p>
+                      </div>
+
+                      {introRewardFormData.rewardType === "freeItem" && (
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Free Item Name <span className="text-red-500">*</span></Label>
+                          <Input
+                            type="text"
+                            value={introRewardFormData.itemName}
+                            onChange={(e) => setIntroRewardFormData({ ...introRewardFormData, itemName: e.target.value })}
+                            placeholder="e.g., Regular Coffee, Pastry, etc."
+                            className="h-10 rounded-md"
+                          />
+                          <p className="text-xs text-gray-500">
+                            Item must be valued at $5 or less
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="col-span-2 space-y-2">
+                        <Label className="text-sm font-medium">Description <span className="text-red-500">*</span></Label>
+                        <Textarea
+                          value={introRewardFormData.description}
+                          onChange={(e) => setIntroRewardFormData({ ...introRewardFormData, description: e.target.value })}
+                          placeholder={introRewardFormData.rewardType === "voucher" 
+                            ? "e.g., Enjoy $5 off your first purchase as a welcome gift from us!" 
+                            : "e.g., Welcome to our store! Enjoy a free coffee on your first visit."}
+                          className="rounded-md"
+                        />
+                        <p className="text-xs text-gray-500">
+                          Description shown to customers
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-blue-50 border border-blue-100 rounded-md p-3 text-xs text-blue-800">
+                      <div className="flex items-start gap-2">
+                        <Sparkles className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-medium">About Introductory Rewards</p>
+                          <ul className="list-disc pl-4 space-y-1 mt-1">
+                            <li>This reward is <strong>funded by Tap Loyalty</strong> (up to $5 value)</li>
+                            <li>Each customer can redeem only one introductory reward across all merchants</li>
+                            <li>Maximum of 3 introductory rewards per merchant</li>
+                            <li>You'll be reimbursed when the reward is redeemed</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 pt-4">
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setShowIntroRewardForm(false)}
+                        className="rounded-md"
+                      >
+                        Cancel
+                      </Button>
+                      <Button 
+                        onClick={saveIntroRewardForMerchant}
+                        disabled={loading}
+                        className="rounded-md"
+                      >
+                        {loading ? "Creating Reward..." : "Create Introductory Reward"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Network Rewards Tab View */}
+        {currentView === 'networkRewards' && (
+          <div className="bg-white p-6 rounded-lg shadow mb-8">
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-2">
+                <span className="text-[#007AFF]">Create</span> Network Rewards
+              </h2>
+              <p className="text-sm text-gray-600">
+                Attract new network customers with special rewards they can redeem using points from other Tap Network merchants
+              </p>
+            </div>
+
+            {/* Merchant Selector */}
+            <div className="mb-6">
+              <Label className="text-sm font-medium">Select Merchant <span className="text-red-500">*</span></Label>
+              <Select value={selectedMerchantForNetworkReward} onValueChange={setSelectedMerchantForNetworkReward}>
+                <SelectTrigger className="w-full mt-1">
+                  <SelectValue placeholder="Choose a merchant to create network reward for..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>Available Merchants</SelectLabel>
+                    {merchants.map((merchant) => (
+                      <SelectItem key={merchant.id} value={merchant.id}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 rounded border overflow-hidden flex-shrink-0 bg-gray-50">
+                            {merchant.logoUrl ? (
+                              <img 
+                                src={merchant.logoUrl} 
+                                alt=""
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-gray-200"></div>
+                            )}
+                          </div>
+                          <span>{merchant.merchantName || merchant.tradingName || merchant.id}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              {!selectedMerchantForNetworkReward && (
+                <p className="text-xs text-gray-500 mt-1">
+                  You must select a merchant before creating a network reward
+                </p>
+              )}
+            </div>
+
+            {selectedMerchantForNetworkReward && (
+              <>
+                {!showNetworkRewardForm ? (
+                  <div className="border border-gray-200 rounded-md p-6 bg-gray-50">
+                    <div className="flex items-center gap-3 mb-3">
+                      <Globe className="h-5 w-5 text-[#007AFF]" />
+                      <h3 className="text-md font-semibold">Network Reward</h3>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Create special discounts that attract customers from other Tap Network merchants using their existing points
+                    </p>
+                    <Button
+                      onClick={() => setShowNetworkRewardForm(true)}
+                      variant="outline"
+                      className="rounded-md"
+                    >
+                      Create Network Reward
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Progress Steps */}
+                    <div className="flex items-center space-x-1">
+                      {[1, 2].map((step) => (
+                        <button
+                          key={step}
+                          type="button"
+                          onClick={() => handleNetworkRewardStepChange(step)}
+                          className={`h-2 w-16 rounded-md transition-all ${
+                            step === currentNetworkRewardStep 
+                              ? "bg-blue-600" 
+                              : step < currentNetworkRewardStep 
+                              ? "bg-blue-300" 
+                              : "bg-gray-200"
+                          }`}
+                        />
+                      ))}
+                    </div>
+
+                    {/* Step 1: Create Reward */}
+                    {currentNetworkRewardStep === 1 && (
+                      <div className={cn(
+                        "transition-all duration-500 ease-in-out",
+                        infoBoxesVisible ? "mt-0 space-y-4" : "-mt-4 space-y-4"
+                      )}>
+                        {/* Information Boxes */}
+                        <div 
+                          className={cn(
+                            "relative overflow-hidden transition-all duration-500 ease-in-out",
+                            infoBoxesVisible ? "max-h-[200px] opacity-100 mb-0" : "max-h-0 opacity-0 -mb-4"
+                          )}
+                        >
+                          <div className="relative">
+                            <div className="overflow-hidden rounded-md">
+                              <div 
+                                className={cn(
+                                  "flex transition-transform duration-300 ease-in-out"
+                                )}
+                                style={{ 
+                                  transform: `translateX(-${currentInfoSlide * 100}%)` 
+                                }}
+                              >
+                                {/* Slide 1: About Network Rewards */}
+                                <div className="bg-gray-50 border border-gray-200 rounded-md p-3 text-xs text-gray-700 w-full flex-shrink-0">
+                                  <div className="flex items-start justify-between gap-2 mb-2">
+                                    <div className="flex items-start gap-2">
+                                      <Users className="h-4 w-4 text-gray-500 mt-0.5 flex-shrink-0" />
+                                      <div>
+                                        <p className="font-medium">About Network Rewards</p>
+                                      </div>
+                                    </div>
+                                    <button
+                                      onClick={() => setInfoBoxesVisible(!infoBoxesVisible)}
+                                      className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors flex-shrink-0"
+                                    >
+                                      <ChevronUp className={cn(
+                                        "h-3 w-3 transition-transform duration-300",
+                                        !infoBoxesVisible && "rotate-180"
+                                      )} />
+                                      Hide
+                                    </button>
+                                  </div>
+                                  <div className="pl-6">
+                                    <p>Network rewards attract customers who have points at other Tap Network merchants but haven't shopped with you before.</p>
+                                    <p className="mt-1">These customers can use their existing points to redeem discounts at your store, bringing you <strong>new business</strong> while ensuring you still profit from each transaction.</p>
+                                  </div>
+                                </div>
+
+                                {/* Slide 2: Why Network Rewards Work */}
+                                <div className="bg-gray-50 border border-gray-200 rounded-md p-3 text-xs text-gray-700 w-full flex-shrink-0">
+                                  <div className="flex items-start gap-2">
+                                    <TrendingUp className="h-4 w-4 text-gray-500 mt-0.5 flex-shrink-0" />
+                                    <div>
+                                      <p className="font-medium">Why Network Rewards Work</p>
+                                      <ul className="list-disc pl-4 space-y-1 mt-1">
+                                        <li>Attract customers who have <strong>never shopped with you</strong></li>
+                                        <li>They can <strong>only redeem specific Network Rewards created by you</strong></li>
+                                        <li>They come with <strong>spending power</strong> (points from other merchants)</li>
+                                        <li>You still <strong>profit</strong> from minimum spend requirements</li>
+                                        <li>Great way to <strong>acquire new loyal customers</strong></li>
+                                      </ul>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Pagination Dots */}
+                            <div className="flex justify-center gap-2 mt-3">
+                              <button
+                                className={cn(
+                                  "w-2 h-2 rounded-full transition-colors",
+                                  currentInfoSlide === 0 ? "bg-gray-600" : "bg-gray-300"
+                                )}
+                                onClick={() => setCurrentInfoSlide(0)}
+                              />
+                              <button
+                                className={cn(
+                                  "w-2 h-2 rounded-full transition-colors",
+                                  currentInfoSlide === 1 ? "bg-gray-600" : "bg-gray-300"
+                                )}
+                                onClick={() => setCurrentInfoSlide(1)}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className={cn(
+                          "space-y-4 transition-all duration-500 ease-in-out", 
+                          infoBoxesVisible ? "pt-1" : "-mt-4"
+                        )}>
+                          <div>
+                            <div className="flex items-center justify-between">
+                              <Label className="text-sm">Discount Type</Label>
+                              {!infoBoxesVisible && (
+                                <button
+                                  onClick={() => setInfoBoxesVisible(true)}
+                                  className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                                >
+                                  <ChevronUp className="h-3 w-3 rotate-180" />
+                                  Show info
+                                </button>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 mt-1.5">
+                              <div
+                                className={cn(
+                                  "border rounded-md p-3 cursor-pointer transition-all",
+                                  networkRewardType === "dollarOff" 
+                                    ? "border-blue-500 bg-blue-50" 
+                                    : "border-gray-200 hover:border-gray-300"
+                                )}
+                                onClick={() => setNetworkRewardType("dollarOff")}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className={cn(
+                                    "h-7 w-7 rounded-full flex items-center justify-center",
+                                    networkRewardType === "dollarOff" ? "bg-blue-500 text-white" : "bg-gray-100"
+                                  )}>
+                                    <DollarSign className="h-3.5 w-3.5" />
+                                  </div>
+                                  <div>
+                                    <p className="font-medium text-sm">$ Off</p>
+                                    <p className="text-xs text-gray-500">Fixed dollar discount</p>
+                                  </div>
+                                </div>
+                              </div>
+                              <div
+                                className={cn(
+                                  "border rounded-md p-3 cursor-pointer transition-all",
+                                  networkRewardType === "percentOff" 
+                                    ? "border-blue-500 bg-blue-50" 
+                                    : "border-gray-200 hover:border-gray-300"
+                                )}
+                                onClick={() => setNetworkRewardType("percentOff")}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className={cn(
+                                    "h-7 w-7 rounded-full flex items-center justify-center",
+                                    networkRewardType === "percentOff" ? "bg-blue-500 text-white" : "bg-gray-100"
+                                  )}>
+                                    <Zap className="h-3.5 w-3.5" />
+                                  </div>
+                                  <div>
+                                    <p className="font-medium text-sm">% Off</p>
+                                    <p className="text-xs text-gray-500">Percentage discount</p>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label htmlFor="networkRewardName" className="text-sm">Reward Name</Label>
+                            <Input
+                              id="networkRewardName"
+                              placeholder={networkRewardType === "dollarOff" ? "e.g., $10 Off Your First Order" : "e.g., 20% Off Your First Purchase"}
+                              value={networkRewardFormData.rewardName}
+                              onChange={(e) => setNetworkRewardFormData({...networkRewardFormData, rewardName: e.target.value})}
+                              className="h-10 rounded-md"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label htmlFor="networkDescription" className="text-sm">Description</Label>
+                            <Textarea
+                              id="networkDescription"
+                              placeholder={networkRewardType === "dollarOff" 
+                                ? "e.g., Welcome to our store! Get $10 off when you spend $50 or more." 
+                                : "e.g., New to our store! Enjoy 20% off your first purchase when you spend $50 or more."}
+                              value={networkRewardFormData.description}
+                              onChange={(e) => setNetworkRewardFormData({...networkRewardFormData, description: e.target.value})}
+                              className="rounded-md"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                              <Label htmlFor="networkDiscountValue" className="text-sm">
+                                {networkRewardType === "dollarOff" ? "Discount Amount" : "Discount Percentage"}
+                              </Label>
+                              <div className="relative">
+                                {networkRewardType === "dollarOff" && (
+                                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                                    <span className="text-gray-500">$</span>
+                                  </div>
+                                )}
+                                <Input
+                                  id="networkDiscountValue"
+                                  type="text"
+                                  className={cn("h-10 rounded-md", networkRewardType === "dollarOff" ? "pl-7" : "")}
+                                  placeholder={networkRewardType === "dollarOff" ? "10" : "20"}
+                                  value={networkRewardFormData.discountValue}
+                                  onChange={(e) => {
+                                    const value = e.target.value.replace(/[^\d.]/g, '');
+                                    setNetworkRewardFormData({...networkRewardFormData, discountValue: value});
+                                  }}
+                                />
+                                {networkRewardType === "percentOff" && (
+                                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                    <span className="text-gray-500">%</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <Label htmlFor="networkMinimumSpend" className="text-sm">Minimum Spend</Label>
+                              <div className="relative">
+                                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                                  <span className="text-gray-500">$</span>
+                                </div>
+                                <Input
+                                  id="networkMinimumSpend"
+                                  type="text"
+                                  className="pl-7 h-10 rounded-md"
+                                  placeholder="50.00"
+                                  value={networkRewardFormData.minimumSpend}
+                                  onChange={(e) => {
+                                    const value = e.target.value.replace(/[^\d.]/g, '');
+                                    setNetworkRewardFormData({...networkRewardFormData, minimumSpend: value});
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label htmlFor="networkPointsCost" className="text-sm">Network Points Cost</Label>
+                            <Input
+                              id="networkPointsCost"
+                              type="text"
+                              className="h-10 rounded-md"
+                              placeholder="100"
+                              value={networkRewardFormData.networkPointsCost}
+                              onChange={(e) => {
+                                const value = e.target.value.replace(/[^\d]/g, '');
+                                setNetworkRewardFormData({...networkRewardFormData, networkPointsCost: value});
+                              }}
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              Number of network points customers need to redeem this reward. Points ratios are standardised across the network with $1 earning 3 points.
+                            </p>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label htmlFor="networkPin" className="text-sm">Redemption PIN</Label>
+                            <Input
+                              id="networkPin"
+                              type="text"
+                              maxLength={4}
+                              placeholder="4-digit PIN"
+                              value={networkRewardFormData.pin}
+                              onChange={(e) => {
+                                const value = e.target.value.replace(/\D/g, '');
+                                setNetworkRewardFormData({...networkRewardFormData, pin: value});
+                              }}
+                              className="h-10 rounded-md"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              Enter a 4-digit PIN that will be required when redeeming this reward
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Step 2: Review & Submit */}
+                    {currentNetworkRewardStep === 2 && (
+                      <div className="mt-0 space-y-4">
+                        <div className="bg-blue-50 border border-blue-100 rounded-md p-3 text-xs text-blue-800">
+                          <div className="flex items-start gap-2">
+                            <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <p className="font-medium">How Network Rewards Work</p>
+                              <ul className="list-disc pl-4 space-y-1 mt-1">
+                                <li>Available to customers with points at <strong>other Tap Network merchants</strong></li>
+                                <li>Customers spend their existing network points to redeem this discount</li>
+                                <li>You receive <strong>full payment</strong> for the minimum spend amount</li>
+                                <li>Great way to <strong>acquire new customers</strong> and increase foot traffic</li>
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="border rounded-md overflow-hidden">
+                          <div className="bg-gray-50 px-3 py-2 border-b">
+                            <h3 className="font-medium text-sm">Reward Preview</h3>
+                          </div>
+                          <div className="p-3 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="space-y-0.5">
+                                <p className="font-medium text-sm">{networkRewardFormData.rewardName}</p>
+                                <p className="text-gray-600 text-xs">{networkRewardFormData.description}</p>
+                              </div>
+                              <div className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-medium">
+                                Network
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 pt-1">
+                              <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                                <DollarSign className="h-4 w-4 text-green-600" />
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500 leading-none">Discount</p>
+                                <p className="text-sm font-medium leading-tight">
+                                  {networkRewardType === "dollarOff" 
+                                    ? `$${networkRewardFormData.discountValue} off` 
+                                    : `${networkRewardFormData.discountValue}% off`}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                <ShoppingBag className="h-4 w-4 text-blue-600" />
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500 leading-none">Minimum Spend</p>
+                                <p className="text-sm font-medium leading-tight">${networkRewardFormData.minimumSpend}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+                                <Zap className="h-4 w-4 text-orange-600" />
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500 leading-none">Network Points Cost</p>
+                                <p className="text-sm font-medium leading-tight">{networkRewardFormData.networkPointsCost} points</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
+                                <Users className="h-4 w-4 text-purple-600" />
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500 leading-none">Eligibility</p>
+                                <p className="text-sm font-medium leading-tight">Tap Network customers only</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex gap-3 pt-4">
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setShowNetworkRewardForm(false)}
+                        className="rounded-md"
+                      >
+                        Cancel
+                      </Button>
+                      {currentNetworkRewardStep > 1 && (
+                        <Button 
+                          variant="outline" 
+                          onClick={() => handleNetworkRewardStepChange(currentNetworkRewardStep - 1)}
+                          className="rounded-md"
+                        >
+                          Back
+                        </Button>
+                      )}
+                      <Button 
+                        onClick={() => {
+                          if (currentNetworkRewardStep < 2) {
+                            handleNetworkRewardStepChange(currentNetworkRewardStep + 1);
+                          } else {
+                            saveNetworkRewardForMerchant();
+                          }
+                        }}
+                        disabled={loading}
+                        className="rounded-md"
+                      >
+                        {loading ? "Processing..." : currentNetworkRewardStep === 2 ? "Create Network Reward" : "Continue"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Create Rewards Tab View */}
+        {currentView === 'createRewards' && (
+          <div className="bg-white p-6 rounded-lg shadow mb-8">
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-2">
+                <span className="text-[#007AFF]">Create</span> Custom Rewards
+              </h2>
+              <p className="text-sm text-gray-600">
+                Create any type of reward for any merchant with full customisation options
+              </p>
+            </div>
+
+            {/* Merchant Selector */}
+            <div className="mb-6">
+              <Label className="text-sm font-medium">Select Merchant <span className="text-red-500">*</span></Label>
+              <Select value={selectedMerchantForReward} onValueChange={setSelectedMerchantForReward}>
+                <SelectTrigger className="w-full mt-1">
+                  <SelectValue placeholder="Choose a merchant to create reward for..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>Available Merchants</SelectLabel>
+                    {merchants.map((merchant) => (
+                      <SelectItem key={merchant.id} value={merchant.id}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 rounded border overflow-hidden flex-shrink-0 bg-gray-50">
+                            {merchant.logoUrl ? (
+                              <img 
+                                src={merchant.logoUrl} 
+                                alt=""
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-gray-200"></div>
+                            )}
+                          </div>
+                          <span>{merchant.merchantName || merchant.tradingName || merchant.id}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              {!selectedMerchantForReward && (
+                <p className="text-xs text-gray-500 mt-1">
+                  You must select a merchant before creating a reward
+                </p>
+              )}
+            </div>
+
+            {selectedMerchantForReward && (
+              <>
+                {!showRewardForm ? (
+                  <div className="border border-gray-200 rounded-md p-6 bg-gray-50">
+                    <div className="flex items-center gap-3 mb-3">
+                      <Gift className="h-5 w-5 text-[#007AFF]" />
+                      <h3 className="text-md font-semibold">Custom Reward</h3>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Create a fully customised reward with advanced conditions, limitations, and targeting options
+                    </p>
+                    <Button
+                      onClick={() => setShowRewardForm(true)}
+                      variant="outline"
+                      className="rounded-md"
+                    >
+                      Create Custom Reward
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Progress Steps */}
+                    <div className="flex items-center space-x-1">
+                      {[1, 2, 3, 4, 5].map((step) => (
+                        <button
+                          key={step}
+                          type="button"
+                          onClick={() => handleRewardStepChange(step)}
+                          className={`h-2 w-10 rounded-md transition-all ${
+                            step === currentRewardStep 
+                              ? "bg-blue-600" 
+                              : step < currentRewardStep 
+                              ? "bg-blue-300" 
+                              : "bg-gray-200"
+                          }`}
+                        />
+                      ))}
+                    </div>
+
+                    {/* Step 1: Basic Details */}
+                    {currentRewardStep === 1 && (
+                      <div className="space-y-4">
+                        <div className="mb-4">
+                          <h2 className="text-lg font-semibold">Basic Details</h2>
+                          <p className="text-sm text-gray-600">Define the core properties of your reward</p>
+                        </div>
+                      
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-sm font-medium">Reward Name <span className="text-red-500">*</span></Label>
+                              <div className="flex items-center gap-2">
+                                <Label className="text-xs text-gray-600">Active</Label>
+                                <Switch
+                                  checked={rewardFormData.isActive}
+                                  onCheckedChange={(checked) => setRewardFormData({ ...rewardFormData, isActive: checked })}
+                                />
+                              </div>
+                            </div>
+                            <Input
+                              value={rewardFormData.rewardName}
+                              onChange={(e) => setRewardFormData({ ...rewardFormData, rewardName: e.target.value })}
+                              placeholder="Enter a clear, concise name (e.g., 'Free Coffee Reward')"
+                              className="h-10 rounded-md"
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Points Cost <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={rewardFormData.pointsCost}
+                              onChange={(e) => setRewardFormData({ ...rewardFormData, pointsCost: e.target.value })}
+                              placeholder="e.g., 100"
+                              className="h-10 rounded-md"
+                            />
+                          </div>
+
+                          <div className="col-span-2 space-y-2">
+                            <Label className="text-sm font-medium">Description <span className="text-red-500">*</span></Label>
+                            <Textarea
+                              value={rewardFormData.description}
+                              onChange={(e) => setRewardFormData({ ...rewardFormData, description: e.target.value })}
+                              placeholder="Explain what customers will receive when they redeem this reward"
+                              className="rounded-md"
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Reward Type <span className="text-red-500">*</span></Label>
+                            <Select
+                              value={rewardFormData.type}
+                              onValueChange={(value) => setRewardFormData({ ...rewardFormData, type: value })}
+                            >
+                              <SelectTrigger className="h-10 rounded-md">
+                                <SelectValue placeholder="Select reward type" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="percentageDiscount">Percentage Discount</SelectItem>
+                                <SelectItem value="fixedDiscount">Fixed-Amount Discount</SelectItem>
+                                <SelectItem value="freeItem">Free Item</SelectItem>
+                                <SelectItem value="bundleOffer">Buy X Get Y (Bundle)</SelectItem>
+                                <SelectItem value="mysterySurprise">Mystery Surprise</SelectItem>
+                                <SelectItem value="other">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">PIN Code (4 digits) <span className="text-red-500">*</span></Label>
+                            <Input
+                              maxLength={4}
+                              value={rewardFormData.pin}
+                              onChange={(e) => {
+                                const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
+                                setRewardFormData({ ...rewardFormData, pin: value })
+                              }}
+                              placeholder="4-digit PIN (e.g., 1234)"
+                              className="h-10 rounded-md"
+                            />
+                            <p className="text-xs text-gray-500">Staff will use this PIN during redemption</p>
+                          </div>
+
+                          {/* Type-specific fields */}
+                          {rewardFormData.type === 'percentageDiscount' && (
+                            <div className="col-span-2 space-y-2 border-l-2 border-blue-100 pl-4 py-2">
+                              <Label className="text-sm font-medium">Discount Percentage <span className="text-red-500">*</span></Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                max="100"
+                                value={rewardFormData.discountValue}
+                                onChange={(e) => setRewardFormData({ ...rewardFormData, discountValue: e.target.value })}
+                                placeholder="e.g., 15 for 15% off"
+                                className="h-10 rounded-md"
+                              />
+                            </div>
+                          )}
+
+                          {rewardFormData.type === 'fixedDiscount' && (
+                            <div className="col-span-2 space-y-4 border-l-2 border-blue-100 pl-4 py-2">
+                              <div className="space-y-2">
+                                <Label className="text-sm font-medium">Discount Amount ($) <span className="text-red-500">*</span></Label>
+                                <Input
+                                  type="number"
+                                  min="0.01"
+                                  step="0.01"
+                                  value={rewardFormData.discountValue}
+                                  onChange={(e) => setRewardFormData({ ...rewardFormData, discountValue: e.target.value })}
+                                  placeholder="e.g., 10 for $10 off"
+                                  className="h-10 rounded-md"
+                                />
+                              </div>
+                              
+                              <div className="space-y-2">
+                                <Label className="text-sm font-medium">Minimum Purchase ($) <span className="text-red-500">*</span></Label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={rewardFormData.minimumPurchase}
+                                  onChange={(e) => setRewardFormData({ ...rewardFormData, minimumPurchase: e.target.value })}
+                                  placeholder="e.g., 25 for minimum $25 purchase"
+                                  className="h-10 rounded-md"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {rewardFormData.type === 'freeItem' && (
+                            <div className="col-span-2 space-y-2 border-l-2 border-blue-100 pl-4 py-2">
+                              <Label className="text-sm font-medium">Free Item Name <span className="text-red-500">*</span></Label>
+                              <Input
+                                type="text"
+                                value={rewardFormData.itemName}
+                                onChange={(e) => setRewardFormData({ ...rewardFormData, itemName: e.target.value })}
+                                placeholder="e.g., Coffee, Muffin, etc."
+                                className="h-10 rounded-md"
+                              />
+                            </div>
+                          )}
+
+                          {rewardFormData.type === 'other' && (
+                            <div className="col-span-2 space-y-2 border-l-2 border-blue-100 pl-4 py-2">
+                              <Label className="text-sm font-medium">Custom Reward Details <span className="text-red-500">*</span></Label>
+                              <Textarea
+                                value={rewardFormData.customRewardDetails}
+                                onChange={(e) => setRewardFormData({ ...rewardFormData, customRewardDetails: e.target.value })}
+                                placeholder="Describe your custom reward in detail"
+                                className="rounded-md"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Step 2: Visibility */}
+                    {currentRewardStep === 2 && (
+                      <div className="space-y-4">
+                        <div className="mb-4">
+                          <h2 className="text-lg font-semibold">Visibility Settings</h2>
+                          <p className="text-sm text-gray-600">Control who can see and access this reward</p>
+                        </div>
+
+                        <div className="space-y-4">
+                          <Label className="text-sm font-medium">Who Can See This Reward</Label>
+                          
+                          <RadioGroup 
+                            value={rewardFormData.rewardVisibility} 
+                            onValueChange={(value) => {
+                              setRewardFormData({
+                                ...rewardFormData,
+                                rewardVisibility: value,
+                                conditions: {
+                                  ...rewardFormData.conditions,
+                                  newCustomer: value === 'new',
+                                  useMembershipRequirements: value !== 'new'
+                                }
+                              });
+                            }}
+                            className="space-y-3"
+                          >
+                            <label htmlFor="all-customers" className="block w-full cursor-pointer">
+                              <div className={`flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 transition-all duration-200 ${rewardFormData.rewardVisibility === 'all' ? 'bg-blue-50 border-blue-200 shadow-sm' : ''}`}>
+                                <RadioGroupItem value="all" id="all-customers" className="mt-1" />
+                                <div className="flex-1">
+                                  <p className={`text-sm font-medium transition-colors duration-200 ${rewardFormData.rewardVisibility === 'all' ? 'text-blue-700' : ''}`}>All Customers</p>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    This reward will be visible to all customers
+                                  </p>
+                                </div>
+                              </div>
+                            </label>
+                            
+                            <label htmlFor="new-customers" className="block w-full cursor-pointer">
+                              <div className={`flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 transition-all duration-200 ${rewardFormData.rewardVisibility === 'new' ? 'bg-blue-50 border-blue-200 shadow-sm' : ''}`}>
+                                <RadioGroupItem value="new" id="new-customers" className="mt-1" />
+                                <div className="flex-1">
+                                  <p className={`text-sm font-medium transition-colors duration-200 ${rewardFormData.rewardVisibility === 'new' ? 'text-blue-700' : ''}`}>New Customers Only</p>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    Only customers who just joined the loyalty program will see this reward
+                                  </p>
+                                </div>
+                              </div>
+                            </label>
+                          </RadioGroup>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Simplified steps 3-5 for now */}
+                    {currentRewardStep > 2 && (
+                      <div className="text-center py-8 text-gray-500">
+                        Step {currentRewardStep} configuration - additional options available in full implementation
+                      </div>
+                    )}
+
+                    <div className="flex gap-3 pt-4">
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setShowRewardForm(false)}
+                        className="rounded-md"
+                      >
+                        Cancel
+                      </Button>
+                      {currentRewardStep > 1 && (
+                        <Button 
+                          variant="outline" 
+                          onClick={() => handleRewardStepChange(currentRewardStep - 1)}
+                          className="rounded-md"
+                        >
+                          Back
+                        </Button>
+                      )}
+                      <Button 
+                        onClick={() => {
+                          if (currentRewardStep < 5) {
+                            handleRewardStepChange(currentRewardStep + 1);
+                          } else {
+                            saveRewardForMerchant();
+                          }
+                        }}
+                        disabled={loading}
+                        className="rounded-md"
+                      >
+                        {loading ? "Processing..." : currentRewardStep === 5 ? "Create Reward" : "Next"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

@@ -553,33 +553,33 @@ export default function GetStartedPage() {
                                  ease: [0.04, 0.62, 0.23, 0.98]
                                }}
                                className="overflow-hidden"
-                             >
-                               <div className="px-3 pb-3 border-t border-gray-100 mt-3">
-                                 <div className="space-y-3">
-                                   <div className="p-3 bg-white rounded-md border border-gray-200">
-                                     <h5 className="text-xs font-medium text-gray-900 mb-2">Tap Standard</h5>
-                                     <p className="text-xs text-gray-600 mb-2">Perfect for individual businesses and single locations.</p>
-                                     <ul className="text-xs text-gray-600 space-y-1">
-                                       <li>• Single business management</li>
-                                       <li>• Basic loyalty features</li>
-                                       <li>• Customer analytics</li>
-                                       <li>• Email marketing tools</li>
-                                     </ul>
-                                   </div>
-                                   
-                                   <div className="p-3 bg-white rounded-md border border-gray-200">
-                                     <h5 className="text-xs font-medium text-gray-900 mb-2">Tap Network</h5>
-                                     <p className="text-xs text-gray-600 mb-2">Ideal for multi-location chains, franchises, and business networks.</p>
-                                     <ul className="text-xs text-gray-600 space-y-1">
-                                       <li>• Multi-location management</li>
-                                       <li>• Advanced network features</li>
-                                       <li>• Cross-location rewards</li>
-                                       <li>• Centralized reporting</li>
-                                       <li>• Franchise management tools</li>
-                                     </ul>
-                                   </div>
-                                 </div>
+                         >
+                           <div className="px-3 pb-3 border-t border-gray-100 mt-3">
+                             <div className="space-y-3">
+                               <div className="p-3 bg-white rounded-md border border-gray-200">
+                                 <h5 className="text-xs font-medium text-gray-900 mb-2">Tap Standard</h5>
+                                 <p className="text-xs text-gray-600 mb-2">Perfect for individual businesses and single locations.</p>
+                                 <ul className="text-xs text-gray-600 space-y-1">
+                                   <li>• Single business management</li>
+                                   <li>• Basic loyalty features</li>
+                                   <li>• Customer analytics</li>
+                                   <li>• Email marketing tools</li>
+                                 </ul>
                                </div>
+                               
+                               <div className="p-3 bg-white rounded-md border border-gray-200">
+                                 <h5 className="text-xs font-medium text-gray-900 mb-2">Tap Network</h5>
+                                 <p className="text-xs text-gray-600 mb-2">Ideal for multi-location chains, franchises, and business networks.</p>
+                                 <ul className="text-xs text-gray-600 space-y-1">
+                                   <li>• Multi-location management</li>
+                                   <li>• Advanced network features</li>
+                                   <li>• Cross-location rewards</li>
+                                   <li>• Centralized reporting</li>
+                                   <li>• Franchise management tools</li>
+                                 </ul>
+                               </div>
+                             </div>
+                           </div>
                              </motion.div>
                            )}
                          </AnimatePresence>
@@ -658,25 +658,25 @@ export default function GetStartedPage() {
                               ease: [0.04, 0.62, 0.23, 0.98]
                             }}
                             className="overflow-hidden"
-                          >
-                            <div className="px-4 pb-4 border-t border-gray-100">
-                              <p className="text-xs text-gray-600 mb-4 mt-3">
-                                {item.description}
-                              </p>
-                              <Button 
-                                size="sm" 
+                      >
+                        <div className="px-4 pb-4 border-t border-gray-100">
+                          <p className="text-xs text-gray-600 mb-4 mt-3">
+                            {item.description}
+                          </p>
+                          <Button 
+                            size="sm" 
                                 className={cn(
                                   "text-white inline-flex items-center gap-2",
                                   item.completed 
                                     ? "bg-gray-500 hover:bg-gray-600" 
                                     : "bg-[#007aff] hover:bg-[#339fff]"
                                 )}
-                                onClick={item.popupAction}
-                              >
+                            onClick={item.popupAction}
+                          >
                                 {item.completed ? "Modify" : item.actionText}
-                                <ExternalLink className="h-3 w-3" />
-                              </Button>
-                            </div>
+                            <ExternalLink className="h-3 w-3" />
+                          </Button>
+                        </div>
                           </motion.div>
                         )}
                       </AnimatePresence>
@@ -788,27 +788,27 @@ export default function GetStartedPage() {
                               ease: [0.04, 0.62, 0.23, 0.98]
                             }}
                             className="overflow-hidden"
-                          >
-                            <div className="px-4 pb-4 border-t border-gray-100">
-                             <p className="text-xs text-gray-600 mb-4 mt-3">
-                               {item.description}
-                             </p>
-                               <Button 
-                                 size="sm" 
-                                 asChild
+                      >
+                        <div className="px-4 pb-4 border-t border-gray-100">
+                         <p className="text-xs text-gray-600 mb-4 mt-3">
+                           {item.description}
+                         </p>
+                           <Button 
+                             size="sm" 
+                             asChild
                                  className={cn(
                                    "text-white",
                                    item.completed 
                                      ? "bg-gray-500 hover:bg-gray-600" 
                                      : "bg-[#007aff] hover:bg-[#339fff]"
                                  )}
-                               >
-                                 <Link href={item.actionUrl!} className="inline-flex items-center gap-2">
+                           >
+                             <Link href={item.actionUrl!} className="inline-flex items-center gap-2">
                                    {item.completed ? "Modify" : item.actionText}
-                                   <ExternalLink className="h-3 w-3" />
-                                 </Link>
-                               </Button>
-                           </div>
+                               <ExternalLink className="h-3 w-3" />
+                             </Link>
+                           </Button>
+                       </div>
                           </motion.div>
                         )}
                       </AnimatePresence>

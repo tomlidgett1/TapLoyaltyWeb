@@ -4999,7 +4999,7 @@ export default function DashboardPage() {
                 <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-medium text-gray-900">Recent Activity</h3>
+                      <h3 className="text-base font-medium text-gray-900">Recent Activity</h3>
                       <div className="flex items-center gap-3 ml-[50px]">
                         <button
                           onClick={() => setIsAdvancedActivity(!isAdvancedActivity)}
@@ -5142,7 +5142,7 @@ export default function DashboardPage() {
                 <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-medium text-gray-900">Popular Rewards</h3>
+                      <h3 className="text-base font-medium text-gray-900">Popular Rewards</h3>
                   <Link href="/store/rewards" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors">
                       View all
                       <ChevronRight className="h-3 w-3" strokeWidth={2.75} />
@@ -5201,7 +5201,7 @@ export default function DashboardPage() {
                 <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-medium text-gray-900">Agent Inbox</h3>
+                      <h3 className="text-base font-medium text-gray-900">Agent Inbox</h3>
                       <Link href="/email" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors">
                         View all
                         <ChevronRight className="h-3 w-3" strokeWidth={2.75} />
@@ -5304,7 +5304,7 @@ export default function DashboardPage() {
                   <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-medium text-gray-900">Live Programs</h3>
+                        <h3 className="text-base font-medium text-gray-900">Live Programs</h3>
                         {/* Program Type Tabs */}
                         <div className="flex items-center gap-4">
                           {recurringPrograms.coffee && (
@@ -5893,7 +5893,7 @@ export default function DashboardPage() {
                 <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-medium text-gray-900">Live Rewards</h3>
+                      <h3 className="text-base font-medium text-gray-900">Live Rewards</h3>
                       {/* Reward Type Tabs */}
                       <div className="flex items-center gap-4">
                         <button
@@ -6084,7 +6084,7 @@ export default function DashboardPage() {
                 <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-medium text-gray-900">All Customers</h3>
+                      <h3 className="text-base font-medium text-gray-900">All Customers</h3>
                       <Link href="/customers" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors">
                         View all
                         <ChevronRight className="h-3 w-3" strokeWidth={2.75} />
@@ -6299,7 +6299,7 @@ export default function DashboardPage() {
                 <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-medium text-gray-900">Customer Engagement Analysis</h3>
+                      <h3 className="text-base font-medium text-gray-900">Customer Engagement Analysis</h3>
                       <div className="flex items-center gap-2">
                         <TooltipProvider>
                           <TooltipComponent>
@@ -6794,7 +6794,7 @@ export default function DashboardPage() {
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
                                                       <Layers className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
-                        <h3 className="text-sm font-medium text-gray-900">Integrations</h3>
+                        <h3 className="text-base font-medium text-gray-900">Integrations</h3>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -6821,7 +6821,7 @@ export default function DashboardPage() {
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
                                                       <Bot className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
-                        <h3 className="text-sm font-medium text-gray-900">Agent Creation</h3>
+                        <h3 className="text-base font-medium text-gray-900">Agent Creation</h3>
                       </div>
                       <div className="flex items-center gap-2">
                         <button

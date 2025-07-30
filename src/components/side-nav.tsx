@@ -837,21 +837,35 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
       
       {/* Account section at the bottom - using NavUser component */}
       <div className="mt-auto border-t border-gray-200 p-3">
-        <NavUser 
-          user={{
-            name: merchantName,
-            email: merchantEmail,
-            avatar: merchantData?.logoUrl && !logoError ? merchantData.logoUrl : "",
-            initials: initials,
-            uid: user?.uid
-          }}
-          status={merchantStatus}
-          isNetworkStore={merchantData?.isNetworkStore}
-          onLogout={handleLogout}
-          onOpenSettings={() => setSettingsDialogOpen(true)}
-          onOpenSupport={() => setSupportBoxOpen(true)}
-          onStatusChange={(newStatus) => setMerchantStatus(newStatus)}
-        />
+        {loading || merchantName === "My Business" ? (
+          <div className="flex items-center gap-3 px-2 py-2">
+            <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center animate-pulse">
+              <div className="w-4 h-4 bg-gray-300 rounded-full animate-pulse"></div>
+            </div>
+            {!isCollapsed && (
+              <div className="flex-1 space-y-1">
+                <div className="h-3 bg-gray-200 rounded animate-pulse w-20"></div>
+                <div className="h-2 bg-gray-100 rounded animate-pulse w-16"></div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <NavUser 
+            user={{
+              name: merchantName,
+              email: merchantEmail,
+              avatar: merchantData?.logoUrl && !logoError ? merchantData.logoUrl : "",
+              initials: initials,
+              uid: user?.uid
+            }}
+            status={merchantStatus}
+            isNetworkStore={merchantData?.isNetworkStore}
+            onLogout={handleLogout}
+            onOpenSettings={() => setSettingsDialogOpen(true)}
+            onOpenSupport={() => setSupportBoxOpen(true)}
+            onStatusChange={(newStatus) => setMerchantStatus(newStatus)}
+          />
+        )}
       </div>
 
       {/* CreateSheet component */}

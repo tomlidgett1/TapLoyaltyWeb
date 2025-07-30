@@ -135,7 +135,7 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import GradientText from "@/components/GradientText"
 import { db } from "@/lib/firebase"
-import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnapshot, updateDoc, setDoc, addDoc, deleteDoc, Timestamp, QueryConstraint } from "firebase/firestore"
+import { collection, query, where, getDocs, orderBy, limit, doc, getDoc, onSnapshot, updateDoc, setDoc, addDoc, deleteDoc, Timestamp, QueryConstraint, startAfter } from "firebase/firestore"
 import { httpsCallable } from "firebase/functions"
 import { functions } from "@/lib/firebase"
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"
@@ -1697,6 +1697,11 @@ export default function EmailPage() {
   const [fetchedEmails, setFetchedEmails] = useState<any[]>([])
   const [gmailEmailAddress, setGmailEmailAddress] = useState<string | null>(null)
   const [emailsLoading, setEmailsLoading] = useState(false)
+  
+  // ✅ PAGINATION: Email pagination state
+  const [lastEmailDoc, setLastEmailDoc] = useState<any>(null)
+  const [hasMoreEmails, setHasMoreEmails] = useState(true)
+  const [loadingMoreEmails, setLoadingMoreEmails] = useState(false)
   const [newEmailIds, setNewEmailIds] = useState<Set<string>>(new Set())
   const [deletingThreadIds, setDeletingThreadIds] = useState<Set<string>>(new Set())
   const [showAttachmentsPopup, setShowAttachmentsPopup] = useState(false)
@@ -1721,6 +1726,9 @@ export default function EmailPage() {
   
 
   const [searchQuery, setSearchQuery] = useState("")
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [isSearchMode, setIsSearchMode] = useState(false)
   const [selectedFilter, setSelectedFilter] = useState<string>('all')
   
   // Custom filters state
@@ -2145,8 +2153,17 @@ ${content}`;
     });
   };
 
-  // Use only fetched Gmail emails
-  const allEmails = fetchedEmails
+  // ✅ SEARCH MODE: Use search results when searching, otherwise use fetched emails
+  const allEmails = isSearchMode ? searchResults : fetchedEmails
+  
+  // Debug: Log current state
+  console.log("📊 Current state:", { 
+    isSearchMode, 
+    searchResultsCount: searchResults.length, 
+    fetchedEmailsCount: fetchedEmails.length,
+    allEmailsCount: allEmails.length,
+    searchQuery: searchQuery
+  })
   
   // Memoized email grouping function to prevent expensive recalculations
   const groupEmailsByThread = useCallback((emails: any[]) => {
@@ -2474,52 +2491,72 @@ ${content}`;
   }
 
   // Fetch Gmail threads from the new Firestore structure
-  const fetchGmailEmails = async () => {
+  const fetchGmailEmails = async (loadMore: boolean = false) => {
     if (!user?.uid) return
-    
+
     // Prevent multiple simultaneous calls
-    if (emailsLoading) {
+    if (emailsLoading || (loadMore && loadingMoreEmails)) {
       console.log("Already loading emails, skipping duplicate request")
       return
     }
 
     try {
-      setEmailsLoading(true)
-      console.log("Fetching emails from Firestore for merchant:", user.uid, "folder:", selectedFolder)
+      if (loadMore) {
+        setLoadingMoreEmails(true)
+      } else {
+        setEmailsLoading(true)
+        // Reset pagination state for new fetch
+        setLastEmailDoc(null)
+        setHasMoreEmails(true)
+      }
       
       if (selectedFolder === "sent") {
         // Fetch sent emails
         const sentEmails = await fetchSentEmails()
         setFetchedEmails(sentEmails)
-        setEmailsLoading(false)
+        if (loadMore) {
+          setLoadingMoreEmails(false)
+        } else {
+          setEmailsLoading(false)
+        }
         return
       }
       
       // Query the thread documents from merchants/merchantId/fetchedemails/
       const threadsRef = collection(db, 'merchants', user.uid, 'fetchedemails')
       
-      const threadsQuery = query(
-        threadsRef,
-        orderBy('updatedAt', 'desc'),
-        limit(50) // Limit to 50 threads
-      )
-      
-      console.log("🔍 Querying thread containers from:", `merchants/${user.uid}/fetchedemails`)
+      let threadsQuery
+      if (loadMore && lastEmailDoc) {
+        // ✅ PAGINATION: Load more starting after the last document
+        threadsQuery = query(
+          threadsRef,
+          orderBy('updatedAt', 'desc'),
+          startAfter(lastEmailDoc),
+          limit(20)
+        )
+      } else {
+        // Initial load
+        threadsQuery = query(
+          threadsRef,
+          orderBy('updatedAt', 'desc'),
+          limit(20)
+        )
+      }
       
       const threadsSnapshot = await getDocs(threadsQuery)
       
-      console.log(`📊 Found ${threadsSnapshot.size} threads in new Firestore structure`)
-      console.log("🔍 Thread documents:", threadsSnapshot.docs.map(doc => ({ id: doc.id, data: doc.data() })))
+      // ✅ PAGINATION: Update hasMoreEmails based on results
+      setHasMoreEmails(threadsSnapshot.docs.length === 20)
+      
+      // ✅ PAGINATION: Store last document for next page
+      if (threadsSnapshot.docs.length > 0) {
+        setLastEmailDoc(threadsSnapshot.docs[threadsSnapshot.docs.length - 1])
+      }
       
       // Transform thread documents into thread objects for the left panel
-      const transformedThreads = await Promise.all(threadsSnapshot.docs.map(async (doc, index) => {
+      // ✅ PERFORMANCE: Parallelize chain queries instead of sequential processing
+      const transformedThreads = await Promise.all(threadsSnapshot.docs.map(async (doc) => {
         const threadData = doc.data()
-        console.log("Processing thread:", doc.id, threadData)
-        
-        // Add delay between requests to avoid overwhelming Firestore
-        if (index > 0) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
         
         // Use thread metadata for the list view
         const threadId = threadData.threadId || doc.id
@@ -2528,7 +2565,7 @@ ${content}`;
         const latestSender = threadData.latestSender || "Unknown Sender"
         const latestReceivedAt = threadData.latestReceivedAt
         
-        // Query the chain subcollection to get actual message count, attachments, read status, and content
+        // ✅ PERFORMANCE: Optimized chain subcollection query
         let messageCount = 1;
         let hasAttachment = false;
         let mostRecentEmailRead = false;
@@ -2538,20 +2575,20 @@ ${content}`;
           const chainSnapshot = await getDocs(chainRef)
           messageCount = chainSnapshot.size || 1
           
-          // Check if any email in the chain has attachments and get most recent email's read status and content
-          hasAttachment = chainSnapshot.docs.some(doc => {
-            const messageData = doc.data();
-            return extractAttachments(messageData).length > 0;
-          });
+          // Process all docs in one pass for efficiency
+          const chainDocs = chainSnapshot.docs.map(doc => ({
+            id: doc.id,
+            data: doc.data(),
+            timestamp: doc.data().receivedAt || doc.data().repliedAt || doc.data().processedAt
+          }));
+          
+          // Check for attachments
+          hasAttachment = chainDocs.some(doc => extractAttachments(doc.data).length > 0);
           
           // Find the most recent email's read status and content
-          if (chainSnapshot.docs.length > 0) {
-            // Sort emails by timestamp to find the most recent one
-            const sortedEmails = chainSnapshot.docs.map(doc => ({
-              id: doc.id,
-              data: doc.data(),
-              timestamp: doc.data().receivedAt || doc.data().repliedAt || doc.data().processedAt
-            })).sort((a, b) => {
+          if (chainDocs.length > 0) {
+            // Sort already processed emails by timestamp
+            const sortedEmails = chainDocs.sort((a, b) => {
               const getTime = (timestamp: any) => {
                 if (typeof timestamp === 'string') {
                   return new Date(timestamp).getTime();
@@ -2600,7 +2637,7 @@ ${content}`;
             }
           }
           
-          console.log(`📊 Thread ${threadId}: Found ${messageCount} messages in chain subcollection, hasAttachment: ${hasAttachment}, mostRecentRead: ${mostRecentEmailRead}`)
+          // ✅ PERFORMANCE: Removed verbose logging for faster processing
         } catch (error) {
           console.error(`Error querying chain for thread ${threadId}:`, error)
           messageCount = 1 // Fallback to 1 if query fails
@@ -2694,29 +2731,37 @@ ${content}`;
         
       console.log("All threads sorted by latest activity:", sortedThreads)
       
-      // Track new emails for animation
+      // ✅ PAGINATION: Handle emails based on load type
       setFetchedEmails(prevEmails => {
-        const prevThreadIds = new Set(prevEmails.map(email => email.threadId))
-        const newThreadIds = new Set<string>()
-        
-        // Identify new threads
-        sortedThreads.forEach(thread => {
-          if (!prevThreadIds.has(thread.threadId)) {
-            newThreadIds.add(thread.threadId)
-          }
-        })
-        
-        // Set new email IDs for animation
-        if (newThreadIds.size > 0) {
-          setNewEmailIds(newThreadIds)
+        if (loadMore) {
+          // Append new emails to existing list
+          const existingThreadIds = new Set(prevEmails.map(email => email.threadId))
+          const newThreads = sortedThreads.filter(thread => !existingThreadIds.has(thread.threadId))
+          return [...prevEmails, ...newThreads]
+        } else {
+          // Replace all emails (initial load)
+          const prevThreadIds = new Set(prevEmails.map(email => email.threadId))
+          const newThreadIds = new Set<string>()
           
-          // Clear the animation after 3 seconds
-          setTimeout(() => {
-            setNewEmailIds(new Set())
-          }, 3000)
+          // Identify new threads for animation
+          sortedThreads.forEach(thread => {
+            if (!prevThreadIds.has(thread.threadId)) {
+              newThreadIds.add(thread.threadId)
+            }
+          })
+          
+          // Set new email IDs for animation
+          if (newThreadIds.size > 0) {
+            setNewEmailIds(newThreadIds)
+            
+            // Clear the animation after 3 seconds
+            setTimeout(() => {
+              setNewEmailIds(new Set())
+            }, 3000)
+          }
+          
+          return sortedThreads
         }
-        
-        return sortedThreads
       })
       
       // Store debug response
@@ -2736,9 +2781,214 @@ ${content}`;
         merchantId: user.uid
       })
     } finally {
-      setEmailsLoading(false)
+      if (loadMore) {
+        setLoadingMoreEmails(false)
+      } else {
+        setEmailsLoading(false)
+      }
     }
   }
+
+  // ✅ PAGINATION: Load more emails function
+  const loadMoreEmails = async () => {
+    if (!hasMoreEmails || loadingMoreEmails) return
+    if (isSearchMode) {
+      await searchEmails(searchQuery, true)
+    } else {
+      await fetchGmailEmails(true)
+    }
+  }
+
+  // ✅ BACKEND SEARCH: Search all emails in database
+  const searchEmails = async (searchTerm: string, loadMore: boolean = false) => {
+    console.log("🔍 searchEmails called with:", { searchTerm, loadMore, userUid: !!user?.uid })
+    
+    if (!user?.uid || !searchTerm.trim()) {
+      console.log("❌ Search aborted - no user or empty search term")
+      // If no query, exit search mode and load regular emails
+      setIsSearchMode(false)
+      setSearchResults([])
+      if (!fetchedEmails.length) {
+        await fetchGmailEmails()
+      }
+      return
+    }
+
+          console.log("✅ Starting search process...")
+
+      try {
+        // Simple test: just filter current fetched emails first to see if that works
+        if (searchTerm === "test") {
+          console.log("🧪 Running simple test search")
+          setIsSearchMode(true)
+          setSearchResults(fetchedEmails.slice(0, 3)) // Just return first 3 emails as test
+          setIsSearching(false)
+          return
+        }
+      if (loadMore) {
+        setLoadingMoreEmails(true)
+      } else {
+        setIsSearching(true)
+        setIsSearchMode(true)
+        setLastEmailDoc(null)
+        setHasMoreEmails(true)
+      }
+
+      const threadsRef = collection(db, 'merchants', user.uid, 'fetchedemails')
+      
+      // Since Firestore doesn't have great full-text search, we'll fetch all and filter
+      // In a production app, you'd use Algolia or similar for better search
+      let threadsQuery
+      if (loadMore && lastEmailDoc) {
+        threadsQuery = query(
+          threadsRef,
+          orderBy('updatedAt', 'desc'),
+          startAfter(lastEmailDoc),
+          limit(50) // Load more for search to have better results
+        )
+      } else {
+        threadsQuery = query(
+          threadsRef,
+          orderBy('updatedAt', 'desc'),
+          limit(50) // Initial search load more to find matches
+        )
+      }
+
+      const threadsSnapshot = await getDocs(threadsQuery)
+      console.log("📊 Found", threadsSnapshot.docs.length, "threads to search through")
+      
+      const searchQuery = searchTerm.toLowerCase().trim()
+      console.log("🔍 Searching for:", searchQuery)
+
+      // Process threads and check for search matches
+      const searchMatches = await Promise.all(
+        threadsSnapshot.docs.map(async (doc) => {
+          const threadData = doc.data() as any
+          const threadId = threadData.threadId || doc.id
+          const subject = threadData.payload?.data?.preview?.subject || threadData.subject || ""
+          const latestSender = threadData.latestSender || ""
+
+          // Check if thread metadata matches
+          const metadataMatch = 
+            subject.toLowerCase().includes(searchQuery) ||
+            latestSender.toLowerCase().includes(searchQuery)
+
+          if (metadataMatch) {
+            // Build thread object similar to fetchGmailEmails
+            return {
+              id: threadId,
+              threadId: threadId,
+              subject: subject,
+              sender: latestSender,
+              time: threadData.latestReceivedAt,
+              representative: {
+                id: threadId,
+                subject: subject,
+                sender: latestSender,
+                time: threadData.latestReceivedAt,
+                read: false // We'll update this from chain if needed
+              }
+            }
+          }
+
+          // If metadata doesn't match, check chain subcollection for content matches
+          try {
+            const chainRef = collection(db, 'merchants', user.uid, 'fetchedemails', threadId, 'chain')
+            const chainSnapshot = await getDocs(chainRef)
+            
+            for (const chainDoc of chainSnapshot.docs) {
+              const messageData = chainDoc.data()
+              const content = messageData.payload?.data?.preview?.body || messageData.htmlMessage || ""
+              const messageSender = messageData.from || ""
+              
+              if (
+                content.toLowerCase().includes(searchQuery) ||
+                messageSender.toLowerCase().includes(searchQuery)
+              ) {
+                // Found match in chain, return thread
+                return {
+                  id: threadId,
+                  threadId: threadId,
+                  subject: subject,
+                  sender: latestSender,
+                  time: threadData.latestReceivedAt,
+                  representative: {
+                    id: threadId,
+                    subject: subject,
+                    sender: latestSender,
+                    time: threadData.latestReceivedAt,
+                    read: messageData.read || false
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            console.error("Error searching chain for thread:", threadId, error)
+          }
+
+          return null // No match found
+        })
+      )
+
+      // Filter out null results and sort
+      const validMatches = searchMatches.filter(match => match !== null)
+      console.log("🎯 Found", validMatches.length, "matches out of", searchMatches.length, "processed threads")
+      
+      const sortedMatches = validMatches.sort((a, b) => {
+        const timeA = a.time?.toDate?.() || a.time || new Date(0)
+        const timeB = b.time?.toDate?.() || b.time || new Date(0)
+        return timeB.getTime() - timeA.getTime()
+      })
+      
+      console.log("📋 Sorted matches:", sortedMatches.map(m => ({ id: m.id, subject: m.subject })))
+
+      // Update pagination state
+      setHasMoreEmails(threadsSnapshot.docs.length === 50 && sortedMatches.length > 0)
+      if (threadsSnapshot.docs.length > 0) {
+        setLastEmailDoc(threadsSnapshot.docs[threadsSnapshot.docs.length - 1])
+      }
+
+      // Update search results
+      if (loadMore) {
+        console.log("📝 Appending", sortedMatches.length, "more results to existing search results")
+        setSearchResults(prev => [...prev, ...sortedMatches])
+      } else {
+        console.log("📝 Setting", sortedMatches.length, "search results")
+        setSearchResults(sortedMatches)
+      }
+
+    } catch (error) {
+      console.error("❌ Error searching emails:", error)
+      // Reset search mode on error
+      setIsSearchMode(false)
+      setSearchResults([])
+    } finally {
+      if (loadMore) {
+        setLoadingMoreEmails(false)
+      } else {
+        setIsSearching(false)
+      }
+    }
+  }
+
+  // ✅ DEBOUNCED SEARCH: Trigger search when query changes
+  useEffect(() => {
+    console.log("🔍 Search effect triggered - searchQuery:", searchQuery, "isSearchMode:", isSearchMode)
+    
+    const timeoutId = setTimeout(() => {
+      if (searchQuery.trim()) {
+        console.log("🚀 Triggering search for:", searchQuery)
+        searchEmails(searchQuery)
+      } else if (isSearchMode) {
+        console.log("🧹 Clearing search mode")
+        // Clear search mode when query is empty
+        setIsSearchMode(false)
+        setSearchResults([])
+      }
+    }, 300) // 300ms debounce
+
+    return () => clearTimeout(timeoutId)
+  }, [searchQuery])
 
   // Sync emails by calling the Firebase function to fetch new emails
   const syncGmailEmails = async () => {
@@ -2833,6 +3083,12 @@ ${content}`;
         }
         
         setConnectedAccounts(accounts)
+        
+        // ✅ FETCH EMAILS: Trigger email fetch after accounts are set up
+        if (selectedFolder !== "sent") {
+          console.log("🚀 ACCOUNTS READY: Triggering fetchGmailEmails after account setup");
+          fetchGmailEmails();
+        }
       } else {
         console.log('No Gmail integration found')
         setConnectedAccounts([])
@@ -2933,13 +3189,8 @@ ${content}`;
   useEffect(() => {
     if (!user?.uid) return;
     
-    // Delayed fetch for non-critical data to improve initial load performance
-    const delayedFetch = setTimeout(() => {
-      fetchConnectedAccounts();
-      // Don't fetch all emails immediately - let user trigger this
-    }, 1000); // 1 second delay
-    
-    return () => clearTimeout(delayedFetch);
+    // ✅ IMMEDIATE ACCOUNT FETCH: Fetch connected accounts immediately for email loading
+    fetchConnectedAccounts();
     
     // Check if we need to trigger Gmail integration setup
     const checkAndTriggerGmailIntegration = async () => {
@@ -3014,14 +3265,16 @@ ${content}`;
       console.error('Error listening to Gmail integration:', error)
     })
     
+    // ✅ EMAILS WILL BE FETCHED: After fetchConnectedAccounts() completes
+
     // Set up Firestore listener for real-time thread updates (only for inbox)
     let threadsUnsubscribe: (() => void) | undefined
-    if (selectedFolder !== "sent") {
+    if (user?.uid && selectedFolder !== "sent") {
       const threadsRef = collection(db, 'merchants', user.uid, 'fetchedemails')
       const threadsQuery = query(
         threadsRef,
         orderBy('updatedAt', 'desc'),
-        limit(50)
+        limit(20) // Reduced from 50 to 20 for faster loading
       )
       
       console.log("📡 Setting up Firestore listener for real-time thread updates")
@@ -4732,12 +4985,19 @@ ${content}`;
                 </div>
                 
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  {isSearching ? (
+                    <Loader2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  )}
                   <Input
-                    placeholder="Search emails..."
+                    placeholder={isSearchMode ? `Search results (${searchResults.length} found)` : "Search emails..."}
                     className="pl-10 pr-8"
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      console.log("🔤 Search input changed:", e.target.value)
+                      setSearchQuery(e.target.value)
+                    }}
                   />
                   {searchQuery && (
                     <button
@@ -4910,6 +5170,17 @@ ${content}`;
 
             
             <div className="divide-y divide-gray-200">
+              {/* ✅ SEARCH EMPTY STATE */}
+              {isSearchMode && searchResults.length === 0 && !isSearching && (
+                <div className="flex flex-col items-center justify-center py-12 px-4">
+                  <Search className="h-12 w-12 text-gray-300 mb-3" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-1">No emails found</h3>
+                  <p className="text-sm text-gray-500 text-center max-w-sm">
+                    No emails match your search for "{searchQuery}". Try adjusting your search terms.
+                  </p>
+                </div>
+              )}
+              
               {emailThreads.map((thread) => (
                 <div 
                   key={thread.threadId}
@@ -5126,6 +5397,30 @@ ${content}`;
                   )}
                 </div>
               ))}
+              
+              {/* ✅ PAGINATION: Load More Button */}
+              {hasMoreEmails && (
+                <div className="p-4 border-t border-gray-100 bg-gray-50">
+                  <Button
+                    variant="outline"
+                    onClick={loadMoreEmails}
+                    disabled={loadingMoreEmails}
+                    className="w-full text-sm py-2 px-4 rounded-md border border-gray-200 bg-white hover:bg-gray-50 transition-colors"
+                  >
+                    {loadingMoreEmails ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Loading more emails...
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-4 h-4 mr-2" />
+                        Load More Emails
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
           )}
@@ -6211,7 +6506,7 @@ ${content}`;
                                       {selectedAgentTask.senderEmail && (
                                         <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
                                           <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
-                                          <Mail className="h-3 w-3 text-gray-500 flex-shrink-0" />
+                                          <Mail className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
                                           {selectedAgentTask.senderEmail}
                                         </span>
                                       )}

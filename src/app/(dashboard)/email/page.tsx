@@ -4649,7 +4649,7 @@ ${content}`;
 
               {/* Email Title */}
               <div className="flex items-center">
-                <h1 className="text-lg font-semibold text-black">Email</h1>
+                <h1 className="text-base font-medium text-gray-900">Email</h1>
               </div>
 
               {/* Minimalist Toolbar Actions */}

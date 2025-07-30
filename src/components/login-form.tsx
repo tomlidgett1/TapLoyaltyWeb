@@ -177,7 +177,7 @@ export function LoginForm({
   
   return (
     <>
-      <Card className={cn("w-full max-w-sm mx-auto border border-gray-200 shadow-sm rounded-xl bg-white", className)} {...props}>
+      <Card className={cn("w-full max-w-sm mx-auto border border-gray-200 shadow-sm rounded-2xl bg-white", className)} {...props}>
         <CardHeader className="space-y-1 pb-6 pt-8">
           <div className="text-center">
             {/* Logo */}

@@ -241,6 +241,13 @@ interface Reward {
 
 export default function AdminMerchants() {
   const router = useRouter();
+  
+  // Authentication state
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  
   const [currentView, setCurrentView] = useState<'merchants' | 'customers' | 'functions' | 'rewards'>('merchants');
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -527,6 +534,15 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
   const [isDeleteRewardDialogOpen, setIsDeleteRewardDialogOpen] = useState(false);
   const [isDeleteAllRewardsDialogOpen, setIsDeleteAllRewardsDialogOpen] = useState(false);
   const [rewardToDelete, setRewardToDelete] = useState<Reward | null>(null);
+  
+  // Merchants state for multi-select
+  const [selectedMerchants, setSelectedMerchants] = useState<string[]>([]);
+  const [isDeleteSelectedMerchantsDialogOpen, setIsDeleteSelectedMerchantsDialogOpen] = useState(false);
+  
+  // Customers state for multi-select
+  const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
+  const [isDeleteSelectedCustomersDialogOpen, setIsDeleteSelectedCustomersDialogOpen] = useState(false);
+  
   const [rewardSortConfig, setRewardSortConfig] = useState<{
     key: string;
     direction: 'ascending' | 'descending';
@@ -537,6 +553,37 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
     redeemable: 'all', // 'all', 'true', 'false'
   });
   const [maxRewardsToShow, setMaxRewardsToShow] = useState(1000);
+
+  // Check authentication on component mount
+  useEffect(() => {
+    const authStatus = sessionStorage.getItem('adminAuthenticated');
+    if (authStatus === 'true') {
+      setIsAuthenticated(true);
+    }
+    setCheckingAuth(false);
+  }, []);
+
+  // Handle password submission
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordInput === '1975') {
+      setIsAuthenticated(true);
+      sessionStorage.setItem('adminAuthenticated', 'true');
+      setPasswordError("");
+      setPasswordInput("");
+    } else {
+      setPasswordError("Incorrect password. Please try again.");
+      setPasswordInput("");
+    }
+  };
+
+  // Handle logout
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    sessionStorage.removeItem('adminAuthenticated');
+    setPasswordInput("");
+    setPasswordError("");
+  };
 
   useEffect(() => {
     if (currentView === 'merchants') {
@@ -1487,6 +1534,74 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
     }
   };
 
+  const handleDeleteSelectedMerchants = async () => {
+    if (selectedMerchants.length === 0) return;
+    
+    try {
+      setLoading(true);
+      
+      const merchantsToDelete = merchants.filter(m => selectedMerchants.includes(m.id));
+      const deletePromises = merchantsToDelete.map(merchant => {
+        const docRef = doc(db, "merchants", merchant.id);
+        return deleteDoc(docRef);
+      });
+      
+      await Promise.all(deletePromises);
+      
+      setMerchants(merchants.filter(m => !selectedMerchants.includes(m.id)));
+      setSelectedMerchants([]);
+      
+      toast({
+        title: "Success",
+        description: `Deleted ${merchantsToDelete.length} merchants successfully`,
+      });
+      
+      setLoading(false);
+    } catch (error) {
+      console.error("Error deleting selected merchants:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete selected merchants",
+        variant: "destructive"
+      });
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteSelectedCustomers = async () => {
+    if (selectedCustomers.length === 0) return;
+    
+    try {
+      setLoading(true);
+      
+      const customersToDelete = customers.filter(c => selectedCustomers.includes(c.id));
+      const deletePromises = customersToDelete.map(customer => {
+        const docRef = doc(db, "customers", customer.id);
+        return deleteDoc(docRef);
+      });
+      
+      await Promise.all(deletePromises);
+      
+      setCustomers(customers.filter(c => !selectedCustomers.includes(c.id)));
+      setSelectedCustomers([]);
+      
+      toast({
+        title: "Success",
+        description: `Deleted ${customersToDelete.length} customers successfully`,
+      });
+      
+      setLoading(false);
+    } catch (error) {
+      console.error("Error deleting selected customers:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete selected customers",
+        variant: "destructive"
+      });
+      setLoading(false);
+    }
+  };
+
   // Reward sorting functions
   const handleRewardSort = (key: string) => {
     let direction: 'ascending' | 'descending' = 'ascending';
@@ -1548,27 +1663,100 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
     return match && match[1] ? match[1] : defaultValue;
   };
 
+  // Show loading while checking authentication
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  // Show password dialog if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold text-gray-900">Admin Portal</h1>
+            <p className="text-gray-600 mt-2">Please enter the password to access the admin portal</p>
+          </div>
+          
+          <form onSubmit={handlePasswordSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                placeholder="Enter admin password"
+                className="mt-1"
+                autoFocus
+              />
+              {passwordError && (
+                <p className="text-red-600 text-sm mt-1">{passwordError}</p>
+              )}
+            </div>
+            
+            <Button type="submit" className="w-full">
+              Access Admin Portal
+            </Button>
+          </form>
+          
+          <div className="mt-4 text-center">
+            <Button 
+              variant="ghost" 
+              onClick={() => router.push("/dashboard")}
+              className="text-sm"
+            >
+              <ArrowLeft className="h-3 w-3 mr-1" />
+              Back to Dashboard
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center mb-8">
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => router.push("/dashboard")}
+              className="mr-4"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Dashboard
+            </Button>
+            <h1 className="text-3xl font-bold">Admin Portal</h1>
+          </div>
+          
           <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => router.push("/dashboard")}
-            className="mr-4"
+            variant="outline" 
+            size="sm"
+            onClick={handleLogout}
+            className="text-red-600 hover:text-red-700"
           >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Dashboard
+            Logout
           </Button>
-          <h1 className="text-3xl font-bold">Admin Portal</h1>
         </div>
 
         {/* Entity type tabs */}
         <Tabs 
           defaultValue="merchants" 
           className="mb-8" 
-          onValueChange={(value) => setCurrentView(value as 'merchants' | 'customers' | 'functions' | 'rewards')}
+          onValueChange={(value) => {
+            setCurrentView(value as 'merchants' | 'customers' | 'functions' | 'rewards');
+            // Clear all selections when changing views
+            setSelectedMerchants([]);
+            setSelectedCustomers([]);
+            setSelectedRewards([]);
+          }}
         >
           <TabsList className="grid w-full max-w-lg grid-cols-4">
             <TabsTrigger value="merchants">Merchants</TabsTrigger>
@@ -1624,6 +1812,17 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
                     Advanced View
                   </Button>
                 </div>
+                
+                {selectedMerchants.length > 0 && (
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={() => setIsDeleteSelectedMerchantsDialogOpen(true)}
+                  >
+                    <Trash className="h-4 w-4 mr-2" />
+                    Delete Selected ({selectedMerchants.length})
+                  </Button>
+                )}
               </div>
               
               <Button onClick={() => setIsCreateDialogOpen(true)}>
@@ -1644,6 +1843,18 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-[50px]">
+                            <Checkbox
+                              checked={selectedMerchants.length === merchants.length && merchants.length > 0}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setSelectedMerchants(merchants.map(m => m.id));
+                                } else {
+                                  setSelectedMerchants([]);
+                                }
+                              }}
+                            />
+                          </TableHead>
                           <TableHead 
                             className="w-[180px] cursor-pointer hover:bg-gray-50"
                             onClick={() => handleSort('merchantName')}
@@ -1713,13 +1924,25 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
                       <TableBody>
                         {sortedMerchants.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                            <TableCell colSpan={9} className="text-center py-8 text-gray-500">
                               {searchTerm ? "No merchants match your search" : "No merchants found"}
                             </TableCell>
                           </TableRow>
                         ) : (
                           sortedMerchants.map((merchant) => (
                             <TableRow key={merchant.id}>
+                              <TableCell>
+                                <Checkbox
+                                  checked={selectedMerchants.includes(merchant.id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setSelectedMerchants([...selectedMerchants, merchant.id]);
+                                    } else {
+                                      setSelectedMerchants(selectedMerchants.filter(id => id !== merchant.id));
+                                    }
+                                  }}
+                                />
+                              </TableCell>
                               <TableCell className="font-medium">
                                 <div className="flex items-center gap-3">
                                   <div className="w-10 h-10 rounded border overflow-hidden flex-shrink-0 bg-gray-50">
@@ -1817,7 +2040,19 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
                       <Table>
                         <TableHeader className="sticky top-0 bg-white z-10">
                           <TableRow>
-                            <TableHead className="w-[200px] sticky left-0 bg-white z-20 border-r">
+                            <TableHead className="w-[50px] sticky left-0 bg-white z-20 border-r">
+                              <Checkbox
+                                checked={selectedMerchants.length === merchants.length && merchants.length > 0}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setSelectedMerchants(merchants.map(m => m.id));
+                                  } else {
+                                    setSelectedMerchants([]);
+                                  }
+                                }}
+                              />
+                            </TableHead>
+                            <TableHead className="w-[200px] sticky left-[50px] bg-white z-20 border-r">
                               Merchant
                             </TableHead>
                             {allMerchantFields.map(field => (
@@ -1844,7 +2079,19 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
                           ) : (
                             sortedMerchants.map((merchant) => (
                               <TableRow key={merchant.id}>
-                                <TableCell className="font-medium sticky left-0 bg-white z-10 border-r">
+                                <TableCell className="sticky left-0 bg-white z-10 border-r">
+                                  <Checkbox
+                                    checked={selectedMerchants.includes(merchant.id)}
+                                    onCheckedChange={(checked) => {
+                                      if (checked) {
+                                        setSelectedMerchants([...selectedMerchants, merchant.id]);
+                                      } else {
+                                        setSelectedMerchants(selectedMerchants.filter(id => id !== merchant.id));
+                                      }
+                                    }}
+                                  />
+                                </TableCell>
+                                <TableCell className="font-medium sticky left-[50px] bg-white z-10 border-r">
                                   <div className="flex items-center gap-2">
                                     <div className="w-8 h-8 rounded border overflow-hidden flex-shrink-0 bg-gray-50">
                                       {merchant.logoUrl ? (
@@ -1923,6 +2170,17 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
                     />
                   </svg>
                 </div>
+                
+                {selectedCustomers.length > 0 && (
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={() => setIsDeleteSelectedCustomersDialogOpen(true)}
+                  >
+                    <Trash className="h-4 w-4 mr-2" />
+                    Delete Selected ({selectedCustomers.length})
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -1935,6 +2193,18 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-[50px]">
+                        <Checkbox
+                          checked={selectedCustomers.length === customers.length && customers.length > 0}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedCustomers(customers.map(c => c.id));
+                            } else {
+                              setSelectedCustomers([]);
+                            }
+                          }}
+                        />
+                      </TableHead>
                       <TableHead 
                         className="w-[200px] cursor-pointer hover:bg-gray-50"
                         onClick={() => handleCustomerSort('fullName')}
@@ -2004,13 +2274,25 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
                   <TableBody>
                     {sortedCustomers.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                        <TableCell colSpan={9} className="text-center py-8 text-gray-500">
                           {searchTerm ? "No customers match your search" : "No customers found"}
                         </TableCell>
                       </TableRow>
                     ) : (
                       sortedCustomers.map((customer) => (
                         <TableRow key={customer.id}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedCustomers.includes(customer.id)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setSelectedCustomers([...selectedCustomers, customer.id]);
+                                } else {
+                                  setSelectedCustomers(selectedCustomers.filter(id => id !== customer.id));
+                                }
+                              }}
+                            />
+                          </TableCell>
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-3">
                               <div className="h-10 w-10 rounded-md bg-[#007AFF]/10 flex items-center justify-center flex-shrink-0 overflow-hidden">
@@ -2615,6 +2897,48 @@ Ensure the reward description is enticing, customer-facing, max 50 characters.\`
             </Button>
             <Button variant="destructive" onClick={handleDeleteAllRewards}>
               Delete All Rewards
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Selected Merchants Dialog */}
+      <Dialog open={isDeleteSelectedMerchantsDialogOpen} onOpenChange={setIsDeleteSelectedMerchantsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Selected Merchants</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {selectedMerchants.length} selected merchant{selectedMerchants.length !== 1 ? 's' : ''}? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteSelectedMerchantsDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteSelectedMerchants}>
+              Delete {selectedMerchants.length} Merchant{selectedMerchants.length !== 1 ? 's' : ''}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Selected Customers Dialog */}
+      <Dialog open={isDeleteSelectedCustomersDialogOpen} onOpenChange={setIsDeleteSelectedCustomersDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Selected Customers</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {selectedCustomers.length} selected customer{selectedCustomers.length !== 1 ? 's' : ''}? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteSelectedCustomersDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteSelectedCustomers}>
+              Delete {selectedCustomers.length} Customer{selectedCustomers.length !== 1 ? 's' : ''}
             </Button>
           </DialogFooter>
         </DialogContent>

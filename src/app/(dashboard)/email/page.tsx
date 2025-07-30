@@ -130,6 +130,7 @@ import {
 } from "lucide-react"
 import { RiRobot3Line } from "react-icons/ri"
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
@@ -5291,103 +5292,116 @@ ${content}`;
 
                   {/* Thread dropdown - show individual emails when expanded (only when 2+ documents in chain) */}
                   {/* Dropdown - only show for multiple emails when expanded */}
-                  {selectedThread?.threadId === thread.threadId && 
-                   selectedThread?.emails?.length > 1 && 
-                   expandedThreads.has(thread.threadId) && (
-                    <div className="border-l-4 border-l-gray-200 bg-gray-50">
-                      {selectedThread.emails
-                        .slice(1) // Skip the first email (it's shown as the main button)
-                        .sort((a: any, b: any) => {
-                          // Sort newest first for dropdown (after main email)
-                          const getEmailDate = (email: any) => {
-                            const dateField = email.repliedAt || email.receivedAt || email.time;
-                            if (typeof dateField === 'string') {
-                              return new Date(dateField);
-                            } else if (dateField && typeof dateField.toDate === 'function') {
-                              return dateField.toDate();
-                            } else if (dateField instanceof Date) {
-                              return dateField;
-                            } else {
-                              return new Date(0);
-                            }
-                          };
-                          const timeA = getEmailDate(a);
-                          const timeB = getEmailDate(b);
-                          return timeB.getTime() - timeA.getTime();
-                        })
-                        .map((email: any, index: number) => {
-                          // Only highlight dropdown emails if the dropdown is expanded and this specific email is selected
-                          const isDropdownEmailHighlighted = selectedEmail?.id === email.id && expandedThreads.has(thread.threadId)
-                          
-                          return (
-                            <div
-                              key={email.id}
-                              className={`flex items-center gap-1.5 p-2 pl-16 cursor-pointer border-t border-t-gray-200 ${
-                                isDropdownEmailHighlighted
-                                  ? 'bg-blue-100'
-                                  : email.read === true
-                                    ? 'bg-white hover:bg-gray-50'
-                                    : 'bg-gray-100 hover:bg-gray-200'
-                              }`}
-                              onClick={() => handleEmailSelect(email)}
-                            >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className={`text-xs ${!email.read ? 'font-bold text-gray-900' : 'font-normal text-gray-600'}`}>
-                                {email.sender}
-                              </span>
-                              {email.hasAttachment && (
-                                <Paperclip className="h-2.5 w-2.5 text-gray-400 flex-shrink-0" />
-                              )}
-                              <span className={`text-xs ml-auto ${!email.read ? 'text-blue-600 font-semibold' : 'text-gray-500'}`}>
-                                {(() => {
-                                  // Get the appropriate timestamp with proper Firestore handling
-                                  const timestamp = email.repliedAt || email.receivedAt || email.time;
-                                  if (!timestamp) return 'Unknown time';
-                                  
-                                  // Handle Firestore Timestamp objects
-                                  if (timestamp && typeof timestamp.toDate === 'function') {
-                                    return formatPreviewTime(timestamp.toDate());
-                                  }
-                                  
-                                  // Handle string or Date objects
-                                  return formatPreviewTime(timestamp);
-                                })()}
-                              </span>
-                            </div>
-                            <div className={`text-xs truncate ${!email.read ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
-                              {(() => {
-                                // First try to use payload.data.preview.body if available
-                                if (email.payload?.data?.preview?.body) {
-                                  return createPreviewText(email.payload.data.preview.body, 60);
+                  <AnimatePresence>
+                    {selectedThread?.threadId === thread.threadId && 
+                     selectedThread?.emails?.length > 1 && 
+                     expandedThreads.has(thread.threadId) && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ 
+                          duration: 0.4,
+                          ease: [0.04, 0.62, 0.23, 0.98]
+                        }}
+                        className="overflow-hidden"
+                      >
+                        <div className="border-l-4 border-l-gray-200 bg-gray-50">
+                          {selectedThread.emails
+                            .slice(1) // Skip the first email (it's shown as the main button)
+                            .sort((a: any, b: any) => {
+                              // Sort newest first for dropdown (after main email)
+                              const getEmailDate = (email: any) => {
+                                const dateField = email.repliedAt || email.receivedAt || email.time;
+                                if (typeof dateField === 'string') {
+                                  return new Date(dateField);
+                                } else if (dateField && typeof dateField.toDate === 'function') {
+                                  return dateField.toDate();
+                                } else if (dateField instanceof Date) {
+                                  return dateField;
+                                } else {
+                                  return new Date(0);
                                 }
-                                
-                                // Otherwise use htmlMessage or content
-                                const htmlContent = email.htmlMessage || email.content || '';
-                                if (!htmlContent) return 'No preview available...';
-                                
-                                // Strip HTML tags and clean up text for preview
-                                const cleanText = htmlContent
-                                  .replace(/<[^>]+>/g, '') // Remove HTML tags
-                                  .replace(/&nbsp;/g, ' ') // Replace &nbsp; with spaces
-                                  .replace(/&amp;/g, '&') // Replace &amp; with &
-                                  .replace(/&lt;/g, '<') // Replace &lt; with <
-                                  .replace(/&gt;/g, '>') // Replace &gt; with >
-                                  .replace(/\s+/g, ' ') // Replace multiple whitespace with single space
-                                  .trim();
-                                
-                                return cleanText.substring(0, 60) + (cleanText.length > 60 ? '...' : '');
-                              })()}
+                              };
+                              const timeA = getEmailDate(a);
+                              const timeB = getEmailDate(b);
+                              return timeB.getTime() - timeA.getTime();
+                            })
+                            .map((email: any, index: number) => {
+                              // Only highlight dropdown emails if the dropdown is expanded and this specific email is selected
+                              const isDropdownEmailHighlighted = selectedEmail?.id === email.id && expandedThreads.has(thread.threadId)
+                              
+                              return (
+                                <div
+                                  key={email.id}
+                                  className={`flex items-center gap-1.5 p-2 pl-16 cursor-pointer border-t border-t-gray-200 ${
+                                    isDropdownEmailHighlighted
+                                      ? 'bg-blue-100'
+                                      : email.read === true
+                                        ? 'bg-white hover:bg-gray-50'
+                                        : 'bg-gray-100 hover:bg-gray-200'
+                                  }`}
+                                  onClick={() => handleEmailSelect(email)}
+                                >
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`text-xs ${!email.read ? 'font-bold text-gray-900' : 'font-normal text-gray-600'}`}>
+                                    {email.sender}
+                                  </span>
+                                  {email.hasAttachment && (
+                                    <Paperclip className="h-2.5 w-2.5 text-gray-400 flex-shrink-0" />
+                                  )}
+                                  <span className={`text-xs ml-auto ${!email.read ? 'text-blue-600 font-semibold' : 'text-gray-500'}`}>
+                                    {(() => {
+                                      // Get the appropriate timestamp with proper Firestore handling
+                                      const timestamp = email.repliedAt || email.receivedAt || email.time;
+                                      if (!timestamp) return 'Unknown time';
+                                      
+                                      // Handle Firestore Timestamp objects
+                                      if (timestamp && typeof timestamp.toDate === 'function') {
+                                        return formatPreviewTime(timestamp.toDate());
+                                      }
+                                      
+                                      // Handle string or Date objects
+                                      return formatPreviewTime(timestamp);
+                                    })()}
+                                  </span>
+                                </div>
+                                <div className={`text-xs truncate ${!email.read ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
+                                  {(() => {
+                                    // First try to use payload.data.preview.body if available
+                                    if (email.payload?.data?.preview?.body) {
+                                      return createPreviewText(email.payload.data.preview.body, 60);
+                                    }
+                                    
+                                    // Otherwise use htmlMessage or content
+                                    const htmlContent = email.htmlMessage || email.content || '';
+                                    if (!htmlContent) return 'No preview available...';
+                                    
+                                    // Strip HTML tags and clean up text for preview
+                                    const cleanText = htmlContent
+                                      .replace(/<[^>]+>/g, '') // Remove HTML tags
+                                      .replace(/&nbsp;/g, ' ') // Replace &nbsp; with spaces
+                                      .replace(/&amp;/g, '&') // Replace &amp; with &
+                                      .replace(/&lt;/g, '<') // Replace &lt; with <
+                                      .replace(/&gt;/g, '>') // Replace &gt; with >
+                                      .replace(/\s+/g, ' ') // Replace multiple whitespace with single space
+                                      .trim();
+                                    
+                                    return cleanText.substring(0, 60) + (cleanText.length > 60 ? '...' : '');
+                                  })()}
+                                </div>
+                              </div>
+                              {!email.read && (
+                                <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+                              )}
                             </div>
-                          </div>
-                          {!email.read && (
-                            <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
-                          )}
+                              )
+                            })}
                         </div>
-                          )
-                        })}
-                    </div>
-                  )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               ))}
               

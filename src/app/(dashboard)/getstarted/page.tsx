@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
   Collapsible,
-  CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   Check,
   ChevronDown,
@@ -381,8 +381,12 @@ export default function GetStartedPage() {
     )
   }
 
-  const loyaltyItems = checklistItems.filter(item => item.category === 'loyalty')
-  const merchantItems = checklistItems.filter(item => item.category === 'merchant')
+  const loyaltyItems = checklistItems
+    .filter(item => item.category === 'loyalty')
+    .sort((a, b) => Number(a.completed) - Number(b.completed))
+  const merchantItems = checklistItems
+    .filter(item => item.category === 'merchant')
+    .sort((a, b) => Number(a.completed) - Number(b.completed))
   const completedCount = checklistItems.filter(item => item.completed).length
 
   return (
@@ -478,7 +482,10 @@ export default function GetStartedPage() {
                      
                      {/* Account Type Selection */}
               <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-md">
-                       <Collapsible>
+                       <Collapsible
+                         open={openItems.includes('account-type')}
+                         onOpenChange={() => toggleItem('account-type')}
+                       >
                          <div className="flex items-center justify-between">
                            <div className="flex items-center gap-3">
                       <div className="w-12 h-12 bg-white border-2 border-gray-200 rounded-md flex items-center justify-center overflow-hidden">
@@ -524,52 +531,68 @@ export default function GetStartedPage() {
                                  size="sm"
                                  className="p-1 h-8 w-8"
                                >
-                                 <ChevronDown className="h-4 w-4 text-gray-400" />
+                                 <ChevronDown 
+                                   className={cn(
+                                     "h-4 w-4 text-gray-400 transition-transform duration-200",
+                                     openItems.includes('account-type') && "rotate-180"
+                                   )} 
+                                 />
                                </Button>
                              </CollapsibleTrigger>
                            </div>
                          </div>
                          
-                         <CollapsibleContent 
-                           className="overflow-hidden data-[state=closed]:animate-out data-[state=closed]:slide-out-to-top-1 data-[state=open]:animate-in data-[state=open]:slide-in-from-top-1"
-                           style={{
-                             transition: 'all 350ms linear(0, 0.3566, 0.7963, 1.0045, 1.0459, 1.0287, 1.0088, 0.9996, 1, 0.9987, 0.9996, 1)'
-                           }}
-                         >
-                           <div className="px-3 pb-3 border-t border-gray-100 mt-3">
-                             <div className="space-y-3">
-                               <div className="p-3 bg-white rounded-md border border-gray-200">
-                                 <h5 className="text-xs font-medium text-gray-900 mb-2">Tap Standard</h5>
-                                 <p className="text-xs text-gray-600 mb-2">Perfect for individual businesses and single locations.</p>
-                                 <ul className="text-xs text-gray-600 space-y-1">
-                                   <li>• Single business management</li>
-                                   <li>• Basic loyalty features</li>
-                                   <li>• Customer analytics</li>
-                                   <li>• Email marketing tools</li>
-                                 </ul>
+                         <AnimatePresence>
+                           {openItems.includes('account-type') && (
+                             <motion.div
+                               initial={{ height: 0, opacity: 0 }}
+                               animate={{ height: "auto", opacity: 1 }}
+                               exit={{ height: 0, opacity: 0 }}
+                               transition={{ 
+                                 duration: 0.4,
+                                 ease: [0.04, 0.62, 0.23, 0.98]
+                               }}
+                               className="overflow-hidden"
+                             >
+                               <div className="px-3 pb-3 border-t border-gray-100 mt-3">
+                                 <div className="space-y-3">
+                                   <div className="p-3 bg-white rounded-md border border-gray-200">
+                                     <h5 className="text-xs font-medium text-gray-900 mb-2">Tap Standard</h5>
+                                     <p className="text-xs text-gray-600 mb-2">Perfect for individual businesses and single locations.</p>
+                                     <ul className="text-xs text-gray-600 space-y-1">
+                                       <li>• Single business management</li>
+                                       <li>• Basic loyalty features</li>
+                                       <li>• Customer analytics</li>
+                                       <li>• Email marketing tools</li>
+                                     </ul>
+                                   </div>
+                                   
+                                   <div className="p-3 bg-white rounded-md border border-gray-200">
+                                     <h5 className="text-xs font-medium text-gray-900 mb-2">Tap Network</h5>
+                                     <p className="text-xs text-gray-600 mb-2">Ideal for multi-location chains, franchises, and business networks.</p>
+                                     <ul className="text-xs text-gray-600 space-y-1">
+                                       <li>• Multi-location management</li>
+                                       <li>• Advanced network features</li>
+                                       <li>• Cross-location rewards</li>
+                                       <li>• Centralized reporting</li>
+                                       <li>• Franchise management tools</li>
+                                     </ul>
+                                   </div>
+                                 </div>
                                </div>
-                               
-                               <div className="p-3 bg-white rounded-md border border-gray-200">
-                                 <h5 className="text-xs font-medium text-gray-900 mb-2">Tap Network</h5>
-                                 <p className="text-xs text-gray-600 mb-2">Ideal for multi-location chains, franchises, and business networks.</p>
-                                 <ul className="text-xs text-gray-600 space-y-1">
-                                   <li>• Multi-location management</li>
-                                   <li>• Advanced network features</li>
-                                   <li>• Cross-location rewards</li>
-                                   <li>• Centralized reporting</li>
-                                   <li>• Franchise management tools</li>
-                                 </ul>
-                               </div>
-                             </div>
-                           </div>
-                         </CollapsibleContent>
+                             </motion.div>
+                           )}
+                         </AnimatePresence>
                        </Collapsible>
                      </div>
               
               {/* Loyalty Tasks */}
               <div className="space-y-3">
                 {loyaltyItems.map((item) => (
-                  <div key={item.id} className="border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-all duration-200 min-h-[80px]">
+                  <div key={item.id} className={cn(
+                    "border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-all duration-200 min-h-[80px]",
+                    item.completed && "opacity-60 bg-gray-100"
+                  )}>
                     <Collapsible
                       open={openItems.includes(item.id)}
                       onOpenChange={() => toggleItem(item.id)}
@@ -586,17 +609,25 @@ export default function GetStartedPage() {
                         </div>
                        
                         <div className="flex-1 text-left">
-                          <h3 className="text-sm font-medium text-gray-900">{item.title}</h3>
+                          <h3 className={cn(
+                            "text-sm font-medium",
+                            item.completed ? "text-gray-600" : "text-gray-900"
+                          )}>{item.title}</h3>
                           <p className="text-xs text-gray-500">Click to learn more</p>
                         </div>
                        
                         <div className="flex items-center gap-2">
                           <Button 
                             size="sm" 
-                            className="bg-[#007aff] hover:bg-[#339fff] text-xs px-3 py-1.5 text-white"
+                            className={cn(
+                              "text-xs px-3 py-1.5 text-white",
+                              item.completed 
+                                ? "bg-gray-500 hover:bg-gray-600" 
+                                : "bg-[#007aff] hover:bg-[#339fff]"
+                            )}
                             onClick={item.popupAction}
                           >
-                            {item.actionText}
+                            {item.completed ? "Modify" : item.actionText}
                           </Button>
                           
                           <CollapsibleTrigger asChild>
@@ -616,26 +647,39 @@ export default function GetStartedPage() {
                         </div>
                       </div>
                      
-                      <CollapsibleContent 
-                        className="overflow-hidden data-[state=closed]:animate-out data-[state=closed]:slide-out-to-top-1 data-[state=open]:animate-in data-[state=open]:slide-in-from-top-1"
-                        style={{
-                          transition: 'all 350ms linear(0, 0.3566, 0.7963, 1.0045, 1.0459, 1.0287, 1.0088, 0.9996, 1, 0.9987, 0.9996, 1)'
-                        }}
-                      >
-                        <div className="px-4 pb-4 border-t border-gray-100">
-                          <p className="text-xs text-gray-600 mb-4 mt-3">
-                            {item.description}
-                          </p>
-                          <Button 
-                            size="sm" 
-                            className="bg-[#007aff] hover:bg-[#339fff] text-white inline-flex items-center gap-2"
-                            onClick={item.popupAction}
+                      <AnimatePresence>
+                        {openItems.includes(item.id) && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ 
+                              duration: 0.4,
+                              ease: [0.04, 0.62, 0.23, 0.98]
+                            }}
+                            className="overflow-hidden"
                           >
-                            {item.actionText}
-                            <ExternalLink className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </CollapsibleContent>
+                            <div className="px-4 pb-4 border-t border-gray-100">
+                              <p className="text-xs text-gray-600 mb-4 mt-3">
+                                {item.description}
+                              </p>
+                              <Button 
+                                size="sm" 
+                                className={cn(
+                                  "text-white inline-flex items-center gap-2",
+                                  item.completed 
+                                    ? "bg-gray-500 hover:bg-gray-600" 
+                                    : "bg-[#007aff] hover:bg-[#339fff]"
+                                )}
+                                onClick={item.popupAction}
+                              >
+                                {item.completed ? "Modify" : item.actionText}
+                                <ExternalLink className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </Collapsible>
                   </div>
                 ))}
@@ -655,7 +699,10 @@ export default function GetStartedPage() {
               {/* Merchant Tasks */}
               <div className="space-y-3">
                 {merchantItems.map((item) => (
-                  <div key={item.id} className="border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-all duration-200 min-h-[80px]">
+                  <div key={item.id} className={cn(
+                    "border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-all duration-200 min-h-[80px]",
+                    item.completed && "opacity-60 bg-gray-100"
+                  )}>
                     <Collapsible
                       open={openItems.includes(item.id)}
                       onOpenChange={() => toggleItem(item.id)}
@@ -690,7 +737,10 @@ export default function GetStartedPage() {
                          </div>
                         
                                                  <div className="flex-1 text-left">
-                           <h3 className="text-sm font-medium text-gray-900">{item.title}</h3>
+                           <h3 className={cn(
+                             "text-sm font-medium",
+                             item.completed ? "text-gray-600" : "text-gray-900"
+                           )}>{item.title}</h3>
                            <p className="text-xs text-gray-500">Click to learn more</p>
                          </div>
                         
@@ -698,10 +748,15 @@ export default function GetStartedPage() {
                             <Button 
                               size="sm" 
                               asChild
-                              className="bg-[#007aff] hover:bg-[#339fff] text-xs px-3 py-1.5 text-white"
+                              className={cn(
+                                "text-xs px-3 py-1.5 text-white",
+                                item.completed 
+                                  ? "bg-gray-500 hover:bg-gray-600" 
+                                  : "bg-[#007aff] hover:bg-[#339fff]"
+                              )}
                             >
                               <Link href={item.actionUrl!}>
-                                {item.actionText}
+                                {item.completed ? "Modify" : item.actionText}
                               </Link>
                             </Button>
                           
@@ -722,28 +777,41 @@ export default function GetStartedPage() {
                         </div>
                       </div>
                      
-                      <CollapsibleContent 
-                        className="overflow-hidden data-[state=closed]:animate-out data-[state=closed]:slide-out-to-top-1 data-[state=open]:animate-in data-[state=open]:slide-in-from-top-1"
-                        style={{
-                          transition: 'all 350ms linear(0, 0.3566, 0.7963, 1.0045, 1.0459, 1.0287, 1.0088, 0.9996, 1, 0.9987, 0.9996, 1)'
-                        }}
-                      >
-                        <div className="px-4 pb-4 border-t border-gray-100">
-                         <p className="text-xs text-gray-600 mb-4 mt-3">
-                           {item.description}
-                         </p>
-                           <Button 
-                             size="sm" 
-                             asChild
-                             className="bg-[#007aff] hover:bg-[#339fff] text-white"
-                           >
-                             <Link href={item.actionUrl!} className="inline-flex items-center gap-2">
-                               {item.actionText}
-                               <ExternalLink className="h-3 w-3" />
-                             </Link>
-                           </Button>
-                       </div>
-                     </CollapsibleContent>
+                      <AnimatePresence>
+                        {openItems.includes(item.id) && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ 
+                              duration: 0.4,
+                              ease: [0.04, 0.62, 0.23, 0.98]
+                            }}
+                            className="overflow-hidden"
+                          >
+                            <div className="px-4 pb-4 border-t border-gray-100">
+                             <p className="text-xs text-gray-600 mb-4 mt-3">
+                               {item.description}
+                             </p>
+                               <Button 
+                                 size="sm" 
+                                 asChild
+                                 className={cn(
+                                   "text-white",
+                                   item.completed 
+                                     ? "bg-gray-500 hover:bg-gray-600" 
+                                     : "bg-[#007aff] hover:bg-[#339fff]"
+                                 )}
+                               >
+                                 <Link href={item.actionUrl!} className="inline-flex items-center gap-2">
+                                   {item.completed ? "Modify" : item.actionText}
+                                   <ExternalLink className="h-3 w-3" />
+                                 </Link>
+                               </Button>
+                           </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                    </Collapsible>
                </div>
              ))}

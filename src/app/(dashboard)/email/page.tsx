@@ -4109,6 +4109,17 @@ ${content}`;
         });
       }
       
+      // Auto-expand dropdown if this cached thread has multiple emails
+      if (cachedThread.emails && cachedThread.emails.length > 1) {
+        console.log("🔽 Auto-expanding cached thread with", cachedThread.emails.length, "emails")
+        setExpandedThreads(prev => new Set([...prev, thread.threadId]))
+      }
+      
+      // Set the most recent email to show in the right panel
+      if (cachedThread.representative) {
+        setSelectedEmail(cachedThread.representative)
+      }
+      
       return
     }
     

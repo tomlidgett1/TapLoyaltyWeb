@@ -2156,14 +2156,8 @@ ${content}`;
   // ✅ SEARCH MODE: Use search results when searching, otherwise use fetched emails
   const allEmails = isSearchMode ? searchResults : fetchedEmails
   
-  // Debug: Log current state
-  console.log("📊 Current state:", { 
-    isSearchMode, 
-    searchResultsCount: searchResults.length, 
-    fetchedEmailsCount: fetchedEmails.length,
-    allEmailsCount: allEmails.length,
-    searchQuery: searchQuery
-  })
+  // Debug: Search state (remove this later)
+  // console.log("📊 Current state:", { isSearchMode, searchResultsCount: searchResults.length })
   
   // Memoized email grouping function to prevent expensive recalculations
   const groupEmailsByThread = useCallback((emails: any[]) => {
@@ -2256,7 +2250,8 @@ ${content}`;
     return 'general'
   }
 
-  const filteredEmails = allEmails.filter(email => {
+  // ✅ SEARCH MODE: Skip frontend filtering when in search mode since backend already filtered
+  const filteredEmails = isSearchMode ? allEmails : allEmails.filter(email => {
     // First filter by folder
     let folderMatch = true
     if (selectedFolder === "inbox") folderMatch = email.folder === "inbox"
@@ -2799,12 +2794,9 @@ ${content}`;
     }
   }
 
-  // ✅ BACKEND SEARCH: Search all emails in database
+    // ✅ BACKEND SEARCH: Search all emails in database
   const searchEmails = async (searchTerm: string, loadMore: boolean = false) => {
-    console.log("🔍 searchEmails called with:", { searchTerm, loadMore, userUid: !!user?.uid })
-    
     if (!user?.uid || !searchTerm.trim()) {
-      console.log("❌ Search aborted - no user or empty search term")
       // If no query, exit search mode and load regular emails
       setIsSearchMode(false)
       setSearchResults([])
@@ -2814,17 +2806,7 @@ ${content}`;
       return
     }
 
-          console.log("✅ Starting search process...")
-
-      try {
-        // Simple test: just filter current fetched emails first to see if that works
-        if (searchTerm === "test") {
-          console.log("🧪 Running simple test search")
-          setIsSearchMode(true)
-          setSearchResults(fetchedEmails.slice(0, 3)) // Just return first 3 emails as test
-          setIsSearching(false)
-          return
-        }
+    try {
       if (loadMore) {
         setLoadingMoreEmails(true)
       } else {
@@ -2855,10 +2837,7 @@ ${content}`;
       }
 
       const threadsSnapshot = await getDocs(threadsQuery)
-      console.log("📊 Found", threadsSnapshot.docs.length, "threads to search through")
-      
       const searchQuery = searchTerm.toLowerCase().trim()
-      console.log("🔍 Searching for:", searchQuery)
 
       // Process threads and check for search matches
       const searchMatches = await Promise.all(
@@ -2873,29 +2852,56 @@ ${content}`;
             subject.toLowerCase().includes(searchQuery) ||
             latestSender.toLowerCase().includes(searchQuery)
 
-          if (metadataMatch) {
-            // Build thread object similar to fetchGmailEmails
-            return {
-              id: threadId,
-              threadId: threadId,
-              subject: subject,
-              sender: latestSender,
-              time: threadData.latestReceivedAt,
-              representative: {
-                id: threadId,
-                subject: subject,
-                sender: latestSender,
-                time: threadData.latestReceivedAt,
-                read: false // We'll update this from chain if needed
-              }
-            }
-          }
-
-          // If metadata doesn't match, check chain subcollection for content matches
+          // Always check chain subcollection for proper read status and content matches
+          let mostRecentEmailRead = false
           try {
             const chainRef = collection(db, 'merchants', user.uid, 'fetchedemails', threadId, 'chain')
             const chainSnapshot = await getDocs(chainRef)
             
+            if (chainSnapshot.docs.length > 0) {
+              // Find the most recent email's read status
+              const sortedEmails = chainSnapshot.docs.map(doc => ({
+                data: doc.data(),
+                timestamp: doc.data().receivedAt || doc.data().repliedAt || doc.data().processedAt
+              })).sort((a, b) => {
+                const getTime = (timestamp: any) => {
+                  if (typeof timestamp === 'string') {
+                    return new Date(timestamp).getTime();
+                  } else if (timestamp && typeof timestamp.toDate === 'function') {
+                    return timestamp.toDate().getTime();
+                  } else if (timestamp instanceof Date) {
+                    return timestamp.getTime();
+                  } else {
+                    return 0;
+                  }
+                };
+                return getTime(b.timestamp) - getTime(a.timestamp); // Newest first
+              });
+              
+              // Get read status from the most recent email
+              const mostRecentEmail = sortedEmails[0];
+              mostRecentEmailRead = mostRecentEmail?.data?.read === true;
+            }
+
+            if (metadataMatch) {
+              // Build thread object with proper read status
+              return {
+                id: threadId,
+                threadId: threadId,
+                subject: subject,
+                sender: latestSender,
+                time: threadData.latestReceivedAt,
+                representative: {
+                  id: threadId,
+                  subject: subject,
+                  sender: latestSender,
+                  time: threadData.latestReceivedAt,
+                  read: mostRecentEmailRead
+                }
+              }
+            }
+
+            // If metadata doesn't match, check chain subcollection for content matches
             for (const chainDoc of chainSnapshot.docs) {
               const messageData = chainDoc.data()
               const content = messageData.payload?.data?.preview?.body || messageData.htmlMessage || ""
@@ -2905,7 +2911,7 @@ ${content}`;
                 content.toLowerCase().includes(searchQuery) ||
                 messageSender.toLowerCase().includes(searchQuery)
               ) {
-                // Found match in chain, return thread
+                // Found match in chain, return thread with proper read status
                 return {
                   id: threadId,
                   threadId: threadId,
@@ -2917,7 +2923,7 @@ ${content}`;
                     subject: subject,
                     sender: latestSender,
                     time: threadData.latestReceivedAt,
-                    read: messageData.read || false
+                    read: mostRecentEmailRead
                   }
                 }
               }
@@ -2932,15 +2938,11 @@ ${content}`;
 
       // Filter out null results and sort
       const validMatches = searchMatches.filter(match => match !== null)
-      console.log("🎯 Found", validMatches.length, "matches out of", searchMatches.length, "processed threads")
-      
       const sortedMatches = validMatches.sort((a, b) => {
         const timeA = a.time?.toDate?.() || a.time || new Date(0)
         const timeB = b.time?.toDate?.() || b.time || new Date(0)
         return timeB.getTime() - timeA.getTime()
       })
-      
-      console.log("📋 Sorted matches:", sortedMatches.map(m => ({ id: m.id, subject: m.subject })))
 
       // Update pagination state
       setHasMoreEmails(threadsSnapshot.docs.length === 50 && sortedMatches.length > 0)
@@ -2950,15 +2952,13 @@ ${content}`;
 
       // Update search results
       if (loadMore) {
-        console.log("📝 Appending", sortedMatches.length, "more results to existing search results")
         setSearchResults(prev => [...prev, ...sortedMatches])
       } else {
-        console.log("📝 Setting", sortedMatches.length, "search results")
         setSearchResults(sortedMatches)
       }
 
     } catch (error) {
-      console.error("❌ Error searching emails:", error)
+      console.error("Error searching emails:", error)
       // Reset search mode on error
       setIsSearchMode(false)
       setSearchResults([])
@@ -2973,14 +2973,10 @@ ${content}`;
 
   // ✅ DEBOUNCED SEARCH: Trigger search when query changes
   useEffect(() => {
-    console.log("🔍 Search effect triggered - searchQuery:", searchQuery, "isSearchMode:", isSearchMode)
-    
     const timeoutId = setTimeout(() => {
       if (searchQuery.trim()) {
-        console.log("🚀 Triggering search for:", searchQuery)
         searchEmails(searchQuery)
       } else if (isSearchMode) {
-        console.log("🧹 Clearing search mode")
         // Clear search mode when query is empty
         setIsSearchMode(false)
         setSearchResults([])
@@ -4994,10 +4990,7 @@ ${content}`;
                     placeholder={isSearchMode ? `Search results (${searchResults.length} found)` : "Search emails..."}
                     className="pl-10 pr-8"
                     value={searchQuery}
-                    onChange={(e) => {
-                      console.log("🔤 Search input changed:", e.target.value)
-                      setSearchQuery(e.target.value)
-                    }}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                   />
                   {searchQuery && (
                     <button

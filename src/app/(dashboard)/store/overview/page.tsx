@@ -228,6 +228,7 @@ interface Reward {
   impressions: number;
   viewCount?: number;
   isAgentGenerated?: boolean;
+  isIntroductoryReward?: boolean; // Add this field for introductory rewards
   // Additional fields for program rewards
   uniqueCustomerIds?: string[];
   uniqueCustomersCount?: number;
@@ -3275,26 +3276,34 @@ const RewardsTabContent = () => {
                           )}
                         </TableCell>
                         <TableCell className="text-center px-6 py-2.5">
-                          {reward.programType === "agent" ? (
-                            <div className="font-semibold">
-                              <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-orange-600">
-                                Agent
+                          <div className="flex flex-col items-center gap-1">
+                            {reward.programType === "agent" ? (
+                              <div className="font-semibold">
+                                <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-orange-600">
+                                  Agent
+                                </span>
+                              </div>
+                            ) : reward.programType ? (
+                              <div className="font-medium text-gray-800">
+                                {reward.programType === "coffeeprogramnew" ? "Coffee Program" :
+                                 reward.programType === "voucherprogramnew" ? "Voucher Program" :
+                                 reward.programType === "transactionrewardsnew" ? "Transaction Rewards" :
+                                 reward.programType.charAt(0).toUpperCase() + reward.programType.slice(1)}
+                              </div>
+                            ) : (
+                              <div className="font-medium text-gray-800">
+                                {reward.programtype 
+                                  ? reward.programtype.charAt(0).toUpperCase() + reward.programtype.slice(1)
+                                  : "Individual Reward"}
+                              </div>
+                            )}
+                            {reward.isIntroductoryReward === true && (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                                Introductory
                               </span>
-                            </div>
-                          ) : reward.programType ? (
-                            <div className="font-medium text-gray-800">
-                              {reward.programType === "coffeeprogramnew" ? "Coffee Program" :
-                               reward.programType === "voucherprogramnew" ? "Voucher Program" :
-                               reward.programType === "transactionrewardsnew" ? "Transaction Rewards" :
-                               reward.programType.charAt(0).toUpperCase() + reward.programType.slice(1)}
-                            </div>
-                          ) : (
-                            <div className="font-medium text-gray-800">
-                              {reward.programtype 
-                                ? reward.programtype.charAt(0).toUpperCase() + reward.programtype.slice(1)
-                                : "Individual Reward"}
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-center px-6 py-2.5">
                           <div className="inline-flex items-center gap-1.5 bg-white border border-gray-200 px-2 py-1 rounded-md text-xs font-medium text-gray-800">
@@ -6768,6 +6777,7 @@ const ProgramRewardsTable = () => {
               redeemableCustomers: data.uniqueCustomersCount || 0,
               hasActivePeriod: false,
               activePeriod: { startDate: '', endDate: '' },
+              isIntroductoryReward: !!data.isIntroductoryReward, // Add introductory reward flag
               customerName: customerDisplayText,
               customerProfilePicture: customerProfilePicture, // Add profile picture
               voucherAmount: data.voucherAmount || 0, // Add voucherAmount field
@@ -7098,8 +7108,16 @@ const ProgramRewardsTable = () => {
                       <RewardPreviewCard reward={reward} />
                     </TableCell>
                     <TableCell className="text-center">
-                      <div className="font-medium text-gray-700">
-                        {getProgramTypeDisplay(reward.programtype || '')}
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="font-medium text-gray-700">
+                          {getProgramTypeDisplay(reward.programtype || '')}
+                        </div>
+                        {reward.isIntroductoryReward === true && (
+                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                            <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                            Introductory
+                          </span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-center">

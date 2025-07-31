@@ -278,6 +278,24 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
     dismissible: boolean;
   }[]>([])
   
+  // Setup progress tracking
+  const [setupProgress, setSetupProgress] = useState({
+    completed: 0,
+    total: 10,
+    items: {
+      uploadLogo: false,
+      introReward: false,
+      individualReward: false,
+      createProgram: false,
+      createBanner: false,
+      pointsRule: false,
+      networkReward: false,
+      manualAgent: false,
+      customerService: false,
+      emailSummary: false
+    }
+  })
+  
   // Audio notification
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
@@ -526,6 +544,173 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
     
     return () => unsubscribe();
   }, [user?.uid]);
+
+  // Track setup progress from get started page items
+  useEffect(() => {
+    if (!user?.uid) {
+      setSetupProgress({
+        completed: 0,
+        total: 10,
+        items: {
+          uploadLogo: false,
+          introReward: false,
+          individualReward: false,
+          createProgram: false,
+          createBanner: false,
+          pointsRule: false,
+          networkReward: false,
+          manualAgent: false,
+          customerService: false,
+          emailSummary: false
+        }
+      });
+      return;
+    }
+
+    // Track merchant document changes (logo, intro rewards, programs)
+    const merchantRef = doc(db, 'merchants', user.uid);
+    const unsubscribeMerchant = onSnapshot(merchantRef, (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        
+        // Check logo
+        const hasLogo = !!(data.logoUrl && typeof data.logoUrl === 'string' && data.logoUrl.trim() !== '');
+        
+        // Check intro rewards
+        const hasIntroRewards = data.introductoryRewardIds && Array.isArray(data.introductoryRewardIds) && data.introductoryRewardIds.length > 0;
+        
+        // Check for active programs
+        const hasActiveTransactionRewards = data.transactionRewards && Array.isArray(data.transactionRewards) && 
+          data.transactionRewards.some((program: any) => program.active === true);
+        const hasActiveVoucherPrograms = data.voucherPrograms && Array.isArray(data.voucherPrograms) && 
+          data.voucherPrograms.some((program: any) => program.active === true);
+        const hasActiveCoffeePrograms = data.coffeePrograms && Array.isArray(data.coffeePrograms) && 
+          data.coffeePrograms.some((program: any) => program.active === true);
+        const hasActivePrograms = hasActiveTransactionRewards || hasActiveVoucherPrograms || hasActiveCoffeePrograms;
+
+                 setSetupProgress(prev => ({
+           ...prev,
+           items: {
+             ...prev.items,
+             uploadLogo: hasLogo,
+             introReward: hasIntroRewards,
+             createProgram: hasActivePrograms
+           }
+         }));
+       }
+     }, (error) => {
+       console.error("Error listening to merchant document for setup progress:", error);
+     });
+
+         // Track rewards collection
+     const rewardsRef = collection(db, `merchants/${user.uid}/rewards`);
+     const unsubscribeRewards = onSnapshot(rewardsRef, (snapshot) => {
+       const hasRewards = !snapshot.empty;
+       setSetupProgress(prev => ({
+         ...prev,
+         items: {
+           ...prev.items,
+           individualReward: hasRewards,
+           networkReward: hasRewards // Network rewards are also in the rewards collection
+         }
+       }));
+     }, (error) => {
+       console.error("Error listening to rewards collection:", error);
+     });
+
+     // Track banners collection
+     const bannersRef = collection(db, `merchants/${user.uid}/banners`);
+     const unsubscribeBanners = onSnapshot(bannersRef, (snapshot) => {
+       const hasBanners = !snapshot.empty;
+       setSetupProgress(prev => ({
+         ...prev,
+         items: {
+           ...prev.items,
+           createBanner: hasBanners
+         }
+       }));
+     }, (error) => {
+       console.error("Error listening to banners collection:", error);
+     });
+
+     // Track points rules collection
+     const pointsRulesRef = collection(db, `merchants/${user.uid}/pointsRules`);
+     const unsubscribePointsRules = onSnapshot(pointsRulesRef, (snapshot) => {
+       const hasPointsRules = !snapshot.empty;
+       setSetupProgress(prev => ({
+         ...prev,
+         items: {
+           ...prev.items,
+           pointsRule: hasPointsRules
+         }
+       }));
+     }, (error) => {
+       console.error("Error listening to points rules collection:", error);
+     });
+
+     // Track agents collection
+     const agentsRef = collection(db, `merchants/${user.uid}/agents`);
+     const unsubscribeAgents = onSnapshot(agentsRef, (snapshot) => {
+       const hasAgents = !snapshot.empty;
+       setSetupProgress(prev => ({
+         ...prev,
+         items: {
+           ...prev.items,
+           manualAgent: hasAgents
+         }
+       }));
+     }, (error) => {
+       console.error("Error listening to agents collection:", error);
+     });
+
+    // Track enrolled agents for customer service and email summary
+    const customerServiceRef = doc(db, 'merchants', user.uid, 'agentsenrolled', 'customer-service');
+    const unsubscribeCustomerService = onSnapshot(customerServiceRef, (doc) => {
+      const hasCustomerService = doc.exists();
+      setSetupProgress(prev => ({
+        ...prev,
+        items: {
+          ...prev.items,
+          customerService: hasCustomerService
+        }
+      }));
+    }, (error) => {
+      console.error("Error listening to customer service agent:", error);
+    });
+
+    const emailSummaryRef = doc(db, 'merchants', user.uid, 'agentsenrolled', 'email-summary');
+    const unsubscribeEmailSummary = onSnapshot(emailSummaryRef, (doc) => {
+      const hasEmailSummary = doc.exists();
+      setSetupProgress(prev => ({
+        ...prev,
+        items: {
+          ...prev.items,
+          emailSummary: hasEmailSummary
+        }
+      }));
+    }, (error) => {
+      console.error("Error listening to email summary agent:", error);
+    });
+
+    return () => {
+      unsubscribeMerchant();
+      unsubscribeRewards();
+      unsubscribeBanners();
+      unsubscribePointsRules();
+      unsubscribeAgents();
+      unsubscribeCustomerService();
+      unsubscribeEmailSummary();
+    };
+  }, [user?.uid]);
+
+  // Calculate completed count whenever items change
+  useEffect(() => {
+    const completedCount = Object.values(setupProgress.items).filter(Boolean).length;
+    setSetupProgress(prev => ({
+      ...prev,
+      completed: completedCount
+    }));
+  }, [setupProgress.items]);
 
   // Check for missing logo and show notification
   useEffect(() => {
@@ -916,6 +1101,57 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
           </div>
         )}
       </nav>
+      
+      {/* Setup Progress Badge */}
+      {!isCollapsed && setupProgress.completed < setupProgress.total && (
+        <div className="px-3 pb-2">
+          <Link 
+            href="/getstarted" 
+            className="block w-full p-2.5 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-colors group"
+          >
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                    <CheckCircle className="h-3 w-3 text-white" />
+                  </div>
+                  <p className="text-xs font-medium text-gray-900">Setup</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-gray-600 font-medium">
+                    {setupProgress.completed}/{setupProgress.total}
+                  </p>
+                  <ChevronRight className="h-3 w-3 text-gray-500 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
+                </div>
+              </div>
+              <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                  style={{ width: `${(setupProgress.completed / setupProgress.total) * 100}%` }}
+                />
+              </div>
+            </div>
+          </Link>
+        </div>
+      )}
+      
+      {/* Collapsed state setup progress indicator */}
+      {isCollapsed && setupProgress.completed < setupProgress.total && (
+        <div className="px-3 pb-2">
+          <Link 
+            href="/getstarted"
+            className="block w-full"
+            title={`Setup Progress: ${setupProgress.completed}/${setupProgress.total} completed`}
+          >
+            <div className="w-8 h-8 bg-blue-500 hover:bg-blue-600 rounded-full flex items-center justify-center relative transition-colors">
+              <CheckCircle className="h-4 w-4 text-white" />
+              <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                {setupProgress.total - setupProgress.completed}
+              </span>
+            </div>
+          </Link>
+        </div>
+      )}
       
       {/* Notification Stacker */}
       {!isCollapsed && notifications.length > 0 && (

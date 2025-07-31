@@ -449,9 +449,6 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                              </div>
                            )}
 
-                           {/* Dynamic Rewards */}
-                           {rewards.map(reward => renderRewardCard(reward))}
-
                            {/* Cashback Card */}
                            {cashbackProgram && (
                              <div className="bg-white rounded-xl px-2.5 py-1.5 shadow-sm border border-green-100">
@@ -468,16 +465,19 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                                      <span className="text-[10px] text-gray-600 whitespace-nowrap" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
                                        Tap to use at {merchantName}
                                      </span>
-                           </div>
-                         </div>
+                                   </div>
+                                 </div>
                                  <div className="bg-green-500 text-white rounded-md px-2 py-0.5 ml-3 leading-none">
                                    <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
                                      $0.50
                                    </span>
-                         </div>
-                         </div>
-                       </div>
+                                 </div>
+                               </div>
+                             </div>
                            )}
+
+                           {/* Dynamic Rewards */}
+                           {rewards.map(reward => renderRewardCard(reward))}
 
                            {/* Fallback rewards if no rewards exist */}
                            {rewards.length === 0 && !coffeeProgram && (

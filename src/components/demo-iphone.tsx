@@ -17,6 +17,9 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
   const { user } = useAuth()
   const [logoUrl, setLogoUrl] = useState<string>("")
   const [merchantName, setMerchantName] = useState<string>("")
+  const [isClosing, setIsClosing] = useState(false)
+  const [isVisible, setIsVisible] = useState(false)
+  const [shouldAnimate, setShouldAnimate] = useState(false)
 
   useEffect(() => {
     const fetchMerchantData = async () => {
@@ -35,13 +38,50 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
     }
 
     if (open) {
-      fetchMerchantData()
+      setIsClosing(false)
+      setIsVisible(true)
+      setShouldAnimate(false)
+      // Small delay to ensure the element is rendered off-screen first, then animate in
+      setTimeout(() => {
+        setShouldAnimate(true)
+        fetchMerchantData()
+      }, 10)
+    } else {
+      setIsVisible(false)
+      setShouldAnimate(false)
     }
   }, [user?.uid, open])
 
+  const handleClose = () => {
+    setIsClosing(true)
+    setTimeout(() => {
+      setIsVisible(false)
+      setShouldAnimate(false)
+      onOpenChange(false)
+      setIsClosing(false)
+    }, 300) // Match the animation duration
+  }
+
+  if (!isVisible && !isClosing) return null
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg p-0 bg-transparent border-0 shadow-none">
+    <>
+      {/* Backdrop */}
+      <div 
+        className="fixed inset-0 bg-black/20 z-50 transition-opacity duration-300"
+        style={{ 
+          opacity: (isClosing || !shouldAnimate) ? 0 : 1 
+        }}
+        onClick={handleClose}
+      />
+      
+      {/* Sliding Panel */}
+      <div 
+        className="fixed right-0 top-0 h-full w-full max-w-lg z-50 bg-transparent transition-transform duration-300 ease-out"
+        style={{ 
+          transform: (!shouldAnimate || isClosing) ? 'translateX(100%)' : 'translateX(0)' 
+        }}
+      >
         <div className="flex items-center justify-center min-h-screen p-8">
           
 
@@ -77,12 +117,12 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                 <div className="h-full w-full bg-white rounded-[3.3rem] overflow-hidden relative">
                   
                                      {/* Dynamic Island */}
-                   <div className="absolute top-[12px] left-1/2 transform -translate-x-1/2 w-[110px] h-[32px] bg-black rounded-full z-50"></div>
+                   <div className="absolute top-[12px] left-1/2 transform -translate-x-1/2 w-[110px] h-[28px] bg-black rounded-full z-50"></div>
                   
                                      {/* Status Bar */}
-                   <div className="flex items-center justify-center px-7 pt-[20px] pb-2 bg-white relative z-40">
+                   <div className="flex items-center justify-center px-7 pt-[17px] pb-2 bg-white relative z-40">
                      <div className="flex items-center justify-between w-full max-w-[280px]">
-                       <div className="text-[14px] font-semibold text-black">4:39</div>
+                                                <div className="text-[14px] font-semibold text-black ml-1">4:39</div>
                        <div className="flex items-center gap-[4px]">
                          {/* Battery */}
                          <svg width="24" height="12" viewBox="0 0 24 12" className="fill-black">
@@ -254,7 +294,7 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
             </div>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </>
   )
 }

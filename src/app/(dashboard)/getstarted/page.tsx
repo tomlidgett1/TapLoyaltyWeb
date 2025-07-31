@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -26,7 +26,7 @@ import {
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, getDocs, query, where, limit, doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
+import { collection, getDocs, query, where, limit, doc, getDoc, setDoc, serverTimestamp, onSnapshot } from "firebase/firestore"
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"
 import { v4 as uuidv4 } from "uuid"
 import { toast } from "@/components/ui/use-toast"
@@ -37,6 +37,7 @@ import { CreateRecurringRewardDialog } from "@/components/create-recurring-rewar
 import { NetworkRewardPopup } from "@/components/network-reward-popup"
 import { CreateBannerDialog } from "@/components/create-banner-dialog"
 import { CreatePointsRulePopup } from "@/components/create-points-rule-popup"
+import { WelcomePopup } from "@/components/welcome-popup"
 
 interface ChecklistItem {
   id: string
@@ -52,9 +53,18 @@ interface ChecklistItem {
 }
 
 export default function GetStartedPage() {
-  const { user } = useAuth()
+  const { user, shouldShowWelcome, clearWelcomeFlag } = useAuth()
   const [openItems, setOpenItems] = useState<string[]>([])
   const [accountType, setAccountType] = useState<'standard' | 'network'>('standard')
+  const [pageLoaded, setPageLoaded] = useState(false)
+  const [showWelcomePopup, setShowWelcomePopup] = useState(false)
+
+  console.log('GetStartedPage render:', { 
+    user: user?.uid, 
+    shouldShowWelcome, 
+    pageLoaded, 
+    showWelcomePopup 
+  })
   
   // Logo upload states
   const [merchantLogoUrl, setMerchantLogoUrl] = useState<string | null>(null)
@@ -71,6 +81,17 @@ export default function GetStartedPage() {
   const [showCreatePointsRule, setShowCreatePointsRule] = useState(false)
   const [showNetworkReward, setShowNetworkReward] = useState(false)
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([
+    {
+      id: 'upload-logo',
+      title: 'Upload Your Logo',
+      description: 'Upload your business logo to personalise your loyalty program and make it recognisable to your customers.',
+      icon: ImageIcon,
+      completed: false,
+      category: 'loyalty',
+      actionType: 'popup',
+      actionText: 'Upload',
+      popupAction: () => triggerFileUpload()
+    },
     {
       id: 'intro-reward',
       title: 'Create an Introductory Reward',
@@ -172,87 +193,178 @@ export default function GetStartedPage() {
     }
   ])
 
-  useEffect(() => {
-    const checkCompletionStatus = async () => {
-      if (!user?.uid) return
+  // Real-time completion status checker
+  const updateCompletionStatus = useCallback((merchantData: any) => {
+    if (!merchantData) return
 
-      try {
-        const merchantId = user.uid
-        
-        // Get merchant document to check for introductory rewards and programs
-        const merchantDoc = await getDoc(doc(db, 'merchants', merchantId))
-        let hasIntroRewards = false
-        let hasActivePrograms = false
-        
-        if (merchantDoc.exists()) {
-          const data = merchantDoc.data()
-          
-          // Check for introductory rewards
-          if (data.introductoryRewardIds && Array.isArray(data.introductoryRewardIds) && data.introductoryRewardIds.length > 0) {
-            hasIntroRewards = true
-          }
-          
-          // Check for active programs
-          const hasActiveTransactionRewards = data.transactionRewards && Array.isArray(data.transactionRewards) && 
-            data.transactionRewards.some(program => program.active === true)
-          const hasActiveVoucherPrograms = data.voucherPrograms && Array.isArray(data.voucherPrograms) && 
-            data.voucherPrograms.some(program => program.active === true)
-          const hasActiveCoffeePrograms = data.coffeePrograms && Array.isArray(data.coffeePrograms) && 
-            data.coffeePrograms.some(program => program.active === true)
-          
-          if (hasActiveTransactionRewards || hasActiveVoucherPrograms || hasActiveCoffeePrograms) {
-            hasActivePrograms = true
-          }
+    // Check all completion statuses
+    const hasLogo = !!merchantData.logoUrl
+    const hasIntroRewards = merchantData.introductoryRewardIds && Array.isArray(merchantData.introductoryRewardIds) && merchantData.introductoryRewardIds.length > 0
+    
+    // Check for active programs
+    const hasActiveTransactionRewards = merchantData.transactionRewards && Array.isArray(merchantData.transactionRewards) && 
+      merchantData.transactionRewards.some((program: any) => program.active === true)
+    const hasActiveVoucherPrograms = merchantData.voucherPrograms && Array.isArray(merchantData.voucherPrograms) && 
+      merchantData.voucherPrograms.some((program: any) => program.active === true)
+    const hasActiveCoffeePrograms = merchantData.coffeePrograms && Array.isArray(merchantData.coffeePrograms) && 
+      merchantData.coffeePrograms.some((program: any) => program.active === true)
+    const hasActivePrograms = hasActiveTransactionRewards || hasActiveVoucherPrograms || hasActiveCoffeePrograms
+
+    setChecklistItems(prev => {
+      const updated = prev.map(item => {
+        switch (item.id) {
+          case 'upload-logo':
+            return { ...item, completed: hasLogo }
+          case 'intro-reward':
+            return { ...item, completed: hasIntroRewards }
+          case 'create-program':
+            return { ...item, completed: hasActivePrograms }
+          default:
+            // Other items are handled by their respective listeners
+            return item
         }
-        
-        setChecklistItems(prev => prev.map(item => {
-          switch (item.id) {
-            case 'intro-reward':
-              return { ...item, completed: hasIntroRewards }
-            case 'individual-reward':
-            case 'network-reward':
-              // Check for rewards in Firestore
-              return { ...item, completed: false } // You can add actual Firestore checks here
-            case 'create-program':
-              return { ...item, completed: hasActivePrograms }
-            case 'create-banner':
-              // Check for banners
-              return { ...item, completed: false } // You can add actual Firestore checks here
-            case 'points-rule':
-              // Check for points rules
-              return { ...item, completed: false } // You can add actual Firestore checks here
-            case 'create-agent':
-              // Check for agents
-              return { ...item, completed: false } // You can add actual Firestore checks here
-            default:
-              return item
-          }
-        }))
-      } catch (error) {
-        console.error('Error checking completion status:', error)
-      }
+      })
+      
+      return updated
+    })
+
+    // Update logo state
+    if (hasLogo) {
+      setMerchantLogoUrl(merchantData.logoUrl)
     }
+  }, [])
 
-    checkCompletionStatus()
-    fetchMerchantLogo()
-  }, [user?.uid])
-
-  // Fetch merchant logo from Firestore
-  const fetchMerchantLogo = async () => {
+  useEffect(() => {
     if (!user?.uid) return
 
-    try {
-      const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
-      if (merchantDoc.exists()) {
-        const data = merchantDoc.data()
-        if (data.logoUrl) {
-          setMerchantLogoUrl(data.logoUrl)
+    // Set up real-time listener for merchant document  
+    const unsubscribe = onSnapshot(
+      doc(db, 'merchants', user.uid),
+      (doc) => {
+        if (doc.exists()) {
+          const data = doc.data()
+          updateCompletionStatus(data)
         }
+      },
+      (error) => {
+        console.error('Error listening to merchant document:', error)
       }
-    } catch (error) {
-      console.error('Error fetching merchant logo:', error)
+    )
+
+    // Also set up listeners for other collections to check completion status
+    const unsubscribeRewards = onSnapshot(
+      collection(db, `merchants/${user.uid}/rewards`),
+      (snapshot) => {
+        const hasRewards = !snapshot.empty
+        setChecklistItems(prev => prev.map(item => {
+          if (item.id === 'individual-reward') {
+            return { ...item, completed: hasRewards }
+          }
+          return item
+        }))
+      },
+      (error) => {
+        console.error('Error listening to rewards collection:', error)
+      }
+    )
+
+    const unsubscribeBanners = onSnapshot(
+      collection(db, `merchants/${user.uid}/banners`),
+      (snapshot) => {
+        const hasBanners = !snapshot.empty
+        setChecklistItems(prev => prev.map(item => {
+          if (item.id === 'create-banner') {
+            return { ...item, completed: hasBanners }
+          }
+          return item
+        }))
+      },
+      (error) => {
+        console.error('Error listening to banners collection:', error)
+      }
+    )
+
+    const unsubscribePointsRules = onSnapshot(
+      collection(db, `merchants/${user.uid}/pointsRules`),
+      (snapshot) => {
+        const hasPointsRules = !snapshot.empty
+        setChecklistItems(prev => prev.map(item => {
+          if (item.id === 'points-rule') {
+            return { ...item, completed: hasPointsRules }
+          }
+          return item
+        }))
+      },
+      (error) => {
+        console.error('Error listening to points rules collection:', error)
+      }
+    )
+
+    const unsubscribeAgents = onSnapshot(
+      collection(db, `merchants/${user.uid}/agents`),
+      (snapshot) => {
+        const hasAgents = !snapshot.empty
+        setChecklistItems(prev => prev.map(item => {
+          if (item.id === 'create-manual-agent' || item.id === 'setup-customer-service' || item.id === 'email-summary-agent') {
+            return { ...item, completed: hasAgents }
+          }
+          return item
+        }))
+      },
+      (error) => {
+        console.error('Error listening to agents collection:', error)
+      }
+    )
+
+    return () => {
+      unsubscribe()
+      unsubscribeRewards()
+      unsubscribeBanners()
+      unsubscribePointsRules()
+      unsubscribeAgents()
     }
-  }
+  }, [user?.uid, updateCompletionStatus])
+
+  // Handle page load completion and welcome popup
+  useEffect(() => {
+    // Mark page as loaded after initial render
+    const timer = setTimeout(() => {
+      setPageLoaded(true)
+    }, 100) // Small delay to ensure page is fully rendered
+
+    return () => clearTimeout(timer)
+  }, [])
+
+  // Show welcome popup once page is loaded and flag is set
+  useEffect(() => {
+    console.log('Welcome popup check:', { pageLoaded, shouldShowWelcome })
+    if (pageLoaded && shouldShowWelcome) {
+      console.log('Showing welcome popup in 500ms')
+      const timer = setTimeout(() => {
+        console.log('Timer fired - setting showWelcomePopup to true')
+        setShowWelcomePopup(true)
+        clearWelcomeFlag() // Clear the flag so it doesn't show again
+        console.log('Welcome popup shown')
+      }, 500) // Additional delay for smooth experience
+
+      return () => clearTimeout(timer)
+    }
+  }, [pageLoaded, shouldShowWelcome, clearWelcomeFlag])
+
+  // Force show welcome popup for testing - remove this after testing
+  useEffect(() => {
+    console.log('Force show test - user:', user?.uid)
+    if (user?.uid) {
+      const timer = setTimeout(() => {
+        console.log('Force showing welcome popup for testing')
+        setShowWelcomePopup(true)
+      }, 2000) // Show after 2 seconds for testing
+
+      return () => clearTimeout(timer)
+    }
+  }, [user?.uid])
+
+
 
   // Logo upload functions from setup-popup.tsx
   const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -343,6 +455,10 @@ export default function GetStartedPage() {
               
               setUploadedUrl(downloadURL)
               setMerchantLogoUrl(downloadURL)
+              // Clear preview states
+              setUploadedLogo(null)
+              setLogoPreview(null)
+              
               toast({
                 title: "Logo uploaded successfully!",
                 description: "Your logo has been saved to your account",
@@ -401,6 +517,7 @@ export default function GetStartedPage() {
         }}
       >
         <div className="max-w-6xl mx-auto px-6 py-8">
+          
 
           {/* Two Column Layout with Separator */}
           <div className="relative">
@@ -419,74 +536,14 @@ export default function GetStartedPage() {
                        </div>
                      </div>
                      
-                     {/* Logo Upload Section */}
-              <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-md">
-                {/* Hidden file input */}
-                <input
-                  id="logo-upload-getstarted"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleLogoUpload}
-                  className="hidden"
-                />
-                
-                       <div className="flex items-center justify-between">
-                         <div className="flex items-center gap-3">
-                    {merchantLogoUrl || logoPreview ? (
-                      <div className="w-12 h-12 bg-white border-2 border-gray-200 rounded-md overflow-hidden flex items-center justify-center">
-                        <img 
-                          src={logoPreview || merchantLogoUrl || ''} 
-                          alt="Business logo" 
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    ) : (
-                           <div className="w-12 h-12 bg-gray-100 border-2 border-dashed border-gray-300 rounded-md flex items-center justify-center">
-                             <ImageIcon className="h-5 w-5 text-gray-400" />
-                           </div>
-                    )}
-                           <div>
-                      <h4 className="text-sm font-medium text-gray-900">
-                        {merchantLogoUrl ? 'Your Logo' : 'Add Your Logo'}
-                      </h4>
-                      <p className="text-xs text-gray-500">
-                        {merchantLogoUrl 
-                          ? 'Your business logo is uploaded' 
-                          : 'Upload your business logo for the loyalty program'
-                        }
-                      </p>
-                           </div>
-                         </div>
-                  <div className="flex items-center gap-2">
-                    {uploadedLogo && !uploadedUrl && (
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        className="text-xs"
-                        onClick={uploadToFirebaseStorage}
-                        disabled={isUploading}
-                      >
-                        {isUploading ? "Uploading..." : "Upload"}
-                      </Button>
-                    )}
-                         <Button 
-                           size="sm" 
-                           variant="outline"
-                           className="text-xs"
-                      onClick={triggerFileUpload}
-                         >
-                      {merchantLogoUrl ? 'Change Logo' : 'Upload Logo'}
-                         </Button>
-                       </div>
-                </div>
-                
-                {/* Upload status */}
-                {uploadedUrl && (
-                  <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded-md">
-                    <p className="text-xs text-green-700 font-medium">✓ Logo uploaded successfully!</p>
-                  </div>
-                )}
-                     </div>
+                     {/* Hidden file input for logo upload */}
+                     <input
+                       id="logo-upload-getstarted"
+                       type="file"
+                       accept="image/*"
+                       onChange={handleLogoUpload}
+                       className="hidden"
+                     />
                      
                      {/* Account Type Selection */}
               <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-md">
@@ -628,6 +685,18 @@ export default function GetStartedPage() {
                         </div>
                        
                         <div className="flex items-center gap-2">
+                          {/* Special handling for logo upload with upload button */}
+                          {item.id === 'upload-logo' && uploadedLogo && !uploadedUrl && (
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              className="text-xs"
+                              onClick={uploadToFirebaseStorage}
+                              disabled={isUploading}
+                            >
+                              {isUploading ? "Uploading..." : "Upload"}
+                            </Button>
+                          )}
                           <Button 
                             size="sm" 
                             className={cn(
@@ -638,7 +707,11 @@ export default function GetStartedPage() {
                             )}
                             onClick={item.popupAction}
                           >
-                            {item.completed ? "Modify" : item.actionText}
+                            {item.completed && item.id === 'upload-logo' 
+                              ? "Change Logo" 
+                              : item.completed 
+                                ? "Modify" 
+                                : item.actionText}
                           </Button>
                           
                           <CollapsibleTrigger asChild>
@@ -684,7 +757,11 @@ export default function GetStartedPage() {
                                 )}
                             onClick={item.popupAction}
                           >
-                                {item.completed ? "Modify" : item.actionText}
+                                {item.completed && item.id === 'upload-logo' 
+                                  ? "Change Logo" 
+                                  : item.completed 
+                                    ? "Modify" 
+                                    : item.actionText}
                             <ExternalLink className="h-3 w-3" />
                           </Button>
                         </div>
@@ -880,6 +957,11 @@ export default function GetStartedPage() {
       <NetworkRewardPopup 
         open={showNetworkReward} 
         onOpenChange={setShowNetworkReward} 
+      />
+      
+      <WelcomePopup 
+        open={showWelcomePopup} 
+        onOpenChange={setShowWelcomePopup} 
       />
     </>
   )

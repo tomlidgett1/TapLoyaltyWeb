@@ -15,12 +15,15 @@ import { useRouter, usePathname } from "next/navigation"
 import { httpsCallable } from "firebase/functions"
 import { doc, getDoc, updateDoc, increment, setDoc } from "firebase/firestore"
 
+
 interface AuthContextType {
   user: User | null
   loading: boolean
+  shouldShowWelcome: boolean
   signIn: (email: string, password: string, redirectPath?: string) => Promise<void>
   signUp: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  clearWelcomeFlag: () => void
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType)
@@ -39,6 +42,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [authInitialized, setAuthInitialized] = useState(false)
+  const [shouldShowWelcome, setShouldShowWelcome] = useState(false)
+  const [isActualLogin, setIsActualLogin] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
 
@@ -102,6 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string, redirectPath: string = '/dashboard') => {
     try {
+      setIsActualLogin(true) // Flag this as an actual login event
       await setPersistence(auth, browserLocalPersistence)
       const result = await signInWithEmailAndPassword(auth, email, password)
       console.log('Sign in successful:', result.user.email)
@@ -117,22 +123,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const merchantDoc = await getDoc(merchantDocRef)
         
         if (merchantDoc.exists()) {
+          const currentData = merchantDoc.data()
+          const currentLoginCount = currentData?.loginCount || 0
+          
+          console.log('Current login count before increment:', currentLoginCount)
+          
           // Increment existing login count
           await updateDoc(merchantDocRef, {
             loginCount: increment(1),
             lastLoginAt: new Date()
           })
           
-          // Get updated login count
-          const updatedDoc = await getDoc(merchantDocRef)
-          const loginCount = updatedDoc.data()?.loginCount || 1
+          // Calculate new login count
+          const newLoginCount = currentLoginCount + 1
           
-          console.log('Login count:', loginCount)
+          console.log('New login count after increment:', newLoginCount)
+          
+          // Set welcome flag unless loginCount > 1 and only on actual login events
+          if (!(newLoginCount > 1) && isActualLogin) {
+            setShouldShowWelcome(true)
+            console.log('Setting welcome flag (loginCount not > 1):', newLoginCount)
+          }
           
           // If login count is less than 5, redirect to getstarted page
-          if (loginCount < 5) {
+          if (newLoginCount < 5) {
             finalRedirectPath = '/getstarted'
-            console.log('Redirecting to getstarted page - login count:', loginCount)
+            console.log('Redirecting to getstarted page - login count:', newLoginCount)
           }
         } else {
           // Create new merchant document with login count
@@ -141,9 +157,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             lastLoginAt: new Date()
           }, { merge: true })
           
+          // Set welcome flag for new user (only on actual login) - new users always get welcome
+          if (isActualLogin) {
+            setShouldShowWelcome(true)
+            console.log('New merchant - setting welcome flag')
+          }
+          
           // First login, redirect to getstarted
           finalRedirectPath = '/getstarted'
-          console.log('First login - redirecting to getstarted page')
+          console.log('New merchant - redirecting to getstarted page')
         }
       } catch (error) {
         console.error('Error updating login count:', error)
@@ -165,8 +187,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // Force a hard navigation to the final redirect path
       window.location.href = finalRedirectPath
+      
+      // Reset the actual login flag
+      setIsActualLogin(false)
     } catch (error) {
       console.error("Error signing in:", error)
+      // Reset flag on error too
+      setIsActualLogin(false)
       throw error
     }
   }
@@ -194,10 +221,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const clearWelcomeFlag = () => {
+    console.log('Clearing welcome flag')
+    setShouldShowWelcome(false)
+  }
 
+  console.log('AuthProvider render:', { 
+    user: user?.uid, 
+    loading, 
+    shouldShowWelcome,
+    authInitialized 
+  })
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, logout }}>
+    <AuthContext.Provider value={{ user, loading, shouldShowWelcome, signIn, signUp, logout, clearWelcomeFlag }}>
       {children}
     </AuthContext.Provider>
   )

@@ -273,18 +273,23 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
           transform: (!shouldAnimate || isClosing) ? 'translateX(100%)' : 'translateX(0)' 
         }}
       >
-        <div className="flex items-center justify-center min-h-screen p-8">
+        <div className="flex items-center justify-center min-h-screen p-4 sm:p-6 lg:p-8">
           
 
           {/* iPhone 16 Pro */}
-          <div className="relative">
+          <div className="relative flex items-center justify-center">
             {/* Phone Shadow */}
             <div className="absolute inset-0 bg-black/30 blur-xl transform translate-y-8 scale-105 rounded-[3.5rem]"></div>
             
                          {/* Outer Frame - Black */}
              <div 
                className="relative bg-[#2F3336] rounded-[3.5rem] p-[5px] shadow-2xl"
-               style={{ width: '340px', height: '736px' }}
+               style={{ 
+                 height: '85vh',
+                 width: 'calc(85vh * 0.462)', // iPhone aspect ratio (340/736 ≈ 0.462)
+                 maxHeight: '736px',
+                 maxWidth: '340px'
+               }}
              >
               
                              {/* Side Buttons */}
@@ -305,7 +310,7 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
               <div className="h-full w-full bg-black rounded-[3.4rem] p-[2px]">
                 
                 {/* Screen */}
-                <div className="h-full w-full bg-white rounded-[3.3rem] overflow-hidden relative">
+                <div className="h-full w-full bg-white rounded-[3.3rem] overflow-hidden relative flex flex-col">
                   
                                      {/* Dynamic Island */}
                    <div className="absolute top-[12px] left-1/2 transform -translate-x-1/2 w-[110px] h-[28px] bg-black rounded-full z-50"></div>
@@ -451,8 +456,8 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                                      $0.50
                                    </span>
                                  </div>
-                               </div>
-                             </div>
+                         </div>
+                       </div>
                            )}
 
                            {/* Fallback rewards if no rewards exist */}

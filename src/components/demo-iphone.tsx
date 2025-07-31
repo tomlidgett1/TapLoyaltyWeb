@@ -416,37 +416,39 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                      >
                        
 
-                                             {/* Coffee Card */}
-                       {coffeeProgram && (
-                         <div className="bg-white rounded-xl px-2.5 py-1.5 shadow-sm border border-gray-200">
-                           <div className="flex items-center justify-between mb-1">
-                             <div className="flex items-center gap-1.5">
-                               <PiCoffeeFill className="h-3.5 w-3.5" style={{ color: '#8B4513' }} />
-                               <span className="font-medium text-gray-800 text-[12px]">Coffee Card</span>
-                             </div>
-                             <span className="text-[10px] text-gray-700 font-medium bg-amber-50/50 px-1.5 py-0.5 rounded-xl">
-                               0/{coffeeProgram.frequency - 1}
-                             </span>
-                           </div>
-                           
-                           <div className="flex items-center justify-between mb-1">
-                             {Array.from({ length: coffeeProgram.frequency - 1 }, (_, index) => (
-                               <div key={index} className="w-4 h-4 bg-gray-200 rounded-full"></div>
-                             ))}
-                         </div>
-                         
-                           <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
-                             <Info className="h-2.5 w-2.5" />
-                             <span>{coffeeProgram.frequency - 1} purchases for a free coffee</span>
-                           </div>
-                         </div>
-                       )}
+
 
 
 
                        {/* Content based on active tab */}
                        {activeTab === 'rewards' ? (
                          <>
+                           {/* Coffee Card */}
+                           {coffeeProgram && (
+                             <div className="bg-white rounded-xl px-2.5 py-1.5 shadow-sm border border-gray-200">
+                               <div className="flex items-center justify-between mb-1">
+                                 <div className="flex items-center gap-1.5">
+                                   <PiCoffeeFill className="h-3.5 w-3.5" style={{ color: '#8B4513' }} />
+                                   <span className="font-medium text-gray-800 text-[12px]">Coffee Card</span>
+                                 </div>
+                                 <span className="text-[10px] text-gray-700 font-medium bg-amber-50/50 px-1.5 py-0.5 rounded-xl">
+                                   0/{coffeeProgram.frequency - 1}
+                                 </span>
+                               </div>
+                               
+                               <div className="flex items-center justify-between mb-1">
+                                 {Array.from({ length: coffeeProgram.frequency - 1 }, (_, index) => (
+                                   <div key={index} className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                                 ))}
+                               </div>
+                               
+                               <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
+                                 <Info className="h-2.5 w-2.5" />
+                                 <span>{coffeeProgram.frequency - 1} purchases for a free coffee</span>
+                               </div>
+                             </div>
+                           )}
+
                            {/* Dynamic Rewards */}
                            {rewards.map(reward => renderRewardCard(reward))}
 
@@ -466,13 +468,13 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                                      <span className="text-[10px] text-gray-600 whitespace-nowrap" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
                                        Tap to use at {merchantName}
                                      </span>
-                                   </div>
-                                 </div>
+                           </div>
+                         </div>
                                  <div className="bg-green-500 text-white rounded-md px-2 py-0.5 ml-3 leading-none">
                                    <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
                                      $0.50
                                    </span>
-                                 </div>
+                         </div>
                          </div>
                        </div>
                            )}
@@ -616,7 +618,7 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                                                          )}
                                                          
                                                          {/* Progress display */}
-                                                         <div className="flex items-center gap-2">
+                             <div className="flex items-center gap-2">
                                                            {isSpendBased ? (
                                                              <>
                                                                <div className={cn(
@@ -686,22 +688,28 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                                    
                                    {/* Coffee Program */}
                                    {coffeeProgram && (
-                                     <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-200 mb-2">
-                                       <div className="flex items-center justify-between mb-2">
-                             <div className="flex items-center gap-2">
-                                           <PiCoffeeFill className="h-4 w-4" style={{ color: '#8B4513' }} />
-                                           <span className="text-[13px] font-semibold text-black">Coffee Card</span>
+                                     <div className="bg-white rounded-xl px-2.5 py-1.5 shadow-sm border border-gray-200 mb-2">
+                                       <div className="flex items-center justify-between mb-1">
+                                         <div className="flex items-center gap-1.5">
+                                           <PiCoffeeFill className="h-3.5 w-3.5" style={{ color: '#8B4513' }} />
+                                           <span className="font-medium text-gray-800 text-[12px]">Coffee Card</span>
                                          </div>
-                                         <span className="text-[11px] text-gray-500">3/4</span>
+                                         <span className="text-[10px] text-gray-700 font-medium bg-amber-50/50 px-1.5 py-0.5 rounded-xl">
+                                           3/{coffeeProgram.frequency - 1 || 4}
+                                         </span>
                                        </div>
                                        
-                                       <div className="flex items-center justify-between mb-2">
-                                         {Array.from({ length: 4 }, (_, index) => (
-                                           <div key={index} className={`w-4 h-4 rounded-full ${index < 3 ? 'bg-amber-500' : 'bg-gray-200'}`}></div>
+                                       <div className="flex items-center justify-between mb-1">
+                                         {Array.from({ length: coffeeProgram.frequency - 1 || 4 }, (_, index) => (
+                                           <div key={index} className={`w-4 h-4 rounded-full flex items-center justify-center ${index < 3 ? 'bg-blue-500' : 'bg-gray-200'}`}>
+                                             {index < 3 && (
+                                               <div className="text-white font-bold text-[8px] leading-none">✓</div>
+                                             )}
+                                           </div>
                                          ))}
                                        </div>
                                        
-                                       <div className="flex items-center gap-2 text-[10px] text-gray-600">
+                                       <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
                                          <Info className="h-2.5 w-2.5" />
                                          <span>1 more purchase for a free coffee</span>
                                        </div>

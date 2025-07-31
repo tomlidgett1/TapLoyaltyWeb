@@ -291,7 +291,7 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
         }}
       >
         <div className="flex items-center justify-center min-h-screen p-4 sm:p-6 lg:p-8 pt-12 sm:pt-16 lg:pt-20">
-          
+
           {/* iPhone 16 Pro */}
           <div className="relative flex items-center justify-center">
             {/* Phone Shadow */}
@@ -304,7 +304,8 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                  height: '87vh',
                  width: 'calc(90vh * 0.462)', // iPhone aspect ratio (340/736 ≈ 0.462)
                  maxHeight: '760px',
-                 maxWidth: '350px'
+                 maxWidth: '350px',
+                 minWidth: '320px'
                }}
              >
               
@@ -422,25 +423,25 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                        {/* Content based on active tab */}
                        {activeTab === 'rewards' ? (
                          <>
-                           {/* Coffee Card */}
+                                             {/* Coffee Card */}
                            {coffeeProgram && (
                              <div className="bg-white rounded-xl px-2.5 py-1.5 shadow-sm border border-gray-200">
                                <div className="flex items-center justify-between mb-1">
                                  <div className="flex items-center gap-1.5">
                                    <PiCoffeeFill className="h-3.5 w-3.5" style={{ color: '#8B4513' }} />
                                    <span className="font-medium text-gray-800 text-[12px]">Coffee Card</span>
-                                 </div>
+                           </div>
                                  <span className="text-[10px] text-gray-700 font-medium bg-amber-50/50 px-1.5 py-0.5 rounded-xl">
                                    0/{coffeeProgram.frequency - 1}
                                  </span>
-                               </div>
-                               
-                               <div className="flex items-center justify-between mb-1">
+                         </div>
+                         
+                               <div className="flex items-center justify-between mb-1 px-3">
                                  {Array.from({ length: coffeeProgram.frequency - 1 }, (_, index) => (
                                    <div key={index} className="w-4 h-4 bg-gray-200 rounded-full"></div>
                                  ))}
-                               </div>
-                               
+                         </div>
+                         
                                <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
                                  <Info className="h-2.5 w-2.5" />
                                  <span>{coffeeProgram.frequency - 1} purchases for a free coffee</span>
@@ -471,8 +472,8 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                                      $0.50
                                    </span>
                                  </div>
-                               </div>
-                             </div>
+                         </div>
+                       </div>
                            )}
 
                            {/* Dynamic Rewards */}
@@ -698,7 +699,7 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                                          </span>
                                        </div>
                                        
-                                       <div className="flex items-center justify-between mb-1">
+                                       <div className="flex items-center justify-between mb-1 px-3">
                                          {Array.from({ length: coffeeProgram.frequency - 1 || 4 }, (_, index) => (
                                            <div key={index} className={`w-4 h-4 rounded-full flex items-center justify-center ${index < 3 ? 'bg-blue-500' : 'bg-gray-200'}`}>
                                              {index < 3 && (
@@ -761,20 +762,20 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
 
                                          {/* Bottom Navigation */}
                      <div className="bg-gray-100 border-t border-gray-200 rounded-b-[3.3rem] overflow-hidden">
-                       <div className="flex items-center justify-around py-2 px-3">
-                         <Button variant="ghost" className="flex-col gap-0.5 h-auto py-1.5 text-blue-500">
+                       <div className="flex items-center justify-around py-1 px-3">
+                         <Button variant="ghost" className="flex-col gap-0 h-auto py-1 text-blue-500">
                            <Home style={{ width: '22px', height: '22px' }} />
                            <span className="text-[9px] font-medium">Home</span>
                          </Button>
-                         <Button variant="ghost" className="flex-col gap-0.5 h-auto py-1.5 text-gray-500">
+                         <Button variant="ghost" className="flex-col gap-0 h-auto py-1 text-gray-500">
                            <Search style={{ width: '22px', height: '22px' }} />
                            <span className="text-[9px]">Browse</span>
                          </Button>
-                         <Button variant="ghost" className="flex-col gap-0.5 h-auto py-1.5 text-gray-500">
+                         <Button variant="ghost" className="flex-col gap-0 h-auto py-1 text-gray-500">
                            <Store style={{ width: '22px', height: '22px' }} />
                            <span className="text-[9px]">My Stores</span>
                          </Button>
-                         <Button variant="ghost" className="flex-col gap-0.5 h-auto py-1.5 text-gray-500">
+                         <Button variant="ghost" className="flex-col gap-0 h-auto py-1 text-gray-500">
                            <Settings style={{ width: '22px', height: '22px' }} />
                            <span className="text-[9px]">Settings</span>
                          </Button>

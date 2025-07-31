@@ -16,7 +16,7 @@ import Link from "next/link"
 import { useState } from "react"
 import { doc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 
 import {
   Avatar,
@@ -65,32 +65,11 @@ export function NavUser({
   const toggleStoreStatus = async () => {
     if (!user?.uid) return
     
-    const newStatus = status === 'active' ? 'inactive' : 'active'
-    
-    // Prevent activating store without a logo
-    if (newStatus === 'active') {
-      const hasLogo = user.avatar && 
-                     typeof user.avatar === 'string' && 
-                     user.avatar.trim() !== '';
-      
-      console.log('Checking logo for activation:', { hasLogo, avatar: user.avatar });
-      
-      if (!hasLogo) {
-        console.log('Blocking activation - no logo found');
-        toast({
-          title: "❌ Logo Required",
-          description: "Upload a business logo in Settings → Business before activating your store.",
-          variant: "destructive",
-          duration: 5000,
-        });
-        return;
-      }
-    }
-    
     setLoading(true)
     
     try {
       const merchantRef = doc(db, 'merchants', user.uid)
+      const newStatus = status === 'active' ? 'inactive' : 'active'
       
       // Update store status
       await updateDoc(merchantRef, {
@@ -201,12 +180,6 @@ export function NavUser({
             
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem asChild>
-                <Link href="/merchant/profile" className="cursor-pointer">
-                  <User className="h-4 w-4" strokeWidth={2.75} />
-                  Profile
-                </Link>
-              </DropdownMenuItem>
               <DropdownMenuItem onClick={onOpenSettings} className="cursor-pointer">
                 <Settings className="h-4 w-4" strokeWidth={2.75} />
                 Settings
@@ -215,12 +188,6 @@ export function NavUser({
                 <Link href="/dashboard/integrations" className="cursor-pointer">
                   <Layers className="h-4 w-4" strokeWidth={2.75} />
                   Integrations
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/docs" className="cursor-pointer">
-                  <FileText className="h-4 w-4" strokeWidth={2.75} />
-                  Help Guide
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onOpenSupport} className="cursor-pointer">

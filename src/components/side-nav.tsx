@@ -361,28 +361,6 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
           
           if (!logoUrl) {
             console.log("No valid logo URL found in any expected fields")
-            
-            // Automatically set status to inactive if no logo exists
-            if (data.status === 'active') {
-              console.log("No logo found but status is active - setting to inactive")
-              try {
-                await updateDoc(doc(db, 'merchants', user.uid), {
-                  status: 'inactive',
-                  updatedAt: serverTimestamp()
-                });
-                data.status = 'inactive'; // Update local data to reflect change
-                console.log("Store status automatically set to inactive due to missing logo")
-                
-                // Notify user about the automatic status change
-                toast({
-                  title: "Store Status Updated",
-                  description: "Your store has been set to inactive. Please upload a logo to activate it.",
-                  variant: "destructive"
-                });
-              } catch (error) {
-                console.error("Error auto-setting status to inactive:", error)
-              }
-            }
           }
           
           // Try different possible field names for the merchant name
@@ -569,13 +547,15 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
         message: 'Add your business logo to complete your profile',
         dismissible: true
       };
-
       setNotifications(prev => {
         // Check if notification already exists
         const exists = prev.some(n => n.id === 'logo-missing');
         if (!exists) {
-          // Play notification sound
+          // Play a happy chime notification sound
           if (audioRef.current) {
+            audioRef.current.src = '/sounds/notification-chime.mp3'; // Default happy chime sound
+            audioRef.current.volume = 0.4; // Moderate volume for the chime
+            audioRef.current.currentTime = 0;
             audioRef.current.play().catch(e => console.log('Audio play failed:', e));
           }
           return [...prev, logoNotification];
@@ -610,23 +590,6 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
     if (!user?.uid) {
       console.warn("Cannot update merchant status: no authenticated user");
       return;
-    }
-
-    // Prevent activating store without a logo
-    if (newStatus === 'active') {
-      const hasLogo = merchantData?.logoUrl && 
-                     typeof merchantData.logoUrl === 'string' && 
-                     merchantData.logoUrl.trim() !== '' &&
-                     !logoError;
-      
-      if (!hasLogo) {
-        toast({
-          title: "Logo Required",
-          description: "Please upload a business logo before activating your store.",
-          variant: "destructive"
-        });
-        return;
-      }
     }
 
     try {
@@ -957,17 +920,23 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
       {/* Notification Stacker */}
       {!isCollapsed && notifications.length > 0 && (
         <div className="px-3 pb-2">
-                    <AnimatePresence mode="popLayout">
+          <AnimatePresence>
             {notifications.map((notification, index) => (
-              <motion.div
+                             <motion.div
                  key={notification.id}
-                 layout
                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
                  animate={{ opacity: 1, y: 0, scale: 1 }}
                  exit={{ opacity: 0, x: 100, scale: 0.9 }}
-                 transition={{ 
-                   duration: 0.3,
-                   ease: [0.04, 0.62, 0.23, 0.98]
+                 transition={{
+                   enter: {
+                     duration: 0.4,
+                     ease: [0.04, 0.62, 0.23, 0.98],
+                     delay: index * 0.1
+                   },
+                   exit: {
+                     duration: 0.3,
+                     ease: [0.4, 0, 1, 1]
+                   }
                  }}
                  className="mb-2"
                >

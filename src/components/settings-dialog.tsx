@@ -1873,22 +1873,6 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
                 <Switch
                   checked={storeActive}
                   onCheckedChange={async (checked) => {
-                    // Prevent activating store without a logo
-                    if (checked) {
-                      const hasLogo = logoUrl && 
-                                     typeof logoUrl === 'string' && 
-                                     logoUrl.trim() !== '';
-                      
-                      if (!hasLogo) {
-                        toast({
-                          title: "Logo Required",
-                          description: "Please upload a business logo before activating your store.",
-                          variant: "destructive"
-                        });
-                        return;
-                      }
-                    }
-
                     setStoreActive(checked);
                     // Immediately update status in Firestore
                     if (!user) return;

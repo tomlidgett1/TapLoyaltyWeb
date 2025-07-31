@@ -5186,7 +5186,62 @@ ${content}`;
                 </div>
               )}
               
-              {emailThreads.map((thread) => (
+              {/* ✅ CONNECT ACCOUNTS SECTION */}
+              {!isSearchMode && connectedAccounts.length === 0 && !loading && (
+                <div className="flex flex-col items-center justify-center py-12 px-4">
+                  <div className="max-w-sm text-center">
+                    <div className="mb-6">
+                      <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-50 rounded-full mb-4">
+                        <Mail className="h-8 w-8 text-blue-500" />
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">Connect Your Email</h3>
+                      <p className="text-sm text-gray-500 mb-6">
+                        Connect your email account to start managing your customer communications from one place.
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <button 
+                        onClick={() => {
+                          if (!user?.uid) return
+                          // Use same approach as integrations page regular Gmail (which email page uses)
+                          window.location.href = `/api/auth/gmail/composio?merchantId=${user.uid}`
+                        }}
+                        className="flex items-center justify-center gap-3 w-full px-4 py-3 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+                      >
+                        <Image 
+                          src="/gmailnew.png"
+                          alt="Gmail"
+                          width={20}
+                          height={20}
+                          className="w-5 h-5 object-scale-down"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Connect Gmail</span>
+                      </button>
+                      
+                      <button 
+                        disabled
+                        className="flex items-center justify-center gap-3 w-full px-4 py-3 bg-white border border-gray-200 rounded-md cursor-not-allowed opacity-75"
+                      >
+                        <Image 
+                          src="/outlook.png"
+                          alt="Outlook"
+                          width={20}
+                          height={20}
+                          className="w-5 h-5 object-scale-down opacity-70"
+                        />
+                        <span className="text-sm font-medium text-gray-600">Connect Outlook - Coming Soon</span>
+                      </button>
+                    </div>
+                    
+                    <p className="text-xs text-gray-400 mt-4">
+                      Your email credentials are encrypted and secure
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {emailThreads.length > 0 && emailThreads.map((thread) => (
                 <div 
                   key={thread.threadId}
                   className={`transition-all duration-300 ease-out ${
@@ -5417,7 +5472,7 @@ ${content}`;
               ))}
               
               {/* ✅ PAGINATION: Load More Button */}
-              {hasMoreEmails && (
+              {hasMoreEmails && connectedAccounts.length > 0 && (
                 <div className="p-4 border-t border-gray-100 bg-gray-50">
                   <Button
                     variant="outline"
@@ -5780,7 +5835,7 @@ ${content}`;
               onDelete={handleDelete}
             />
           ) : (
-            <EmptyEmailView />
+            <EmptyEmailView connectedAccounts={connectedAccounts} />
           )}
         </div>
       </div>
@@ -8383,19 +8438,67 @@ const ComposeEmailView = ({
     </div>
   );
 };
-
 // Empty state component
-const EmptyEmailView = () => (
-  <div className="flex-1 flex items-center justify-center bg-gray-50 h-full">
-    <div className="text-center">
-      <div className="w-24 h-24 mx-auto mb-4 rounded-md bg-gray-200 flex items-center justify-center">
-        <Search className="h-8 w-8 text-gray-400" />
+const EmptyEmailView = ({ connectedAccounts }: { connectedAccounts: ConnectedAccount[] }) => (
+  <div className={`flex-1 flex flex-col h-full ${connectedAccounts.length === 0 ? 'bg-gray-100' : 'bg-gray-50'}`}>
+    {/* Tap Agents Section - Only show when no connected accounts */}
+    {connectedAccounts.length === 0 ? (
+      <div className="pt-40 p-6 bg-gray-100">
+        <div className="max-w-lg mx-auto border rounded-2xl overflow-hidden shadow-sm bg-white">
+          <div className="p-6">
+            <div className="mb-4">
+              <h4 className="text-lg font-medium text-gray-900 mb-1 flex items-center gap-2">
+                <span className="bg-gradient-to-r from-blue-500 to-orange-500 bg-clip-text text-transparent font-semibold">
+                  Tap Agent
+                </span>
+              </h4>
+              <p className="text-sm text-gray-500 mb-4">
+                Once connected, enjoy intelligent email management
+              </p>
+            </div>
+            
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-md">
+                <Mail className="h-4 w-4 text-gray-500" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-800">Smart Composing</p>
+                  <p className="text-xs text-gray-500">Intelligent email drafting</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-md">
+                <MessageSquare className="h-4 w-4 text-gray-500" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-800">Quick Replies</p>
+                  <p className="text-xs text-gray-500">Instant response suggestions</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-md">
+                <FileText className="h-4 w-4 text-gray-500" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-800">Email Summarisation</p>
+                  <p className="text-xs text-gray-500">Thread and conversation insights</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <h3 className="text-lg font-medium text-gray-900 mb-2">No Email Selected</h3>
-      <p className="text-gray-500 max-w-sm">
-        Select an email from the list to view its content here.
-      </p>
-    </div>
+    ) : (
+      /* Main Empty State - Only show when accounts are connected */
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-24 h-24 mx-auto mb-4 rounded-md bg-gray-200 flex items-center justify-center">
+            <Search className="h-8 w-8 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Email Selected</h3>
+          <p className="text-gray-500 max-w-sm">
+            Select an email from the list to view its content here.
+          </p>
+        </div>
+      </div>
+    )}
   </div>
 );
 

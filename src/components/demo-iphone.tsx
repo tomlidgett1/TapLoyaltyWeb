@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { X, Gift, Home, Search, Store, Settings, Star, MoreHorizontal, Coffee, Info, Navigation, CreditCard, Globe, Sparkles, Fingerprint } from "lucide-react"
+import { X, Gift, Home, Search, Store, Settings, Star, MoreHorizontal, Coffee, Info, Navigation, CreditCard, Globe, Sparkles, Fingerprint, ChevronDown } from "lucide-react"
 import { PiCoffeeFill } from "react-icons/pi"
 import { BiSolidCoffeeTogo } from "react-icons/bi"
+import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
@@ -24,10 +25,24 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
   const [coffeeProgram, setCoffeeProgram] = useState<any>(null)
   const [cashbackProgram, setCashbackProgram] = useState<any>(null)
   const [rewards, setRewards] = useState<any[]>([])
+  const [customPrograms, setCustomPrograms] = useState<any[]>([])
+  const [expandedPrograms, setExpandedPrograms] = useState<Set<string>>(new Set())
   const [isClosing, setIsClosing] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const [shouldAnimate, setShouldAnimate] = useState(false)
   const [activeTab, setActiveTab] = useState<'rewards' | 'programs'>('rewards')
+
+  const toggleProgramExpansion = (programId: string) => {
+    setExpandedPrograms(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(programId)) {
+        newSet.delete(programId)
+      } else {
+        newSet.add(programId)
+      }
+      return newSet
+    })
+  }
 
   useEffect(() => {
     const fetchMerchantData = async () => {
@@ -88,6 +103,24 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
         })
         
         setRewards(fetchedRewards)
+
+        // Fetch custom programs
+        const customProgramsRef = collection(db, 'merchants', user.uid, 'customprograms')
+        const customProgramsSnapshot = await getDocs(customProgramsRef)
+        
+        const fetchedCustomPrograms = customProgramsSnapshot.docs.map(doc => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            name: data.name || 'Custom Program',
+            description: data.description || '',
+            status: data.status || 'active',
+            totalRewards: data.totalRewards || 0,
+            rewards: data.rewards || []
+          }
+        })
+        
+        setCustomPrograms(fetchedCustomPrograms)
       } catch (error) {
         console.error("Error fetching merchant data:", error)
       }
@@ -378,8 +411,8 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                              {Array.from({ length: coffeeProgram.frequency - 1 }, (_, index) => (
                                <div key={index} className="w-4 h-4 bg-gray-200 rounded-full"></div>
                              ))}
-                           </div>
-                           
+                         </div>
+                         
                            <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
                              <Info className="h-2.5 w-2.5" />
                              <span>{coffeeProgram.frequency - 1} purchases for a free coffee</span>
@@ -387,32 +420,7 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                          </div>
                        )}
 
-                       {/* Cashback Card */}
-                       {cashbackProgram && (
-                         <div className="bg-white rounded-xl px-2.5 py-1.5 shadow-sm border border-green-100">
-                           <div className="flex items-start justify-between">
-                             <div className="flex-1 min-w-0">
-                               <h3 className="text-sm font-medium text-gray-900 truncate" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
-                                 Tap Cash
-                               </h3>
-                               <p className="text-xs text-gray-500 mt-0.5" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
-                                 {cashbackProgram.description || 'Tap to select amount and reduce your transaction'}
-                               </p>
-                               <div className="flex items-center gap-1.5 mt-1">
-                                 <Fingerprint className="w-2.5 h-2.5 text-green-500 flex-shrink-0" />
-                                 <span className="text-[10px] text-gray-600 whitespace-nowrap" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
-                                   Tap to use at {merchantName}
-                                 </span>
-                               </div>
-                             </div>
-                             <div className="bg-green-500 text-white rounded-md px-2 py-0.5 ml-3 leading-none">
-                               <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
-                                 $0.50
-                               </span>
-                             </div>
-                           </div>
-                         </div>
-                       )}
+
 
                        {/* Content based on active tab */}
                        {activeTab === 'rewards' ? (
@@ -420,39 +428,277 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                            {/* Dynamic Rewards */}
                            {rewards.map(reward => renderRewardCard(reward))}
 
-                           {/* Fallback rewards if no rewards exist */}
-                           {rewards.length === 0 && !coffeeProgram && (
-                             <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
-                               <div className="flex items-center justify-between">
-                                 <div className="flex-1">
-                                   <h3 className="font-semibold text-black text-[13px]">Welcome Gift</h3>
-                                   <p className="text-[11px] text-gray-500 mb-2">Special offer for new customers</p>
-                                   <div className="flex items-center gap-2 text-[10px]">
-                                     <div className="w-3 h-3 bg-blue-500 rounded-full flex items-center justify-center">
-                                       <span className="text-[7px] text-white font-bold">!</span>
-                                     </div>
-                                     <span className="text-gray-600">You have 1 x welcome gift across all merchants</span>
+                           {/* Cashback Card */}
+                           {cashbackProgram && (
+                             <div className="bg-white rounded-xl px-2.5 py-1.5 shadow-sm border border-green-100">
+                               <div className="flex items-start justify-between">
+                                 <div className="flex-1 min-w-0">
+                                   <h3 className="text-sm font-medium text-gray-900 truncate" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                                     Tap Cash
+                                   </h3>
+                                   <p className="text-xs text-gray-500 mt-0.5" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                                     {cashbackProgram.description || 'Tap to select amount and reduce your transaction'}
+                                   </p>
+                                   <div className="flex items-center gap-1.5 mt-1">
+                                     <Fingerprint className="w-2.5 h-2.5 text-green-500 flex-shrink-0" />
+                                     <span className="text-[10px] text-gray-600 whitespace-nowrap" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                                       Tap to use at {merchantName}
+                                     </span>
                                    </div>
                                  </div>
-                                 <Button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full px-3 py-1.5 text-[11px] font-medium ml-2">
-                                   + Welcome Gift
-                                 </Button>
+                                 <div className="bg-green-500 text-white rounded-md px-2 py-0.5 ml-3 leading-none">
+                                   <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                                     $0.50
+                                   </span>
+                                 </div>
                                </div>
                              </div>
+                           )}
+
+                           {/* Fallback rewards if no rewards exist */}
+                           {rewards.length === 0 && !coffeeProgram && (
+                       <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
+                         <div className="flex items-center justify-between">
+                           <div className="flex-1">
+                             <h3 className="font-semibold text-black text-[13px]">Welcome Gift</h3>
+                             <p className="text-[11px] text-gray-500 mb-2">Special offer for new customers</p>
+                             <div className="flex items-center gap-2 text-[10px]">
+                               <div className="w-3 h-3 bg-blue-500 rounded-full flex items-center justify-center">
+                                 <span className="text-[7px] text-white font-bold">!</span>
+                               </div>
+                               <span className="text-gray-600">You have 1 x welcome gift across all merchants</span>
+                             </div>
+                           </div>
+                           <Button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full px-3 py-1.5 text-[11px] font-medium ml-2">
+                             + Welcome Gift
+                           </Button>
+                         </div>
+                       </div>
                            )}
                          </>
                        ) : (
                          <>
                            {/* Programs Tab Content */}
-                           <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
-                             <div className="text-center py-8">
-                               <h3 className="font-semibold text-black text-[13px] mb-2">No Programs Available</h3>
-                               <p className="text-[11px] text-gray-500">Check back later for loyalty programs</p>
+                           {customPrograms.length > 0 ? (
+                             <>
+                               {/* Custom Programs Section */}
+                               <div className="mb-3">
+                                 <h3 className="text-[14px] font-semibold text-black mb-2">Custom Programs</h3>
+                                 {customPrograms.map(program => (
+                                   <div key={program.id} className="bg-white rounded-xl px-3 py-2 shadow-sm border border-gray-200 mb-2">
+                                     <div 
+                                       className="flex items-start justify-between mb-1.5 cursor-pointer"
+                                       onClick={() => toggleProgramExpansion(program.id)}
+                                     >
+                                       <div className="flex-1">
+                                         <h4 className="text-[13px] font-semibold text-black">{program.name}</h4>
+                                         <p className="text-[11px] text-gray-500">{program.description}</p>
+                                       </div>
+                                       <div className="text-right">
+                                         {(() => {
+                                           const totalRewards = program.rewards?.length || 0
+                                           const completedRewards = 1 // For demo, assume first reward is completed
+                                           const progressPercentage = totalRewards > 0 ? Math.round((completedRewards / totalRewards) * 100) : 0
+                                           
+                                           return (
+                                             <>
+                                               <div className="text-[12px] font-bold text-blue-500">{completedRewards}/{totalRewards}</div>
+                                               <div className="text-[9px] text-gray-500 mb-0.5">Available</div>
+                                             </>
+                                           )
+                                         })()}
+                                         <ChevronDown 
+                                           className={cn(
+                                             "h-3.5 w-3.5 text-gray-400 ml-auto transition-transform duration-200 -mb-1.5",
+                                             expandedPrograms.has(program.id) && "rotate-180"
+                                           )} 
+                                         />
+                                       </div>
+                                     </div>
+                                     
+                                     <div className="flex items-center justify-between mb-0.5">
+                                       <div className="text-[10px] text-gray-500">Program Progress</div>
+                                       {(() => {
+                                         const totalRewards = program.rewards?.length || 0
+                                         const completedRewards = 1 // For demo, assume first reward is completed
+                                         const progressPercentage = totalRewards > 0 ? Math.round((completedRewards / totalRewards) * 100) : 0
+                                         
+                                         return (
+                                           <div className="text-[11px] font-medium text-blue-500">{progressPercentage}% Complete</div>
+                                         )
+                                       })()}
+                                     </div>
+                                     
+                                     {/* Progress Bar */}
+                                     {(() => {
+                                       const totalRewards = program.rewards?.length || 0
+                                       const completedRewards = 1 // For demo, assume first reward is completed
+                                       const progressPercentage = totalRewards > 0 ? Math.round((completedRewards / totalRewards) * 100) : 0
+                                       
+                                       return (
+                                         <div className="w-full bg-gray-200 rounded-full h-1">
+                                           <div className="bg-blue-500 h-1 rounded-full" style={{ width: `${progressPercentage}%` }}></div>
+                                         </div>
+                                       )
+                                     })()}
+
+                                     {/* Expandable Rewards Section */}
+                                     <AnimatePresence>
+                                       {expandedPrograms.has(program.id) && (
+                                         <motion.div
+                                           initial={{ height: 0, opacity: 0 }}
+                                           animate={{ height: "auto", opacity: 1 }}
+                                           exit={{ height: 0, opacity: 0 }}
+                                           transition={{ 
+                                             duration: 0.4,
+                                             ease: [0.04, 0.62, 0.23, 0.98]
+                                           }}
+                                           className="overflow-hidden mt-3"
+                                         >
+                                           <div className="space-y-2">
+                                             {/* Dynamic rewards from program */}
+                                             {program.rewards && program.rewards.length > 0 ? (
+                                               program.rewards.map((reward: any, rewardIndex: number) => {
+                                                 // Determine if this reward is completed (for demo purposes, make first reward completed)
+                                                 const isCompleted = rewardIndex === 0
+                                                 const isSpendBased = reward.conditions && reward.conditions[0]?.type === 'minimumSpend'
+                                                 
+                                                 return (
+                                                   <div key={rewardIndex} className="p-2 rounded-lg border border-gray-200">
+                                                     <div className="flex items-center gap-2 mb-0.5">
+                                                       <div className={cn(
+                                                         "w-6 h-6 rounded-full border-2 flex items-center justify-center",
+                                                         isCompleted 
+                                                           ? "border-blue-500 bg-blue-500" 
+                                                           : "border-gray-300"
+                                                       )}>
+                                                         {isCompleted ? (
+                                                           <div className="text-white font-bold text-[10px] leading-none">✓</div>
+                                                         ) : (
+                                                           <div className="w-2 h-2 bg-gray-300 rounded-full"></div>
+                                                         )}
+                                                       </div>
+                           <div className="flex-1">
+                                                         <div className="text-[12px] font-medium text-black">{reward.name || reward.freeItemName}</div>
+                                                         <div className="text-[10px] text-gray-500">{reward.description}</div>
+                                                         
+                                                         {/* Condition display */}
+                                                         {isSpendBased ? (
+                                                           <div className="text-[10px] text-blue-500">
+                                                             Total spend ${reward.conditions[0]?.amount || 0}
+                                                           </div>
+                                                         ) : (
+                                                           <div className="text-[10px] text-blue-500">
+                                                             Visit #{reward.limitations?.[0]?.value || 1}
+                                                           </div>
+                                                         )}
+                                                         
+                                                         {/* Progress display */}
+                                                         <div className="flex items-center gap-2">
+                                                           {isSpendBased ? (
+                                                             <>
+                                                               <div className={cn(
+                                                                 "text-[9px]",
+                                                                 isCompleted ? "text-green-500" : "text-orange-500"
+                                                               )}>
+                                                                 ${isCompleted ? reward.conditions[0]?.amount : Math.floor((reward.conditions[0]?.amount || 0) * 0.1)}/${reward.conditions[0]?.amount || 0}
+                                                               </div>
+                                                               <div className="flex-1 bg-gray-200 rounded-full h-1">
+                                                                 <div 
+                                                                   className={cn(
+                                                                     "h-1 rounded-full",
+                                                                     isCompleted ? "bg-green-500" : "bg-blue-500"
+                                                                   )} 
+                                                                   style={{ width: isCompleted ? '100%' : '10%' }}
+                                                                 ></div>
+                                                               </div>
+                                                             </>
+                                                           ) : (
+                                                             <>
+                                                               <div className={cn(
+                                                                 "text-[9px]",
+                                                                 isCompleted ? "text-green-500" : "text-orange-500"
+                                                               )}>
+                                                                 {isCompleted ? reward.limitations?.[0]?.value || 1 : 0}/{reward.limitations?.[0]?.value || 1} visits
+                                                               </div>
+                                                               <div className="flex-1 bg-gray-200 rounded-full h-1">
+                                                                 <div 
+                                                                   className={cn(
+                                                                     "h-1 rounded-full",
+                                                                     isCompleted ? "bg-green-500" : "bg-blue-500"
+                                                                   )} 
+                                                                   style={{ width: isCompleted ? '100%' : '0%' }}
+                                                                 ></div>
+                                                               </div>
+                                                             </>
+                                                           )}
+                                                         </div>
+                                                       </div>
+                                                       <span className={cn(
+                                                         "text-[10px]",
+                                                         isCompleted ? "text-blue-500" : "text-gray-500"
+                                                       )}>
+                                                         {isCompleted ? "Earned" : "Locked"}
+                                                       </span>
+                                                     </div>
+                                                   </div>
+                                                 )
+                                               })
+                                             ) : (
+                                               <div className="text-center text-gray-500 text-[12px] py-4">
+                                                 No rewards in this program
+                                               </div>
+                                             )}
+                                           </div>
+                                         </motion.div>
+                                       )}
+                                     </AnimatePresence>
+                                   </div>
+                                 ))}
+                               </div>
+
+                               {/* Recurring Programs Section */}
+                               {(coffeeProgram || cashbackProgram) && (
+                                 <div>
+                                   <h3 className="text-[14px] font-semibold text-black mb-2">Recurring Programs</h3>
+                                   
+                                   {/* Coffee Program */}
+                                   {coffeeProgram && (
+                                     <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-200 mb-2">
+                                       <div className="flex items-center justify-between mb-2">
+                             <div className="flex items-center gap-2">
+                                           <PiCoffeeFill className="h-4 w-4" style={{ color: '#8B4513' }} />
+                                           <span className="text-[13px] font-semibold text-black">Coffee Card</span>
+                                         </div>
+                                         <span className="text-[11px] text-gray-500">3/4</span>
+                                       </div>
+                                       
+                                       <div className="flex items-center justify-between mb-2">
+                                         {Array.from({ length: 4 }, (_, index) => (
+                                           <div key={index} className={`w-4 h-4 rounded-full ${index < 3 ? 'bg-amber-500' : 'bg-gray-200'}`}></div>
+                                         ))}
+                                       </div>
+                                       
+                                       <div className="flex items-center gap-2 text-[10px] text-gray-600">
+                                         <Info className="h-2.5 w-2.5" />
+                                         <span>1 more purchase for a free coffee</span>
+                                       </div>
+                                     </div>
+                                   )}
+                                 </div>
+                               )}
+                             </>
+                           ) : (
+                             <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
+                               <div className="text-center py-8">
+                                 <h3 className="font-semibold text-black text-[13px] mb-2">No Programs Available</h3>
+                                 <p className="text-[11px] text-gray-500">Check back later for loyalty programs</p>
+                               </div>
                              </div>
-                           </div>
+                           )}
                          </>
                        )}
-                    </div>
+                           </div>
 
                     {/* Floating Filter Pill */}
                                           <div className="absolute bottom-20 left-4 z-10">
@@ -481,7 +727,7 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                           <Star className="h-3.5 w-3.5" />
                           Programs
                         </button>
-                      </div>
+                       </div>
                     </div>
 
                                          {/* Bottom Navigation */}

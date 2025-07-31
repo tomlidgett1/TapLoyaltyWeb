@@ -26,6 +26,7 @@ import { CreateBannerDialog } from "@/components/create-banner-dialog"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
 import { CreateRewardSheet } from "@/components/create-reward-sheet"
 import { CreatePointsRuleSheet } from "@/components/create-points-rule-sheet"
+import { DemoIPhone } from "@/components/demo-iphone"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -240,6 +241,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   
   // Add state for the recurring reward dialog
   const [showRecurringRewardDialog, setShowRecurringRewardDialog] = useState(false)
+  
+  // Add state for the preview modal
+  const [showPreview, setShowPreview] = useState(false)
   
   // Add these states for the metrics
   const [metrics, setMetrics] = useState({
@@ -2374,6 +2378,21 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       </DropdownMenuContent>
                     </DropdownMenu>
                     
+                    {/* Preview Button */}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-sm font-medium text-gray-900 bg-white border-gray-300 hover:bg-gray-50 focus:ring-0 focus:ring-offset-0 flex items-center"
+                      onClick={() => setShowPreview(true)}
+                    >
+                      <img 
+                        src="/apple-logo.png" 
+                        alt="Apple" 
+                        className="h-4 w-4 mr-1.5 flex-shrink-0"
+                      />
+                      Preview
+                    </Button>
+                    
                     {/* Notifications */}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -3234,6 +3253,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </div>
         </DialogContent>
       </Dialog>
+      
+      {/* Preview Modal */}
+      <DemoIPhone 
+        open={showPreview} 
+        onOpenChange={setShowPreview}
+      />
     </div>
     </AuthGuard>
   )

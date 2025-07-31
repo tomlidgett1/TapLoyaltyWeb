@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { X, Gift, Home, Search, Store, Settings, Star, MoreHorizontal, Coffee, Info } from "lucide-react"
+import { X, Gift, Home, Search, Store, Settings, Star, MoreHorizontal, Coffee, Info, Navigation } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { doc, getDoc } from "firebase/firestore"
@@ -16,9 +16,10 @@ interface DemoIPhoneProps {
 export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
   const { user } = useAuth()
   const [logoUrl, setLogoUrl] = useState<string>("")
+  const [merchantName, setMerchantName] = useState<string>("")
 
   useEffect(() => {
-    const fetchMerchantLogo = async () => {
+    const fetchMerchantData = async () => {
       if (!user?.uid) return
       
       try {
@@ -26,14 +27,15 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
         if (merchantDoc.exists()) {
           const data = merchantDoc.data()
           setLogoUrl(data.logoUrl || "")
+          setMerchantName(data.merchantName || "Store")
         }
       } catch (error) {
-        console.error("Error fetching merchant logo:", error)
+        console.error("Error fetching merchant data:", error)
       }
     }
 
     if (open) {
-      fetchMerchantLogo()
+      fetchMerchantData()
     }
   }, [user?.uid, open])
 
@@ -41,13 +43,7 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg p-0 bg-transparent border-0 shadow-none">
         <div className="flex items-center justify-center min-h-screen p-8">
-          {/* Close Button */}
-          <button
-            onClick={() => onOpenChange(false)}
-            className="absolute top-8 right-8 z-50 p-3 rounded-full bg-black/80 hover:bg-black transition-colors backdrop-blur-sm"
-          >
-            <X className="h-5 w-5 text-white" />
-          </button>
+          
 
           {/* iPhone 16 Pro */}
           <div className="relative">
@@ -56,23 +52,23 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
             
                          {/* Outer Frame - Black */}
              <div 
-               className="relative bg-black rounded-[3.5rem] p-[4px] shadow-2xl"
+               className="relative bg-[#2F3336] rounded-[3.5rem] p-[5px] shadow-2xl"
                style={{ width: '340px', height: '736px' }}
              >
               
-              {/* Side Buttons */}
-              {/* Mute Switch */}
-              <div className="absolute -left-[2px] top-[94px] w-[3px] h-[24px] bg-gradient-to-r from-gray-400 to-gray-300 rounded-r-md"></div>
-              
-              {/* Volume Buttons */}
-              <div className="absolute -left-[2px] top-[136px] w-[3px] h-[28px] bg-gradient-to-r from-gray-400 to-gray-300 rounded-r-md"></div>
-              <div className="absolute -left-[2px] top-[176px] w-[3px] h-[28px] bg-gradient-to-r from-gray-400 to-gray-300 rounded-r-md"></div>
-              
-              {/* Power Button */}
-              <div className="absolute -right-[2px] top-[154px] w-[3px] h-[42px] bg-gradient-to-l from-gray-400 to-gray-300 rounded-l-md"></div>
-              
-              {/* Camera Control */}
-              <div className="absolute -right-[2px] top-[222px] w-[3px] h-[20px] bg-gradient-to-l from-gray-400 to-gray-300 rounded-l-md"></div>
+                             {/* Side Buttons */}
+               {/* Mute Switch */}
+               <div className="absolute -left-[2px] top-[94px] w-[3px] h-[24px] bg-black rounded-r-md"></div>
+               
+               {/* Volume Buttons */}
+               <div className="absolute -left-[2px] top-[136px] w-[3px] h-[28px] bg-black rounded-r-md"></div>
+               <div className="absolute -left-[2px] top-[176px] w-[3px] h-[28px] bg-black rounded-r-md"></div>
+               
+               {/* Power Button */}
+               <div className="absolute -right-[2px] top-[154px] w-[3px] h-[42px] bg-black rounded-l-md"></div>
+               
+               {/* Camera Control */}
+               <div className="absolute -right-[2px] top-[222px] w-[3px] h-[20px] bg-black rounded-l-md"></div>
 
               {/* Inner Frame */}
               <div className="h-full w-full bg-black rounded-[3.4rem] p-[2px]">
@@ -84,59 +80,61 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                    <div className="absolute top-[12px] left-1/2 transform -translate-x-1/2 w-[110px] h-[32px] bg-black rounded-full z-50"></div>
                   
                                      {/* Status Bar */}
-                   <div className="flex items-center justify-center px-7 pt-[15px] pb-0 bg-white relative z-40">
-                     <div className="flex items-center justify-between w-full max-w-[200px]">
-                       <div className="text-[14px] font-semibold text-black -ml-2">4:39</div>
-                       <div className="flex items-center gap-[4px] ml-2">
-                         {/* Cellular */}
-                         <svg width="14" height="9" viewBox="0 0 14 9" className="fill-black">
-                           <rect x="0" y="6" width="1.5" height="3" rx="0.3"/>
-                           <rect x="2.5" y="4.5" width="1.5" height="4.5" rx="0.3"/>
-                           <rect x="5" y="3" width="1.5" height="6" rx="0.3"/>
-                           <rect x="7.5" y="1.5" width="1.5" height="7.5" rx="0.3"/>
-                           <rect x="10" y="0" width="1.5" height="9" rx="0.3"/>
-                         </svg>
+                   <div className="flex items-center justify-center px-7 pt-[20px] pb-2 bg-white relative z-40">
+                     <div className="flex items-center justify-between w-full max-w-[280px]">
+                       <div className="text-[14px] font-semibold text-black">4:39</div>
+                       <div className="flex items-center gap-[4px]">
                          {/* Battery */}
-                         <div className="flex items-center gap-[1px]">
-                           <div className="w-[20px] h-[9px] border border-black rounded-[1.5px] relative">
-                             <div className="absolute inset-[1.5px] bg-black rounded-[0.5px]"></div>
-                           </div>
-                           <div className="w-[1.5px] h-[4px] bg-black rounded-r-full"></div>
-                         </div>
+                         <svg width="24" height="12" viewBox="0 0 24 12" className="fill-black">
+                           <rect x="0.5" y="0.5" width="21" height="11" rx="2.5" stroke="black" strokeWidth="1" fill="none"/>
+                           <rect x="2" y="2" width="18" height="8" rx="1.5" fill="black"/>
+                           <rect x="21.5" y="4" width="2" height="4" rx="1" fill="black"/>
+                         </svg>
                        </div>
                      </div>
                    </div>
+
+                   
 
                                      {/* App Content */}
                    <div className="bg-gray-100 overflow-hidden flex flex-col" style={{ height: 'calc(100% - 51px)' }}>
                     
                                          {/* Header */}
-                     <div className="bg-white px-4 py-3 flex items-center justify-between border-b border-gray-100">
+                     <div className="bg-white px-4 py-3 flex items-center justify-between">
                        <div className="flex items-center gap-2.5">
-                         <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-sm overflow-hidden">
+                         <div className={`w-9 h-9 ${logoUrl ? 'bg-transparent' : 'bg-gradient-to-br from-blue-500 to-blue-600'} rounded-full flex items-center justify-center shadow-sm overflow-hidden`}>
                            {logoUrl ? (
                              <img 
                                src={logoUrl} 
                                alt="Store Logo" 
-                               className="w-full h-full object-cover rounded-lg"
+                               className="w-full h-full object-cover rounded-full"
                              />
                            ) : (
                              <div className="w-4 h-4 bg-white rounded-sm"></div>
                            )}
                          </div>
                          <div>
-                           <h1 className="text-[16px] font-bold text-black">test</h1>
-                           <p className="text-[11px] text-gray-500">📍 162 High St, Ashburton VIC 3147</p>
+                           <h1 className="text-[16px] font-bold text-black">{merchantName}</h1>
+                           <p className="text-[11px] text-gray-500 flex items-center gap-1">
+                             <Navigation className="h-3 w-3 text-gray-500 pt-0.5" />
+                             162 High St, Ashburton VIC 3147
+                           </p>
                          </div>
                        </div>
                        <div className="flex items-center gap-2">
-                         <Star className="h-4 w-4 text-gray-400" />
-                         <button className="text-gray-400 text-lg">›</button>
+                         <Star className="h-4 w-4 text-gray-400 -mt-3.5" />
+                         <button className="text-gray-400 text-lg -mt-3.5">›</button>
                        </div>
+                     </div>
+                       
+                       
+                       {/* Divider */}
+                       <div className="flex justify-center">
+                       <div className="h-[1px] bg-gray-70 w-[100%]"></div>
                      </div>
 
                                          {/* Metrics Section */}
-                     <div className="bg-white px-4 py-3 border-b border-gray-100 rounded-b-2xl">
+                     <div className="bg-white px-4 py-3 rounded-b-2xl border-b border-gray-200">
                        <div className="flex items-center justify-around">
                          <div className="text-center">
                            <div className="text-[16px] font-bold text-blue-500">8,850</div>
@@ -160,13 +158,13 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                        
 
                                              {/* Coffee Card */}
-                       <div className="bg-white rounded-xl p-2.5 shadow-sm border border-gray-100/80">
+                       <div className="bg-white rounded-xl p-2.5 shadow-sm border border-gray-200">
                          <div className="flex items-center justify-between mb-2">
                            <div className="flex items-center gap-2">
                              <Coffee className="h-4 w-4 text-amber-600" />
                              <span className="font-semibold text-black text-[13px]">Coffee Card</span>
                            </div>
-                           <span className="text-[11px] text-gray-500 font-medium">0/4</span>
+                           <span className="text-[11px] text-gray-700 font-medium bg-amber-50 px-2 py-0.5 rounded-2xl">0/4</span>
                          </div>
                          
                          <div className="flex items-center justify-between mb-2">
@@ -183,7 +181,7 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                        </div>
 
                                              {/* Welcome Gift */}
-                       <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100/80">
+                       <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
                          <div className="flex items-center justify-between">
                            <div className="flex-1">
                              <h3 className="font-semibold text-black text-[13px]">Welcome Gift</h3>
@@ -202,7 +200,7 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                        </div>
 
                                              {/* $10 Off */}
-                       <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100/80">
+                       <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
                          <div className="flex items-center justify-between">
                            <div className="flex-1">
                              <h3 className="font-semibold text-black text-[13px]">$10 Off Purchase</h3>
@@ -228,19 +226,19 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                      <div className="bg-gray-100 border-t border-gray-200 rounded-b-[3.3rem] overflow-hidden">
                        <div className="flex items-center justify-around py-2 px-3">
                          <Button variant="ghost" className="flex-col gap-0.5 h-auto py-1.5 text-blue-500">
-                           <Home className="h-4 w-4" />
+                           <Home style={{ width: '22px', height: '22px' }} />
                            <span className="text-[9px] font-medium">Home</span>
                          </Button>
                          <Button variant="ghost" className="flex-col gap-0.5 h-auto py-1.5 text-gray-500">
-                           <Search className="h-4 w-4" />
+                           <Search style={{ width: '22px', height: '22px' }} />
                            <span className="text-[9px]">Browse</span>
                          </Button>
                          <Button variant="ghost" className="flex-col gap-0.5 h-auto py-1.5 text-gray-500">
-                           <Store className="h-4 w-4" />
+                           <Store style={{ width: '22px', height: '22px' }} />
                            <span className="text-[9px]">My Stores</span>
                          </Button>
                          <Button variant="ghost" className="flex-col gap-0.5 h-auto py-1.5 text-gray-500">
-                           <Settings className="h-4 w-4" />
+                           <Settings style={{ width: '22px', height: '22px' }} />
                            <span className="text-[9px]">Settings</span>
                          </Button>
                        </div>

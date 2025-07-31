@@ -222,16 +222,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const clearWelcomeFlag = () => {
-    console.log('Clearing welcome flag')
     setShouldShowWelcome(false)
   }
-
-  console.log('AuthProvider render:', { 
-    user: user?.uid, 
-    loading, 
-    shouldShowWelcome,
-    authInitialized 
-  })
 
   return (
     <AuthContext.Provider value={{ user, loading, shouldShowWelcome, signIn, signUp, logout, clearWelcomeFlag }}>

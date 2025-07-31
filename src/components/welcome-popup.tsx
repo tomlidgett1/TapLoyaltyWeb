@@ -10,8 +10,6 @@ interface WelcomePopupProps {
 }
 
 export function WelcomePopup({ open, onOpenChange }: WelcomePopupProps) {
-  console.log('WelcomePopup render:', { open })
-  
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md p-0 rounded-2xl overflow-hidden border-0 shadow-lg animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out">

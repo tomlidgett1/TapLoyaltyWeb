@@ -58,13 +58,6 @@ export default function GetStartedPage() {
   const [accountType, setAccountType] = useState<'standard' | 'network'>('standard')
   const [pageLoaded, setPageLoaded] = useState(false)
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
-
-  console.log('GetStartedPage render:', { 
-    user: user?.uid, 
-    shouldShowWelcome, 
-    pageLoaded, 
-    showWelcomePopup 
-  })
   
   // Logo upload states
   const [merchantLogoUrl, setMerchantLogoUrl] = useState<string | null>(null)
@@ -337,32 +330,17 @@ export default function GetStartedPage() {
 
   // Show welcome popup once page is loaded and flag is set
   useEffect(() => {
-    console.log('Welcome popup check:', { pageLoaded, shouldShowWelcome })
     if (pageLoaded && shouldShowWelcome) {
-      console.log('Showing welcome popup in 500ms')
       const timer = setTimeout(() => {
-        console.log('Timer fired - setting showWelcomePopup to true')
         setShowWelcomePopup(true)
         clearWelcomeFlag() // Clear the flag so it doesn't show again
-        console.log('Welcome popup shown')
       }, 500) // Additional delay for smooth experience
 
       return () => clearTimeout(timer)
     }
   }, [pageLoaded, shouldShowWelcome, clearWelcomeFlag])
 
-  // Force show welcome popup for testing - remove this after testing
-  useEffect(() => {
-    console.log('Force show test - user:', user?.uid)
-    if (user?.uid) {
-      const timer = setTimeout(() => {
-        console.log('Force showing welcome popup for testing')
-        setShowWelcomePopup(true)
-      }, 2000) // Show after 2 seconds for testing
 
-      return () => clearTimeout(timer)
-    }
-  }, [user?.uid])
 
 
 

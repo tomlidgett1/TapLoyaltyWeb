@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils'
 import Image from 'next/image'
 import { useAuth } from '@/contexts/auth-context'
 import { doc, setDoc, serverTimestamp, getDoc, updateDoc, collection, getDocs, query, orderBy, limit, addDoc, deleteDoc, where } from 'firebase/firestore'
+import { AgentsWelcomePopup } from '@/components/agents-welcome-popup'
 import { db } from '@/lib/firebase'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -62,6 +63,8 @@ export default function AgentsPage() {
   const [isEmailSummaryModalOpen, setIsEmailSummaryModalOpen] = useState(false)
   const [isEmailExecutiveModalOpen, setIsEmailExecutiveModalOpen] = useState(false)
   const [isCreateAgentModalOpen, setIsCreateAgentModalOpen] = useState(false)
+  const [showAgentsWelcomePopup, setShowAgentsWelcomePopup] = useState(false)
+  const [pageLoaded, setPageLoaded] = useState(false)
   const [connectingAgents, setConnectingAgents] = useState<Set<string>>(new Set())
   const [enrolledAgents, setEnrolledAgents] = useState<Record<string, any>>({})
   const [agentSettings, setAgentSettings] = useState({
@@ -419,6 +422,65 @@ export default function AgentsPage() {
 
     loadEnrolledAgents()
   }, [user?.uid])
+
+  // Handle page load completion and welcome popup
+  useEffect(() => {
+    // Mark page as loaded after initial render
+    const timer = setTimeout(() => {
+      setPageLoaded(true)
+    }, 100) // Small delay to ensure page is fully rendered
+
+    return () => clearTimeout(timer)
+  }, [])
+
+  // Check for first-time visit and show welcome popup
+  useEffect(() => {
+    const checkFirstTimeVisit = async () => {
+      if (!pageLoaded || !user?.uid) return
+
+      try {
+        const merchantDocRef = doc(db, 'merchants', user.uid)
+        const merchantDoc = await getDoc(merchantDocRef)
+        
+        if (merchantDoc.exists()) {
+          const data = merchantDoc.data()
+          const agentsPageVisitCount = data.agentsPageVisitCount || 0
+          
+          console.log('Agents page visit count:', agentsPageVisitCount)
+          
+          // Show welcome popup on first visit
+          if (agentsPageVisitCount === 0) {
+            console.log('First time visiting agents page - showing welcome popup')
+            setTimeout(() => {
+              setShowAgentsWelcomePopup(true)
+            }, 500) // Delay for smooth experience
+          }
+          
+          // Increment visit count
+          await updateDoc(merchantDocRef, {
+            agentsPageVisitCount: (agentsPageVisitCount || 0) + 1,
+            lastAgentsPageVisit: serverTimestamp()
+          })
+        } else {
+          // Create new document with visit count
+          await setDoc(merchantDocRef, {
+            agentsPageVisitCount: 1,
+            lastAgentsPageVisit: serverTimestamp()
+          }, { merge: true })
+          
+          // Show welcome popup for new user
+          console.log('New merchant - showing agents welcome popup')
+          setTimeout(() => {
+            setShowAgentsWelcomePopup(true)
+          }, 500)
+        }
+      } catch (error) {
+        console.error('Error checking first-time visit:', error)
+      }
+    }
+
+    checkFirstTimeVisit()
+  }, [pageLoaded, user?.uid])
 
   // Load agent logs when showLogsView is true
   useEffect(() => {
@@ -5688,6 +5750,11 @@ Describe the main purpose and goal of your agent...
         </Dialog>
       )}
 
+      {/* Agents Welcome Popup */}
+      <AgentsWelcomePopup 
+        open={showAgentsWelcomePopup} 
+        onOpenChange={setShowAgentsWelcomePopup} 
+      />
 
     </div>
   )

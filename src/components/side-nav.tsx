@@ -34,7 +34,10 @@ import {
   Headphones,
   Send,
   X,
-  Mail
+  Mail,
+  Camera,
+  Upload,
+  Bell
 } from "lucide-react"
 import { RiRobot3Line } from "react-icons/ri"
 
@@ -73,6 +76,7 @@ import { CreateManualProgramDialog } from "@/components/create-manual-program-di
 import { SettingsDialog } from "@/components/settings-dialog"
 import { NavUser } from "@/components/nav-user"
 import { NavCreate } from "@/components/nav-create"
+import { motion, AnimatePresence } from "framer-motion"
 
 // Get auth instance
 const auth = getAuth();
@@ -265,7 +269,17 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   const [merchantStatus, setMerchantStatus] = useState<'active' | 'inactive'>('active')
   const [merchantPlan, setMerchantPlan] = useState<'light' | 'advanced' | 'pro'>('light')
 
-
+  // Notification state
+  const [notifications, setNotifications] = useState<{
+    id: string;
+    type: 'logo-missing' | 'info' | 'warning';
+    title: string;
+    message: string;
+    dismissible: boolean;
+  }[]>([])
+  
+  // Audio notification
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   // Sync with parent's collapsed prop (external change)
   useEffect(() => {
@@ -347,6 +361,28 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
           
           if (!logoUrl) {
             console.log("No valid logo URL found in any expected fields")
+            
+            // Automatically set status to inactive if no logo exists
+            if (data.status === 'active') {
+              console.log("No logo found but status is active - setting to inactive")
+              try {
+                await updateDoc(doc(db, 'merchants', user.uid), {
+                  status: 'inactive',
+                  updatedAt: serverTimestamp()
+                });
+                data.status = 'inactive'; // Update local data to reflect change
+                console.log("Store status automatically set to inactive due to missing logo")
+                
+                // Notify user about the automatic status change
+                toast({
+                  title: "Store Status Updated",
+                  description: "Your store has been set to inactive. Please upload a logo to activate it.",
+                  variant: "destructive"
+                });
+              } catch (error) {
+                console.error("Error auto-setting status to inactive:", error)
+              }
+            }
           }
           
           // Try different possible field names for the merchant name
@@ -400,6 +436,28 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
     
     fetchMerchantData()
   }, [user])
+
+  // Listen for real-time merchant status changes
+  useEffect(() => {
+    if (!user?.uid) {
+      setMerchantStatus('active') // Reset to default
+      return
+    }
+
+    const merchantRef = doc(db, 'merchants', user.uid)
+    const unsubscribe = onSnapshot(merchantRef, (doc) => {
+      if (doc.exists()) {
+        const data = doc.data()
+        if (data.status) {
+          setMerchantStatus(data.status as 'active' | 'inactive')
+        }
+      }
+    }, (error) => {
+      console.error("Error listening to merchant status changes:", error)
+    })
+
+    return () => unsubscribe()
+  }, [user?.uid])
 
   useEffect(() => {
     const checkOnboardingStatus = async () => {
@@ -491,6 +549,49 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
     return () => unsubscribe();
   }, [user?.uid]);
 
+  // Check for missing logo and show notification
+  useEffect(() => {
+    if (!user?.uid || !merchantData) {
+      setNotifications([]);
+      return;
+    }
+
+    const hasLogo = merchantData.logoUrl && 
+                   typeof merchantData.logoUrl === 'string' && 
+                   merchantData.logoUrl.trim() !== '' &&
+                   !logoError;
+
+    if (!hasLogo) {
+      const logoNotification = {
+        id: 'logo-missing',
+        type: 'logo-missing' as const,
+        title: 'Upload Logo',
+        message: 'Add your business logo to complete your profile',
+        dismissible: true
+      };
+
+      setNotifications(prev => {
+        // Check if notification already exists
+        const exists = prev.some(n => n.id === 'logo-missing');
+        if (!exists) {
+          // Play notification sound
+          if (audioRef.current) {
+            audioRef.current.play().catch(e => console.log('Audio play failed:', e));
+          }
+          return [...prev, logoNotification];
+        }
+        return prev;
+      });
+    } else {
+      // Remove logo notification if logo is now present
+      setNotifications(prev => prev.filter(n => n.id !== 'logo-missing'));
+    }
+  }, [user?.uid, merchantData?.logoUrl, logoError, merchantData]);
+
+  const dismissNotification = (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
   const handleLogout = async () => {
     try {
       await signOut(auth)
@@ -511,13 +612,31 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
       return;
     }
 
+    // Prevent activating store without a logo
+    if (newStatus === 'active') {
+      const hasLogo = merchantData?.logoUrl && 
+                     typeof merchantData.logoUrl === 'string' && 
+                     merchantData.logoUrl.trim() !== '' &&
+                     !logoError;
+      
+      if (!hasLogo) {
+        toast({
+          title: "Logo Required",
+          description: "Please upload a business logo before activating your store.",
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+
     try {
       const merchantRef = doc(db, 'merchants', user.uid);
       await updateDoc(merchantRef, {
-        status: newStatus
+        status: newStatus,
+        updatedAt: serverTimestamp()
       });
       
-      setMerchantStatus(newStatus);
+      // Status will be updated automatically by the real-time listener
       
       toast({
         title: "Status Updated",
@@ -835,6 +954,102 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
         )}
       </nav>
       
+      {/* Notification Stacker */}
+      {!isCollapsed && notifications.length > 0 && (
+        <div className="px-3 pb-2">
+                    <AnimatePresence mode="popLayout">
+            {notifications.map((notification, index) => (
+              <motion.div
+                 key={notification.id}
+                 layout
+                 initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                 animate={{ opacity: 1, y: 0, scale: 1 }}
+                 exit={{ opacity: 0, x: 100, scale: 0.9 }}
+                 transition={{ 
+                   duration: 0.3,
+                   ease: [0.04, 0.62, 0.23, 0.98]
+                 }}
+                 className="mb-2"
+               >
+                                 <div 
+                   className="bg-blue-500 text-white px-3 py-2.5 rounded-2xl shadow-sm relative overflow-hidden cursor-pointer hover:bg-blue-600 transition-colors"
+                   onClick={() => setSettingsDialogOpen(true)}
+                 >
+                   <div className="flex items-center justify-between gap-2">
+                     <div className="flex items-center gap-2 flex-1 min-w-0">
+                       <Camera className="h-3.5 w-3.5 text-blue-100 flex-shrink-0" />
+                       <div className="flex-1 min-w-0">
+                         <p className="text-xs font-medium text-white truncate">
+                           Upload Logo
+                         </p>
+                         <p className="text-xs text-blue-100 opacity-80">
+                           Required
+                         </p>
+                       </div>
+                     </div>
+                     <div className="flex items-center gap-1 flex-shrink-0">
+                       {notification.dismissible && (
+                         <Button
+                           size="sm"
+                           variant="ghost"
+                           className="h-5 w-5 p-0 text-blue-100 hover:text-white hover:bg-white/20 rounded-sm transition-colors"
+                           onClick={(e) => {
+                             e.stopPropagation();
+                             dismissNotification(notification.id);
+                           }}
+                         >
+                           <X className="h-2.5 w-2.5" />
+                         </Button>
+                       )}
+                     </div>
+                   </div>
+                 </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+      )}
+      
+      {/* Collapsed state notification indicator */}
+      {isCollapsed && notifications.length > 0 && (
+        <div className="px-3 pb-2">
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="w-full flex justify-center"
+          >
+            <motion.div
+              animate={{ 
+                scale: [1, 1.1, 1],
+                backgroundColor: ["#3B82F6", "#2563EB", "#3B82F6"]
+              }}
+              transition={{ 
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
+              className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-blue-600 transition-colors"
+              onClick={() => setIsCollapsed(false)}
+              title={`${notifications.length} notification${notifications.length > 1 ? 's' : ''}`}
+            >
+              <Bell className="h-4 w-4 text-white" />
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                {notifications.length}
+              </span>
+            </motion.div>
+          </motion.div>
+        </div>
+      )}
+      
+      {/* Hidden audio element for notification sound */}
+      <audio
+        ref={audioRef}
+        preload="auto"
+        style={{ display: 'none' }}
+      >
+        <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt" type="audio/wav" />
+      </audio>
+      
       {/* Account section at the bottom - using NavUser component */}
       <div className="mt-auto border-t border-gray-200 p-3">
         {loading || merchantName === "My Business" ? (
@@ -863,7 +1078,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
             onLogout={handleLogout}
             onOpenSettings={() => setSettingsDialogOpen(true)}
             onOpenSupport={() => setSupportBoxOpen(true)}
-            onStatusChange={(newStatus) => setMerchantStatus(newStatus)}
+            onStatusChange={updateMerchantStatus}
           />
         )}
       </div>

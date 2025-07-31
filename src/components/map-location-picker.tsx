@@ -319,10 +319,11 @@ export function MapLocationPicker({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end gap-2">
-        <div className="flex-1 space-y-2 relative">
-          <Label htmlFor="address-search">Search for your business address</Label>
-          <Input
+      <div className="space-y-2">
+        <Label htmlFor="address-search">Search for your business address</Label>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 relative">
+            <Input
             id="address-search"
             value={address}
             onChange={(e) => {
@@ -364,17 +365,6 @@ export function MapLocationPicker({
               ))}
             </div>
           )}
-          
-          {searchError && (
-            <div className="text-red-500 text-xs flex items-center gap-1 mt-1">
-              <AlertCircle className="h-3 w-3" />
-              {searchError}
-            </div>
-          )}
-          
-          <p className="text-xs text-muted-foreground mt-1">
-            Try including suburb, state or postcode for better results
-          </p>
         </div>
         <Button 
           onClick={searchAddress} 
@@ -388,6 +378,18 @@ export function MapLocationPicker({
             </>
           )}
         </Button>
+        </div>
+        
+        {searchError && (
+          <div className="text-red-500 text-xs flex items-center gap-1 mt-1">
+            <AlertCircle className="h-3 w-3" />
+            {searchError}
+          </div>
+        )}
+        
+        <p className="text-xs text-muted-foreground">
+          Try including suburb, state or postcode for better results
+        </p>
       </div>
       
       <div 

@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { TapAiDialogProvider } from "@/components/tap-ai-dialog-provider";
 import { CommandPalette } from "@/components/command-palette"
 
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],

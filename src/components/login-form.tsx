@@ -6,6 +6,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -153,11 +154,10 @@ export function LoginForm({
     return (
       <div className="fixed inset-0 bg-[#F5F5F5] flex flex-col items-center justify-center z-50">
         <div className="flex flex-col items-center gap-6 p-8">
-          {/* Tap Loyalty Text */}
+          {/* Tap Text */}
           <div className="text-center">
             <h1 className="text-4xl mb-2">
-              <span className="font-extrabold text-[#007AFF]">Tap</span>
-              <span className="font-normal text-black"> Loyalty</span>
+              <span className="font-bold text-[#007AFF]">Tap</span>
             </h1>
           </div>
 
@@ -184,13 +184,13 @@ export function LoginForm({
             <div className="flex justify-center mb-4">
               <img 
                 src="/taplogo.png" 
-                alt="Tap Loyalty" 
+                alt="Tap" 
                 className="w-8 h-8 rounded-sm"
               />
             </div>
             {/* Header Text */}
             <h1 className="text-xl font-semibold text-gray-900">
-              Sign in to Tap Loyalty
+              Sign in to <span className="font-bold text-[#007AFF]">Tap</span>
             </h1>
           </div>
         </CardHeader>
@@ -275,6 +275,21 @@ export function LoginForm({
             </div>
           </form>
         </CardContent>
+        
+        {/* Contact Support Section */}
+        <CardFooter className="pt-0 pb-6">
+          <div className="w-full">
+            <div className="border-t border-gray-100 pt-4">
+              <a 
+                href="mailto:support@tap.com.au" 
+                className="flex items-center justify-center gap-2 p-2 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors group"
+              >
+                <Mail className="h-3 w-3 text-gray-400 group-hover:text-gray-500" />
+                <span className="text-xs text-gray-600 group-hover:text-gray-700">Contact Support</span>
+              </a>
+            </div>
+          </div>
+        </CardFooter>
         
         <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
           <DialogContent className="sm:max-w-[425px] rounded-md">

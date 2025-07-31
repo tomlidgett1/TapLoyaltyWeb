@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "@/components/ui/use-toast"
-import { Eye, EyeOff, ArrowRight, Loader2, ChevronLeft, ChevronRight, ShieldCheck, Users, Zap } from "lucide-react"
+import { Eye, EyeOff, ArrowRight, Loader2, ChevronLeft, ChevronRight, ShieldCheck, Users, Zap, Mail } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -20,6 +20,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { collection, query, where, getDocs, getDoc } from "firebase/firestore"
 import Script from "next/script"
 import { PageTransition } from "@/components/page-transition"
+import { cn } from "@/lib/utils"
+import { MapLocationPicker } from "@/components/map-location-picker"
 
 // Business types matching iOS app
 const businessTypes = [
@@ -78,7 +80,7 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [currentStep, setCurrentStep] = useState(1)
-  const totalSteps = 7
+  const totalSteps = 8
   const [validationErrors, setValidationErrors] = useState<string[]>([])
   
   // Step 1: Basic Auth
@@ -88,7 +90,7 @@ export default function SignupPage() {
   
   // Step 2: Template Selection (NEW)
   const [selectedTemplate, setSelectedTemplate] = useState<string>("")
-  const [availableTemplates, setAvailableTemplates] = useState<Array<{value: string, label: string, description: string}>>([])
+  const [availableTemplates, setAvailableTemplates] = useState<Array<{value: string, label: string, description: string, address: string, data: any}>>([])
   const [loadingTemplates, setLoadingTemplates] = useState(false)
   
   // Load available templates
@@ -124,7 +126,7 @@ export default function SignupPage() {
           label: "Start from Scratch",
           description: "Build your own custom setup",
           address: "",
-          data: null
+          data: {}
         })
         
         setAvailableTemplates(templates)
@@ -132,7 +134,7 @@ export default function SignupPage() {
         console.error("Error loading templates:", error)
         // Set default templates if Firestore fails
         setAvailableTemplates([
-          { value: "custom", label: "Start from Scratch", description: "Build your own custom setup", address: "" }
+          { value: "custom", label: "Start from Scratch", description: "Build your own custom setup", address: "", data: {} }
         ])
       } finally {
         setLoadingTemplates(false)
@@ -165,11 +167,21 @@ export default function SignupPage() {
           if (templateData.address.suburb) setSuburb(templateData.address.suburb)
           if (templateData.address.state) setState(templateData.address.state)
           if (templateData.address.postcode) setPostcode(templateData.address.postcode)
+          if (templateData.address.latitude) setLatitude(templateData.address.latitude)
+          if (templateData.address.longitude) setLongitude(templateData.address.longitude)
+          if (templateData.address.formattedAddress) setFormattedAddress(templateData.address.formattedAddress)
+        }
+        
+        // Apply location coordinates if available
+        if (templateData.location?.coordinates) {
+          setLatitude(templateData.location.coordinates.latitude)
+          setLongitude(templateData.location.coordinates.longitude)
+          if (templateData.location.displayAddress) setFormattedAddress(templateData.location.displayAddress)
         }
         
         // Apply operating hours - handle both formats
         if (templateData.operatingHours) {
-          const convertedHours = {}
+          const convertedHours: OperatingHours = {}
           Object.keys(templateData.operatingHours).forEach(day => {
             const dayData = templateData.operatingHours[day]
             convertedHours[day] = {
@@ -229,6 +241,9 @@ export default function SignupPage() {
   const [suburb, setSuburb] = useState("")
   const [state, setState] = useState("NSW")
   const [postcode, setPostcode] = useState("")
+  const [latitude, setLatitude] = useState<number | undefined>()
+  const [longitude, setLongitude] = useState<number | undefined>()
+  const [formattedAddress, setFormattedAddress] = useState("")
   
   // Step 5: Operating Hours (was Step 4)
   const [operatingHours, setOperatingHours] = useState<OperatingHours>(() => {
@@ -311,8 +326,6 @@ export default function SignupPage() {
     }))
   }
   
-
-  
   const validateCurrentStep = () => {
     const errors = []
     
@@ -339,6 +352,7 @@ export default function SignupPage() {
         break
         
       case 4:
+        if (!latitude || !longitude) errors.push("Please select your store location on the map")
         if (!street) errors.push("Street address is required")
         if (!suburb) errors.push("Suburb is required")
         if (!state) errors.push("State is required")
@@ -346,7 +360,15 @@ export default function SignupPage() {
         if (postcode && (postcode.length !== 4 || !/^\d+$/.test(postcode))) errors.push("Postcode must be 4 digits")
         break
         
-      case 5: // Operating Hours
+      case 5: // Address Details
+        if (!street) errors.push("Street address is required")
+        if (!suburb) errors.push("Suburb is required")
+        if (!state) errors.push("State is required")
+        if (!postcode) errors.push("Postcode is required")
+        if (postcode && (postcode.length !== 4 || !/^\d+$/.test(postcode))) errors.push("Postcode must be 4 digits")
+        break
+        
+      case 6: // Operating Hours
         // Basic validation for operating hours
         for (const day of daysOfWeek) {
           const dayLower = day.toLowerCase()
@@ -357,13 +379,13 @@ export default function SignupPage() {
         }
         break
         
-      case 6: // Representative
+      case 7: // Representative
         if (!repName) errors.push("Representative name is required")
         if (!repPhone) errors.push("Contact phone is required")
         if (repPhone && !validateAustralianPhone(repPhone)) errors.push("Invalid Australian phone number format")
         break
         
-      case 7: // ABN & Verification
+      case 8: // ABN & Verification
         if (!abn) errors.push("ABN is required")
         if (abn && (abn.length !== 11 || !/^\d+$/.test(abn))) errors.push("ABN must be 11 digits")
         break
@@ -418,10 +440,8 @@ export default function SignupPage() {
   const prevStep = () => {
     setCurrentStep(prev => Math.max(prev - 1, 1))
   }
-  
 
-  
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (currentStep < totalSteps) {
@@ -441,8 +461,6 @@ export default function SignupPage() {
       const user = userCredential.user
       
       console.log("User created:", user.uid)
-      
-
       
       // Update user profile
       await updateProfile(user, {
@@ -465,40 +483,29 @@ export default function SignupPage() {
         // Template reference
         ...(selectedTemplate && selectedTemplate !== "custom" && { merchantId: selectedTemplate }),
         
-        // Address - enhanced with template data
+        // Address - use user-selected location data
         address: {
           street,
           suburb,
           state,
           postcode,
-          // Include additional address fields from template if available
-          ...(templateData?.address && {
-            country: templateData.address.country || "Australia",
-            countryCode: templateData.address.countryCode || "AU",
-            isoCountryCode: templateData.address.isoCountryCode || "AU",
-            subAdministrativeArea: templateData.address.subAdministrativeArea,
-            subLocality: templateData.address.subLocality
-          }),
-          coordinates: templateData?.location?.coordinates ? 
-            new GeoPoint(templateData.location.coordinates.latitude, templateData.location.coordinates.longitude) :
-            new GeoPoint(0, 0)
+          latitude,
+          longitude,
+          formattedAddress,
+          country: "Australia",
+          countryCode: "AU",
+          isoCountryCode: "AU"
         },
         
-        // Location data from template
-        ...(templateData?.location && {
-          location: {
-            address: templateData.location.address,
-            displayAddress: templateData.location.displayAddress,
-            coordinates: {
-              latitude: templateData.location.coordinates.latitude,
-              longitude: templateData.location.coordinates.longitude
-            },
-            ...(templateData.location.areaOfInterest && { areaOfInterest: templateData.location.areaOfInterest }),
-            ...(templateData.location.inlandWater && { inlandWater: templateData.location.inlandWater }),
-            ...(templateData.location.ocean && { ocean: templateData.location.ocean }),
-            ...(templateData.location.timeZone && { timeZone: templateData.location.timeZone })
+        // Location data from user selection
+        location: {
+          address: `${street}, ${suburb}`,
+          displayAddress: `${street}, ${suburb}, ${state}, ${postcode}`,
+          coordinates: {
+            latitude: latitude || 0,
+            longitude: longitude || 0
           }
-        }),
+        },
         
         // Operating hours
         operatingHours,
@@ -524,6 +531,7 @@ export default function SignupPage() {
         updatedAt: new Date(),
         isActive: true,
         isVerified: false,
+        loginCount: 0,
         
         // Loyalty program settings - use template settings if available
         loyaltyProgram: {
@@ -540,22 +548,22 @@ export default function SignupPage() {
       
       toast({
         title: "Account created successfully!",
-        description: "Welcome to Tap Loyalty. You can now start setting up your loyalty program.",
+        description: "Welcome to Tap. You can now start setting up your loyalty program.",
       })
       
       // Redirect to dashboard
       router.push('/dashboard')
       
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating account:", error)
       
       let errorMessage = "Failed to create account. Please try again."
       
-      if (error.code === 'auth/email-already-in-use') {
+      if (error?.code === 'auth/email-already-in-use') {
         errorMessage = "An account with this email already exists."
-      } else if (error.code === 'auth/weak-password') {
+      } else if (error?.code === 'auth/weak-password') {
         errorMessage = "Password is too weak. Please choose a stronger password."
-      } else if (error.code === 'auth/invalid-email') {
+      } else if (error?.code === 'auth/invalid-email') {
         errorMessage = "Invalid email address."
       }
       
@@ -575,9 +583,10 @@ export default function SignupPage() {
       case 2: return "Choose a template"
       case 3: return "Tell us about your business"
       case 4: return "Where are you located?"
-      case 5: return "When are you open?"
-      case 6: return "Who should we contact?"
-      case 7: return "Let's verify your business"
+      case 5: return "Address Details"
+      case 6: return "When are you open?"
+      case 7: return "Who should we contact?"
+      case 8: return "Let's verify your business"
       default: return "Create Account"
     }
   }
@@ -588,9 +597,10 @@ export default function SignupPage() {
       case 2: return "Choose a template to get started quickly"
       case 3: return "Help us understand your business better"
       case 4: return "We need your business address for customer matching"
-      case 5: return "Set your operating hours for customer visibility"
-      case 6: return "Primary contact for your loyalty program"
-      case 7: return "Final details to get you started"
+      case 5: return "Review and edit your store address"
+      case 6: return "Set your operating hours for customer visibility"
+      case 7: return "Primary contact for your loyalty program"
+      case 8: return "Final details to get you started"
       default: return ""
     }
   }
@@ -601,7 +611,7 @@ export default function SignupPage() {
         return (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-gray-700">Email address</Label>
+              <Label htmlFor="email" className="text-sm font-medium text-gray-900">Email address</Label>
               <Input
                 id="email"
                 type="email"
@@ -609,12 +619,12 @@ export default function SignupPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="h-12 px-4 text-base rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-[#007AFF]"
+                className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
               />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-medium text-gray-700">Password</Label>
+              <Label htmlFor="password" className="text-sm font-medium text-gray-900">Password</Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -623,20 +633,20 @@ export default function SignupPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="h-12 px-4 pr-12 text-base rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-[#007AFF]"
+                  className="h-10 px-3 pr-10 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700">Confirm password</Label>
+              <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-900">Confirm password</Label>
               <Input
                 id="confirmPassword"
                 type="password"
@@ -644,21 +654,21 @@ export default function SignupPage() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                className="h-12 px-4 text-base rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-[#007AFF]"
+                className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
               />
             </div>
           </div>
         )
         
-              case 2:
+      case 2:
          return (
            <div className="space-y-6">
              <div className="space-y-2">
-               <Label htmlFor="template">Select Template</Label>
+               <Label htmlFor="template" className="text-sm font-medium text-gray-900">Select Template</Label>
                {loadingTemplates ? (
                  <div className="flex items-center justify-center py-4">
                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                   <span className="text-sm text-muted-foreground">Loading templates...</span>
+                   <span className="text-sm text-gray-500">Loading templates...</span>
                  </div>
                ) : (
                  <Select 
@@ -668,7 +678,7 @@ export default function SignupPage() {
                      applyTemplate(value)
                    }}
                  >
-                   <SelectTrigger className="rounded-md">
+                   <SelectTrigger className="h-10 rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF]">
                      <SelectValue placeholder="Choose a template to get started" />
                    </SelectTrigger>
                    <SelectContent>
@@ -676,7 +686,7 @@ export default function SignupPage() {
                        <SelectItem key={template.value} value={template.value}>
                          <div className="flex flex-col items-start">
                            <span className="font-medium">{template.label}</span>
-                           <div className="flex gap-2 text-xs text-muted-foreground">
+                           <div className="flex gap-2 text-xs text-gray-500">
                              <span>{template.description}</span>
                              {template.address && <span>• {template.address}</span>}
                            </div>
@@ -694,32 +704,32 @@ export default function SignupPage() {
         return (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="legalBusinessName">Legal Business Name</Label>
+              <Label htmlFor="legalBusinessName" className="text-sm font-medium text-gray-900">Legal Business Name</Label>
               <Input
                 id="legalBusinessName"
                 placeholder="As registered with ASIC"
                 value={legalBusinessName}
                 onChange={(e) => setLegalBusinessName(e.target.value)}
                 required
-                className="rounded-md"
+                className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
               />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="tradingName">Trading Name</Label>
+              <Label htmlFor="tradingName" className="text-sm font-medium text-gray-900">Trading Name</Label>
               <Input
                 id="tradingName"
                 placeholder="What customers know you as"
                 value={tradingName}
                 onChange={(e) => setTradingName(e.target.value)}
                 required
-                className="rounded-md"
+                className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
               />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="businessEmail">Business Email</Label>
+                <Label htmlFor="businessEmail" className="text-sm font-medium text-gray-900">Business Email</Label>
                 <Input
                   id="businessEmail"
                   type="email"
@@ -727,12 +737,12 @@ export default function SignupPage() {
                   value={businessEmail}
                   onChange={(e) => setBusinessEmail(e.target.value)}
                   required
-                  className="rounded-md"
+                  className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="businessPhone">Business Phone</Label>
+                <Label htmlFor="businessPhone" className="text-sm font-medium text-gray-900">Business Phone</Label>
                 <Input
                   id="businessPhone"
                   placeholder="0412 345 678 or 12345678"
@@ -746,7 +756,7 @@ export default function SignupPage() {
                     }
                   }}
                   required
-                  className="rounded-md"
+                  className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
                 />
                 <p className="text-xs text-gray-500">
                   Australian mobile (04xx xxx xxx) or landline (8 digits max)
@@ -755,9 +765,9 @@ export default function SignupPage() {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="businessType">Business Type</Label>
+              <Label htmlFor="businessType" className="text-sm font-medium text-gray-900">Business Type</Label>
               <Select value={businessType} onValueChange={setBusinessType}>
-                <SelectTrigger className="rounded-md">
+                <SelectTrigger className="h-10 rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF]">
                   <SelectValue placeholder="Select business type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -769,8 +779,6 @@ export default function SignupPage() {
                 </SelectContent>
               </Select>
             </div>
-            
-
           </div>
         )
         
@@ -778,105 +786,113 @@ export default function SignupPage() {
         return (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="street">Street Address</Label>
-              <Input
-                id="street"
-                placeholder="123 Main Street"
-                value={street}
-                onChange={(e) => setStreet(e.target.value)}
-                required
-                className="rounded-md"
-              />
+              <h3 className="text-sm font-medium text-gray-900">Store Location</h3>
+              <p className="text-xs text-gray-600">
+                Search for your business address or click on the map to set your exact location
+              </p>
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="suburb">Suburb</Label>
-                <Input
-                  id="suburb"
-                  placeholder="Sydney"
-                  value={suburb}
-                  onChange={(e) => setSuburb(e.target.value)}
-                  required
-                  className="rounded-md"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="postcode">Postcode</Label>
-                <Input
-                  id="postcode"
-                  placeholder="2000"
-                  value={postcode}
-                  onChange={(e) => setPostcode(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  required
-                  className="rounded-md"
-                />
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="state">State</Label>
-              <Select value={state} onValueChange={setState}>
-                <SelectTrigger className="rounded-md">
-                  <SelectValue placeholder="Select state" />
-                </SelectTrigger>
-                <SelectContent>
-                  {australianStates.map(state => (
-                    <SelectItem key={state.value} value={state.value}>
-                      {state.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <MapLocationPicker
+              initialAddress={formattedAddress || `${street}, ${suburb}, ${state}, ${postcode}, Australia`}
+              initialLatitude={latitude}
+              initialLongitude={longitude}
+              onLocationChange={(locationData) => {
+                const addressParts = locationData.address.split(',');
+                setLatitude(locationData.latitude);
+                setLongitude(locationData.longitude);
+                setFormattedAddress(locationData.formattedAddress || locationData.address);
+                setStreet(addressParts[0]?.trim() || "");
+                setSuburb(addressParts[1]?.trim() || "");
+                
+                // Extract state and postcode from the address if possible
+                const stateMatch = locationData.formattedAddress?.match(/\b(NSW|VIC|QLD|WA|SA|TAS|ACT|NT)\b/);
+                if (stateMatch) {
+                  setState(stateMatch[0]);
+                }
+                
+                const postcodeMatch = locationData.formattedAddress?.match(/\b\d{4}\b/);
+                if (postcodeMatch) {
+                  setPostcode(postcodeMatch[0]);
+                }
+              }}
+            />
           </div>
         )
         
       case 5:
         return (
           <div className="space-y-4">
-            <p className="text-sm text-gray-600 mb-4">
-              Set your operating hours so customers know when you're open
-            </p>
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium text-gray-900">Address Details</h3>
+              <p className="text-xs text-gray-600">
+                Review and edit your address details. The location coordinates are already set from the map.
+              </p>
+            </div>
             
-            <div className="space-y-3">
-              {daysOfWeek.map(day => (
-                <div key={day} className="flex items-center gap-4 p-3 border rounded-md">
-                  <div className="flex items-center space-x-2 min-w-[100px]">
-                    <Checkbox
-                      id={`${day}-open`}
-                      checked={operatingHours[day.toLowerCase()]?.isOpen || false}
-                      onCheckedChange={(checked) => updateOperatingHours(day, 'isOpen', checked)}
-                    />
-                    <Label htmlFor={`${day}-open`} className="text-sm font-medium">
-                      {day}
-                    </Label>
-                  </div>
-                  
-                  {operatingHours[day.toLowerCase()]?.isOpen && (
-                    <div className="flex items-center gap-2 flex-1">
-                      <Input
-                        type="time"
-                        value={operatingHours[day.toLowerCase()]?.openTime || "09:00"}
-                        onChange={(e) => updateOperatingHours(day, 'openTime', e.target.value)}
-                        className="w-32 rounded-md"
-                      />
-                      <span className="text-gray-500">to</span>
-                      <Input
-                        type="time"
-                        value={operatingHours[day.toLowerCase()]?.closeTime || "17:00"}
-                        onChange={(e) => updateOperatingHours(day, 'closeTime', e.target.value)}
-                        className="w-32 rounded-md"
-                      />
-                    </div>
-                  )}
-                  
-                  {!operatingHours[day.toLowerCase()]?.isOpen && (
-                    <span className="text-gray-500 text-sm flex-1">Closed</span>
-                  )}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="street" className="text-sm font-medium text-gray-900">Street Address</Label>
+                <Input
+                  id="street"
+                  placeholder="123 Main Street"
+                  value={street}
+                  onChange={(e) => setStreet(e.target.value)}
+                  required
+                  className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="suburb" className="text-sm font-medium text-gray-900">Suburb</Label>
+                  <Input
+                    id="suburb"
+                    placeholder="Sydney"
+                    value={suburb}
+                    onChange={(e) => setSuburb(e.target.value)}
+                    required
+                    className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
+                  />
                 </div>
-              ))}
+                
+                <div className="space-y-2">
+                  <Label htmlFor="postcode" className="text-sm font-medium text-gray-900">Postcode</Label>
+                  <Input
+                    id="postcode"
+                    placeholder="2000"
+                    value={postcode}
+                    onChange={(e) => setPostcode(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    required
+                    className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="state" className="text-sm font-medium text-gray-900">State</Label>
+                <Select value={state} onValueChange={setState}>
+                  <SelectTrigger className="h-10 rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF]">
+                    <SelectValue placeholder="Select state" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {australianStates.map(state => (
+                      <SelectItem key={state.value} value={state.value}>
+                        {state.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {formattedAddress && (
+                <div className="p-3 bg-blue-50 border border-blue-100 rounded-md">
+                  <p className="text-xs text-blue-600 font-medium mb-1">Selected Location:</p>
+                  <p className="text-sm text-blue-800">{formattedAddress}</p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Coordinates: {latitude?.toFixed(6)}, {longitude?.toFixed(6)}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )
@@ -885,23 +901,96 @@ export default function SignupPage() {
         return (
           <div className="space-y-4">
             <p className="text-sm text-gray-600 mb-4">
+              Set your operating hours so customers know when you're open
+            </p>
+            
+            <div className="space-y-2">
+              {daysOfWeek.map(day => (
+                <div key={day} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <Checkbox
+                        id={`${day}-open`}
+                        checked={operatingHours[day.toLowerCase()]?.isOpen || false}
+                        onCheckedChange={(checked) => updateOperatingHours(day, 'isOpen', checked)}
+                        className="h-4 w-4"
+                      />
+                      <Label htmlFor={`${day}-open`} className="text-sm font-medium text-gray-900 min-w-[80px]">
+                        {day}
+                      </Label>
+                    </div>
+                    
+                    {operatingHours[day.toLowerCase()]?.isOpen ? (
+                      <div className="flex items-center gap-2">
+                        <Select 
+                          value={operatingHours[day.toLowerCase()]?.openTime || "09:00"} 
+                          onValueChange={(value) => updateOperatingHours(day, 'openTime', value)}
+                        >
+                          <SelectTrigger className="h-9 w-24 text-sm border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 24 }, (_, i) => {
+                              const hour = i.toString().padStart(2, '0')
+                              return (
+                                <SelectItem key={`${hour}:00`} value={`${hour}:00`}>
+                                  {`${hour}:00`}
+                                </SelectItem>
+                              )
+                            })}
+                          </SelectContent>
+                        </Select>
+                        <span className="text-gray-400 text-sm font-medium">to</span>
+                        <Select 
+                          value={operatingHours[day.toLowerCase()]?.closeTime || "17:00"} 
+                          onValueChange={(value) => updateOperatingHours(day, 'closeTime', value)}
+                        >
+                          <SelectTrigger className="h-9 w-24 text-sm border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 24 }, (_, i) => {
+                              const hour = i.toString().padStart(2, '0')
+                              return (
+                                <SelectItem key={`${hour}:00`} value={`${hour}:00`}>
+                                  {`${hour}:00`}
+                                </SelectItem>
+                              )
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 text-sm font-medium">Closed</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+        
+      case 7:
+        return (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600 mb-4">
               Who should we contact about your loyalty program?
             </p>
             
             <div className="space-y-2">
-              <Label htmlFor="repName">Contact Name</Label>
+              <Label htmlFor="repName" className="text-sm font-medium text-gray-900">Contact Name</Label>
               <Input
                 id="repName"
                 placeholder="John Smith"
                 value={repName}
                 onChange={(e) => setRepName(e.target.value)}
                 required
-                className="rounded-md"
+                className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
               />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="repPhone">Contact Phone</Label>
+              <Label htmlFor="repPhone" className="text-sm font-medium text-gray-900">Contact Phone</Label>
               <Input
                 id="repPhone"
                 placeholder="0412 345 678 or 12345678"
@@ -915,7 +1004,7 @@ export default function SignupPage() {
                   }
                 }}
                 required
-                className="rounded-md"
+                className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
               />
               <p className="text-xs text-gray-500">
                 Australian mobile (04xx xxx xxx) or landline (8 digits max)
@@ -924,18 +1013,18 @@ export default function SignupPage() {
           </div>
         )
         
-      case 7:
+      case 8:
         return (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="abn">ABN (Australian Business Number)</Label>
+              <Label htmlFor="abn" className="text-sm font-medium text-gray-900">ABN (Australian Business Number)</Label>
               <Input
                 id="abn"
                 placeholder="11 digit ABN"
                 value={abn}
                 onChange={(e) => setAbn(e.target.value.replace(/\D/g, '').slice(0, 11))}
                 required
-                className="rounded-md"
+                className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
               />
               <p className="text-sm text-gray-500">
                 Required for payment matching and loyalty point allocation
@@ -944,9 +1033,9 @@ export default function SignupPage() {
             
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="pointOfSale">Point of Sale System</Label>
+                <Label htmlFor="pointOfSale" className="text-sm font-medium text-gray-900">Point of Sale System</Label>
                 <Select value={pointOfSale} onValueChange={setPointOfSale}>
-                  <SelectTrigger className="rounded-md">
+                  <SelectTrigger className="h-10 rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF]">
                     <SelectValue placeholder="Select POS system" />
                   </SelectTrigger>
                   <SelectContent>
@@ -960,9 +1049,9 @@ export default function SignupPage() {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="paymentProvider">Payment Provider</Label>
+                <Label htmlFor="paymentProvider" className="text-sm font-medium text-gray-900">Payment Provider</Label>
                 <Select value={paymentProvider} onValueChange={setPaymentProvider}>
-                  <SelectTrigger className="rounded-md">
+                  <SelectTrigger className="h-10 rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF]">
                     <SelectValue placeholder="Select payment provider" />
                   </SelectTrigger>
                   <SelectContent>
@@ -984,200 +1073,133 @@ export default function SignupPage() {
   }
 
   return (
-    <PageTransition>
-      <div className="min-h-screen w-full bg-white">
-        <div className="grid min-h-screen lg:grid-cols-6">
-          {/* Left side - Hero section */}
-          <div className="relative hidden lg:flex lg:col-span-2 bg-gray-100 flex-col justify-between px-16 py-16">
-            {/* Main content */}
-            <div className="flex flex-col flex-1 pt-8">
-              <div className="max-w-md">
-                {/* Tap Loyalty title */}
-                <h1 className="text-2xl font-bold mb-6">
-                  <span className="font-extrabold text-[#007AFF]">Tap</span>{" "}
-                  <span className="font-semibold text-gray-900">Loyalty</span>
-                </h1>
-                
-                <h2 className="text-2xl font-semibold text-gray-900 mb-4">
-                  Join thousands of Australian businesses
-                </h2>
-                <p className="text-gray-600 leading-relaxed mb-8">
-                  Start rewarding your customers today with Australia's most advanced loyalty platform.
-                </p>
-                
-                {/* Benefits */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-[#007AFF] bg-opacity-10 rounded-md flex items-center justify-center">
-                      <Users className="h-4 w-4 text-[#007AFF]" />
-                    </div>
-                    <span className="text-gray-700">Increase customer retention by 40%</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-[#007AFF] bg-opacity-10 rounded-md flex items-center justify-center">
-                      <Zap className="h-4 w-4 text-[#007AFF]" />
-                    </div>
-                    <span className="text-gray-700">Automated reward management</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-[#007AFF] bg-opacity-10 rounded-md flex items-center justify-center">
-                      <ShieldCheck className="h-4 w-4 text-[#007AFF]" />
-                    </div>
-                    <span className="text-gray-700">Bank-grade security & compliance</span>
-                  </div>
-                </div>
-              </div>
+    <div className="min-h-screen bg-[#F5F5F5] flex flex-col items-center justify-start pt-16 p-4">
+      <Card className={cn("w-full max-w-md mx-auto border border-gray-200 shadow-sm rounded-2xl bg-white")}>
+        <CardHeader className="space-y-1 pb-6 pt-8">
+          <div className="text-center">
+            {/* Logo */}
+            <div className="flex justify-center mb-4">
+              <img 
+                src="/taplogo.png" 
+                alt="Tap" 
+                className="w-8 h-8 rounded-sm"
+              />
             </div>
-
-            {/* Integration icons */}
-            <div className="border-t border-gray-200 pt-6">
-              <p className="text-xs text-gray-500 mb-4 font-medium tracking-wide">
-                INTEGRATES WITH
-              </p>
-              <div className="flex items-center gap-3 flex-wrap">
-                {["xero.png", "square.png", "sheetspro.png", "outlook.png", "mailchimp.png", "hubspot.png", "gmailnew.png", "lslogo.png"].map((integration, index) => (
-                  <div key={index} className="w-9 h-9 bg-white rounded-md shadow-sm border border-gray-200 flex items-center justify-center p-1.5">
-                    <Image src={`/${integration}`} alt={integration.split('.')[0]} width={24} height={24} className="w-full h-full object-contain" />
-                  </div>
-                ))}
+            {/* Header Text */}
+            <h1 className="text-xl font-semibold text-gray-900 mb-2">
+              {getStepTitle()}
+            </h1>
+            <p className="text-sm text-gray-600">{getStepDescription()}</p>
+            
+            {/* Progress indicator */}
+            <div className="mt-6">
+              <div className="flex justify-center mb-3">
+                <span className="text-xs text-gray-500">{Math.round((currentStep / totalSteps) * 100)}% Complete</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-1">
+                <div 
+                  className="bg-[#007AFF] h-1 rounded-full transition-all duration-300" 
+                  style={{ width: `${(currentStep / totalSteps) * 100}%` }}
+                ></div>
               </div>
             </div>
           </div>
-
-          {/* Right side - Signup form */}
-          <div className="relative flex flex-col lg:col-span-4">
-            {/* Mobile header */}
-            <div className="lg:hidden p-6 border-b bg-white">
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold">
-                  <span className="font-extrabold text-[#007AFF]">Tap</span>{" "}
-                  <span className="font-semibold text-gray-900">Loyalty</span>
-                </h1>
+        </CardHeader>
+        
+        <CardContent className="px-6 pb-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {renderStepContent()}
+            
+            {validationErrors.length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                <p className="text-sm font-medium text-red-800 mb-2">Please fix the following errors:</p>
+                <ul className="text-sm text-red-700 list-disc pl-4 space-y-1">
+                  {validationErrors.map((error, index) => (
+                    <li key={index}>{error}</li>
+                  ))}
+                </ul>
               </div>
-            </div>
-
-            {/* Form section */}
-            <div className="flex-1 p-6 lg:p-12">
-              <div className="w-full max-w-lg mx-auto pt-8">
-                {/* Progress indicator */}
-                <div className="mb-8">
-                  <div className="flex justify-center mb-4">
-                    <div className="w-2/3">
-                      <div className="flex items-center justify-center mb-2">
-                        <span className="text-sm text-gray-500">{Math.round((currentStep / totalSteps) * 100)}% Complete</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-[#007AFF] h-2 rounded-full transition-all duration-300" 
-                          style={{ width: `${(currentStep / totalSteps) * 100}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="text-center mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">{getStepTitle()}</h2>
-                    <p className="text-gray-600">{getStepDescription()}</p>
-                  </div>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  {renderStepContent()}
-                  
-                  {validationErrors.length > 0 && (
-                    <div className="bg-red-50 border border-red-200 rounded-md p-4">
-                      <p className="text-sm font-medium text-red-800 mb-2">Please fix the following errors:</p>
-                      <ul className="text-sm text-red-700 list-disc pl-5 space-y-1">
-                        {validationErrors.map((error, index) => (
-                          <li key={index}>{error}</li>
-                        ))}
-                      </ul>
-                    </div>
+            )}
+            
+            <div className="flex justify-between pt-4">
+              {currentStep > 1 ? (
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  onClick={prevStep}
+                  disabled={loading}
+                  className="h-10 px-4 text-sm rounded-md"
+                >
+                  <ChevronLeft className="h-4 w-4 mr-2" />
+                  Back
+                </Button>
+              ) : (
+                <div></div>
+              )}
+              
+              {currentStep < totalSteps ? (
+                <Button 
+                  type="button" 
+                  onClick={nextStep}
+                  disabled={loading}
+                  className="h-10 px-4 bg-[#007AFF] hover:bg-[#0066CC] text-white text-sm rounded-md"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Checking...
+                    </>
+                  ) : (
+                    <>
+                      Continue
+                      <ChevronRight className="h-4 w-4 ml-2" />
+                    </>
                   )}
-                  
-                  <div className="flex justify-between pt-4">
-                    {currentStep > 1 ? (
-                      <Button 
-                        type="button" 
-                        variant="outline"
-                        onClick={prevStep}
-                        disabled={loading}
-                        className="rounded-md"
-                      >
-                        <ChevronLeft className="h-4 w-4 mr-2" />
-                        Back
-                      </Button>
-                    ) : (
-                      <div></div>
-                    )}
-                    
-                    {currentStep < totalSteps ? (
-                      <Button 
-                        type="button" 
-                        onClick={nextStep}
-                        disabled={loading}
-                        className="bg-[#007AFF] hover:bg-[#0066CC] text-white rounded-md"
-                      >
-                        {loading ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Checking...
-                          </>
-                        ) : (
-                          <>
-                            Continue
-                            <ChevronRight className="h-4 w-4 ml-2" />
-                          </>
-                        )}
-                      </Button>
-                    ) : (
-                      <Button 
-                        type="submit" 
-                        className="bg-[#007AFF] hover:bg-[#0066CC] text-white rounded-md"
-                        disabled={loading}
-                      >
-                        {loading ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Creating Account...
-                          </>
-                        ) : (
-                          <>
-                            Create Account
-                            <ArrowRight className="ml-2 h-4 w-4" />
-                          </>
-                        )}
-                      </Button>
-                    )}
-                  </div>
-                </form>
-                
-                {/* Sign in link */}
-                <div className="mt-8 pt-6 border-t border-gray-100">
-                  <div className="text-center text-sm text-gray-600">
-                    Already have an account?{" "}
-                    <Link href="/login" className="text-[#007AFF] hover:text-[#0066CC] font-medium hover:underline underline-offset-4 transition-colors">
-                      Sign in
-                    </Link>
-                  </div>
-                </div>
-              </div>
+                </Button>
+              ) : (
+                <Button 
+                  type="submit" 
+                  className="h-10 px-4 bg-[#007AFF] hover:bg-[#0066CC] text-white text-sm rounded-md"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating Account...
+                    </>
+                  ) : (
+                    <>
+                      Create Account
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
-
-            {/* Mobile hero content */}
-            <div className="lg:hidden bg-gray-50 p-6">
-              <div className="text-center">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  Join thousands of Australian businesses
-                </h3>
-                <p className="text-gray-600 text-sm">
-                  Start rewarding your customers with <span className="font-semibold text-[#007AFF]">Tap Loyalty</span>
-                </p>
-              </div>
+          </form>
+          
+          {/* Sign in link */}
+          <div className="mt-6 pt-4 border-t border-gray-100">
+            <div className="text-center text-sm text-gray-600">
+              Already have an account?{" "}
+              <Link href="/login" className="text-[#007AFF] hover:text-[#0066CC] font-medium transition-colors">
+                Sign in
+              </Link>
             </div>
           </div>
-        </div>
-      </div>
-    </PageTransition>
+          
+          {/* Contact Support Section */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <a 
+              href="mailto:support@tap.com.au" 
+              className="flex items-center justify-center gap-2 p-2 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors group"
+            >
+              <Mail className="h-3 w-3 text-gray-400 group-hover:text-gray-500" />
+              <span className="text-xs text-gray-600 group-hover:text-gray-700">Contact Support</span>
+            </a>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   )
 } 

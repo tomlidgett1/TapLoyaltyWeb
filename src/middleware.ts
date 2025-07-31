@@ -36,7 +36,7 @@ export function middleware(request: NextRequest) {
   
   // If not a public route/asset and no token exists, redirect to login
   // Only redirect for specific protected routes to avoid conflicts with auth context
-  const PROTECTED_ROUTES = ['/dashboard', '/store', '/customers', '/email', '/notes', '/analytics', '/financials', '/merchant', '/auth-test']
+  const PROTECTED_ROUTES = ['/dashboard', '/getstarted', '/store', '/customers', '/email', '/notes', '/analytics', '/financials', '/merchant', '/auth-test']
   const isProtectedRoute = PROTECTED_ROUTES.some(route => path.startsWith(route))
   
   if (isProtectedRoute && !token) {

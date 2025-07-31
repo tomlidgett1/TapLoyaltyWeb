@@ -10,9 +10,10 @@ import {
   setPersistence,
   browserLocalPersistence
 } from "firebase/auth"
-import { auth, functions } from "@/lib/firebase"
+import { auth, functions, db } from "@/lib/firebase"
 import { useRouter, usePathname } from "next/navigation"
 import { httpsCallable } from "firebase/functions"
+import { doc, getDoc, updateDoc, increment, setDoc } from "firebase/firestore"
 
 interface AuthContextType {
   user: User | null
@@ -49,6 +50,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const token = await user.getIdToken()
         document.cookie = `session=${token}; path=/`
         setUser(user)
+        
+
       } else {
         document.cookie = `session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`
         setUser(null)
@@ -107,6 +110,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const token = await result.user.getIdToken()
       document.cookie = `session=${token}; path=/`
       
+      // Update login count in merchant document
+      let finalRedirectPath = redirectPath
+      try {
+        const merchantDocRef = doc(db, 'merchants', result.user.uid)
+        const merchantDoc = await getDoc(merchantDocRef)
+        
+        if (merchantDoc.exists()) {
+          // Increment existing login count
+          await updateDoc(merchantDocRef, {
+            loginCount: increment(1),
+            lastLoginAt: new Date()
+          })
+          
+          // Get updated login count
+          const updatedDoc = await getDoc(merchantDocRef)
+          const loginCount = updatedDoc.data()?.loginCount || 1
+          
+          console.log('Login count:', loginCount)
+          
+          // If login count is less than 5, redirect to getstarted page
+          if (loginCount < 5) {
+            finalRedirectPath = '/getstarted'
+            console.log('Redirecting to getstarted page - login count:', loginCount)
+          }
+        } else {
+          // Create new merchant document with login count
+          await setDoc(merchantDocRef, {
+            loginCount: 1,
+            lastLoginAt: new Date()
+          }, { merge: true })
+          
+          // First login, redirect to getstarted
+          finalRedirectPath = '/getstarted'
+          console.log('First login - redirecting to getstarted page')
+        }
+      } catch (error) {
+        console.error('Error updating login count:', error)
+        // Continue with normal flow if login count update fails
+      }
+      
       // Call the manualUpdateCustomerCohorts Firebase function
       try {
         console.log('Calling manualUpdateCustomerCohorts function')
@@ -120,8 +163,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Continue with login flow even if the function call fails
       }
       
-      // Force a hard navigation to the redirect path or dashboard
-      window.location.href = redirectPath
+      // Force a hard navigation to the final redirect path
+      window.location.href = finalRedirectPath
     } catch (error) {
       console.error("Error signing in:", error)
       throw error

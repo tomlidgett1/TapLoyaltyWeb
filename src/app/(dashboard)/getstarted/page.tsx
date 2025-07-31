@@ -391,7 +391,15 @@ export default function GetStartedPage() {
 
   return (
     <>
-      <div className="min-h-screen bg-white">
+      <motion.div 
+        className="min-h-screen bg-white"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ 
+          duration: 0.5,
+          ease: "easeOut"
+        }}
+      >
         <div className="max-w-6xl mx-auto px-6 py-8">
 
           {/* Two Column Layout with Separator */}
@@ -588,11 +596,14 @@ export default function GetStartedPage() {
               
               {/* Loyalty Tasks */}
               <div className="space-y-3">
-                {loyaltyItems.map((item) => (
-                  <div key={item.id} className={cn(
-                    "border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-all duration-200 min-h-[80px]",
-                    item.completed && "opacity-60 bg-gray-100"
-                  )}>
+                {loyaltyItems.map((item, index) => (
+                  <div 
+                    key={item.id} 
+                    className={cn(
+                      "border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-all duration-200 min-h-[80px]",
+                      item.completed && "opacity-60 bg-gray-100"
+                    )}
+                  >
                     <Collapsible
                       open={openItems.includes(item.id)}
                       onOpenChange={() => toggleItem(item.id)}
@@ -698,11 +709,14 @@ export default function GetStartedPage() {
                  
               {/* Merchant Tasks */}
               <div className="space-y-3">
-                {merchantItems.map((item) => (
-                  <div key={item.id} className={cn(
-                    "border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-all duration-200 min-h-[80px]",
-                    item.completed && "opacity-60 bg-gray-100"
-                  )}>
+                {merchantItems.map((item, index) => (
+                  <div 
+                    key={item.id} 
+                    className={cn(
+                      "border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-all duration-200 min-h-[80px]",
+                      item.completed && "opacity-60 bg-gray-100"
+                    )}
+                  >
                     <Collapsible
                       open={openItems.includes(item.id)}
                       onOpenChange={() => toggleItem(item.id)}
@@ -820,7 +834,7 @@ export default function GetStartedPage() {
           </div>
            </div>
 
-           {/* Simple Completion Message */}
+                      {/* Simple Completion Message */}
            {completedCount === checklistItems.length && (
              <div className="mt-8 p-6 bg-green-50 border border-green-200 rounded-md">
                <div className="flex items-center gap-3">
@@ -835,7 +849,7 @@ export default function GetStartedPage() {
              </div>
            )}
         </div>
-      </div>
+      </motion.div>
       
       {/* Popup Components */}
       <IntroductoryRewardPopup 

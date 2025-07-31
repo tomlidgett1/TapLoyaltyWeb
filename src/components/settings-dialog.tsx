@@ -225,6 +225,13 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
   const [supportBoxOpen, setSupportBoxOpen] = useState(false)
   const [supportMessage, setSupportMessage] = useState("")
   const [supportLoading, setSupportLoading] = useState(false)
+
+  // Validation state - track missing fields count for each section
+  const [validationCounts, setValidationCounts] = useState({
+    Business: 0,
+    Location: 0,
+    Team: 0
+  })
   
   // Business types
   const businessTypes = [
@@ -248,6 +255,70 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
     { value: "NT", label: "Northern Territory" }
   ]
 
+  // Validation functions
+  const validateBusinessSection = () => {
+    let count = 0
+    
+    // Required business fields
+    if (!legalBusinessName.trim()) count++
+    if (!tradingName.trim()) count++
+    if (!businessEmail.trim()) count++
+    if (!abn.trim()) count++
+    
+    // ABN verification pending/in review/rejected counts as incomplete
+    if (abn.trim() && !['approved', 'verified'].includes(abnVerificationStatus)) count++
+    
+    return count
+  }
+
+  const validateLocationSection = () => {
+    let count = 0
+    
+    // Required location fields
+    if (!street.trim()) count++
+    if (!suburb.trim()) count++
+    if (!state.trim()) count++
+    if (!postcode.trim()) count++
+    if (!latitude || !longitude) count++
+    
+    return count
+  }
+
+  const validateTeamSection = () => {
+    let count = 0
+    
+    // Required team/representative fields
+    if (!repName.trim()) count++
+    if (!repPhone.trim()) count++
+    if (!repEmail.trim()) count++
+    
+    return count
+  }
+
+  // Check if critical required fields are missing (prevents saving)
+  const hasCriticalFieldsMissing = () => {
+    return !legalBusinessName.trim() || 
+           !tradingName.trim() || 
+           !businessType.trim() ||
+           !street.trim() ||
+           !suburb.trim() ||
+           !state.trim() ||
+           !postcode.trim()
+  }
+
+  // Update validation counts when relevant fields change
+  useEffect(() => {
+    setValidationCounts({
+      Business: validateBusinessSection(),
+      Location: validateLocationSection(),
+      Team: validateTeamSection()
+    })
+  }, [
+    legalBusinessName, tradingName, businessEmail, abn, abnVerificationStatus,
+    street, suburb, state, postcode, latitude, longitude,
+    repName, repPhone, repEmail
+  ])
+
   // Load merchant data from Firestore
   useEffect(() => {
     async function fetchMerchantData() {
@@ -267,8 +338,8 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
           setMerchantId(user.uid)
           
           // Set business details
-          setLegalBusinessName(data.legalName || "")
-          setTradingName(data.tradingName || "")
+          setLegalBusinessName(data.legalBusinessName || data.legalName || "")
+          setTradingName(data.merchantName || data.tradingName || "")
           setBusinessEmail(data.businessEmail || user.email || "")
           setBusinessType(data.businessType || "cafe")
           setLogoUrl(data.logoUrl || "")
@@ -670,6 +741,29 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
       });
       return;
     }
+
+    // Validate required fields before saving
+    const missingFields: string[] = [];
+    
+    // Business information requirements
+    if (!legalBusinessName.trim()) missingFields.push("Legal Business Name");
+    if (!tradingName.trim()) missingFields.push("Trading Name");
+    if (!businessType.trim()) missingFields.push("Business Type");
+    
+    // Address requirements
+    if (!street.trim()) missingFields.push("Street Address");
+    if (!suburb.trim()) missingFields.push("Suburb");
+    if (!state.trim()) missingFields.push("State");
+    if (!postcode.trim()) missingFields.push("Postcode");
+    
+    if (missingFields.length > 0) {
+      toast({
+        title: "Required Fields Missing",
+        description: `Please complete the following required fields: ${missingFields.join(", ")}`,
+        variant: "destructive"
+      });
+      return;
+    }
     
     setLoading(true);
     
@@ -728,17 +822,21 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
       
       // Save all changes to Firestore
       const merchantData = {
-        legalName: legalBusinessName,
+        legalBusinessName: legalBusinessName,
+        legalName: legalBusinessName, // Keep for backwards compatibility
         tradingName: tradingName,
+        merchantName: tradingName, // Primary field for trading name
         businessEmail: businessEmail,
         businessType: businessType,
         logoUrl: newLogoUrl,
-        merchantName: tradingName,
         address: {
           street,
           suburb,
           state,
-          postcode
+          postcode,
+          latitude,
+          longitude,
+          formattedAddress
         },
         location: {
           address: `${street}, ${suburb}`,
@@ -746,7 +844,7 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
             latitude,
             longitude
           },
-          displayAddress: formattedAddress
+          displayAddress: `${street}, ${suburb}, ${state}, ${postcode}`
         },
         representative: {
           name: repName,
@@ -758,7 +856,6 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
         abnVerificationUrl: newAbnVerificationUrl,
         pointOfSale,
         paymentProvider,
-        status: storeActive ? "active" : "inactive",
         abnVerification: {
           status: abnVerificationStatus,
           rejectionReason: abnRejectionReason,
@@ -1071,24 +1168,17 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
       case "Location":
         return (
           <div className="space-y-6">
-            <p className="text-sm text-muted-foreground">
-              Search for your business address or click on the map to set your exact location
-            </p>
-            
-            {location.address && location.coordinates && (
-              <div className="p-4 bg-blue-50 border border-blue-100 rounded-md">
-                <h4 className="text-sm font-medium text-blue-800 mb-2">Selected Location</h4>
-                <div className="flex items-start gap-2">
-                  <MapPin className="h-4 w-4 mt-0.5 text-blue-600" />
-                  <div>
-                    <p className="text-sm font-medium">{location.displayAddress}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Coordinates: {location.coordinates.latitude?.toFixed(6)}, {location.coordinates.longitude?.toFixed(6)}
-                    </p>
-                  </div>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Search for your business address or click on the map to set your exact location
+              </p>
+              {location.address && location.coordinates && (
+                <div className="flex items-center gap-1.5 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-md">
+                  <MapPin className="h-3 w-3" />
+                  <span>Location set</span>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
             
             <MapLocationPicker
               initialAddress={formattedAddress || `${street}, ${suburb}, ${state}, ${postcode}, Australia`}
@@ -1120,6 +1210,99 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
                 setSuburb(suburbPart);
               }}
             />
+            
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium text-gray-900">Address Details</h4>
+                <p className="text-xs text-muted-foreground">
+                  Review and edit your address details. The location coordinates are set from the map above.
+                </p>
+              </div>
+              
+              <div className="space-y-4">
+                                  <div className="space-y-2">
+                    <Label htmlFor="street" className="text-sm font-medium">Street Address</Label>
+                    <Input
+                      id="street"
+                      placeholder="123 Main Street"
+                      value={street}
+                      onChange={(e) => {
+                        setStreet(e.target.value);
+                        // Update location display address
+                        setLocation(prev => ({
+                          ...prev,
+                          address: `${e.target.value}, ${suburb}`,
+                          displayAddress: `${e.target.value}, ${suburb}, ${state}, ${postcode}`
+                        }));
+                      }}
+                      className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
+                    />
+                  </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                                      <div className="space-y-2">
+                      <Label htmlFor="suburb" className="text-sm font-medium">Suburb</Label>
+                      <Input
+                        id="suburb"
+                        placeholder="Sydney"
+                        value={suburb}
+                        onChange={(e) => {
+                          setSuburb(e.target.value);
+                          // Update location display address
+                          setLocation(prev => ({
+                            ...prev,
+                            address: `${street}, ${e.target.value}`,
+                            displayAddress: `${street}, ${e.target.value}, ${state}, ${postcode}`
+                          }));
+                        }}
+                        className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="postcode" className="text-sm font-medium">Postcode</Label>
+                      <Input
+                        id="postcode"
+                        placeholder="2000"
+                        value={postcode}
+                        onChange={(e) => {
+                          const newPostcode = e.target.value.replace(/\D/g, '').slice(0, 4);
+                          setPostcode(newPostcode);
+                          // Update location display address
+                          setLocation(prev => ({
+                            ...prev,
+                            displayAddress: `${street}, ${suburb}, ${state}, ${newPostcode}`
+                          }));
+                        }}
+                        className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
+                      />
+                    </div>
+                </div>
+                
+                                  <div className="space-y-2">
+                    <Label htmlFor="state" className="text-sm font-medium">State</Label>
+                    <select 
+                      id="state"
+                      value={state}
+                      onChange={(e) => {
+                        setState(e.target.value);
+                        // Update location display address
+                        setLocation(prev => ({
+                          ...prev,
+                          displayAddress: `${street}, ${suburb}, ${e.target.value}, ${postcode}`
+                        }));
+                      }}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {australianStates.map(state => (
+                        <option key={state.value} value={state.value}>
+                          {state.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+              </div>
+            </div>
           </div>
         )
 
@@ -1642,19 +1825,26 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
                     key={item.name}
                     onClick={() => setActiveSection(item.name)}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors w-full text-left",
+                      "flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md transition-colors w-full text-left",
                       item.name === activeSection
                         ? "bg-[#007AFF]/10 text-[#007AFF]"
                         : "text-gray-600 hover:bg-[#007AFF]/5"
                     )}
                   >
-                    <item.icon className={cn(
-                      "h-4 w-4",
-                      item.name === activeSection
-                        ? "text-[#007AFF]"
-                        : "text-gray-500"
-                    )} />
-                    {item.name}
+                    <div className="flex items-center gap-3">
+                      <item.icon className={cn(
+                        "h-4 w-4",
+                        item.name === activeSection
+                          ? "text-[#007AFF]"
+                          : "text-gray-500"
+                      )} />
+                      {item.name}
+                    </div>
+                    {validationCounts[item.name as keyof typeof validationCounts] > 0 && (
+                      <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-medium text-white bg-red-500 rounded-full">
+                        {validationCounts[item.name as keyof typeof validationCounts]}
+                      </span>
+                    )}
                   </button>
                 ))}
               </nav>
@@ -1671,6 +1861,63 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
                 <Headphones className="h-3 w-3" />
                 Contact Support
               </Button>
+            </div>
+            
+            {/* Store Active Toggle */}
+            <div className="px-4 pb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Store className="h-3 w-3 text-gray-500" />
+                  <span className="text-xs text-gray-600">Store Active</span>
+                </div>
+                <Switch
+                  checked={storeActive}
+                  onCheckedChange={async (checked) => {
+                    // Prevent activating store without a logo
+                    if (checked) {
+                      const hasLogo = logoUrl && 
+                                     typeof logoUrl === 'string' && 
+                                     logoUrl.trim() !== '';
+                      
+                      if (!hasLogo) {
+                        toast({
+                          title: "Logo Required",
+                          description: "Please upload a business logo before activating your store.",
+                          variant: "destructive"
+                        });
+                        return;
+                      }
+                    }
+
+                    setStoreActive(checked);
+                    // Immediately update status in Firestore
+                    if (!user) return;
+                    
+                    try {
+                      await updateDoc(doc(db, 'merchants', user.uid), {
+                        status: checked ? "active" : "inactive",
+                        updatedAt: serverTimestamp()
+                      });
+                      toast({
+                        title: checked ? "Store Activated" : "Store Deactivated",
+                        description: checked 
+                          ? "Your store is now active and visible to customers." 
+                          : "Your store is now inactive and hidden from customers.",
+                      });
+                    } catch (error) {
+                      console.error("Error updating store status:", error);
+                      // Revert the switch if update failed
+                      setStoreActive(!checked);
+                      toast({
+                        title: "Error",
+                        description: "Failed to update store status. Please try again.",
+                        variant: "destructive"
+                      });
+                    }
+                  }}
+                  className="data-[state=checked]:bg-[#007AFF]"
+                />
+              </div>
             </div>
             
             {/* Merchant Profile Section */}
@@ -1803,7 +2050,8 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
                 <Button 
                   className="gap-2" 
                   onClick={handleSave}
-                  disabled={loading}
+                  disabled={loading || hasCriticalFieldsMissing()}
+                  title={hasCriticalFieldsMissing() ? "Complete required fields before saving" : undefined}
                 >
                   <Save className="h-4 w-4" />
                   {loading ? "Saving..." : "Save Changes"}

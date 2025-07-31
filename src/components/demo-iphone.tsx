@@ -3,7 +3,10 @@
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { X, Gift, Home, Search, Store, Settings, Star, MoreHorizontal, Coffee, Info, Navigation, CreditCard } from "lucide-react"
+import { X, Gift, Home, Search, Store, Settings, Star, MoreHorizontal, Coffee, Info, Navigation, CreditCard, Globe, Sparkles } from "lucide-react"
+import { PiCoffeeFill } from "react-icons/pi"
+import { BiSolidCoffeeTogo } from "react-icons/bi"
+import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, collection, query, orderBy, getDocs, where } from "firebase/firestore"
@@ -64,7 +67,13 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
             pointsCost: data.pointsCost || 0,
             voucherAmount: data.voucherAmount || 0,
             isIntroductoryReward: data.isIntroductoryReward || false,
-            category: data.category || 'individual'
+            category: data.category || 'individual',
+            // Network reward fields
+            isNetworkReward: data.isNetworkReward || false,
+            discountType: data.discountType || '',
+            discountValue: data.discountValue || 0,
+            minimumSpend: data.minimumSpend || 0,
+            networkPointsCost: data.networkPointsCost || 0
           }
         })
         
@@ -103,65 +112,98 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
     // Skip coffee program rewards as they're handled separately
     if (reward.programType === 'coffeeprogramnew') return null
 
-    // Welcome/Introductory gifts
-    if (reward.isIntroductoryReward || reward.pointsCost === 0) {
+    // Check if this is a network reward
+    if (reward.isNetworkReward) {
       return (
-        <div key={reward.id} className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <h3 className="font-semibold text-black text-[13px]">{reward.rewardName}</h3>
-              <p className="text-[11px] text-gray-500 mb-2">{reward.description}</p>
-              <div className="flex items-center gap-2 text-[10px]">
-                <div className="w-3 h-3 bg-blue-500 rounded-full flex items-center justify-center">
-                  <span className="text-[7px] text-white font-bold">!</span>
-                </div>
-                <span className="text-gray-600">
-                  {reward.isIntroductoryReward ? 'Welcome gift available' : 'Free reward available'}
+        <div key={reward.id} className="bg-white border border-gray-200 rounded-xl shadow-lg px-3 py-2 w-full">
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-medium text-gray-900 truncate" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                {reward.rewardName}
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                {reward.description}
+              </p>
+              <div className="flex items-center gap-1 mt-1 flex-nowrap">
+                <span className="text-xs text-gray-700 whitespace-nowrap" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                  ${reward.discountValue || '10'} Off
+                </span>
+                <span className="text-xs text-gray-400">•</span>
+                <span className="text-xs text-gray-500 whitespace-nowrap" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                  Min. spend: ${reward.minimumSpend || '50'}
                 </span>
               </div>
             </div>
-            <Button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full px-3 py-1.5 text-[11px] font-medium ml-2">
-              + {reward.isIntroductoryReward ? 'Welcome Gift' : 'Claim'}
-            </Button>
-          </div>
-        </div>
-      )
-    }
-
-    // Voucher rewards
-    if (reward.programType === 'voucher' || reward.programType === 'voucherprogramnew') {
-      return (
-        <div key={reward.id} className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <h3 className="font-semibold text-black text-[13px]">{reward.rewardName}</h3>
-              <p className="text-[11px] text-gray-500 mb-2">{reward.description}</p>
-              <div className="flex items-center gap-2">
-                <span className="text-[14px] font-bold text-orange-600">
-                  ${reward.voucherAmount || '0'} Voucher
-                </span>
-              </div>
-            </div>
-            <div className="bg-orange-400 text-white rounded-full px-2.5 py-1 text-[10px] font-medium flex items-center gap-1">
-              <CreditCard className="h-3 w-3" />
-              {reward.pointsCost} ⚡
+            <div className="flex items-center justify-center bg-gray-400 text-white rounded-lg px-2 py-1 ml-3">
+              <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                {reward.networkPointsCost || reward.pointsCost || '100'}
+              </span>
+              <Globe className="w-3 h-3 ml-1" />
             </div>
           </div>
         </div>
-      )
+      );
     }
 
-    // Regular points-based rewards
     return (
-      <div key={reward.id} className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
-        <div className="flex items-center justify-between">
-          <div className="flex-1">
-            <h3 className="font-semibold text-black text-[13px]">{reward.rewardName}</h3>
-            <p className="text-[11px] text-gray-500 mb-2">{reward.description}</p>
+      <div key={reward.id} className="bg-white border border-gray-200 rounded-xl shadow-lg px-3 py-2 w-full">
+        <div className="flex items-start justify-between">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-medium text-gray-900 truncate" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+              {reward.rewardName}
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+              {reward.description}
+            </p>
+            {reward.isIntroductoryReward && (
+              <div className="flex items-center gap-1.5 mt-1">
+                <div className="w-2.5 h-2.5 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-[6px] text-white font-bold">!</span>
+                </div>
+                <span className="text-[10px] text-gray-600 whitespace-nowrap" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                  You have 1 x welcome gift across all merchants
+                </span>
+              </div>
+            )}
           </div>
-          <div className="bg-blue-500 text-white rounded-full px-2.5 py-1 text-[10px] font-medium flex items-center gap-1">
-            {reward.pointsCost}
-            <Star className="h-3 w-3 fill-white" />
+          <div 
+            className={cn(
+              "flex items-center justify-center rounded-md px-2 py-1 ml-3",
+              reward.isIntroductoryReward
+                ? "bg-blue-500 text-white"
+                : (reward.programType === 'voucher' || reward.programType === 'voucherprogramnew')
+                  ? "bg-orange-400 text-white"
+                  : (reward.pointsCost === 0) 
+                    ? "bg-green-500 text-white" 
+                    : "bg-blue-500 text-white"
+            )}
+          >
+            {reward.isIntroductoryReward ? (
+              <>
+                <Sparkles className="w-3 h-3 mr-1" />
+                <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                  Welcome Gift
+                </span>
+              </>
+            ) : (reward.programType === 'voucher' || reward.programType === 'voucherprogramnew') ? (
+              <>
+                <CreditCard className="w-3 h-3 mr-1" />
+                <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                  ${reward.voucherAmount || '0'} voucher
+                </span>
+              </>
+            ) : (reward.pointsCost === 0) ? (
+              <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                Free
+              </span>
+            ) : (
+              <>
+                <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                  {reward.pointsCost}
+                </span>
+                <Star className="w-3 h-3 ml-1 fill-white" />
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -305,25 +347,25 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
 
                                              {/* Coffee Card */}
                        {coffeeProgram && (
-                         <div className="bg-white rounded-xl p-2.5 shadow-sm border border-gray-200">
-                           <div className="flex items-center justify-between mb-2">
-                             <div className="flex items-center gap-2">
-                               <Coffee className="h-4 w-4 text-amber-600" />
-                               <span className="font-semibold text-black text-[13px]">Coffee Card</span>
+                         <div className="bg-white rounded-xl px-2.5 py-1.5 shadow-sm border border-gray-200">
+                           <div className="flex items-center justify-between mb-1">
+                             <div className="flex items-center gap-1.5">
+                               <PiCoffeeFill className="h-3.5 w-3.5" style={{ color: '#8B4513' }} />
+                               <span className="font-medium text-gray-800 text-[12px]">Coffee Card</span>
                              </div>
-                             <span className="text-[11px] text-gray-700 font-medium bg-amber-50 px-2 py-0.5 rounded-2xl">
+                             <span className="text-[10px] text-gray-700 font-medium bg-amber-50/50 px-1.5 py-0.5 rounded-xl">
                                0/{coffeeProgram.frequency - 1}
                              </span>
                            </div>
                            
-                           <div className="flex items-center justify-between mb-2">
+                           <div className="flex items-center justify-between mb-1">
                              {Array.from({ length: coffeeProgram.frequency - 1 }, (_, index) => (
-                               <div key={index} className="w-5 h-5 bg-gray-200 rounded-full"></div>
+                               <div key={index} className="w-4 h-4 bg-gray-200 rounded-full"></div>
                              ))}
                            </div>
                            
-                           <div className="flex items-center gap-2 text-[11px] text-gray-600">
-                             <Info className="h-3 w-3" />
+                           <div className="flex items-center gap-1.5 text-[10px] text-gray-600">
+                             <Info className="h-2.5 w-2.5" />
                              <span>{coffeeProgram.frequency - 1} purchases for a free coffee</span>
                            </div>
                          </div>

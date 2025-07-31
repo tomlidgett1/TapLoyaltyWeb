@@ -290,9 +290,8 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
           transform: (!shouldAnimate || isClosing) ? 'translateX(100%)' : 'translateX(0)' 
         }}
       >
-        <div className="flex items-center justify-center min-h-screen p-4 sm:p-6 lg:p-8 pt-8 sm:pt-12 lg:pt-16">
+        <div className="flex items-center justify-center min-h-screen p-4 sm:p-6 lg:p-8 pt-12 sm:pt-16 lg:pt-20">
           
-
           {/* iPhone 16 Pro */}
           <div className="relative flex items-center justify-center">
             {/* Phone Shadow */}
@@ -302,10 +301,10 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
              <div 
                className="relative bg-[#2F3336] rounded-[3.5rem] p-[5px] shadow-2xl"
                style={{ 
-                 height: '99vh',
-                 width: 'calc(99vh * 0.462)', // iPhone aspect ratio (340/736 ≈ 0.462)
-                 maxHeight: '736px',
-                 maxWidth: '340px'
+                 height: '87vh',
+                 width: 'calc(90vh * 0.462)', // iPhone aspect ratio (340/736 ≈ 0.462)
+                 maxHeight: '760px',
+                 maxWidth: '350px'
                }}
              >
               

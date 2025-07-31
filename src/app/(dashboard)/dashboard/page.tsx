@@ -150,6 +150,7 @@ import {
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 import { TapAgentSheet } from "@/components/tap-agent-sheet"
+import { DemoIPhone } from "@/components/demo-iphone"
 
 // Add custom animation for the popup and tab transitions
 const customAnimationStyles = `
@@ -930,6 +931,7 @@ export default function DashboardPage() {
   const [rewardsTypeFilter, setRewardsTypeFilter] = useState<'all' | 'free' | 'points'>('all')
   const [liveRewards, setLiveRewards] = useState<any[]>([])
   const [liveRewardsLoading, setLiveRewardsLoading] = useState(false)
+  const [demoIPhoneOpen, setDemoIPhoneOpen] = useState(false)
   const [livePrograms, setLivePrograms] = useState({
     coffee: [] as any[],
     voucher: [] as any[],
@@ -7957,6 +7959,32 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Demo Button - Floating Action Button */}
+      <Button
+        onClick={() => setDemoIPhoneOpen(true)}
+        className="fixed bottom-4 right-4 z-50 h-10 w-10 rounded-full bg-blue-500 hover:bg-blue-600 shadow-lg hover:shadow-xl transition-all duration-200 p-0"
+        title="View Customer App Demo"
+      >
+        <svg 
+          className="h-4 w-4 text-white" 
+          fill="none" 
+          viewBox="0 0 24 24" 
+          stroke="currentColor"
+        >
+          <path 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            strokeWidth={2} 
+            d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" 
+          />
+        </svg>
+      </Button>
+
+      {/* Demo iPhone */}
+      <DemoIPhone 
+        open={demoIPhoneOpen} 
+        onOpenChange={setDemoIPhoneOpen} 
+      />
 
     </>
   );

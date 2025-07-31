@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { X, Gift, Home, Search, Store, Settings, Star, MoreHorizontal, Coffee, Info, Navigation, CreditCard, Globe, Sparkles } from "lucide-react"
+import { X, Gift, Home, Search, Store, Settings, Star, MoreHorizontal, Coffee, Info, Navigation, CreditCard, Globe, Sparkles, Fingerprint } from "lucide-react"
 import { PiCoffeeFill } from "react-icons/pi"
 import { BiSolidCoffeeTogo } from "react-icons/bi"
 import { cn } from "@/lib/utils"
@@ -22,10 +22,12 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
   const [merchantName, setMerchantName] = useState<string>("")
   const [displayAddress, setDisplayAddress] = useState<string>("")
   const [coffeeProgram, setCoffeeProgram] = useState<any>(null)
+  const [cashbackProgram, setCashbackProgram] = useState<any>(null)
   const [rewards, setRewards] = useState<any[]>([])
   const [isClosing, setIsClosing] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const [shouldAnimate, setShouldAnimate] = useState(false)
+  const [activeTab, setActiveTab] = useState<'rewards' | 'programs'>('rewards')
 
   useEffect(() => {
     const fetchMerchantData = async () => {
@@ -44,6 +46,14 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
           const coffeePrograms = data.coffeePrograms || []
           const activeCoffeeProgram = coffeePrograms.find((program: any) => program.active === true)
           setCoffeeProgram(activeCoffeeProgram || null)
+          
+          // Get cashback program if active
+          const cashbackProgram = data.cashbackProgram || null
+          if (cashbackProgram && cashbackProgram.isActive === true) {
+            setCashbackProgram(cashbackProgram)
+          } else {
+            setCashbackProgram(null)
+          }
         }
 
         // Fetch active rewards
@@ -322,18 +332,24 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                      </div>
 
                                          {/* Metrics Section */}
-                     <div className="bg-white px-4 py-3 rounded-b-2xl border-b border-gray-200">
-                       <div className="flex items-center justify-around">
+                     <div className={`bg-white ${cashbackProgram ? 'px-8' : 'px-6'} ${cashbackProgram ? 'py-2' : 'py-3'} rounded-b-2xl border-b border-gray-200`}>
+                       <div className={`flex items-center ${cashbackProgram ? 'justify-between' : 'justify-around'}`}>
                          <div className="text-center">
-                           <div className="text-[16px] font-bold text-blue-500">8,850</div>
+                           <div className={`${cashbackProgram ? 'text-[14px]' : 'text-[16px]'} font-bold text-blue-500`}>750</div>
                            <div className="text-[10px] text-gray-500">Points</div>
                          </div>
+                         {cashbackProgram && (
+                           <div className="text-center">
+                             <div className="text-[14px] font-bold text-green-500">$0.50</div>
+                             <div className="text-[10px] text-gray-500">Tap Cash</div>
+                           </div>
+                         )}
                          <div className="text-center">
-                           <div className="text-[16px] font-bold text-amber-600">Bronze</div>
+                           <div className={`${cashbackProgram ? 'text-[14px]' : 'text-[16px]'} font-bold text-amber-600`}>Bronze</div>
                            <div className="text-[10px] text-gray-500">Status</div>
                          </div>
                          <div className="text-center">
-                           <div className="text-[16px] font-bold text-black">10</div>
+                           <div className={`${cashbackProgram ? 'text-[14px]' : 'text-[16px]'} font-bold text-black`}>2</div>
                            <div className="text-[10px] text-gray-500">Visits</div>
                          </div>
                        </div>
@@ -371,32 +387,102 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                          </div>
                        )}
 
-                       {/* Dynamic Rewards */}
-                       {rewards.map(reward => renderRewardCard(reward))}
-
-                       {/* Fallback rewards if no rewards exist */}
-                       {rewards.length === 0 && !coffeeProgram && (
-                         <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
-                           <div className="flex items-center justify-between">
-                             <div className="flex-1">
-                               <h3 className="font-semibold text-black text-[13px]">Welcome Gift</h3>
-                               <p className="text-[11px] text-gray-500 mb-2">Special offer for new customers</p>
-                               <div className="flex items-center gap-2 text-[10px]">
-                                 <div className="w-3 h-3 bg-blue-500 rounded-full flex items-center justify-center">
-                                   <span className="text-[7px] text-white font-bold">!</span>
-                                 </div>
-                                 <span className="text-gray-600">You have 1 x welcome gift across all merchants</span>
+                       {/* Cashback Card */}
+                       {cashbackProgram && (
+                         <div className="bg-white rounded-xl px-2.5 py-1.5 shadow-sm border border-green-100">
+                           <div className="flex items-start justify-between">
+                             <div className="flex-1 min-w-0">
+                               <h3 className="text-sm font-medium text-gray-900 truncate" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                                 Tap Cash
+                               </h3>
+                               <p className="text-xs text-gray-500 mt-0.5" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                                 {cashbackProgram.description || 'Tap to select amount and reduce your transaction'}
+                               </p>
+                               <div className="flex items-center gap-1.5 mt-1">
+                                 <Fingerprint className="w-2.5 h-2.5 text-green-500 flex-shrink-0" />
+                                 <span className="text-[10px] text-gray-600 whitespace-nowrap" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                                   Tap to use at {merchantName}
+                                 </span>
                                </div>
                              </div>
-                             <Button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full px-3 py-1.5 text-[11px] font-medium ml-2">
-                               + Welcome Gift
-                             </Button>
+                             <div className="bg-green-500 text-white rounded-md px-2 py-0.5 ml-3 leading-none">
+                               <span className="text-xs font-medium" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
+                                 $0.50
+                               </span>
+                             </div>
                            </div>
                          </div>
                        )}
+
+                       {/* Content based on active tab */}
+                       {activeTab === 'rewards' ? (
+                         <>
+                           {/* Dynamic Rewards */}
+                           {rewards.map(reward => renderRewardCard(reward))}
+
+                           {/* Fallback rewards if no rewards exist */}
+                           {rewards.length === 0 && !coffeeProgram && (
+                             <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
+                               <div className="flex items-center justify-between">
+                                 <div className="flex-1">
+                                   <h3 className="font-semibold text-black text-[13px]">Welcome Gift</h3>
+                                   <p className="text-[11px] text-gray-500 mb-2">Special offer for new customers</p>
+                                   <div className="flex items-center gap-2 text-[10px]">
+                                     <div className="w-3 h-3 bg-blue-500 rounded-full flex items-center justify-center">
+                                       <span className="text-[7px] text-white font-bold">!</span>
+                                     </div>
+                                     <span className="text-gray-600">You have 1 x welcome gift across all merchants</span>
+                                   </div>
+                                 </div>
+                                 <Button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full px-3 py-1.5 text-[11px] font-medium ml-2">
+                                   + Welcome Gift
+                                 </Button>
+                               </div>
+                             </div>
+                           )}
+                         </>
+                       ) : (
+                         <>
+                           {/* Programs Tab Content */}
+                           <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
+                             <div className="text-center py-8">
+                               <h3 className="font-semibold text-black text-[13px] mb-2">No Programs Available</h3>
+                               <p className="text-[11px] text-gray-500">Check back later for loyalty programs</p>
+                             </div>
+                           </div>
+                         </>
+                       )}
                     </div>
 
-                    
+                    {/* Floating Filter Pill */}
+                                          <div className="absolute bottom-20 left-4 z-10">
+                      <div className="flex items-center bg-gray-100 p-0.5 rounded-2xl shadow-lg">
+                        <button
+                          onClick={() => setActiveTab('rewards')}
+                          className={cn(
+                            "flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] font-medium rounded-xl transition-colors",
+                            activeTab === 'rewards'
+                              ? "text-blue-500 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                        >
+                          <Gift className="h-3.5 w-3.5" />
+                          Rewards
+                        </button>
+                        <button
+                          onClick={() => setActiveTab('programs')}
+                          className={cn(
+                            "flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] font-medium rounded-xl transition-colors",
+                            activeTab === 'programs'
+                              ? "text-blue-500 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                        >
+                          <Star className="h-3.5 w-3.5" />
+                          Programs
+                        </button>
+                      </div>
+                    </div>
 
                                          {/* Bottom Navigation */}
                      <div className="bg-gray-100 border-t border-gray-200 rounded-b-[3.3rem] overflow-hidden">

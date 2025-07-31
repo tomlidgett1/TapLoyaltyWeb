@@ -3,10 +3,10 @@
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { X, Gift, Home, Search, Store, Settings, Star, MoreHorizontal, Coffee, Info, Navigation } from "lucide-react"
+import { X, Gift, Home, Search, Store, Settings, Star, MoreHorizontal, Coffee, Info, Navigation, CreditCard } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, getDoc } from "firebase/firestore"
+import { doc, getDoc, collection, query, orderBy, getDocs, where } from "firebase/firestore"
 
 interface DemoIPhoneProps {
   open: boolean
@@ -17,6 +17,9 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
   const { user } = useAuth()
   const [logoUrl, setLogoUrl] = useState<string>("")
   const [merchantName, setMerchantName] = useState<string>("")
+  const [displayAddress, setDisplayAddress] = useState<string>("")
+  const [coffeeProgram, setCoffeeProgram] = useState<any>(null)
+  const [rewards, setRewards] = useState<any[]>([])
   const [isClosing, setIsClosing] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const [shouldAnimate, setShouldAnimate] = useState(false)
@@ -26,12 +29,46 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
       if (!user?.uid) return
       
       try {
+        // Fetch merchant info
         const merchantDoc = await getDoc(doc(db, "merchants", user.uid))
         if (merchantDoc.exists()) {
           const data = merchantDoc.data()
           setLogoUrl(data.logoUrl || "")
           setMerchantName(data.merchantName || "Store")
+          setDisplayAddress(data.location?.address || "")
+          
+          // Get the first active coffee program
+          const coffeePrograms = data.coffeePrograms || []
+          const activeCoffeeProgram = coffeePrograms.find((program: any) => program.active === true)
+          setCoffeeProgram(activeCoffeeProgram || null)
         }
+
+        // Fetch active rewards
+        const rewardsRef = collection(db, 'merchants', user.uid, 'rewards')
+        const rewardsQuery = query(
+          rewardsRef, 
+          where('isActive', '==', true),
+          where('status', '==', 'active'),
+          orderBy('createdAt', 'desc')
+        )
+        const rewardsSnapshot = await getDocs(rewardsQuery)
+        
+        const fetchedRewards = rewardsSnapshot.docs.map(doc => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            rewardName: data.rewardName || data.name || 'Unnamed Reward',
+            description: data.description || '',
+            type: data.type || 'gift',
+            programType: data.programType || data.programtype || '',
+            pointsCost: data.pointsCost || 0,
+            voucherAmount: data.voucherAmount || 0,
+            isIntroductoryReward: data.isIntroductoryReward || false,
+            category: data.category || 'individual'
+          }
+        })
+        
+        setRewards(fetchedRewards)
       } catch (error) {
         console.error("Error fetching merchant data:", error)
       }
@@ -60,6 +97,75 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
       onOpenChange(false)
       setIsClosing(false)
     }, 300) // Match the animation duration
+  }
+
+  const renderRewardCard = (reward: any) => {
+    // Skip coffee program rewards as they're handled separately
+    if (reward.programType === 'coffeeprogramnew') return null
+
+    // Welcome/Introductory gifts
+    if (reward.isIntroductoryReward || reward.pointsCost === 0) {
+      return (
+        <div key={reward.id} className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <h3 className="font-semibold text-black text-[13px]">{reward.rewardName}</h3>
+              <p className="text-[11px] text-gray-500 mb-2">{reward.description}</p>
+              <div className="flex items-center gap-2 text-[10px]">
+                <div className="w-3 h-3 bg-blue-500 rounded-full flex items-center justify-center">
+                  <span className="text-[7px] text-white font-bold">!</span>
+                </div>
+                <span className="text-gray-600">
+                  {reward.isIntroductoryReward ? 'Welcome gift available' : 'Free reward available'}
+                </span>
+              </div>
+            </div>
+            <Button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full px-3 py-1.5 text-[11px] font-medium ml-2">
+              + {reward.isIntroductoryReward ? 'Welcome Gift' : 'Claim'}
+            </Button>
+          </div>
+        </div>
+      )
+    }
+
+    // Voucher rewards
+    if (reward.programType === 'voucher' || reward.programType === 'voucherprogramnew') {
+      return (
+        <div key={reward.id} className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <h3 className="font-semibold text-black text-[13px]">{reward.rewardName}</h3>
+              <p className="text-[11px] text-gray-500 mb-2">{reward.description}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-[14px] font-bold text-orange-600">
+                  ${reward.voucherAmount || '0'} Voucher
+                </span>
+              </div>
+            </div>
+            <div className="bg-orange-400 text-white rounded-full px-2.5 py-1 text-[10px] font-medium flex items-center gap-1">
+              <CreditCard className="h-3 w-3" />
+              {reward.pointsCost} ⚡
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    // Regular points-based rewards
+    return (
+      <div key={reward.id} className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <h3 className="font-semibold text-black text-[13px]">{reward.rewardName}</h3>
+            <p className="text-[11px] text-gray-500 mb-2">{reward.description}</p>
+          </div>
+          <div className="bg-blue-500 text-white rounded-full px-2.5 py-1 text-[10px] font-medium flex items-center gap-1">
+            {reward.pointsCost}
+            <Star className="h-3 w-3 fill-white" />
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (!isVisible && !isClosing) return null
@@ -157,7 +263,7 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                            <h1 className="text-[16px] font-bold text-black">{merchantName}</h1>
                            <p className="text-[11px] text-gray-500 flex items-center gap-1">
                              <Navigation className="h-3 w-3 text-gray-500 pt-0.5" />
-                             162 High St, Ashburton VIC 3147
+                             {displayAddress || "162 High St, Ashburton VIC 3147"}
                            </p>
                          </div>
                        </div>
@@ -198,66 +304,54 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                        
 
                                              {/* Coffee Card */}
-                       <div className="bg-white rounded-xl p-2.5 shadow-sm border border-gray-200">
-                         <div className="flex items-center justify-between mb-2">
-                           <div className="flex items-center gap-2">
-                             <Coffee className="h-4 w-4 text-amber-600" />
-                             <span className="font-semibold text-black text-[13px]">Coffee Card</span>
-                           </div>
-                           <span className="text-[11px] text-gray-700 font-medium bg-amber-50 px-2 py-0.5 rounded-2xl">0/4</span>
-                         </div>
-                         
-                         <div className="flex items-center justify-between mb-2">
-                           <div className="w-7 h-7 bg-gray-200 rounded-full"></div>
-                           <div className="w-7 h-7 bg-gray-200 rounded-full"></div>
-                           <div className="w-7 h-7 bg-gray-200 rounded-full"></div>
-                           <div className="w-7 h-7 bg-gray-200 rounded-full"></div>
-                         </div>
-                         
-                         <div className="flex items-center gap-2 text-[11px] text-gray-600">
-                           <Info className="h-3 w-3" />
-                           <span>4 purchases for a free coffee</span>
-                         </div>
-                       </div>
-
-                                             {/* Welcome Gift */}
-                       <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
-                         <div className="flex items-center justify-between">
-                           <div className="flex-1">
-                             <h3 className="font-semibold text-black text-[13px]">Welcome Gift</h3>
-                             <p className="text-[11px] text-gray-500 mb-2">Special offer for new customers</p>
-                             <div className="flex items-center gap-2 text-[10px]">
-                               <div className="w-3 h-3 bg-blue-500 rounded-full flex items-center justify-center">
-                                 <span className="text-[7px] text-white font-bold">!</span>
-                               </div>
-                               <span className="text-gray-600">You have 1 x welcome gift across all merchants</span>
-                             </div>
-                           </div>
-                           <Button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full px-3 py-1.5 text-[11px] font-medium ml-2">
-                             + Welcome Gift
-                           </Button>
-                         </div>
-                       </div>
-
-                                             {/* $10 Off */}
-                       <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
-                         <div className="flex items-center justify-between">
-                           <div className="flex-1">
-                             <h3 className="font-semibold text-black text-[13px]">$10 Off Purchase</h3>
-                             <p className="text-[11px] text-gray-500 mb-2">Save on your next order</p>
+                       {coffeeProgram && (
+                         <div className="bg-white rounded-xl p-2.5 shadow-sm border border-gray-200">
+                           <div className="flex items-center justify-between mb-2">
                              <div className="flex items-center gap-2">
-                               <span className="text-[14px] font-bold text-green-600">$10 Off</span>
-                               <div className="flex items-center gap-1 text-[10px] text-gray-500">
-                                 <Info className="h-3 w-3" />
-                                 <span>Min. spend: $50</span>
-                               </div>
+                               <Coffee className="h-4 w-4 text-amber-600" />
+                               <span className="font-semibold text-black text-[13px]">Coffee Card</span>
                              </div>
+                             <span className="text-[11px] text-gray-700 font-medium bg-amber-50 px-2 py-0.5 rounded-2xl">
+                               0/{coffeeProgram.frequency - 1}
+                             </span>
                            </div>
-                           <div className="bg-gray-200 text-gray-700 rounded-full px-2.5 py-1 text-[10px] font-medium">
-                             100 ⚡
+                           
+                           <div className="flex items-center justify-between mb-2">
+                             {Array.from({ length: coffeeProgram.frequency - 1 }, (_, index) => (
+                               <div key={index} className="w-5 h-5 bg-gray-200 rounded-full"></div>
+                             ))}
+                           </div>
+                           
+                           <div className="flex items-center gap-2 text-[11px] text-gray-600">
+                             <Info className="h-3 w-3" />
+                             <span>{coffeeProgram.frequency - 1} purchases for a free coffee</span>
                            </div>
                          </div>
-                       </div>
+                       )}
+
+                       {/* Dynamic Rewards */}
+                       {rewards.map(reward => renderRewardCard(reward))}
+
+                       {/* Fallback rewards if no rewards exist */}
+                       {rewards.length === 0 && !coffeeProgram && (
+                         <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
+                           <div className="flex items-center justify-between">
+                             <div className="flex-1">
+                               <h3 className="font-semibold text-black text-[13px]">Welcome Gift</h3>
+                               <p className="text-[11px] text-gray-500 mb-2">Special offer for new customers</p>
+                               <div className="flex items-center gap-2 text-[10px]">
+                                 <div className="w-3 h-3 bg-blue-500 rounded-full flex items-center justify-center">
+                                   <span className="text-[7px] text-white font-bold">!</span>
+                                 </div>
+                                 <span className="text-gray-600">You have 1 x welcome gift across all merchants</span>
+                               </div>
+                             </div>
+                             <Button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full px-3 py-1.5 text-[11px] font-medium ml-2">
+                               + Welcome Gift
+                             </Button>
+                           </div>
+                         </div>
+                       )}
                     </div>
 
                     

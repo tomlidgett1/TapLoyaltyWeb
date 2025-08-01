@@ -42,6 +42,10 @@ export function MapLocationPicker({
 
   // Load Google Maps script
   useEffect(() => {
+    // Debug: Log API key availability (remove after testing)
+    console.log('Google Maps API Key available:', !!GOOGLE_MAPS_API_KEY);
+    console.log('API Key length:', GOOGLE_MAPS_API_KEY?.length || 0);
+    
     // Check if API key is available
     if (!GOOGLE_MAPS_API_KEY) {
       setMapLoadError("Google Maps API key is not configured. Please contact support.");
@@ -50,15 +54,31 @@ export function MapLocationPicker({
 
     // Check if Google Maps script is already loaded
     if (window.google && window.google.maps) {
+      console.log('Google Maps already loaded, initializing...');
       initializeMap();
       return;
     }
 
+    // Check if script is already being loaded
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
+    if (existingScript) {
+      console.log('Google Maps script already exists, waiting for load...');
+      existingScript.addEventListener('load', () => {
+        initializeMap();
+        if (window.google && window.google.maps && window.google.maps.places) {
+          autocompleteService.current = new google.maps.places.AutocompleteService();
+        }
+      });
+      return;
+    }
+
+    console.log('Loading Google Maps script...');
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`;
     script.async = true;
     script.defer = true;
     script.onload = () => {
+      console.log('Google Maps script loaded successfully');
       initializeMap();
       // Initialize autocomplete service
       if (window.google && window.google.maps && window.google.maps.places) {

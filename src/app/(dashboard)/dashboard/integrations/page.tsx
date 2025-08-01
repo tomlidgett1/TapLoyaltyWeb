@@ -14,7 +14,7 @@ import Link from "next/link"
 import { PageTransition } from "@/components/page-transition"
 import { PageHeader } from "@/components/page-header"
 import { generateCodeVerifier, generateCodeChallenge } from "@/lib/pkce"
-import { CheckCircle, Globe, BarChart2, MessageSquare, Mail, Phone, Calculator, Calendar, FileText, Table } from "lucide-react"
+import { CheckCircle, Globe, BarChart2, MessageSquare, Mail, Phone, Calculator, Calendar, FileText, Table, Loader2 } from "lucide-react"
 
 // Import icons for different POS systems
 import { LightspeedIcon } from "@/components/icons/lightspeed-icon"
@@ -1051,6 +1051,8 @@ export default function IntegrationsPage() {
   const disconnectGmailComposio = async () => {
     if (!user) return
     
+    setConnecting("gmail_composio")
+    
     try {
       // Call the deleteConnectedAccounts Firebase function
       const deleteConnectedAccounts = httpsCallable(functions, 'deleteConnectedAccounts');
@@ -1080,6 +1082,8 @@ export default function IntegrationsPage() {
         description: "Failed to disconnect Gmail Composio. Please try again.",
         variant: "destructive"
       })
+    } finally {
+      setConnecting(null)
     }
   }
 
@@ -1840,7 +1844,14 @@ export default function IntegrationsPage() {
                       onClick={disconnectGmailComposio}
                       disabled={connecting === "gmail_composio"}
                     >
-                      {connecting === "gmail_composio" ? "..." : "Disconnect"}
+                      {connecting === "gmail_composio" ? (
+                        <>
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                          Disconnecting...
+                        </>
+                      ) : (
+                        "Disconnect"
+                      )}
                     </Button>
                   </div>
                 </CardContent>

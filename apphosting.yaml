@@ -24,7 +24,7 @@ env:
 
   # Google Maps API key - using secret manager for security
   - variable: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-    secret: googleMapsApiKey
+    value: AIzaSyDzreykxGGVbtBgtlwHMkSOk2rHQc6qJXE
     availability:
       - BUILD
       - RUNTIME

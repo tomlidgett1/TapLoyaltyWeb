@@ -1,0 +1,18 @@
+[debug] [2025-08-01T02:44:18.062Z] ----------------------------------------------------------------------
+[debug] [2025-08-01T02:44:18.064Z] Command:       /usr/local/bin/node /usr/local/bin/firebase apphosting:rollouts:create taptap
+[debug] [2025-08-01T02:44:18.064Z] CLI Version:   14.1.0
+[debug] [2025-08-01T02:44:18.064Z] Platform:      darwin
+[debug] [2025-08-01T02:44:18.064Z] Node Version:  v22.13.1
+[debug] [2025-08-01T02:44:18.065Z] Time:          Fri Aug 01 2025 12:44:18 GMT+1000 (Australian Eastern Standard Time)
+[debug] [2025-08-01T02:44:18.065Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-08-01T02:44:18.152Z] Object "" in "firebase.json" has unknown property: {"additionalProperty":"apphosting"}
+[debug] [2025-08-01T02:44:18.155Z] Checked if tokens are valid: true, expires at: 1754019831544
+[debug] [2025-08-01T02:44:18.155Z] Checked if tokens are valid: true, expires at: 1754019831544
+[debug] [2025-08-01T02:44:18.155Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/tap-loyalty-fb6d0/services/firebaseapphosting.googleapis.com [none]
+[debug] [2025-08-01T02:44:18.155Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/tap-loyalty-fb6d0/services/firebaseapphosting.googleapis.com x-goog-quota-user=projects/tap-loyalty-fb6d0
+[debug] [2025-08-01T02:44:19.645Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/tap-loyalty-fb6d0/services/firebaseapphosting.googleapis.com 200
+[debug] [2025-08-01T02:44:19.645Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/tap-loyalty-fb6d0/services/firebaseapphosting.googleapis.com [omitted]
+[debug] [2025-08-01T02:44:19.646Z] Checked if tokens are valid: true, expires at: 1754019831544
+[debug] [2025-08-01T02:44:19.646Z] Checked if tokens are valid: true, expires at: 1754019831544
+[debug] [2025-08-01T02:44:19.646Z] >>> [apiv2][query] GET https://firebaseapphosting.googleapis.com/v1beta/projects/tap-loyalty-fb6d0/locations/-/backends 

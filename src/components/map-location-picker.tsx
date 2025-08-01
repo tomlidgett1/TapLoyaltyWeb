@@ -35,12 +35,19 @@ export function MapLocationPicker({
   const [searchError, setSearchError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [mapLoadError, setMapLoadError] = useState<string | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const geocoder = useRef<google.maps.Geocoder | null>(null);
   const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
 
   // Load Google Maps script
   useEffect(() => {
+    // Check if API key is available
+    if (!GOOGLE_MAPS_API_KEY) {
+      setMapLoadError("Google Maps API key is not configured. Please contact support.");
+      return;
+    }
+
     // Check if Google Maps script is already loaded
     if (window.google && window.google.maps) {
       initializeMap();
@@ -57,6 +64,9 @@ export function MapLocationPicker({
       if (window.google && window.google.maps && window.google.maps.places) {
         autocompleteService.current = new google.maps.places.AutocompleteService();
       }
+    };
+    script.onerror = () => {
+      setMapLoadError("Failed to load Google Maps. Please check your internet connection and try again.");
     };
     document.head.appendChild(script);
 
@@ -392,10 +402,25 @@ export function MapLocationPicker({
         </p>
       </div>
       
-      <div 
-        ref={mapRef} 
-        className="w-full h-[300px] rounded-md border border-gray-200 bg-gray-50"
-      />
+      {mapLoadError ? (
+        <div className="w-full h-[300px] rounded-md border border-red-200 bg-red-50 flex items-center justify-center">
+          <div className="text-center p-6">
+            <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-3" />
+            <p className="text-sm text-red-700 font-medium mb-2">Map Unavailable</p>
+            <p className="text-xs text-red-600 max-w-sm">{mapLoadError}</p>
+            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+              <p className="text-xs text-yellow-800">
+                You can still continue by entering your full address above. The location will be validated during setup.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div 
+          ref={mapRef} 
+          className="w-full h-[300px] rounded-md border border-gray-200 bg-gray-50"
+        />
+      )}
       
       <div className="flex flex-col gap-1">
         {address && (

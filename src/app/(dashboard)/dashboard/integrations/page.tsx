@@ -2152,7 +2152,14 @@ export default function IntegrationsPage() {
                       onClick={connectGmailComposio}
                       disabled={connecting === "gmail_composio"}
                     >
-                      {connecting === "gmail_composio" ? "..." : "Connect"}
+                      {connecting === "gmail_composio" ? (
+                        <>
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                          Connecting...
+                        </>
+                      ) : (
+                        "Connect"
+                      )}
                     </Button>
                   </div>
                 </CardContent>

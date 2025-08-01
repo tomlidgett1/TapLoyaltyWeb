@@ -52,51 +52,67 @@ export function MapLocationPicker({
       return;
     }
 
-    // Check if Google Maps script is already loaded
-    if (window.google && window.google.maps) {
+    // Check if Google Maps script is already loaded and ready
+    if (window.google && window.google.maps && window.google.maps.Map) {
       console.log('Google Maps already loaded, initializing...');
       initializeMap();
       return;
     }
 
     // Check if script is already being loaded
-    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]') as HTMLScriptElement;
     if (existingScript) {
       console.log('Google Maps script already exists, waiting for load...');
-      existingScript.addEventListener('load', () => {
+      
+      // Create a callback function name
+      const callbackName = `googleMapsCallback_${Date.now()}`;
+      (window as any)[callbackName] = () => {
+        console.log('Google Maps callback executed');
         initializeMap();
         if (window.google && window.google.maps && window.google.maps.places) {
           autocompleteService.current = new google.maps.places.AutocompleteService();
         }
-      });
+        // Clean up callback
+        delete (window as any)[callbackName];
+      };
+      
+      // If script exists but callback not set, add it
+      if (!existingScript.src.includes('callback=')) {
+        existingScript.remove();
+        loadGoogleMapsScript(callbackName);
+      }
       return;
     }
 
     console.log('Loading Google Maps script...');
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      console.log('Google Maps script loaded successfully');
+    const callbackName = `googleMapsCallback_${Date.now()}`;
+    loadGoogleMapsScript(callbackName);
+  }, []);
+
+  const loadGoogleMapsScript = (callbackName: string) => {
+    // Set up callback function
+    (window as any)[callbackName] = () => {
+      console.log('Google Maps script loaded successfully via callback');
       initializeMap();
       // Initialize autocomplete service
       if (window.google && window.google.maps && window.google.maps.places) {
         autocompleteService.current = new google.maps.places.AutocompleteService();
       }
+      // Clean up callback
+      delete (window as any)[callbackName];
     };
+
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&loading=async&callback=${callbackName}`;
+    script.async = true;
+    script.defer = true;
     script.onerror = () => {
       setMapLoadError("Failed to load Google Maps. Please check your internet connection and try again.");
+      // Clean up callback on error
+      delete (window as any)[callbackName];
     };
     document.head.appendChild(script);
-
-    return () => {
-      // Clean up script if component unmounts before script loads
-      if (document.head.contains(script)) {
-        document.head.removeChild(script);
-      }
-    };
-  }, []);
+  };
 
   // Initialize map
   const initializeMap = () => {

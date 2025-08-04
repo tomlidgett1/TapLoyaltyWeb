@@ -2328,55 +2328,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       </Button>
                     )}
                     
-                    {/* Setup Dropdown */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-sm font-medium text-gray-900 hover:text-gray-900 hover:bg-gray-100 focus:ring-0 focus:ring-offset-0"
-                        >
-                          Setup
-                          <ChevronDown className="h-3 w-3 ml-1.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="rounded-2xl">
-                        <DropdownMenuLabel className="text-xs text-gray-500 font-medium">Things to do</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => setShowTapAgentSheet(true)} className="cursor-pointer">
-                          <Sparkles className="h-4 w-4 mr-2" />
-                          Get Started with AI
-                          <Check className="h-4 w-4 ml-auto text-green-500" />
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="cursor-pointer">
-                          <Plug className="h-4 w-4 mr-2" />
-                          Connect Integrations
-                          <Check className="h-4 w-4 ml-auto text-green-500" />
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="cursor-pointer">
-                          <Gift className="h-4 w-4 mr-2" />
-                          Create Rewards
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="cursor-pointer">
-                          <Target className="h-4 w-4 mr-2" />
-                          Set Up Rules
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="cursor-pointer">
-                          <BarChart className="h-4 w-4 mr-2" />
-                          Configure Analytics
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="cursor-pointer">
-                          <Cog className="h-4 w-4 mr-2" />
-                          Account Settings
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/getstarted')}>
-                          <Cog className="h-4 w-4 mr-2" />
-                          Setup
-                          <ExternalLink className="h-4 w-4 ml-auto text-gray-400" />
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {/* Setup Button */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-sm font-medium text-gray-900 hover:text-gray-900 hover:bg-gray-100 focus:ring-0 focus:ring-offset-0"
+                      onClick={() => router.push('/getstarted')}
+                    >
+                      Setup
+                    </Button>
                     
                     {/* Preview Button */}
                     <Button

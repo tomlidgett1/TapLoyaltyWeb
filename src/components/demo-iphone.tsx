@@ -295,18 +295,22 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
           {/* iPhone 16 Pro */}
           <div className="relative flex items-center justify-center">
             {/* Phone Shadow */}
-            <div className="absolute inset-0 bg-black/30 blur-xl transform translate-y-8 scale-105 rounded-[60px]"></div>
+            <div className="absolute inset-0 bg-black/30 blur-xl transform translate-y-8 scale-105 rounded-[61px]"></div>
             
+            {/* Very Outer Frame - Dark Silver Outline */}
+            <div 
+              className="relative bg-[#8B8B8B] rounded-[61px] p-[1px] shadow-2xl"
+              style={{ 
+                height: '87vh',
+                width: 'calc(90vh * 0.462)', // iPhone aspect ratio (340/736 ≈ 0.462)
+                maxHeight: '760px',
+                maxWidth: '350px',
+                minWidth: '320px'
+              }}
+            >
                          {/* Outer Frame - Black */}
              <div 
-               className="relative bg-[#252932] rounded-[60px] p-[9px] shadow-2xl"
-               style={{ 
-                 height: '87vh',
-                 width: 'calc(90vh * 0.462)', // iPhone aspect ratio (340/736 ≈ 0.462)
-                 maxHeight: '760px',
-                 maxWidth: '350px',
-                 minWidth: '320px'
-               }}
+               className="relative bg-[#252932] rounded-[60px] p-[9px] h-full w-full"
              >
               
                              {/* Side Buttons */}
@@ -479,25 +483,15 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                            {/* Dynamic Rewards */}
                            {rewards.map(reward => renderRewardCard(reward))}
 
-                           {/* Fallback rewards if no rewards exist */}
+                           {/* No rewards message if no rewards exist */}
                            {rewards.length === 0 && !coffeeProgram && (
-                       <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
-                         <div className="flex items-center justify-between">
-                           <div className="flex-1">
-                             <h3 className="font-semibold text-black text-[13px]">Welcome Gift</h3>
-                             <p className="text-[11px] text-gray-500 mb-2">Special offer for new customers</p>
-                             <div className="flex items-center gap-2 text-[10px]">
-                               <div className="w-3 h-3 bg-blue-500 rounded-full flex items-center justify-center">
-                                 <span className="text-[7px] text-white font-bold">!</span>
+                             <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
+                               <div className="flex items-center justify-center py-2">
+                                 <div className="text-center">
+                                   <p className="text-[12px] text-gray-500">No rewards available yet</p>
+                                 </div>
                                </div>
-                               <span className="text-gray-600">You have 1 x welcome gift across all merchants</span>
                              </div>
-                           </div>
-                           <Button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full px-3 py-1.5 text-[11px] font-medium ml-2">
-                             + Welcome Gift
-                           </Button>
-                         </div>
-                       </div>
                            )}
                          </>
                        ) : (
@@ -789,6 +783,7 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                   </div>
                 </div>
               </div>
+            </div>
             </div>
           </div>
         </div>

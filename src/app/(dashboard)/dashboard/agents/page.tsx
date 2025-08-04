@@ -1809,7 +1809,7 @@ export default function AgentsPage() {
                   <div 
                     key={agent.id} 
                     className={cn(
-                  "bg-gray-50 border border-gray-200 rounded-md p-5 flex flex-col hover:border-gray-300 transition-colors relative",
+                  "bg-gray-50 border border-gray-200 rounded-xl p-5 flex flex-col hover:border-gray-300 transition-colors relative",
                       agent.status === 'coming-soon' && "opacity-60 grayscale",
                       isCustomerServiceSection && "cursor-pointer"
                     )}
@@ -2064,7 +2064,7 @@ export default function AgentsPage() {
                   {customAgents.map((agent) => (
                     <div 
                       key={agent.id} 
-                      className="bg-gray-50 border border-gray-200 rounded-md p-5 flex flex-col hover:border-gray-300 transition-colors cursor-pointer"
+                      className="bg-gray-50 border border-gray-200 rounded-xl p-5 flex flex-col hover:border-gray-300 transition-colors cursor-pointer"
                       onClick={() => handleCustomAgentClick(agent)}
                     >
                       {/* Header with title and status */}

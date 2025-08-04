@@ -724,14 +724,14 @@ export default function DashboardPage() {
     return (
       <div 
         key={metricId}
-        className={`group relative bg-white border border-gray-200 rounded-lg p-3 transition-all duration-300 ease-out hover:border-gray-300 hover:shadow-sm ${
+        className={`group relative bg-white border border-gray-200 rounded-xl p-3 transition-all duration-300 ease-out hover:border-gray-300 hover:shadow-sm ${
           isRemoving ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'
         }`}
       >
         {/* Loading bar at top */}
         {(metricsLoading || metricsCompleting) && (
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gray-100 rounded-t-lg overflow-hidden">
-            <div className={`h-full bg-[#007AFF] rounded-t-lg origin-left ${
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gray-100 rounded-t-xl overflow-hidden">
+            <div className={`h-full bg-[#007AFF] rounded-t-xl origin-left ${
               metricsCompleting 
                 ? 'animate-[loading-complete_0.5s_ease-out_forwards]' 
                 : 'animate-[loading-to-75_0.8s_ease-out_forwards,loading-pulse_2s_ease-in-out_infinite]'
@@ -908,8 +908,7 @@ export default function DashboardPage() {
   
   // Metrics state management
   const [enabledMetrics, setEnabledMetrics] = useState<string[]>([
-    'activePrograms', 'pointsIssued', 'totalRewards', 'activeCustomers',
-    'newCustomers', 'totalSpend', 'tapCashUsed', 'tapCashIssued'
+    'totalRewards', 'activeCustomers', 'totalSpend'
   ])
   const [removingMetrics, setRemovingMetrics] = useState<string[]>([])
 
@@ -4745,7 +4744,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Recurring Program */}
-                  <div className={`group relative bg-gray-50 border rounded-lg p-4 transition-all hover:shadow-sm ${
+                  <div className={`group relative bg-gray-50 border rounded-xl p-4 transition-all hover:shadow-sm ${
                     recurringPrograms.hasAny 
                       ? 'border-blue-200 hover:border-blue-300' 
                       : 'border-gray-200 hover:border-gray-300'
@@ -4803,7 +4802,7 @@ export default function DashboardPage() {
                     </Button>
                   </div>
                   {/* Individual Reward */}
-                  <div className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
+                  <div className="group relative bg-gray-50 border border-gray-200 rounded-xl p-4 transition-all hover:border-gray-300 hover:shadow-sm">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
                                                     <Gift className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
@@ -4830,7 +4829,7 @@ export default function DashboardPage() {
                   </div>
                 
                   {/* Banner */}
-                  <div className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
+                  <div className="group relative bg-gray-50 border border-gray-200 rounded-xl p-4 transition-all hover:border-gray-300 hover:shadow-sm">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
                                                     <Megaphone className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
@@ -4857,7 +4856,7 @@ export default function DashboardPage() {
                   </div>
                 
                   {/* Intro Reward */}
-                  <div className={`group relative bg-gray-50 border rounded-lg p-4 transition-all hover:shadow-sm ${
+                  <div className={`group relative bg-gray-50 border rounded-xl p-4 transition-all hover:shadow-sm ${
                     hasIntroductoryReward 
                       ? 'border-blue-200 hover:border-blue-300' 
                       : 'border-gray-200 hover:border-gray-300'
@@ -4981,7 +4980,7 @@ export default function DashboardPage() {
                   {/* Add Metrics Button */}
                   <button
                     onClick={() => setAddMetricsPopupOpen(true)}
-                    className="group relative bg-gray-50 border border-gray-200 rounded-lg p-3 transition-all hover:border-gray-300 hover:shadow-sm w-full text-center flex flex-col items-center justify-center"
+                    className="group relative bg-gray-50 border-2 border-blue-300 rounded-xl p-3 transition-all hover:border-blue-400 hover:shadow-sm w-full text-center flex flex-col items-center justify-center"
                   >
                     <PlusCircle className="h-4 w-4 text-gray-500 mb-2" strokeWidth={2.75} />
                     <h4 className="text-sm font-medium text-gray-900 mb-1">Add Metrics</h4>
@@ -4992,13 +4991,18 @@ export default function DashboardPage() {
                 </div>
               </div>
 
+              {/* Rewards and Programs Title */}
+              <div className="mb-6">
+                <h2 className="text-lg font-medium text-gray-900">Rewards and Programs</h2>
+              </div>
+
               {/* Activity and Analytics Section for Loyalty */}
           <div className={cn(
             "grid grid-cols-1 gap-6 overflow-hidden transition-all duration-500 ease-in-out",
             isAdvancedActivity ? "md:grid-cols-[2fr_1fr]" : "md:grid-cols-[1.2fr_0.9fr]"
           )}>
             {/* Recent Activity */}
-                <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
                       <h3 className="text-base font-medium text-gray-900">Recent Activity</h3>
@@ -5014,9 +5018,9 @@ export default function DashboardPage() {
                         >
                           {isAdvancedActivity ? 'Simple' : 'Advanced'}
                         </button>
-                        <Link href="/store/activity" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors">
+                        <Link href="/store/activity" className="group inline-flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-blue-600 transition-colors duration-200">
                       View all
-                      <ChevronRight className="h-3 w-3" strokeWidth={2.75} />
+                      <ChevronRight className="h-3 w-3 transition-transform duration-200 group-hover:translate-x-0.5" strokeWidth={2.75} />
                     </Link>
                 </div>
               </div>
@@ -5141,13 +5145,13 @@ export default function DashboardPage() {
             </div>
 
             {/* Popular Rewards */}
-                <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
                       <h3 className="text-base font-medium text-gray-900">Popular Rewards</h3>
-                  <Link href="/store/rewards" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors">
+                  <Link href="/store/rewards" className="group inline-flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-blue-600 transition-colors duration-200">
                       View all
-                      <ChevronRight className="h-3 w-3" strokeWidth={2.75} />
+                      <ChevronRight className="h-3 w-3 transition-transform duration-200 group-hover:translate-x-0.5" strokeWidth={2.75} />
                     </Link>
                 </div>
               </div>
@@ -5200,13 +5204,13 @@ export default function DashboardPage() {
             </div>
 
                 {/* Agent Inbox */}
-                <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex items-center justify-between">
                       <h3 className="text-base font-medium text-gray-900">Agent Inbox</h3>
-                      <Link href="/email" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors">
+                      <Link href="/email" className="group inline-flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-blue-600 transition-colors duration-200">
                         View all
-                        <ChevronRight className="h-3 w-3" strokeWidth={2.75} />
+                        <ChevronRight className="h-3 w-3 transition-transform duration-200 group-hover:translate-x-0.5" strokeWidth={2.75} />
                       </Link>
                     </div>
                   </div>
@@ -5303,7 +5307,7 @@ export default function DashboardPage() {
               <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Live Programs */}
                 {recurringPrograms.hasAny && (
-                  <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                       <div className="flex items-center justify-between">
                         <h3 className="text-base font-medium text-gray-900">Live Programs</h3>
@@ -5892,7 +5896,7 @@ export default function DashboardPage() {
                 )}
                 
                 {/* Live Rewards */}
-                <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex items-center justify-between">
                       <h3 className="text-base font-medium text-gray-900">Live Rewards</h3>
@@ -6083,13 +6087,13 @@ export default function DashboardPage() {
 
               {/* All Customers Section */}
               <div className="mt-8">
-                <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-base font-medium text-gray-900">All Customers</h3>
-                      <Link href="/customers" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors">
+                      <Link href="/customers" className="group inline-flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-blue-600 transition-colors duration-200">
                         View all
-                        <ChevronRight className="h-3 w-3" strokeWidth={2.75} />
+                        <ChevronRight className="h-3 w-3 transition-transform duration-200 group-hover:translate-x-0.5" strokeWidth={2.75} />
                       </Link>
                     </div>
                     <div className="flex items-center gap-3">
@@ -6298,9 +6302,9 @@ export default function DashboardPage() {
 
               {/* Customer Reward Analytics Section */}
               <div className="mt-8">
-                <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between">
                       <h3 className="text-base font-medium text-gray-900">Customer Engagement Analysis</h3>
                       <div className="flex items-center gap-2">
                         <TooltipProvider>
@@ -6315,7 +6319,6 @@ export default function DashboardPage() {
                         </TooltipProvider>
                       </div>
                     </div>
-                    <p className="text-xs text-gray-600">Customers with fewer available rewards are ranked first as they may be less likely to engage</p>
                   </div>
                   
                   <div className="overflow-x-auto">
@@ -6551,7 +6554,7 @@ export default function DashboardPage() {
                     {!customerRewardAnalyticsLoading && customerRewardAnalytics.length > 15 && (
                       <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
                         <p className="text-xs text-gray-500 text-center">
-                          Showing top 15 customers. <Link href="/customers" className="text-blue-600 hover:text-blue-800">View all customers</Link>
+                          Showing top 15 customers. <Link href="/customers" className="text-gray-500 hover:text-blue-600 font-medium transition-colors duration-200">View all customers</Link>
                         </p>
                       </div>
                     )}
@@ -6562,52 +6565,54 @@ export default function DashboardPage() {
             {/* Transactions & Redemptions Chart */}
             <div className="mb-8 mt-8">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="py-0 rounded-md">
-                  <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">
-                    <div className="flex flex-1 flex-col justify-center gap-1 px-6 pt-4 pb-3 sm:!py-0">
-                      <CardTitle>Transactions & Redemptions</CardTitle>
-                      <CardDescription>
-                        {chartPeriod === 'daily' ? 'Daily' : chartPeriod === 'weekly' ? 'Weekly' : 'Monthly'} activity over the last 90 days
-                      </CardDescription>
-                      <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit mt-2">
-                        {["daily", "weekly", "monthly"].map((period) => (
-                          <button
-                            key={period}
-                            className={cn(
-                              "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
-                              chartPeriod === period
-                                ? "text-gray-800 bg-white shadow-sm"
-                                : "text-gray-600 hover:bg-gray-200/70"
-                            )}
-                            onClick={() => setChartPeriod(period as 'daily' | 'weekly' | 'monthly')}
-                          >
-                            {period.charAt(0).toUpperCase() + period.slice(1)}
-                          </button>
-                        ))}
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-base font-medium text-gray-900">Transactions & Redemptions</h3>
+                      <div className="flex bg-white border border-gray-200 rounded-md overflow-hidden">
+                        {["transactions", "redemptions"].map((key) => {
+                          const chart = key as keyof typeof chartTotals
+                          return (
+                            <button
+                              key={chart}
+                              data-active={activeTransactionChart === chart}
+                              className={cn(
+                                "relative flex flex-col justify-center items-center gap-0.5 px-4 py-2 text-center border-r border-gray-200 last:border-r-0 hover:bg-gray-50 transition-colors text-xs",
+                                activeTransactionChart === chart
+                                  ? "bg-blue-50 text-blue-600"
+                                  : "text-gray-600"
+                              )}
+                              onClick={() => setActiveTransactionChart(chart)}
+                            >
+                              <span className="text-xs capitalize font-medium">
+                                {chart}
+                              </span>
+                              <span className="text-sm leading-none font-bold">
+                                {chartTotals[chart].toLocaleString()}
+                              </span>
+                            </button>
+                          )
+                        })}
                       </div>
                     </div>
-                    <div className="flex">
-                      {["transactions", "redemptions"].map((key) => {
-                        const chart = key as keyof typeof chartTotals
-                        return (
-                          <button
-                            key={chart}
-                            data-active={activeTransactionChart === chart}
-                            className="data-[active=true]:bg-muted/50 relative z-30 flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6"
-                            onClick={() => setActiveTransactionChart(chart)}
-                          >
-                            <span className="text-muted-foreground text-xs capitalize">
-                              {chart}
-                            </span>
-                            <span className="text-lg leading-none font-bold sm:text-3xl">
-                              {chartTotals[chart].toLocaleString()}
-                            </span>
-                          </button>
-                        )
-                      })}
+                    <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+                      {["daily", "weekly", "monthly"].map((period) => (
+                        <button
+                          key={period}
+                          className={cn(
+                            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                            chartPeriod === period
+                              ? "text-gray-800 bg-white shadow-sm"
+                              : "text-gray-600 hover:bg-gray-200/70"
+                          )}
+                          onClick={() => setChartPeriod(period as 'daily' | 'weekly' | 'monthly')}
+                        >
+                          {period.charAt(0).toUpperCase() + period.slice(1)}
+                        </button>
+                      ))}
                     </div>
-                  </CardHeader>
-                  <CardContent className="px-2 sm:p-6">
+                  </div>
+                  <div className="px-2 sm:p-6">
                     {transactionRedemptionLoading ? (
                       <div className="aspect-auto h-[250px] w-full flex items-center justify-center">
                         <div className="h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></div>
@@ -6706,78 +6711,8 @@ export default function DashboardPage() {
                         </BarChart>
                       </ResponsiveContainer>
                     )}
-                  </CardContent>
-                </Card>
-                
-                {/* Sales by Weekday Chart */}
-                <Card className="rounded-md">
-                  <CardHeader>
-                    <CardTitle>Sales by Weekday</CardTitle>
-                    <CardDescription>Total sales over the last 90 days</CardDescription>
-                    <div className="text-xs text-muted-foreground">
-                      Total: ${totalWeekdaySales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="px-2 sm:p-6">
-                    {weekdaySalesLoading ? (
-                      <div className="aspect-auto h-[250px] w-full flex items-center justify-center">
-                        <div className="h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></div>
-                      </div>
-                    ) : (
-                      <ResponsiveContainer width="100%" height={250}>
-                        <BarChart
-                          data={weekdaySalesData}
-                          layout="vertical"
-                          margin={{
-                            left: 0,
-                            right: 12,
-                            top: 12,
-                            bottom: 12,
-                          }}
-                        >
-                          <XAxis 
-                            type="number" 
-                            hide 
-                          />
-                          <YAxis
-                            dataKey="weekday"
-                            type="category"
-                            tickLine={false}
-                            tickMargin={10}
-                            axisLine={false}
-                            tick={{ fontSize: 11 }}
-                          />
-                          <Tooltip
-                            content={({ active, payload, label }) => {
-                              if (active && payload && payload.length) {
-                                const data = payload[0].payload
-                                return (
-                                  <div className="bg-white p-3 border border-gray-200 rounded-md shadow-lg">
-                                    <p className="text-sm font-medium">
-                                      {label}
-                                    </p>
-                                    <p className="text-sm text-blue-600">
-                                      Sales: ${data.sales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                      {data.count} transactions
-                                    </p>
-                                  </div>
-                                )
-                              }
-                              return null
-                            }}
-                          />
-                          <Bar 
-                            dataKey="sales" 
-                            layout="vertical" 
-                            radius={5}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
                 </div>
               </div>
             </>
@@ -6934,7 +6869,7 @@ export default function DashboardPage() {
 
                     // Add the "Add Integrations" box
                     const addIntegrationsBox = (
-                      <div key="add-integrations" className="group relative bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:border-gray-300 hover:shadow-sm">
+                      <div key="add-integrations" className="group relative bg-gray-50 border border-gray-200 rounded-xl p-4 transition-all hover:border-gray-300 hover:shadow-sm">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-2">
                             <PlusCircle className="h-5 w-5 text-gray-500" strokeWidth={2.75} />
@@ -7856,7 +7791,7 @@ export default function DashboardPage() {
                   .map(([metricId, metric]) => (
                   <button
                     key={metricId}
-                    className="group relative bg-gray-50 border border-gray-200 rounded-lg p-3 transition-all hover:border-gray-300 hover:shadow-sm text-left w-full"
+                    className="group relative bg-gray-50 border border-gray-200 rounded-xl p-3 transition-all hover:border-gray-300 hover:shadow-sm text-left w-full"
                     onClick={() => handleAddMetric(metricId)}
                   >
                     <div className="flex items-start justify-between mb-2">

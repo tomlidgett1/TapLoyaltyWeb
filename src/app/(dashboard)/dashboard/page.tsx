@@ -151,6 +151,7 @@ import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 import { TapAgentSheet } from "@/components/tap-agent-sheet"
 import { DemoIPhone } from "@/components/demo-iphone"
+import { motion, AnimatePresence } from "framer-motion"
 
 // Add custom animation for the popup and tab transitions
 const customAnimationStyles = `
@@ -948,6 +949,7 @@ export default function DashboardPage() {
   const [allCustomers, setAllCustomers] = useState<any[]>([])
   const [customersLoading, setCustomersLoading] = useState(false)
   const [customerSearchTerm, setCustomerSearchTerm] = useState('')
+  const [isCustomerSearchVisible, setIsCustomerSearchVisible] = useState(false)
   const [customerSortField, setCustomerSortField] = useState<'fullName' | 'pointsBalance' | 'cashback' | 'lastTransactionDate' | 'firstTransactionDate' | 'totalLifetimeSpend' | 'lifetimeTransactionCount'>('fullName')
   const [customerSortDirection, setCustomerSortDirection] = useState<'asc' | 'desc'>('asc')
   const [hasIntroductoryReward, setHasIntroductoryReward] = useState(false)
@@ -6089,26 +6091,55 @@ export default function DashboardPage() {
               <div className="mt-8">
                 <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-base font-medium text-gray-900">All Customers</h3>
-                      <Link href="/customers" className="group inline-flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-blue-600 transition-colors duration-200">
-                        View all
-                        <ChevronRight className="h-3 w-3 transition-transform duration-200 group-hover:translate-x-0.5" strokeWidth={2.75} />
-                      </Link>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="relative flex-1 max-w-sm">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                        <input
-                          type="text"
-                          placeholder="Search customers..."
-                          value={customerSearchTerm}
-                          onChange={(e) => setCustomerSearchTerm(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-baseline gap-2">
+                        <h3 className="text-base font-medium text-gray-900">All Customers</h3>
+                        <div className="text-xs text-gray-500">
+                          {getFilteredAndSortedCustomers().length} of {allCustomers.length} customers
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-500">
-                        {getFilteredAndSortedCustomers().length} of {allCustomers.length} customers
+                      <div className="flex items-center gap-3">
+                        <AnimatePresence>
+                          {isCustomerSearchVisible && (
+                            <motion.div
+                              initial={{ width: 0, opacity: 0 }}
+                              animate={{ width: "auto", opacity: 1 }}
+                              exit={{ width: 0, opacity: 0 }}
+                              transition={{ 
+                                duration: 0.4,
+                                ease: [0.04, 0.62, 0.23, 0.98]
+                              }}
+                              className="overflow-hidden"
+                            >
+                              <div className="relative w-64">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                <input
+                                  type="text"
+                                  placeholder="Search customers..."
+                                  value={customerSearchTerm}
+                                  onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                                  className="w-full h-8 pl-10 pr-4 text-sm border border-gray-200 rounded-md focus:outline-none focus:border-gray-300"
+                                  autoFocus
+                                />
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                        <button
+                          onClick={() => {
+                            setIsCustomerSearchVisible(!isCustomerSearchVisible)
+                            if (isCustomerSearchVisible) {
+                              setCustomerSearchTerm('')
+                            }
+                          }}
+                          className="p-2 text-gray-400 hover:text-gray-600 transition-colors duration-200 rounded-md hover:bg-gray-100"
+                        >
+                          <Search className="h-4 w-4" />
+                        </button>
+                        <Link href="/customers" className="group inline-flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-blue-600 transition-colors duration-200">
+                          View all
+                          <ChevronRight className="h-3 w-3 transition-transform duration-200 group-hover:translate-x-0.5" strokeWidth={2.75} />
+                        </Link>
                       </div>
                     </div>
                   </div>

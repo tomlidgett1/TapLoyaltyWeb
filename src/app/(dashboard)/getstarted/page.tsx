@@ -589,17 +589,6 @@ export default function GetStartedPage() {
       >
         <div className="max-w-6xl mx-auto px-6 py-8">
           
-          {/* Create Agent Button */}
-          <div className="mb-6 flex justify-end">
-            <Button
-              onClick={() => setIsCreateAgentModalOpen(true)}
-              className="bg-[#007aff] hover:bg-[#339fff] text-white rounded-md px-4 py-2 text-sm font-medium flex items-center gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              Create Agent
-            </Button>
-          </div>
-
           {/* Two Column Layout with Separator */}
           <div className="relative">
             {/* Vertical Separator Line - starts at first card level */}

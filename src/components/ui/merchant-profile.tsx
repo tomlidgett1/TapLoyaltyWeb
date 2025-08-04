@@ -69,7 +69,7 @@ export function MerchantProfile() {
           <div className="flex items-center gap-2 w-full">
             <Avatar className="h-6 w-6">
               <AvatarImage src={logoUrl} alt={merchantName} />
-              <AvatarFallback className="text-xs">
+              <AvatarFallback className="text-xs bg-[#007AFF] text-white">
                 {merchantName ? getInitials(merchantName) : "ME"}
               </AvatarFallback>
             </Avatar>

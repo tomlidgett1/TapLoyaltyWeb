@@ -1695,6 +1695,7 @@ export default function EmailPage() {
   const [connectedAccounts, setConnectedAccounts] = useState<ConnectedAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [gmailProfileData, setGmailProfileData] = useState<any>(null)
+  const [previousGmailConnected, setPreviousGmailConnected] = useState<boolean | null>(null)
   const [fetchedEmails, setFetchedEmails] = useState<any[]>([])
   const [gmailEmailAddress, setGmailEmailAddress] = useState<string | null>(null)
   const [emailsLoading, setEmailsLoading] = useState(false)
@@ -2417,8 +2418,38 @@ ${content}`;
   }
 
   // Fetch sent emails from Firestore
+  // Check if Gmail integration is properly connected
+  const isGmailConnected = async (): Promise<boolean> => {
+    if (!user?.uid) return false
+
+    try {
+      const gmailIntegrationDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'gmail'))
+      
+      if (!gmailIntegrationDoc.exists()) {
+        console.log('Gmail integration document does not exist')
+        return false
+      }
+
+      const gmailData = gmailIntegrationDoc.data()
+      const isConnected = gmailData.connected === true
+      
+      console.log('Gmail integration check:', { exists: true, connected: isConnected })
+      return isConnected
+    } catch (error) {
+      console.error('Error checking Gmail integration:', error)
+      return false
+    }
+  }
+
   const fetchSentEmails = async () => {
     if (!user?.uid) return []
+
+    // Check if Gmail is properly connected before fetching sent emails
+    const gmailConnected = await isGmailConnected()
+    if (!gmailConnected) {
+      console.log("Gmail not connected, skipping sent emails fetch")
+      return []
+    }
 
     try {
       console.log("Fetching sent emails from Firestore for merchant:", user.uid)
@@ -2489,6 +2520,16 @@ ${content}`;
   // Fetch Gmail threads from the new Firestore structure
   const fetchGmailEmails = async (loadMore: boolean = false) => {
     if (!user?.uid) return
+
+    // Check if Gmail is properly connected before fetching emails
+    const gmailConnected = await isGmailConnected()
+    if (!gmailConnected) {
+      console.log("Gmail not connected, clearing emails and skipping fetch")
+      setFetchedEmails([])
+      setEmailsLoading(false)
+      setLoadingMoreEmails(false)
+      return
+    }
 
     // Prevent multiple simultaneous calls
     if (emailsLoading || (loadMore && loadingMoreEmails)) {
@@ -2807,6 +2848,17 @@ ${content}`;
       return
     }
 
+    // Check if Gmail is properly connected before searching emails
+    const gmailConnected = await isGmailConnected()
+    if (!gmailConnected) {
+      console.log("Gmail not connected, clearing search results")
+      setIsSearchMode(false)
+      setSearchResults([])
+      setIsSearching(false)
+      setLoadingMoreEmails(false)
+      return
+    }
+
     try {
       if (loadMore) {
         setLoadingMoreEmails(true)
@@ -2991,6 +3043,13 @@ ${content}`;
   const syncGmailEmails = async () => {
     if (!user?.uid) return
 
+    // Check if Gmail is properly connected before syncing emails
+    const gmailConnected = await isGmailConnected()
+    if (!gmailConnected) {
+      console.log("Gmail not connected, skipping email sync")
+      return
+    }
+
     try {
       setEmailsLoading(true)
       console.log("Syncing Gmail emails via Firebase function for merchant:", user.uid)
@@ -3081,14 +3140,18 @@ ${content}`;
         
         setConnectedAccounts(accounts)
         
-        // ✅ FETCH EMAILS: Trigger email fetch after accounts are set up
-        if (selectedFolder !== "sent") {
+        // ✅ FETCH EMAILS: Trigger email fetch after accounts are set up, only if Gmail is connected
+        if (selectedFolder !== "sent" && gmailData.connected === true) {
           console.log("🚀 ACCOUNTS READY: Triggering fetchGmailEmails after account setup");
           fetchGmailEmails();
+        } else if (!gmailData.connected) {
+          console.log("Gmail not connected, clearing emails");
+          setFetchedEmails([]);
         }
       } else {
         console.log('No Gmail integration found')
         setConnectedAccounts([])
+        setFetchedEmails([]) // Clear emails when no Gmail integration exists
       }
       
     } catch (error) {
@@ -3246,14 +3309,32 @@ ${content}`;
           if (!selectedAccount) {
             setSelectedAccount(emailAddress)
           }
+          
+          // ✅ AUTO-FETCH: Trigger email fetching only when Gmail connection status changes to true
+          const isCurrentlyConnected = gmailData.connected === true
+          
+          if (isCurrentlyConnected && previousGmailConnected !== true && selectedFolder !== "sent") {
+            console.log("🚀 Gmail connection status changed to connected, auto-fetching emails")
+            fetchGmailEmails()
+          } else if (!isCurrentlyConnected && previousGmailConnected === true) {
+            console.log("Gmail connection status changed to disconnected, clearing emails")
+            setFetchedEmails([])
+          }
+          
+          // Update the previous connection status
+          setPreviousGmailConnected(isCurrentlyConnected)
         } else {
           setConnectedAccounts([])
+          setFetchedEmails([]) // Clear emails when no email address
+          setPreviousGmailConnected(false) // Update previous connection status
         }
               } else {
           console.log('Gmail integration document does not exist')
           setGmailEmailAddress(null)
           setGmailProfileData(null)
           setConnectedAccounts([])
+          setFetchedEmails([]) // Clear emails when no integration document
+          setPreviousGmailConnected(false) // Update previous connection status
           
           // Trigger Gmail integration setup if document doesn't exist
           handleGmailIntegrationTrigger()

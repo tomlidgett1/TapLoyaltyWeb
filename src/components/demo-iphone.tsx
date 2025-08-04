@@ -295,11 +295,11 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
           {/* iPhone 16 Pro */}
           <div className="relative flex items-center justify-center">
             {/* Phone Shadow */}
-            <div className="absolute inset-0 bg-black/30 blur-xl transform translate-y-8 scale-105 rounded-[3.5rem]"></div>
+            <div className="absolute inset-0 bg-black/30 blur-xl transform translate-y-8 scale-105 rounded-[60px]"></div>
             
                          {/* Outer Frame - Black */}
              <div 
-               className="relative bg-[#2F3336] rounded-[3.5rem] p-[5px] shadow-2xl"
+               className="relative bg-[#252932] rounded-[60px] p-[9px] shadow-2xl"
                style={{ 
                  height: '87vh',
                  width: 'calc(90vh * 0.462)', // iPhone aspect ratio (340/736 ≈ 0.462)
@@ -324,10 +324,10 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                <div className="absolute -right-[2px] top-[222px] w-[3px] h-[20px] bg-black rounded-l-md"></div>
 
               {/* Inner Frame */}
-              <div className="h-full w-full bg-black rounded-[3.4rem] p-[2px]">
+              <div className="h-full w-full bg-black rounded-[51px] p-[2px]">
                 
                 {/* Screen */}
-                <div className="h-full w-full bg-white rounded-[3.3rem] overflow-hidden relative flex flex-col">
+                <div className="h-full w-full bg-white rounded-[49px] overflow-hidden relative flex flex-col">
                   
                                      {/* Dynamic Island */}
                    <div className="absolute top-[12px] left-1/2 transform -translate-x-1/2 w-[110px] h-[28px] bg-black rounded-full z-50"></div>
@@ -761,7 +761,7 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                     </div>
 
                                          {/* Bottom Navigation */}
-                     <div className="bg-gray-100 border-t border-gray-200 rounded-b-[3.3rem] overflow-hidden">
+                     <div className="bg-gray-100 border-t border-gray-200 rounded-b-[49px] overflow-hidden">
                        <div className="flex items-center justify-around py-1 px-3">
                          <Button variant="ghost" className="flex-col gap-0 h-auto py-1 text-blue-500">
                            <Home style={{ width: '22px', height: '22px' }} />

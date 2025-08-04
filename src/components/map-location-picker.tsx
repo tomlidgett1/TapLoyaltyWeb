@@ -376,7 +376,7 @@ export function MapLocationPicker({
               setAddress(e.target.value);
               setSearchError(null);
             }}
-            placeholder="Enter your business address (e.g. 123 Main St, Sydney NSW)"
+            placeholder="Enter your business address (e.g. 123 George St, Sydney NSW 2000)"
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();

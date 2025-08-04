@@ -1107,7 +1107,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
         <div className="px-3 pb-2">
           <Link 
             href="/getstarted" 
-            className="block w-full p-2.5 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-colors group"
+            className="block w-full p-2.5 bg-white hover:bg-gray-50 border-2 border-gray-250 rounded-lg transition-colors group"
           >
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -1158,54 +1158,42 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
         <div className="px-3 pb-2">
           <AnimatePresence>
             {notifications.map((notification, index) => (
-                             <motion.div
-                 key={notification.id}
-                 initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                 exit={{ opacity: 0, x: 100, scale: 0.9 }}
-                 transition={{
-                   enter: {
-                     duration: 0.4,
-                     ease: [0.04, 0.62, 0.23, 0.98],
-                     delay: index * 0.1
-                   },
-                   exit: {
-                     duration: 0.3,
-                     ease: [0.4, 0, 1, 1]
-                   }
-                 }}
-                 className="mb-2"
-               >
+              <motion.div
+                key={notification.id}
+                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, x: 100, scale: 0.9 }}
+                transition={{
+                  enter: {
+                    duration: 0.4,
+                    ease: [0.04, 0.62, 0.23, 0.98],
+                    delay: index * 0.1
+                  },
+                  exit: {
+                    duration: 0.3,
+                    ease: [0.4, 0, 1, 1]
+                  }
+                }}
+                className="mb-2"
+              >
                                  <div 
-                   className="bg-blue-500 text-white px-3 py-2.5 rounded-2xl shadow-sm relative overflow-hidden cursor-pointer hover:bg-blue-600 transition-colors"
+                   className="block w-full px-2.5 pt-2.5 pb-1.5 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-colors group cursor-pointer"
                    onClick={() => setSettingsDialogOpen(true)}
                  >
-                   <div className="flex items-center justify-between gap-2">
-                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                       <Camera className="h-3.5 w-3.5 text-blue-100 flex-shrink-0" />
-                       <div className="flex-1 min-w-0">
-                         <p className="text-xs font-medium text-white truncate">
-                           Upload Logo
-                         </p>
-                         <p className="text-xs text-blue-100 opacity-80">
-                           Required
-                         </p>
+                   <div className="space-y-1">
+                     <div className="flex items-center justify-between">
+                       <div className="flex items-center gap-2">
+                         <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                           <Camera className="h-3 w-3 text-white" />
+                         </div>
+                         <p className="text-xs font-medium text-gray-900">Upload Logo</p>
+                       </div>
+                       <div className="flex items-center gap-2">
+                         <ChevronRight className="h-3 w-3 text-gray-500 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
                        </div>
                      </div>
-                     <div className="flex items-center gap-1 flex-shrink-0">
-                       {notification.dismissible && (
-                         <Button
-                           size="sm"
-                           variant="ghost"
-                           className="h-5 w-5 p-0 text-blue-100 hover:text-white hover:bg-white/20 rounded-sm transition-colors"
-                           onClick={(e) => {
-                             e.stopPropagation();
-                             dismissNotification(notification.id);
-                           }}
-                         >
-                           <X className="h-2.5 w-2.5" />
-                         </Button>
-                       )}
+                     <div className="pl-7">
+                       <p className="text-[10px] text-gray-600 font-medium">Required</p>
                      </div>
                    </div>
                  </div>

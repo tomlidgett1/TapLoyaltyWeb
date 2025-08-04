@@ -219,7 +219,7 @@ export function MerchantSidebar() {
                           src={merchant?.logoUrl || merchant?.avatar || '/avatars/user.png'} 
                           alt={merchant?.merchantName || 'Merchant'} 
                         />
-                        <AvatarFallback className="rounded-lg bg-gray-50 text-gray-800">
+                        <AvatarFallback className="rounded-lg bg-[#007AFF] text-white">
                           {merchant?.merchantName?.slice(0, 2).toUpperCase() || 'ML'}
                         </AvatarFallback>
                       </Avatar>
@@ -247,7 +247,7 @@ export function MerchantSidebar() {
                             src={merchant?.logoUrl || merchant?.avatar || '/avatars/user.png'} 
                             alt={merchant?.merchantName || 'Merchant'} 
                           />
-                          <AvatarFallback className="rounded-lg">
+                          <AvatarFallback className="rounded-lg bg-[#007AFF] text-white">
                             {merchant?.merchantName?.slice(0, 2).toUpperCase() || 'ML'}
                           </AvatarFallback>
                         </Avatar>

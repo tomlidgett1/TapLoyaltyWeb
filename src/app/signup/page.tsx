@@ -551,8 +551,8 @@ export default function SignupPage() {
         description: "Welcome to Tap. You can now start setting up your loyalty program.",
       })
       
-      // Redirect to dashboard
-      router.push('/dashboard')
+      // Redirect to getstarted page for new users
+      router.push('/getstarted')
       
     } catch (error: any) {
       console.error("Error creating account:", error)
@@ -793,7 +793,7 @@ export default function SignupPage() {
             </div>
             
             <MapLocationPicker
-              initialAddress={formattedAddress || `${street}, ${suburb}, ${state}, ${postcode}, Australia`}
+              initialAddress={formattedAddress || (street && suburb ? `${street}, ${suburb}, ${state}, ${postcode}, Australia` : "")}
               initialLatitude={latitude}
               initialLongitude={longitude}
               onLocationChange={(locationData) => {

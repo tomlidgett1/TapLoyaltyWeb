@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
+import { motion } from "framer-motion"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { collection, query, getDocs, orderBy, limit, where, doc, getDoc, Timestamp, serverTimestamp, startAfter } from "firebase/firestore"
@@ -55,6 +56,7 @@ import { BannerPreview, BannerStyle, BannerVisibility } from "@/components/banne
 import { BannerScheduler } from "@/components/banner-scheduler"
 import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
 import { CreateManualProgramDialog } from "@/components/create-manual-program-dialog"
+import { CreateRewardPopup } from "@/components/create-reward-popup"
 import { cn } from "@/lib/utils"
 import { updateDoc, deleteDoc } from "firebase/firestore"
 
@@ -2174,6 +2176,10 @@ const RewardsTabContent = () => {
   const [rewardsData, setRewardsData] = useState<Reward[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [rewardCategory, setRewardCategory] = useState<"all" | "individual" | "customer-specific" | "programs" | "agent" | "customer-search">("all")
+  
+  // Rewards subtab refs for measuring widths
+  const rewardTabRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({})
+  const [rewardTabDimensions, setRewardTabDimensions] = useState<{ [key: string]: { width: number; left: number } }>({})
   const [sortField, setSortField] = useState<"rewardName" | "type" | "programType" | "pointsCost" | "redemptionCount" | "impressions" | "createdAt" | "lastRedeemed" | "isActive">("rewardName")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   const [loadingRewards, setLoadingRewards] = useState(true)
@@ -2189,6 +2195,7 @@ const RewardsTabContent = () => {
   const [lastDoc, setLastDoc] = useState<any>(null)
   const [hasMoreRewards, setHasMoreRewards] = useState(true)
   const [allRewardsLoaded, setAllRewardsLoaded] = useState(false)
+  const [showCreateRewardPopup, setShowCreateRewardPopup] = useState(false)
 
     // Function to get customer name by ID from top-level customers collection
   const getCustomerName = async (customerId: string): Promise<string> => {
@@ -2348,6 +2355,38 @@ const RewardsTabContent = () => {
     
     fetchRewardsData()
   }, [user])
+
+  // Measure rewards subtab dimensions for sliding animation
+  useEffect(() => {
+    const measureRewardTabs = () => {
+      const tabs = ['all', 'individual', 'customer-specific', 'programs', 'agent', 'customer-search']
+      const newDimensions: { [key: string]: { width: number; left: number } } = {}
+      
+      tabs.forEach(tab => {
+        const element = rewardTabRefs.current[tab]
+        if (element) {
+          const rect = element.getBoundingClientRect()
+          const containerRect = element.parentElement?.getBoundingClientRect()
+          newDimensions[tab] = {
+            width: rect.width,
+            left: containerRect ? rect.left - containerRect.left : 0
+          }
+        }
+      })
+      
+      setRewardTabDimensions(newDimensions)
+    }
+    
+    // Initial measurement (with timeout to ensure DOM is ready)
+    const timer = setTimeout(measureRewardTabs, 100)
+    
+    // Re-measure on window resize
+    window.addEventListener('resize', measureRewardTabs)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('resize', measureRewardTabs)
+    }
+  }, [])
 
   // Helper functions
   const getRewardTypeIcon = (type: string) => {
@@ -2942,62 +2981,85 @@ const RewardsTabContent = () => {
     <div>
       <Tabs defaultValue="all" onValueChange={(value) => setRewardCategory(value as typeof rewardCategory)}>
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+          <div className="relative flex items-center bg-gray-100 p-0.5 pr-[5px] rounded-md w-fit">
+            {/* Animated white background */}
+            <motion.div
+              className="absolute inset-y-0.5 bg-white rounded-md shadow-sm"
+              initial={false}
+              animate={{
+                x: rewardTabDimensions[rewardCategory]?.left || 0,
+                width: rewardTabDimensions[rewardCategory]?.width || 80
+              }}
+              transition={{
+                type: "spring",
+                stiffness: 400,
+                damping: 30
+              }}
+              style={{
+                display: Object.keys(rewardTabDimensions).length === 0 ? 'none' : 'block'
+              }}
+            />
+            
             <button
+              ref={(el) => rewardTabRefs.current['all'] = el}
               onClick={() => setRewardCategory("all")}
               className={cn(
-                "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                "relative z-10 flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
                 rewardCategory === "all"
-                  ? "text-gray-800 bg-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-200/70"
+                  ? "text-gray-800"
+                  : "text-gray-600 hover:text-gray-700"
               )}
             >
               <Package className="h-3 w-3" />
               All Rewards
             </button>
             <button
+              ref={(el) => rewardTabRefs.current['individual'] = el}
               onClick={() => setRewardCategory("individual")}
               className={cn(
-                "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                "relative z-10 flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
                 rewardCategory === "individual"
-                  ? "text-gray-800 bg-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-200/70"
+                  ? "text-gray-800"
+                  : "text-gray-600 hover:text-gray-700"
               )}
             >
               <Gift className="h-3 w-3" />
               Individual
             </button>
             <button
+              ref={(el) => rewardTabRefs.current['customer-specific'] = el}
               onClick={() => setRewardCategory("customer-specific")}
               className={cn(
-                "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                "relative z-10 flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
                 rewardCategory === "customer-specific"
-                  ? "text-gray-800 bg-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-200/70"
+                  ? "text-gray-800"
+                  : "text-gray-600 hover:text-gray-700"
               )}
             >
               <Users className="h-3 w-3" />
               Customer-Specific
             </button>
             <button
+              ref={(el) => rewardTabRefs.current['programs'] = el}
               onClick={() => setRewardCategory("programs")}
               className={cn(
-                "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                "relative z-10 flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
                 rewardCategory === "programs"
-                  ? "text-gray-800 bg-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-200/70"
+                  ? "text-gray-800"
+                  : "text-gray-600 hover:text-gray-700"
               )}
             >
               <Award className="h-3 w-3" />
               Programs
             </button>
             <button
+              ref={(el) => rewardTabRefs.current['agent'] = el}
               onClick={() => setRewardCategory("agent")}
               className={cn(
-                "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                "relative z-10 flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
                 rewardCategory === "agent"
-                  ? "text-gray-800 bg-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-200/70"
+                  ? "text-gray-800"
+                  : "text-gray-600 hover:text-gray-700"
               )}
             >
               <Sparkles className="h-3 w-3 text-blue-500" />
@@ -3011,12 +3073,13 @@ const RewardsTabContent = () => {
             
             {/* Search by Customer Button */}
             <button
+              ref={(el) => rewardTabRefs.current['customer-search'] = el}
               onClick={() => setRewardCategory("customer-search")}
               className={cn(
-                "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                "relative z-10 flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
                 rewardCategory === "customer-search"
-                  ? "text-gray-800 bg-gray-200"
-                  : "text-gray-600 hover:bg-gray-200/70"
+                  ? "text-gray-800"
+                  : "text-gray-600 hover:text-gray-700"
               )}
             >
               <Search className="h-3 w-3" />
@@ -3233,8 +3296,8 @@ const RewardsTabContent = () => {
                           </p>
                           {!searchQuery && (
                             <Button 
-                              className="mt-6 h-10 gap-2 rounded-md bg-blue-600 hover:bg-blue-700"
-                              onClick={() => router.push('/create')}
+                              className="mt-6 h-10 gap-2 rounded-md bg-[#007AFF] hover:bg-[#0056b3]"
+                              onClick={() => setShowCreateRewardPopup(true)}
                             >
                               <Plus className="h-4 w-4" />
                               Create Reward
@@ -3652,6 +3715,12 @@ const RewardsTabContent = () => {
           rewardId={selectedRewardId}
         />
       )}
+
+      {/* Create Reward Popup */}
+      <CreateRewardPopup
+        open={showCreateRewardPopup}
+        onOpenChange={setShowCreateRewardPopup}
+      />
     </div>
   );
 };
@@ -4969,6 +5038,10 @@ const CustomersTabContent = ({ onCustomerClick }: { onCustomerClick: (customer: 
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [cohort, setCohort] = useState<'all' | 'active' | 'engaged' | 'at-risk' | 'dormant' | 'new' | 'loyal' | 'vip'>('all')
   const [customerView, setCustomerView] = useState<'standard' | 'advanced'>('standard')
+  
+  // Customer subtab refs for measuring widths
+  const customerTabRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({})
+  const [customerTabDimensions, setCustomerTabDimensions] = useState<{ [key: string]: { width: number; left: number } }>({})
 
   // Filter and sort customers
   const filteredCustomers = useMemo(() => {
@@ -5121,65 +5194,125 @@ const CustomersTabContent = ({ onCustomerClick }: { onCustomerClick: (customer: 
     }
   }
 
+  // Measure customer subtab dimensions for sliding animation
+  useEffect(() => {
+    const measureCustomerTabs = () => {
+      const tabs = ['all', 'active', 'at-risk', 'dormant', 'advanced']
+      const newDimensions: { [key: string]: { width: number; left: number } } = {}
+      
+      tabs.forEach(tab => {
+        const element = customerTabRefs.current[tab]
+        if (element) {
+          const rect = element.getBoundingClientRect()
+          const containerRect = element.parentElement?.getBoundingClientRect()
+          newDimensions[tab] = {
+            width: rect.width,
+            left: containerRect ? rect.left - containerRect.left : 0
+          }
+        }
+      })
+      
+      setCustomerTabDimensions(newDimensions)
+    }
+    
+    // Initial measurement (with timeout to ensure DOM is ready)
+    const timer = setTimeout(measureCustomerTabs, 100)
+    
+    // Re-measure on window resize
+    window.addEventListener('resize', measureCustomerTabs)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('resize', measureCustomerTabs)
+    }
+  }, [])
+
+  // Helper function to get active tab key
+  const getActiveTab = () => {
+    if (customerView === 'advanced') return 'advanced'
+    return cohort
+  }
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-        <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+        <div className="relative flex items-center bg-gray-100 p-0.5 pr-[5px] rounded-md w-fit">
+          {/* Animated white background */}
+          <motion.div
+            className="absolute inset-y-0.5 bg-white rounded-md shadow-sm"
+            initial={false}
+            animate={{
+              x: customerTabDimensions[getActiveTab()]?.left || 0,
+              width: customerTabDimensions[getActiveTab()]?.width || 80
+            }}
+            transition={{
+              type: "spring",
+              stiffness: 400,
+              damping: 30
+            }}
+            style={{
+              display: Object.keys(customerTabDimensions).length === 0 ? 'none' : 'block'
+            }}
+          />
+          
           <button
+            ref={(el) => customerTabRefs.current['all'] = el}
             onClick={() => {
               setCohort("all")
               setCustomerView('standard')
             }}
             className={cn(
-              "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+              "relative z-10 flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
               cohort === "all" && customerView === "standard"
-                ? "text-gray-800 bg-white shadow-sm"
-                : "text-gray-600 hover:bg-gray-200/70"
+                ? "text-gray-800"
+                : "text-gray-600 hover:text-gray-700"
             )}
           >
             <Users className="h-3 w-3" />
             All Customers
           </button>
           <button
+            ref={(el) => customerTabRefs.current['active'] = el}
             onClick={() => {
               setCohort("active")
               setCustomerView('standard')
             }}
             className={cn(
-              "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+              "relative z-10 flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
               cohort === "active" && customerView === "standard"
-                ? "text-gray-800 bg-white shadow-sm"
-                : "text-gray-600 hover:bg-gray-200/70"
+                ? "text-gray-800"
+                : "text-gray-600 hover:text-gray-700"
             )}
           >
             <CheckCircle className="h-3 w-3" />
             Active
           </button>
           <button
+            ref={(el) => customerTabRefs.current['at-risk'] = el}
             onClick={() => {
               setCohort("at-risk")
               setCustomerView('standard')
             }}
             className={cn(
-              "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+              "relative z-10 flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
               cohort === "at-risk" && customerView === "standard"
-                ? "text-gray-800 bg-white shadow-sm"
-                : "text-gray-600 hover:bg-gray-200/70"
+                ? "text-gray-800"
+                : "text-gray-600 hover:text-gray-700"
             )}
           >
             <Clock className="h-3 w-3" />
             At Risk
           </button>
           <button
+            ref={(el) => customerTabRefs.current['dormant'] = el}
             onClick={() => {
               setCohort("dormant")
               setCustomerView('standard')
             }}
             className={cn(
-              "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+              "relative z-10 flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
               cohort === "dormant" && customerView === "standard"
-                ? "text-gray-800 bg-white shadow-sm"
-                : "text-gray-600 hover:bg-gray-200/70"
+                ? "text-gray-800"
+                : "text-gray-600 hover:text-gray-700"
             )}
           >
             <XCircle className="h-3 w-3" />
@@ -5189,12 +5322,13 @@ const CustomersTabContent = ({ onCustomerClick }: { onCustomerClick: (customer: 
           <div className="h-4 w-px bg-gray-300 mx-1"></div>
           
           <button
+            ref={(el) => customerTabRefs.current['advanced'] = el}
             onClick={() => setCustomerView('advanced')}
             className={cn(
-              "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+              "relative z-10 flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
               customerView === "advanced"
-                ? "text-gray-800 bg-white shadow-sm"
-                : "text-gray-600 hover:bg-gray-200/70"
+                ? "text-gray-800"
+                : "text-gray-600 hover:text-gray-700"
             )}
           >
             <BarChart3 className="h-3 w-3" />
@@ -5602,6 +5736,10 @@ const BannersTabContent = () => {
   const [loading, setLoading] = useState(true)
   const [bannerToDelete, setBannerToDelete] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState("all")
+  
+  // Banner subtab refs for measuring widths
+  const bannerTabRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({})
+  const [bannerTabDimensions, setBannerTabDimensions] = useState<{ [key: string]: { width: number; left: number } }>({})
 
   // Fetch banners from Firestore
   useEffect(() => {
@@ -5637,6 +5775,38 @@ const BannersTabContent = () => {
     
     fetchBanners()
   }, [user])
+
+  // Measure banner subtab dimensions for sliding animation
+  useEffect(() => {
+    const measureBannerTabs = () => {
+      const tabs = ['all', 'active', 'inactive']
+      const newDimensions: { [key: string]: { width: number; left: number } } = {}
+      
+      tabs.forEach(tab => {
+        const element = bannerTabRefs.current[tab]
+        if (element) {
+          const rect = element.getBoundingClientRect()
+          const containerRect = element.parentElement?.getBoundingClientRect()
+          newDimensions[tab] = {
+            width: rect.width,
+            left: containerRect ? rect.left - containerRect.left : 0
+          }
+        }
+      })
+      
+      setBannerTabDimensions(newDimensions)
+    }
+    
+    // Initial measurement (with timeout to ensure DOM is ready)
+    const timer = setTimeout(measureBannerTabs, 100)
+    
+    // Re-measure on window resize
+    window.addEventListener('resize', measureBannerTabs)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('resize', measureBannerTabs)
+    }
+  }, [])
 
   // Filtering function
   const filteredBanners = banners.filter(banner => {
@@ -5816,13 +5986,32 @@ const BannersTabContent = () => {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center">
-          <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+          <div className="relative flex items-center bg-gray-100 p-0.5 pr-[5px] rounded-md w-fit">
+            {/* Animated white background */}
+            <motion.div
+              className="absolute inset-y-0.5 bg-white rounded-md shadow-sm"
+              initial={false}
+              animate={{
+                x: bannerTabDimensions[activeTab]?.left || 0,
+                width: bannerTabDimensions[activeTab]?.width || 80
+              }}
+              transition={{
+                type: "spring",
+                stiffness: 400,
+                damping: 30
+              }}
+              style={{
+                display: Object.keys(bannerTabDimensions).length === 0 ? 'none' : 'block'
+              }}
+            />
+            
             <button
+              ref={(el) => bannerTabRefs.current['all'] = el}
               className={cn(
-                "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                "relative z-10 flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
                 activeTab === "all"
-                  ? "text-gray-800 bg-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-200/70"
+                  ? "text-gray-800"
+                  : "text-gray-600 hover:text-gray-700"
               )}
               onClick={() => setActiveTab("all")}
             >
@@ -5830,11 +6019,12 @@ const BannersTabContent = () => {
               All Banners
             </button>
             <button
+              ref={(el) => bannerTabRefs.current['active'] = el}
               className={cn(
-                "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                "relative z-10 flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
                 activeTab === "active"
-                  ? "text-gray-800 bg-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-200/70"
+                  ? "text-gray-800"
+                  : "text-gray-600 hover:text-gray-700"
               )}
               onClick={() => setActiveTab("active")}
             >
@@ -5842,11 +6032,12 @@ const BannersTabContent = () => {
               Active
             </button>
             <button
+              ref={(el) => bannerTabRefs.current['inactive'] = el}
               className={cn(
-                "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+                "relative z-10 flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
                 activeTab === "inactive"
-                  ? "text-gray-800 bg-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-200/70"
+                  ? "text-gray-800"
+                  : "text-gray-600 hover:text-gray-700"
               )}
               onClick={() => setActiveTab("inactive")}
             >
@@ -7263,6 +7454,10 @@ export default function StoreOverviewPage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("rewards")
   
+  // Tab refs for measuring widths
+  const tabRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({})
+  const [tabDimensions, setTabDimensions] = useState<{ [key: string]: { width: number; left: number } }>({})
+  
   // State for different data sections
   const [rewards, setRewards] = useState<Reward[]>([])
   const [banners, setBanners] = useState<Banner[]>([])
@@ -7380,6 +7575,38 @@ export default function StoreOverviewPage() {
       })
     }
   }, [user])
+  
+  // Measure tab dimensions for sliding animation
+  useEffect(() => {
+    const measureTabs = () => {
+      const tabs = ['rewards', 'programs', 'customers', 'messages', 'banners', 'activity']
+      const newDimensions: { [key: string]: { width: number; left: number } } = {}
+      
+      tabs.forEach(tab => {
+        const element = tabRefs.current[tab]
+        if (element) {
+          const rect = element.getBoundingClientRect()
+          const containerRect = element.parentElement?.getBoundingClientRect()
+          newDimensions[tab] = {
+            width: rect.width,
+            left: containerRect ? rect.left - containerRect.left : 0
+          }
+        }
+      })
+      
+      setTabDimensions(newDimensions)
+    }
+    
+    // Initial measurement (with timeout to ensure DOM is ready)
+    const timer = setTimeout(measureTabs, 100)
+    
+    // Re-measure on window resize
+    window.addEventListener('resize', measureTabs)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('resize', measureTabs)
+    }
+  }, [])
   
   // Data fetching functions
   const fetchRewards = async () => {
@@ -8099,13 +8326,32 @@ export default function StoreOverviewPage() {
       <div className="p-6 py-4">
         <div className="flex items-center justify-between">
           {/* Top Navigation Tabs */}
-          <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+          <div className="relative flex items-center bg-gray-100 p-0.5 pr-[5px] rounded-md w-fit">
+            {/* Animated white background */}
+            <motion.div
+              className="absolute inset-y-0.5 bg-white rounded-md shadow-sm"
+              initial={false}
+              animate={{
+                x: tabDimensions[activeTab]?.left || 0,
+                width: tabDimensions[activeTab]?.width || 80
+              }}
+              transition={{
+                type: "spring",
+                stiffness: 400,
+                damping: 30
+              }}
+              style={{
+                display: Object.keys(tabDimensions).length === 0 ? 'none' : 'block'
+              }}
+            />
+            
             <button
+              ref={(el) => tabRefs.current['rewards'] = el}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                "relative z-10 flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                 activeTab === "rewards"
-                  ? "text-gray-800 bg-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-200/70"
+                  ? "text-gray-800"
+                  : "text-gray-600 hover:text-gray-700"
               )}
               onClick={() => setActiveTab("rewards")}
             >
@@ -8113,11 +8359,12 @@ export default function StoreOverviewPage() {
               Rewards
             </button>
             <button
+              ref={(el) => tabRefs.current['programs'] = el}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                "relative z-10 flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                 activeTab === "programs"
-                  ? "text-gray-800 bg-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-200/70"
+                  ? "text-gray-800"
+                  : "text-gray-600 hover:text-gray-700"
               )}
               onClick={() => setActiveTab("programs")}
             >
@@ -8125,11 +8372,12 @@ export default function StoreOverviewPage() {
               Programs
             </button>
             <button
+              ref={(el) => tabRefs.current['customers'] = el}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                "relative z-10 flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                 activeTab === "customers"
-                  ? "text-gray-800 bg-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-200/70"
+                  ? "text-gray-800"
+                  : "text-gray-600 hover:text-gray-700"
               )}
               onClick={() => setActiveTab("customers")}
             >
@@ -8137,11 +8385,12 @@ export default function StoreOverviewPage() {
               Customers
             </button>
             <button
+              ref={(el) => tabRefs.current['messages'] = el}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                "relative z-10 flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                 activeTab === "messages"
-                  ? "text-gray-800 bg-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-200/70"
+                  ? "text-gray-800"
+                  : "text-gray-600 hover:text-gray-700"
               )}
               onClick={() => setActiveTab("messages")}
             >
@@ -8149,11 +8398,12 @@ export default function StoreOverviewPage() {
               Messages
             </button>
             <button
+              ref={(el) => tabRefs.current['banners'] = el}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                "relative z-10 flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                 activeTab === "banners"
-                  ? "text-gray-800 bg-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-200/70"
+                  ? "text-gray-800"
+                  : "text-gray-600 hover:text-gray-700"
               )}
               onClick={() => setActiveTab("banners")}
             >
@@ -8161,11 +8411,12 @@ export default function StoreOverviewPage() {
               Banners
             </button>
             <button
+              ref={(el) => tabRefs.current['activity'] = el}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                "relative z-10 flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                 activeTab === "activity"
-                  ? "text-gray-800 bg-white shadow-sm"
-                  : "text-gray-600 hover:bg-gray-200/70"
+                  ? "text-gray-800"
+                  : "text-gray-600 hover:text-gray-700"
               )}
               onClick={() => setActiveTab("activity")}
             >

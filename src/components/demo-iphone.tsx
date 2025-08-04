@@ -285,7 +285,7 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
       
       {/* Sliding Panel */}
       <div 
-        className="fixed right-0 top-0 h-full w-full max-w-lg z-50 bg-transparent transition-transform duration-300 ease-out"
+        className="fixed right-0 top-0 h-full w-full max-w-lg z-50 bg-transparent transition-transform duration-300 ease-out pointer-events-none"
         style={{ 
           transform: (!shouldAnimate || isClosing) ? 'translateX(100%)' : 'translateX(0)' 
         }}
@@ -293,20 +293,20 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
         <div className="flex items-center justify-center min-h-screen p-4 sm:p-6 lg:p-8 pt-12 sm:pt-16 lg:pt-20">
 
           {/* iPhone 16 Pro */}
-          <div className="relative flex items-center justify-center">
+          <div className="relative flex items-center justify-center pointer-events-auto">
             {/* Phone Shadow */}
             <div className="absolute inset-0 bg-black/30 blur-xl transform translate-y-8 scale-105 rounded-[61px]"></div>
             
             {/* Very Outer Frame - Dark Silver Outline */}
-            <div 
+             <div 
               className="relative bg-[#8B8B8B] rounded-[61px] p-[1px] shadow-2xl"
-              style={{ 
-                height: '87vh',
-                width: 'calc(90vh * 0.462)', // iPhone aspect ratio (340/736 ≈ 0.462)
-                maxHeight: '760px',
-                maxWidth: '350px',
-                minWidth: '320px'
-              }}
+               style={{ 
+                 height: '87vh',
+                 width: 'calc(90vh * 0.462)', // iPhone aspect ratio (340/736 ≈ 0.462)
+                 maxHeight: '760px',
+                 maxWidth: '350px',
+                 minWidth: '320px'
+               }}
             >
                          {/* Outer Frame - Black */}
              <div 
@@ -485,13 +485,13 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
 
                            {/* No rewards message if no rewards exist */}
                            {rewards.length === 0 && !coffeeProgram && (
-                             <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
+                       <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
                                <div className="flex items-center justify-center py-2">
                                  <div className="text-center">
                                    <p className="text-[12px] text-gray-500">No rewards available yet</p>
                                  </div>
-                               </div>
-                             </div>
+                         </div>
+                       </div>
                            )}
                          </>
                        ) : (
@@ -779,11 +779,11 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
                        <div className="flex justify-center pb-0">
                          <div className="w-28 h-1 bg-black rounded-full opacity-40"></div>
                        </div>
+                       </div>
                      </div>
                   </div>
                 </div>
               </div>
-            </div>
             </div>
           </div>
         </div>

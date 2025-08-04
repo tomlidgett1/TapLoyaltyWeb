@@ -9,7 +9,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { useState, useEffect } from "react"
-import { CalendarIcon, X, CheckCircle, Edit as EditIcon, Search, Info } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import { CalendarIcon, X, CheckCircle, Edit as EditIcon, Search, Info, Loader2 } from "lucide-react"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
@@ -71,8 +72,7 @@ interface FormData {
     useTimeRequirements: boolean
     minimumTransactions: string
     maximumTransactions: string
-    daysSinceJoined: string
-    daysSinceLastVisit: string
+      daysSinceJoined: string
     minimumLifetimeSpend: string
     minimumPointsBalance: string
     membershipLevel: string
@@ -119,8 +119,9 @@ export function CreateRewardPopup({
   const { user } = useAuth()
   const [customers, setCustomers] = useState<any[]>([])
   const [selectedCustomers, setSelectedCustomers] = useState<{ id: string; name: string }[]>([])
-  const [customersLoading, setCustomersLoading] = useState(false)
-  
+    const [customersLoading, setCustomersLoading] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+
   const [formData, setFormData] = useState<FormData>({
     // Basic Details
     rewardName: "",
@@ -160,7 +161,6 @@ export function CreateRewardPopup({
       minimumTransactions: "",
       maximumTransactions: "",
       daysSinceJoined: "",
-      daysSinceLastVisit: "",
       minimumLifetimeSpend: "",
       minimumPointsBalance: "",
       membershipLevel: "Bronze",
@@ -302,14 +302,7 @@ export function CreateRewardPopup({
         }
         break;
         
-      case 'mysterySurprise':
-        summary = "Surprise reward - redeem to reveal your prize!";
-        break;
-        
-      case 'other':
-        const firstLine = formData.customRewardDetails.split('\n')[0];
-        summary = firstLine || "Custom reward";
-        break;
+
         
       default:
         summary = "Reward";
@@ -341,6 +334,36 @@ export function CreateRewardPopup({
         })
       }
 
+      if (formData.conditions.maximumTransactions) {
+        conditions.push({
+          type: "maximumTransactions",
+          value: Number(formData.conditions.maximumTransactions)
+        })
+      }
+
+      // Spending conditions
+      if (formData.conditions.minimumLifetimeSpend) {
+        conditions.push({
+          type: "minimumLifetimeSpend",
+          value: Number(formData.conditions.minimumLifetimeSpend)
+        })
+      }
+
+      if (formData.conditions.minimumPointsBalance) {
+        conditions.push({
+          type: "minimumPointsBalance",
+          value: Number(formData.conditions.minimumPointsBalance)
+        })
+      }
+
+      // Time-based conditions
+      if (formData.conditions.daysSinceJoined) {
+        conditions.push({
+          type: "daysSinceJoined",
+          value: Number(formData.conditions.daysSinceJoined)
+        })
+      }
+
       // Membership level condition (always enabled for non-new customers)
       if (formData.conditions.membershipLevel && formData.rewardVisibility !== 'new') {
         conditions.push({
@@ -351,6 +374,55 @@ export function CreateRewardPopup({
 
       // Transform limitations into array of objects
       const limitations = []
+
+      // Total Redemption Limit
+      if (formData.limitations.totalRedemptionLimit) {
+        limitations.push({
+          type: "totalRedemptionLimit",
+          value: Number(formData.limitations.totalRedemptionLimit)
+        });
+      }
+
+      // Time Restrictions
+      if (formData.limitations.useTimeRestrictions) {
+        if (formData.limitations.startTime) {
+          limitations.push({
+            type: "startTime",
+            value: formData.limitations.startTime
+          });
+        }
+        
+        if (formData.limitations.endTime) {
+          limitations.push({
+            type: "endTime", 
+            value: formData.limitations.endTime
+          });
+        }
+        
+        if (formData.limitations.dayRestrictions.length > 0) {
+          limitations.push({
+            type: "dayRestrictions",
+            value: formData.limitations.dayRestrictions
+          });
+        }
+      }
+
+      // Date Restrictions
+      if (formData.limitations.useDateRestrictions) {
+        if (formData.limitations.dateRestrictionStart) {
+          limitations.push({
+            type: "dateRestrictionStart",
+            value: formData.limitations.dateRestrictionStart
+          });
+        }
+        
+        if (formData.limitations.dateRestrictionEnd) {
+          limitations.push({
+            type: "dateRestrictionEnd",
+            value: formData.limitations.dateRestrictionEnd
+          });
+        }
+      }
 
       // Ensure Per Customer Limit is always at least 1
       const perCustomerLimit = formData.limitations.perCustomerLimit 
@@ -377,18 +449,24 @@ export function CreateRewardPopup({
         description: formData.description,
         programtype: "points",
         isActive: formData.isActive,
-        pointsCost: Math.max(0, Number(formData.pointsCost)),
+        pointsCost: formData.rewardVisibility === 'new' ? 0 : Math.max(0, Number(formData.pointsCost)),
         rewardVisibility: formData.rewardVisibility === 'all' ? 'global' : 
                           formData.rewardVisibility === 'specific' ? 'specific' : 
-                          formData.rewardVisibility === 'new' ? 'new' : 'conditional',
+                          formData.rewardVisibility === 'new' ? 'global' : 'conditional',
         newcx: formData.rewardVisibility === 'new',
+        firstPurchaseRequired: formData.rewardVisibility === 'new',
         
         // Add reward type specific data
         rewardTypeDetails: {
           type: formData.type,
         },
         
-        delayedVisibility: formData.rewardVisibility === 'new' ? false : formData.delayedVisibility,
+        delayedVisibility: formData.rewardVisibility === 'new' || !formData.delayedVisibility ? null : {
+          type: formData.delayedVisibilityType === 'transactions' ? 'totaltransactions' : 'totalLifetimeSpend',
+          value: formData.delayedVisibilityType === 'transactions' 
+            ? Number(formData.delayedVisibilityTransactions)
+            : Number(formData.delayedVisibilitySpend)
+        },
         conditions,
         limitations,
         pin: formData.pin,
@@ -436,12 +514,16 @@ export function CreateRewardPopup({
           };
           break;
           
-        case 'other':
+        case 'bundleOffer':
           rewardData.rewardTypeDetails = {
             ...rewardData.rewardTypeDetails,
-            details: formData.customRewardDetails
+            requiredPurchase: formData.requiredPurchase,
+            bonusItem: formData.bonusItem,
+            bundleDiscountType: formData.bundleDiscountType,
+            bundleDiscountValue: formData.bundleDiscountType !== 'free' ? Number(formData.bundleDiscountValue) || 0 : 0
           };
           break;
+
       }
 
       // Create in merchant's rewards subcollection
@@ -479,11 +561,6 @@ export function CreateRewardPopup({
       
       // Close the popup
       onOpenChange(false);
-      
-      // Navigate to the reward details page
-      if (newRewardRef && newRewardRef.id) {
-        router.push(`/store/${newRewardRef.id}`);
-      }
       
     } catch (error) {
       console.error("Error saving reward:", error);
@@ -540,7 +617,6 @@ export function CreateRewardPopup({
               minimumTransactions: "",
               maximumTransactions: "",
               daysSinceJoined: "",
-              daysSinceLastVisit: "",
               minimumLifetimeSpend: "",
               minimumPointsBalance: "",
               membershipLevel: "Bronze",
@@ -612,8 +688,8 @@ export function CreateRewardPopup({
                 <nav className="space-y-2">
                   {[
                     { step: 1, title: "Basic Details", desc: "Name, type, and points" },
-                    { step: 2, title: "Visibility", desc: "Who can see this reward" },
-                    { step: 3, title: "Conditions", desc: "Eligibility requirements" },
+                    { step: 2, title: "Visibility", desc: "Who can see this reward (not who can redeem)" },
+                    { step: 3, title: "Conditions", desc: "Who can redeem this reward" },
                     { step: 4, title: "Limitations", desc: "Usage restrictions" },
                     { step: 5, title: "Review", desc: "Final review and create" }
                   ].map((item) => (
@@ -704,8 +780,6 @@ export function CreateRewardPopup({
                               <SelectItem value="fixedDiscount">Fixed-Amount Discount</SelectItem>
                               <SelectItem value="freeItem">Free Item</SelectItem>
                               <SelectItem value="bundleOffer">Buy X Get Y (Bundle)</SelectItem>
-                              <SelectItem value="mysterySurprise">Mystery Surprise</SelectItem>
-                              <SelectItem value="other">Other</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -715,11 +789,20 @@ export function CreateRewardPopup({
                           <Input
                             type="number"
                             min="0"
-                            value={formData.pointsCost}
-                            onChange={(e) => setFormData({ ...formData, pointsCost: e.target.value })}
+                            value={formData.rewardVisibility === 'new' ? '0' : formData.pointsCost}
+                            onChange={(e) => {
+                              if (formData.rewardVisibility === 'new') return; // Prevent changes for new customers
+                              setFormData({ ...formData, pointsCost: e.target.value })
+                            }}
                             placeholder="e.g., 100"
                             className="h-9"
+                            disabled={formData.rewardVisibility === 'new'}
                           />
+                          {formData.rewardVisibility === 'new' && (
+                            <p className="text-xs text-amber-600">
+                              New customer rewards must be free (0 points) since they haven't earned points yet.
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -780,17 +863,72 @@ export function CreateRewardPopup({
                         </div>
                       )}
 
-                      {formData.type === 'other' && (
+                      {formData.type === 'bundleOffer' && (
                         <div className="space-y-1.5 border-l-2 border-blue-100 pl-4 py-2">
-                          <Label className="text-sm">Custom Reward Details <span className="text-red-500">*</span></Label>
-                          <Textarea
-                            value={formData.customRewardDetails}
-                            onChange={(e) => setFormData({ ...formData, customRewardDetails: e.target.value })}
-                            placeholder="Describe your custom reward in detail"
-                            className="min-h-[70px] text-sm"
-                          />
+                          <div className="space-y-1.5">
+                            <Label className="text-sm">Required Purchase <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="text"
+                              value={formData.requiredPurchase}
+                              onChange={(e) => setFormData({ ...formData, requiredPurchase: e.target.value })}
+                              placeholder="e.g., Large Coffee, Any Sandwich, etc."
+                              className="h-9"
+                            />
+                            <p className="text-xs text-gray-500">What the customer needs to purchase</p>
+                          </div>
+                          
+                          <div className="space-y-1.5">
+                            <Label className="text-sm">Bonus Item <span className="text-red-500">*</span></Label>
+                            <Input
+                              type="text"
+                              value={formData.bonusItem}
+                              onChange={(e) => setFormData({ ...formData, bonusItem: e.target.value })}
+                              placeholder="e.g., Small Coffee, Cookie, etc."
+                              className="h-9"
+                            />
+                            <p className="text-xs text-gray-500">What the customer gets as a bonus</p>
+                          </div>
+                          
+                          <div className="space-y-1.5">
+                            <Label className="text-sm">Bonus Discount Type <span className="text-red-500">*</span></Label>
+                            <Select
+                              value={formData.bundleDiscountType}
+                              onValueChange={(value) => setFormData({ ...formData, bundleDiscountType: value })}
+                            >
+                              <SelectTrigger className="h-9">
+                                <SelectValue placeholder="Select discount type" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="free">Free (100% off)</SelectItem>
+                                <SelectItem value="percentage">Percentage off</SelectItem>
+                                <SelectItem value="fixed">Fixed amount off</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          {formData.bundleDiscountType !== 'free' && (
+                            <div className="space-y-1.5">
+                              <Label className="text-sm">
+                                Discount Value <span className="text-red-500">*</span>
+                                {formData.bundleDiscountType === 'percentage' && ' (%)'}
+                                {formData.bundleDiscountType === 'fixed' && ' ($)'}
+                              </Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                max={formData.bundleDiscountType === 'percentage' ? "100" : undefined}
+                                step={formData.bundleDiscountType === 'fixed' ? "0.01" : "1"}
+                                value={formData.bundleDiscountValue}
+                                onChange={(e) => setFormData({ ...formData, bundleDiscountValue: e.target.value })}
+                                placeholder={formData.bundleDiscountType === 'percentage' ? "e.g., 50 for 50% off" : "e.g., 5 for $5 off"}
+                                className="h-9"
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
+
+
 
                       <div className="space-y-1.5">
                         <Label className="text-sm">PIN Code (4 digits) <span className="text-red-500">*</span></Label>
@@ -814,6 +952,17 @@ export function CreateRewardPopup({
                   <div className="space-y-6">
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900 mb-4">Visibility Settings</h3>
+                      <div className="bg-white border border-gray-200 rounded-xl p-4">
+                        <div className="flex gap-3">
+                          <Info className="h-4 w-4 text-gray-500 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 mb-1">About Visibility Settings</p>
+                            <p className="text-sm text-gray-600">
+                              These settings control <strong>who can see</strong> this reward in their app. Redemption eligibility (who can actually redeem it) will be configured in the following steps with conditions and limitations.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                     
                     <div className="space-y-4">
@@ -827,6 +976,7 @@ export function CreateRewardPopup({
                             setFormData({
                               ...formData,
                               rewardVisibility: value,
+                              pointsCost: value === 'new' ? '0' : formData.pointsCost,
                               conditions: {
                                 ...formData.conditions,
                                 newCustomer: value === 'new',
@@ -842,7 +992,7 @@ export function CreateRewardPopup({
                               <div className="flex-1">
                                 <p className={`text-sm font-medium transition-colors duration-200 ${formData.rewardVisibility === 'all' ? 'text-blue-700' : ''}`}>All Customers</p>
                                 <p className="text-xs text-gray-500 mt-1">
-                                  This reward will be visible to all your customers
+                                  This reward will be visible to all your customers in their app
                                 </p>
                               </div>
                             </div>
@@ -854,7 +1004,7 @@ export function CreateRewardPopup({
                               <div className="flex-1">
                                 <p className={`text-sm font-medium transition-colors duration-200 ${formData.rewardVisibility === 'new' ? 'text-blue-700' : ''}`}>New Customers Only</p>
                                 <p className="text-xs text-gray-500 mt-1">
-                                  Only customers who just joined your loyalty program will see this reward
+                                  Only customers who just joined your loyalty program will see this reward in their app
                                 </p>
                               </div>
                             </div>
@@ -866,7 +1016,7 @@ export function CreateRewardPopup({
                               <div className="flex-1">
                                 <p className={`text-sm font-medium transition-colors duration-200 ${formData.rewardVisibility === 'specific' ? 'text-blue-700' : ''}`}>Specific Customers</p>
                                 <p className="text-xs text-gray-500 mt-1">
-                                  Choose specific customers who can see this reward
+                                  Choose specific customers who can see this reward in their app
                                 </p>
                               </div>
                             </div>
@@ -874,8 +1024,20 @@ export function CreateRewardPopup({
                         </RadioGroup>
                         
                         {/* Specific Customer Selection */}
-                        {formData.rewardVisibility === 'specific' && (
-                          <div className="border-l-2 border-blue-100 pl-4 py-2">
+                        <AnimatePresence mode="wait">
+                          {formData.rewardVisibility === 'specific' && (
+                            <motion.div
+                              key="specific-customers"
+                              initial={{ height: 0, opacity: 0, y: -10 }}
+                              animate={{ height: "auto", opacity: 1, y: 0 }}
+                              exit={{ height: 0, opacity: 0, y: -10 }}
+                              transition={{ 
+                                duration: 0.3,
+                                ease: [0.25, 0.46, 0.45, 0.94]
+                              }}
+                              className="overflow-hidden"
+                            >
+                              <div className="border-l-2 border-blue-100 pl-4 py-2">
                             {customersLoading ? (
                               <div className="flex items-center justify-center p-8">
                                 <div className="text-sm text-gray-500">Loading customers...</div>
@@ -995,8 +1157,10 @@ export function CreateRewardPopup({
                                 </Button>
                               </div>
                             )}
-                          </div>
-                        )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                       
                       {/* Progressive Unlock */}
@@ -1017,10 +1181,22 @@ export function CreateRewardPopup({
                           />
                         </div>
                         
-                        {formData.delayedVisibility && (
-                          <div className="border-l-2 border-blue-100 pl-4 py-2">
+                        <AnimatePresence mode="wait">
+                          {formData.delayedVisibility && (
+                            <motion.div
+                              key="progressive-unlock"
+                              initial={{ height: 0, opacity: 0, y: -10 }}
+                              animate={{ height: "auto", opacity: 1, y: 0 }}
+                              exit={{ height: 0, opacity: 0, y: -10 }}
+                              transition={{ 
+                                duration: 0.3,
+                                ease: [0.25, 0.46, 0.45, 0.94]
+                              }}
+                              className="overflow-hidden"
+                            >
+                              <div className="border-l-2 border-blue-100 pl-4 py-2">
                             <p className="text-xs text-gray-600 mb-4">
-                              Hide this reward until the customer reaches a certain milestone.
+                              Hide this reward from view until the customer reaches a certain milestone. Once visible, redemption eligibility will still be determined by your conditions and limitations settings.
                             </p>
                             
                             <div className="space-y-4">
@@ -1083,8 +1259,10 @@ export function CreateRewardPopup({
                                 </div>
                               )}
                             </div>
-                          </div>
-                        )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                       
                       {/* Active Period */}
@@ -1102,10 +1280,22 @@ export function CreateRewardPopup({
                           />
                         </div>
                         
-                        {formData.hasActivePeriod && (
-                          <div className="border-l-2 border-blue-100 pl-4 py-2">
+                        <AnimatePresence mode="wait">
+                          {formData.hasActivePeriod && (
+                            <motion.div
+                              key="active-period"
+                              initial={{ height: 0, opacity: 0, y: -10 }}
+                              animate={{ height: "auto", opacity: 1, y: 0 }}
+                              exit={{ height: 0, opacity: 0, y: -10 }}
+                              transition={{ 
+                                duration: 0.3,
+                                ease: [0.25, 0.46, 0.45, 0.94]
+                              }}
+                              className="overflow-hidden"
+                            >
+                              <div className="border-l-2 border-blue-100 pl-4 py-2">
                             <p className="text-xs text-gray-600 mb-4">
-                              Set a specific time period when this reward is available.
+                              Set a specific time period when this reward is visible to customers. Additional redemption conditions can be set in the following steps.
                             </p>
                             
                             <div className="grid grid-cols-2 gap-4">
@@ -1177,8 +1367,10 @@ export function CreateRewardPopup({
                                 </Popover>
                               </div>
                             </div>
-                          </div>
-                        )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     </div>
                   </div>
@@ -1214,7 +1406,6 @@ export function CreateRewardPopup({
                                     useTimeRequirements: false,
                                     minimumTransactions: "",
                                     daysSinceJoined: "",
-                                    daysSinceLastVisit: "",
                                     minimumLifetimeSpend: "",
                                     minimumPointsBalance: ""
                                   }
@@ -1273,8 +1464,20 @@ export function CreateRewardPopup({
                             />
                           </div>
                         
-                          {formData.conditions.useTransactionRequirements && (
-                            <div className="border-l-2 border-blue-100 pl-4 py-2">
+                          <AnimatePresence mode="wait">
+                            {formData.conditions.useTransactionRequirements && (
+                              <motion.div
+                                key="transaction-requirements"
+                                initial={{ height: 0, opacity: 0, y: -10 }}
+                                animate={{ height: "auto", opacity: 1, y: 0 }}
+                                exit={{ height: 0, opacity: 0, y: -10 }}
+                                transition={{ 
+                                  duration: 0.3,
+                                  ease: [0.25, 0.46, 0.45, 0.94]
+                                }}
+                                className="overflow-hidden"
+                              >
+                                <div className="border-l-2 border-blue-100 pl-4 py-2">
                               <p className="text-xs text-gray-600 mb-4">
                                 Set purchase count conditions that determine eligibility based on the number of transactions.
                               </p>
@@ -1322,8 +1525,10 @@ export function CreateRewardPopup({
                                   </p>
                                 </div>
                               </div>
-                            </div>
-                          )}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
                         
                         {/* Spending Requirements */}
@@ -1346,8 +1551,20 @@ export function CreateRewardPopup({
                             />
                           </div>
                         
-                          {formData.conditions.useSpendingRequirements && (
-                            <div className="border-l-2 border-blue-100 pl-4 py-2">
+                          <AnimatePresence mode="wait">
+                            {formData.conditions.useSpendingRequirements && (
+                              <motion.div
+                                key="spending-requirements"
+                                initial={{ height: 0, opacity: 0, y: -10 }}
+                                animate={{ height: "auto", opacity: 1, y: 0 }}
+                                exit={{ height: 0, opacity: 0, y: -10 }}
+                                transition={{ 
+                                  duration: 0.3,
+                                  ease: [0.25, 0.46, 0.45, 0.94]
+                                }}
+                                className="overflow-hidden"
+                              >
+                                <div className="border-l-2 border-blue-100 pl-4 py-2">
                               <p className="text-xs text-gray-600 mb-4">
                                 Set monetary or points requirements that determine eligibility based on spending or point balance.
                               </p>
@@ -1395,8 +1612,10 @@ export function CreateRewardPopup({
                                   </p>
                                 </div>
                               </div>
-                            </div>
-                          )}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
                         
                         {/* Time Requirements */}
@@ -1410,8 +1629,7 @@ export function CreateRewardPopup({
                                 conditions: {
                                   ...formData.conditions,
                                   useTimeRequirements: checked,
-                                  daysSinceJoined: checked ? formData.conditions.daysSinceJoined : "",
-                                  daysSinceLastVisit: checked ? formData.conditions.daysSinceLastVisit : ""
+                                  daysSinceJoined: checked ? formData.conditions.daysSinceJoined : ""
                                 }
                               })}
                               disabled={formData.rewardVisibility === 'new'}
@@ -1419,57 +1637,48 @@ export function CreateRewardPopup({
                             />
                           </div>
                         
-                          {formData.conditions.useTimeRequirements && (
-                            <div className="border-l-2 border-blue-100 pl-4 py-2">
+                          <AnimatePresence mode="wait">
+                            {formData.conditions.useTimeRequirements && (
+                              <motion.div
+                                key="time-requirements"
+                                initial={{ height: 0, opacity: 0, y: -10 }}
+                                animate={{ height: "auto", opacity: 1, y: 0 }}
+                                exit={{ height: 0, opacity: 0, y: -10 }}
+                                transition={{ 
+                                  duration: 0.3,
+                                  ease: [0.25, 0.46, 0.45, 0.94]
+                                }}
+                                className="overflow-hidden"
+                              >
+                                <div className="border-l-2 border-blue-100 pl-4 py-2">
                               <p className="text-xs text-gray-600 mb-4">
                                 Set time-based conditions that determine eligibility based on membership duration or last visit.
                               </p>
                               
-                              <div className="grid grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                  <Label className="text-sm">Minimum Days as Member</Label>
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    value={formData.conditions.daysSinceJoined}
-                                    onChange={(e) => setFormData({
-                                      ...formData,
-                                      conditions: {
-                                        ...formData.conditions,
-                                        daysSinceJoined: e.target.value
-                                      }
-                                    })}
-                                    placeholder="e.g., 30"
-                                    className="text-sm h-9"
-                                  />
-                                  <p className="text-xs text-gray-500">
-                                    Customer must have been a member for at least this many days
-                                  </p>
-                                </div>
-                                
-                                <div className="space-y-2">
-                                  <Label className="text-sm">Days Since Last Visit</Label>
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    value={formData.conditions.daysSinceLastVisit}
-                                    onChange={(e) => setFormData({
-                                      ...formData,
-                                      conditions: {
-                                        ...formData.conditions,
-                                        daysSinceLastVisit: e.target.value
-                                      }
-                                    })}
-                                    placeholder="e.g., 7"
-                                    className="text-sm h-9"
-                                  />
-                                  <p className="text-xs text-gray-500">
-                                    Customer must not have visited for at least this many days
-                                  </p>
-                                </div>
+                              <div className="space-y-2">
+                                <Label className="text-sm">Minimum Days as Member</Label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={formData.conditions.daysSinceJoined}
+                                  onChange={(e) => setFormData({
+                                    ...formData,
+                                    conditions: {
+                                      ...formData.conditions,
+                                      daysSinceJoined: e.target.value
+                                    }
+                                  })}
+                                  placeholder="e.g., 30"
+                                  className="text-sm h-9"
+                                />
+                                <p className="text-xs text-gray-500">
+                                  Customer must have been a member for at least this many days
+                                </p>
                               </div>
-                            </div>
-                          )}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
                         
                         {/* Membership Level - Always enabled for non-new customers */}
@@ -1610,8 +1819,20 @@ export function CreateRewardPopup({
                           />
                         </div>
 
-                        {formData.limitations.useTimeRestrictions && (
-                          <div className="border-l-2 border-blue-100 pl-4 py-2 space-y-6">
+                        <AnimatePresence mode="wait">
+                          {formData.limitations.useTimeRestrictions && (
+                            <motion.div
+                              key="time-restrictions"
+                              initial={{ height: 0, opacity: 0, y: -10 }}
+                              animate={{ height: "auto", opacity: 1, y: 0 }}
+                              exit={{ height: 0, opacity: 0, y: -10 }}
+                              transition={{ 
+                                duration: 0.3,
+                                ease: [0.25, 0.46, 0.45, 0.94]
+                              }}
+                              className="overflow-hidden"
+                            >
+                              <div className="border-l-2 border-blue-100 pl-4 py-2 space-y-6">
                             <p className="text-sm text-gray-600">
                               Specify when this reward can be redeemed. This is useful for happy hours, lunch specials, etc.
                             </p>
@@ -1696,8 +1917,10 @@ export function CreateRewardPopup({
                                 Select the days when this reward is available for redemption
                               </p>
                             </div>
-                          </div>
-                        )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
 
                       {/* Date Restrictions */}
@@ -1717,8 +1940,20 @@ export function CreateRewardPopup({
                           />
                         </div>
 
-                        {formData.limitations.useDateRestrictions && (
-                          <div className="border-l-2 border-blue-100 pl-4 py-2 space-y-6">
+                        <AnimatePresence mode="wait">
+                          {formData.limitations.useDateRestrictions && (
+                            <motion.div
+                              key="date-restrictions"
+                              initial={{ height: 0, opacity: 0, y: -10 }}
+                              animate={{ height: "auto", opacity: 1, y: 0 }}
+                              exit={{ height: 0, opacity: 0, y: -10 }}
+                              transition={{ 
+                                duration: 0.3,
+                                ease: [0.25, 0.46, 0.45, 0.94]
+                              }}
+                              className="overflow-hidden"
+                            >
+                              <div className="border-l-2 border-blue-100 pl-4 py-2 space-y-6">
                             <p className="text-sm text-gray-600">
                               Set a specific date range when this reward is available. Useful for seasonal promotions.
                             </p>
@@ -1800,8 +2035,10 @@ export function CreateRewardPopup({
                                 </p>
                               </div>
                             </div>
-                          </div>
-                        )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     </div>
                   </div>
@@ -1901,16 +2138,29 @@ export function CreateRewardPopup({
                     )}
                   </div>
                   <Button 
-                    onClick={() => {
+                    onClick={async () => {
                       if (currentStep < 5) {
                         handleStepChange(currentStep + 1);
                       } else {
-                        saveReward();
+                        setIsCreating(true);
+                        await saveReward();
+                        // Keep loading state for 2 seconds
+                        setTimeout(() => {
+                          setIsCreating(false);
+                        }, 2000);
                       }
                     }}
-                    className="bg-[#007AFF] hover:bg-[#0062CC] text-white rounded-md w-full sm:w-auto order-1 sm:order-2"
+                    disabled={isCreating}
+                    className="bg-[#007AFF] hover:bg-[#0062CC] text-white rounded-md w-full sm:w-auto order-1 sm:order-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {currentStep === 5 ? 'Create Reward' : 'Next'}
+                    {isCreating ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      currentStep === 5 ? 'Create Reward' : 'Next'
+                    )}
                   </Button>
                 </div>
               </div>

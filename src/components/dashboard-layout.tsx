@@ -780,19 +780,26 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       if (!user?.uid || !pathname?.includes('/getstarted')) return
       
       try {
-        const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
         let completed = 0
-        const total = 12 // Total number of checklist items
+        const total = 10 // Total number of checklist items (matches get started page)
+        
+        // Fetch merchant document
+        const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
         
         if (merchantDoc.exists()) {
           const data = merchantDoc.data()
           
-          // Check for introductory rewards
+          // 1. Check for logo upload
+          if (data.logoUrl) {
+            completed += 1
+          }
+          
+          // 2. Check for introductory rewards
           if (data.introductoryRewardIds && Array.isArray(data.introductoryRewardIds) && data.introductoryRewardIds.length > 0) {
             completed += 1
           }
           
-          // Check for active programs  
+          // 3. Check for active programs
           const hasActiveTransactionRewards = data.transactionRewards && Array.isArray(data.transactionRewards) && 
             data.transactionRewards.some((program: any) => program.active === true)
           const hasActiveVoucherPrograms = data.voucherPrograms && Array.isArray(data.voucherPrograms) && 
@@ -803,9 +810,40 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           if (hasActiveTransactionRewards || hasActiveVoucherPrograms || hasActiveCoffeePrograms) {
             completed += 1
           }
-          
-          // You can add more completion checks here as needed
-          // For now, we'll just count these main ones
+        }
+        
+        // Fetch rewards collection
+        const rewardsSnapshot = await getDocs(collection(db, `merchants/${user.uid}/rewards`))
+        const rewards = rewardsSnapshot.docs.map(doc => doc.data())
+        
+        // 4. Check for individual rewards (not network rewards)
+        const hasIndividualRewards = rewards.some(reward => !reward.isNetworkReward)
+        if (hasIndividualRewards) {
+          completed += 1
+        }
+        
+        // 5. Check for network rewards
+        const hasNetworkRewards = rewards.some(reward => reward.isNetworkReward === true)
+        if (hasNetworkRewards) {
+          completed += 1
+        }
+        
+        // 6. Check for banners
+        const bannersSnapshot = await getDocs(collection(db, `merchants/${user.uid}/banners`))
+        if (!bannersSnapshot.empty) {
+          completed += 1
+        }
+        
+        // 7. Check for points rules
+        const pointsRulesSnapshot = await getDocs(collection(db, `merchants/${user.uid}/pointsRules`))
+        if (!pointsRulesSnapshot.empty) {
+          completed += 1
+        }
+        
+        // 8, 9, 10. Check for agents (covers all 3 agent types)
+        const agentsSnapshot = await getDocs(collection(db, `merchants/${user.uid}/agents`))
+        if (!agentsSnapshot.empty) {
+          completed += 3 // All 3 agent checklist items are completed if any agent exists
         }
         
         setCompletedCount(completed)
@@ -2329,14 +2367,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     )}
                     
                     {/* Setup Button */}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-sm font-medium text-gray-900 hover:text-gray-900 hover:bg-gray-100 focus:ring-0 focus:ring-offset-0"
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-sm font-medium text-gray-900 hover:text-gray-900 hover:bg-gray-100 focus:ring-0 focus:ring-offset-0"
                       onClick={() => router.push('/getstarted')}
-                    >
-                      Setup
-                    </Button>
+                        >
+                          Setup
+                        </Button>
                     
                     {/* Preview Button */}
                     <Button

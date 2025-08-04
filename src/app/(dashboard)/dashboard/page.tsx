@@ -5004,7 +5004,10 @@ export default function DashboardPage() {
             isAdvancedActivity ? "md:grid-cols-[2fr_1fr]" : "md:grid-cols-[1.2fr_0.9fr]"
           )}>
             {/* Recent Activity */}
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className={cn(
+                  "bg-white rounded-xl border border-gray-200 overflow-hidden transition-opacity duration-300",
+                  !activityLoading && recentActivity.length === 0 && "opacity-50"
+                )}>
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
                       <h3 className="text-base font-medium text-gray-900">Recent Activity</h3>
@@ -5147,7 +5150,10 @@ export default function DashboardPage() {
             </div>
 
             {/* Popular Rewards */}
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className={cn(
+                  "bg-white rounded-xl border border-gray-200 overflow-hidden transition-opacity duration-300",
+                  !rewardsLoading && popularRewards.length === 0 && "opacity-50"
+                )}>
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
                       <h3 className="text-base font-medium text-gray-900">Popular Rewards</h3>
@@ -5206,7 +5212,10 @@ export default function DashboardPage() {
             </div>
 
                 {/* Agent Inbox */}
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className={cn(
+                  "bg-white rounded-xl border border-gray-200 overflow-hidden transition-opacity duration-300",
+                  !agentTasksLoading && agentTasks.length === 0 && "opacity-50"
+                )}>
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex items-center justify-between">
                       <h3 className="text-base font-medium text-gray-900">Agent Inbox</h3>
@@ -5309,7 +5318,15 @@ export default function DashboardPage() {
               <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Live Programs */}
                 {recurringPrograms.hasAny && (
-                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <div className={cn(
+                    "bg-white rounded-xl border border-gray-200 overflow-hidden transition-opacity duration-300",
+                    !programCustomers.loading && (
+                      (liveProgramsTab === 'coffee' && programCustomers.coffee.length === 0) ||
+                      (liveProgramsTab === 'voucher' && programCustomers.voucher.length === 0) ||
+                      (liveProgramsTab === 'transaction' && programCustomers.transaction.length === 0) ||
+                      (liveProgramsTab === 'cashback' && programCustomers.cashback.length === 0)
+                    ) && "opacity-50"
+                  )}>
                     <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                       <div className="flex items-center justify-between">
                         <h3 className="text-base font-medium text-gray-900">Live Programs</h3>
@@ -5898,7 +5915,17 @@ export default function DashboardPage() {
                 )}
                 
                 {/* Live Rewards */}
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className={cn(
+                  "bg-white rounded-xl border border-gray-200 overflow-hidden transition-opacity duration-300",
+                  !liveRewardsLoading && (() => {
+                    const filteredRewards = liveRewards.filter(reward => {
+                      const matchesTab = reward.type === liveRewardsTab
+                      const matchesFilter = rewardsTypeFilter === 'all' || reward.costType === rewardsTypeFilter
+                      return matchesTab && matchesFilter
+                    })
+                    return filteredRewards.length === 0
+                  })() && "opacity-50"
+                )}>
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex items-center justify-between">
                       <h3 className="text-base font-medium text-gray-900">Live Rewards</h3>
@@ -6087,9 +6114,17 @@ export default function DashboardPage() {
                 </div>
               </div>
 
+              {/* Customers Title */}
+              <div className="mb-6 mt-8">
+                <h2 className="text-lg font-medium text-gray-900">Customers</h2>
+              </div>
+
               {/* All Customers Section */}
-              <div className="mt-8">
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div>
+                <div className={cn(
+                  "bg-white rounded-xl border border-gray-200 overflow-hidden transition-opacity duration-300",
+                  !customersLoading && allCustomers.length === 0 && "opacity-50"
+                )}>
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex items-center justify-between">
                       <div className="flex items-baseline gap-2">
@@ -6333,7 +6368,10 @@ export default function DashboardPage() {
 
               {/* Customer Reward Analytics Section */}
               <div className="mt-8">
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className={cn(
+                  "bg-white rounded-xl border border-gray-200 overflow-hidden transition-opacity duration-300",
+                  !customerRewardAnalyticsLoading && customerRewardAnalytics.length === 0 && "opacity-50"
+                )}>
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex items-center justify-between">
                       <h3 className="text-base font-medium text-gray-900">Customer Engagement Analysis</h3>
@@ -6596,7 +6634,10 @@ export default function DashboardPage() {
             {/* Transactions & Redemptions Chart */}
             <div className="mb-8 mt-8">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className={cn(
+                  "bg-white rounded-xl border border-gray-200 overflow-hidden transition-opacity duration-300",
+                  transactionRedemptionData.length === 0 && chartTotals.transactions === 0 && chartTotals.redemptions === 0 && "opacity-50"
+                )}>
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-base font-medium text-gray-900">Transactions & Redemptions</h3>
@@ -7925,26 +7966,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Demo Button - Floating Action Button */}
-      <Button
-        onClick={() => setDemoIPhoneOpen(true)}
-        className="fixed bottom-4 right-4 z-50 h-10 w-10 rounded-full bg-blue-500 hover:bg-blue-600 shadow-lg hover:shadow-xl transition-all duration-200 p-0"
-        title="View Customer App Demo"
-      >
-        <svg 
-          className="h-4 w-4 text-white" 
-          fill="none" 
-          viewBox="0 0 24 24" 
-          stroke="currentColor"
-        >
-          <path 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            strokeWidth={2} 
-            d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" 
-          />
-        </svg>
-      </Button>
+      
 
       {/* Demo iPhone */}
       <DemoIPhone 

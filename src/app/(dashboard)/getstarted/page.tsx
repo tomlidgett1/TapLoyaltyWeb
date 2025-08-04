@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -236,17 +236,6 @@ export default function GetStartedPage() {
       popupAction: () => setShowNetworkReward(true)
     },
     {
-      id: 'create-manual-agent',
-      title: 'Create Manual Agent',
-      description: 'Set up a manual agent to handle customer inquiries and support requests through your preferred communication channels.',
-      icon: Bot,
-      completed: false,
-      category: 'merchant',
-      actionType: 'popup',
-      actionText: 'Setup',
-      popupAction: () => setIsCreateAgentModalOpen(true)
-    },
-    {
       id: 'setup-customer-service',
       title: 'Setup Customer Service Email Agent',
       description: 'Configure an AI agent to automatically respond to customer service emails and provide quick, helpful support.',
@@ -267,6 +256,17 @@ export default function GetStartedPage() {
       actionType: 'url',
       actionUrl: '/dashboard/agents',
       actionText: 'Setup'
+    },
+    {
+      id: 'create-manual-agent',
+      title: 'Create Manual Agent',
+      description: 'Set up a manual agent to handle customer inquiries and support requests through your preferred communication channels.',
+      icon: Bot,
+      completed: false,
+      category: 'merchant',
+      actionType: 'popup',
+      actionText: 'Setup',
+      popupAction: () => setIsCreateAgentModalOpen(true)
     }
   ])
 
@@ -345,10 +345,20 @@ export default function GetStartedPage() {
     const unsubscribeRewards = onSnapshot(
       collection(db, `merchants/${user.uid}/rewards`),
       (snapshot) => {
-        const hasRewards = !snapshot.empty
+        const rewards = snapshot.docs.map(doc => doc.data())
+        
+        // Check for individual rewards (not network rewards)
+        const hasIndividualRewards = rewards.some(reward => !reward.isNetworkReward)
+        
+        // Check for network rewards
+        const hasNetworkRewards = rewards.some(reward => reward.isNetworkReward === true)
+        
         setChecklistItems(prev => prev.map(item => {
           if (item.id === 'individual-reward') {
-            return { ...item, completed: hasRewards }
+            return { ...item, completed: hasIndividualRewards }
+          }
+          if (item.id === 'network-reward') {
+            return { ...item, completed: hasNetworkRewards }
           }
           return item
         }))
@@ -571,9 +581,11 @@ export default function GetStartedPage() {
   const loyaltyItems = checklistItems
     .filter(item => item.category === 'loyalty')
     .sort((a, b) => Number(a.completed) - Number(b.completed))
-  const merchantItems = checklistItems
-    .filter(item => item.category === 'merchant')
-    .sort((a, b) => Number(a.completed) - Number(b.completed))
+  // Define specific order for merchant items to maintain proper separator placement
+  const merchantItemOrder = ['setup-customer-service', 'email-summary-agent', 'create-manual-agent']
+  const merchantItems = merchantItemOrder
+    .map(id => checklistItems.find(item => item.id === id))
+    .filter(Boolean) as ChecklistItem[]
   const completedCount = checklistItems.filter(item => item.completed).length
 
   return (
@@ -588,7 +600,7 @@ export default function GetStartedPage() {
         }}
       >
         <div className="max-w-6xl mx-auto px-6 py-8">
-          
+
           {/* Two Column Layout with Separator */}
           <div className="relative">
             {/* Vertical Separator Line - starts at first card level */}
@@ -621,7 +633,10 @@ export default function GetStartedPage() {
                          open={openItems.includes('account-type')}
                          onOpenChange={() => toggleItem('account-type')}
                        >
-                         <div className="flex items-center justify-between">
+                         <div 
+                           className="flex items-center justify-between cursor-pointer"
+                           onClick={() => toggleItem('account-type')}
+                         >
                            <div className="flex items-center gap-3">
                       <div className="w-12 h-12 bg-white border-2 border-gray-200 rounded-md flex items-center justify-center overflow-hidden">
                         <img 
@@ -636,25 +651,48 @@ export default function GetStartedPage() {
                              </div>
                            </div>
                            <div className="flex items-center gap-2">
-                             <div className="flex items-center bg-gray-100 p-0.5 rounded-md">
+                             <div className="relative flex items-center bg-gray-100 p-0.5 rounded-md">
+                               {/* Animated white background */}
+                               <motion.div
+                                 className="absolute inset-y-0.5 bg-white rounded-md shadow-sm"
+                                 initial={false}
+                                 animate={{
+                                   x: accountType === 'standard' ? 0 : '100%',
+                                   width: '50%'
+                                 }}
+                                 transition={{
+                                   type: "spring",
+                                   stiffness: 400,
+                                   damping: 30
+                                 }}
+                               />
+                               
+                               {/* Tab buttons */}
                                <button
-                                 onClick={() => setAccountType('standard')}
+                                 onClick={(e) => {
+                                   e.stopPropagation()
+                                   setAccountType('standard')
+                                 }}
                                  className={cn(
-                            "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                                   "relative z-10 px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
                                    accountType === 'standard'
-                                     ? "text-gray-800 bg-white shadow-sm"
-                                     : "text-gray-600 hover:bg-gray-200/70"
+                                     ? "text-gray-800" 
+                                     : "text-gray-600 hover:text-gray-700"
                                  )}
                                >
                                  Standard
                                </button>
+                               
                                <button
-                                 onClick={() => setAccountType('network')}
+                                 onClick={(e) => {
+                                   e.stopPropagation()
+                                   setAccountType('network')
+                                 }}
                                  className={cn(
-                            "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                                   "relative z-10 px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
                                    accountType === 'network'
-                                     ? "text-gray-800 bg-white shadow-sm"
-                                     : "text-gray-600 hover:bg-gray-200/70"
+                                     ? "text-gray-800" 
+                                     : "text-gray-600 hover:text-gray-700"
                                  )}
                                >
                                  Network
@@ -665,6 +703,7 @@ export default function GetStartedPage() {
                                  variant="ghost"
                                  size="sm"
                                  className="p-1 h-8 w-8"
+                                 onClick={(e) => e.stopPropagation()}
                                >
                                  <ChevronDown 
                                    className={cn(
@@ -735,7 +774,10 @@ export default function GetStartedPage() {
                       open={openItems.includes(item.id)}
                       onOpenChange={() => toggleItem(item.id)}
                     >
-                      <div className="flex items-center gap-3 p-4">
+                      <div 
+                        className="flex items-center gap-3 p-4 cursor-pointer"
+                        onClick={() => toggleItem(item.id)}
+                      >
                         <div className="w-10 h-5 flex items-center justify-center">
                           {item.completed ? (
                             <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
@@ -761,7 +803,10 @@ export default function GetStartedPage() {
                               size="sm" 
                               variant="outline"
                               className="text-xs"
-                              onClick={uploadToFirebaseStorage}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              uploadToFirebaseStorage()
+                            }}
                               disabled={isUploading}
                             >
                               {isUploading ? "Uploading..." : "Upload"}
@@ -775,7 +820,10 @@ export default function GetStartedPage() {
                                 ? "bg-gray-500 hover:bg-gray-600" 
                                 : "bg-[#007aff] hover:bg-[#339fff]"
                             )}
-                            onClick={item.popupAction}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              item.popupAction?.()
+                            }}
                           >
                             {item.completed && item.id === 'upload-logo' 
                               ? "Change Logo" 
@@ -789,6 +837,7 @@ export default function GetStartedPage() {
                               variant="ghost"
                               size="sm"
                               className="p-1 h-8 w-8"
+                              onClick={(e) => e.stopPropagation()}
                             >
                               <ChevronDown 
                                 className={cn(
@@ -825,7 +874,10 @@ export default function GetStartedPage() {
                                     ? "bg-gray-500 hover:bg-gray-600" 
                                     : "bg-[#007aff] hover:bg-[#339fff]"
                                 )}
-                            onClick={item.popupAction}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              item.popupAction?.()
+                            }}
                           >
                                 {item.completed && item.id === 'upload-logo' 
                                   ? "Change Logo" 
@@ -857,8 +909,8 @@ export default function GetStartedPage() {
               {/* Merchant Tasks */}
               <div className="space-y-3">
                 {merchantItems.map((item, index) => (
+                  <React.Fragment key={item.id}>
                   <div 
-                    key={item.id} 
                     className={cn(
                       "border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-all duration-200 min-h-[80px]",
                       item.completed && "opacity-60 bg-gray-100"
@@ -868,7 +920,10 @@ export default function GetStartedPage() {
                       open={openItems.includes(item.id)}
                       onOpenChange={() => toggleItem(item.id)}
                     >
-                      <div className="flex items-center gap-3 p-4">
+                      <div 
+                        className="flex items-center gap-3 p-4 cursor-pointer"
+                        onClick={() => toggleItem(item.id)}
+                      >
                                                  <div className="w-10 h-5 flex items-center justify-center">
                            {item.completed ? (
                              <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
@@ -917,7 +972,10 @@ export default function GetStartedPage() {
                                   : "bg-[#007aff] hover:bg-[#339fff]"
                               )}
                             >
-                              <Link href={item.actionUrl!}>
+                              <Link 
+                                href={item.actionUrl!}
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 {item.completed ? "Modify" : item.actionText}
                               </Link>
                             </Button>
@@ -930,7 +988,10 @@ export default function GetStartedPage() {
                                   ? "bg-gray-500 hover:bg-gray-600" 
                                   : "bg-[#007aff] hover:bg-[#339fff]"
                               )}
-                              onClick={item.popupAction}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                item.popupAction?.()
+                              }}
                             >
                               {item.completed ? "Modify" : item.actionText}
                             </Button>
@@ -941,6 +1002,7 @@ export default function GetStartedPage() {
                               variant="ghost"
                               size="sm"
                               className="p-1 h-8 w-8"
+                              onClick={(e) => e.stopPropagation()}
                             >
                               <ChevronDown 
                                 className={cn(
@@ -980,7 +1042,11 @@ export default function GetStartedPage() {
                                    : "bg-[#007aff] hover:bg-[#339fff]"
                                )}
                              >
-                               <Link href={item.actionUrl!} className="inline-flex items-center gap-2">
+                               <Link 
+                                 href={item.actionUrl!} 
+                                 className="inline-flex items-center gap-2"
+                                 onClick={(e) => e.stopPropagation()}
+                               >
                                  {item.completed ? "Modify" : item.actionText}
                                  <ExternalLink className="h-3 w-3" />
                                </Link>
@@ -994,7 +1060,10 @@ export default function GetStartedPage() {
                                    ? "bg-gray-500 hover:bg-gray-600" 
                                    : "bg-[#007aff] hover:bg-[#339fff]"
                                )}
-                               onClick={item.popupAction}
+                               onClick={(e) => {
+                                 e.stopPropagation()
+                                 item.popupAction?.()
+                               }}
                              >
                                {item.completed ? "Modify" : item.actionText}
                                <ExternalLink className="h-3 w-3" />
@@ -1006,6 +1075,18 @@ export default function GetStartedPage() {
                       </AnimatePresence>
                    </Collapsible>
                </div>
+               
+               {/* Add separator after email-summary-agent */}
+               {item.id === 'email-summary-agent' && (
+                 <div className="my-6 flex items-center">
+                   <div className="flex-1 h-px bg-gray-200"></div>
+                   <div className="px-4">
+                     <span className="text-xs font-medium text-gray-500 bg-white px-2">Custom Agents</span>
+                   </div>
+                   <div className="flex-1 h-px bg-gray-200"></div>
+                 </div>
+               )}
+             </React.Fragment>
              ))}
               </div>
             </div>

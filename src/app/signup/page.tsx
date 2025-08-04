@@ -529,16 +529,9 @@ export default function SignupPage() {
         // System fields
         createdAt: new Date(),
         updatedAt: new Date(),
-        isActive: true,
+        isActive: false,
         isVerified: false,
-        loginCount: 0,
-        
-        // Loyalty program settings - use template settings if available
-        loyaltyProgram: {
-          pointsPerDollar: templateData?.loyaltySettings?.pointsPerDollar || 1,
-          welcomeBonus: templateData?.loyaltySettings?.welcomeBonus || 100,
-          isActive: true
-        }
+        loginCount: 0
       }
       
       console.log("Creating merchant document...")

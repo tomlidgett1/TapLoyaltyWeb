@@ -126,30 +126,33 @@ export function CreateRewardPopup({
 
   const [formData, setFormData] = useState<FormData>({
     // Basic Details
-    rewardName: "",
-    description: "",
-    type: "",
-    rewardVisibility: "all",
-    specificCustomerIds: customerId ? [customerId] : [],
-    specificCustomerNames: customerName ? [customerName] : [],
-    pin: "",
-    pointsCost: "",
-    isActive: true,
-    delayedVisibility: false,
-    delayedVisibilityType: "transactions",
-    delayedVisibilityTransactions: "",
-    delayedVisibilitySpend: "",
+    rewardName: defaultValues?.rewardName || "",
+    description: defaultValues?.description || "",
+    type: defaultValues?.rewardTypeDetails?.type || "",
+    rewardVisibility: defaultValues?.newcx ? "new" : 
+                     defaultValues?.rewardVisibility === "specific" ? "specific" : "all",
+    specificCustomerIds: customerId ? [customerId] : defaultValues?.specificCustomerIds || [],
+    specificCustomerNames: customerName ? [customerName] : defaultValues?.specificCustomerNames || [],
+    pin: defaultValues?.pin || "",
+    pointsCost: defaultValues?.pointsCost?.toString() || "",
+    isActive: defaultValues?.isActive ?? true,
+    delayedVisibility: !!defaultValues?.delayedVisibility,
+    delayedVisibilityType: defaultValues?.delayedVisibility?.type === "totaltransactions" ? "transactions" : "spend",
+    delayedVisibilityTransactions: defaultValues?.delayedVisibility?.type === "totaltransactions" ? 
+                                  defaultValues.delayedVisibility.value?.toString() || "" : "",
+    delayedVisibilitySpend: defaultValues?.delayedVisibility?.type === "totalLifetimeSpend" ? 
+                           defaultValues.delayedVisibility.value?.toString() || "" : "",
     
     // Reward type specific fields
-    discountValue: "",
-    discountAppliesTo: "",
-    minimumPurchase: "",
-    itemName: "",
-    itemDescription: "",
-    requiredPurchase: "",
-    bonusItem: "",
-    bundleDiscountType: "free",
-    bundleDiscountValue: "",
+    discountValue: defaultValues?.rewardTypeDetails?.discountValue?.toString() || "",
+    discountAppliesTo: defaultValues?.rewardTypeDetails?.appliesTo || "",
+    minimumPurchase: defaultValues?.rewardTypeDetails?.minimumPurchase?.toString() || "",
+    itemName: defaultValues?.rewardTypeDetails?.itemName || "",
+    itemDescription: defaultValues?.rewardTypeDetails?.itemDescription || "",
+    requiredPurchase: defaultValues?.rewardTypeDetails?.requiredPurchase || "",
+    bonusItem: defaultValues?.rewardTypeDetails?.bonusItem || "",
+    bundleDiscountType: defaultValues?.rewardTypeDetails?.bundleDiscountType || "free",
+    bundleDiscountValue: defaultValues?.rewardTypeDetails?.bundleDiscountValue?.toString() || "",
     mysteryOptions: "",
     revealAtCheckout: false,
     customRewardDetails: "",
@@ -157,43 +160,49 @@ export function CreateRewardPopup({
     
     // Conditions
     conditions: {
-      useTransactionRequirements: false,
-      useSpendingRequirements: false,
-      useTimeRequirements: false,
-      minimumTransactions: "",
-      maximumTransactions: "",
-      daysSinceJoined: "",
-      minimumLifetimeSpend: "",
-      minimumPointsBalance: "",
-      membershipLevel: "Bronze",
-      newCustomer: false,
-      useMembershipRequirements: true
+      useTransactionRequirements: defaultValues?.conditions?.some((c: any) => c.type === "minimumTransactions" || c.type === "maximumTransactions") || false,
+      useSpendingRequirements: defaultValues?.conditions?.some((c: any) => c.type === "minimumLifetimeSpend" || c.type === "minimumPointsBalance") || false,
+      useTimeRequirements: defaultValues?.conditions?.some((c: any) => c.type === "daysSinceJoined") || false,
+      minimumTransactions: defaultValues?.conditions?.find((c: any) => c.type === "minimumTransactions")?.value?.toString() || "",
+      maximumTransactions: defaultValues?.conditions?.find((c: any) => c.type === "maximumTransactions")?.value?.toString() || "",
+      daysSinceJoined: defaultValues?.conditions?.find((c: any) => c.type === "daysSinceJoined")?.value?.toString() || "",
+      minimumLifetimeSpend: defaultValues?.conditions?.find((c: any) => c.type === "minimumLifetimeSpend")?.value?.toString() || "",
+      minimumPointsBalance: defaultValues?.conditions?.find((c: any) => c.type === "minimumPointsBalance")?.value?.toString() || "",
+      membershipLevel: defaultValues?.conditions?.find((c: any) => c.type === "membershipLevel")?.value || "Bronze",
+      newCustomer: defaultValues?.newcx || false,
+      useMembershipRequirements: !defaultValues?.newcx
     },
 
     // Limitations
     limitations: {
-      totalRedemptionLimit: "",
-      perCustomerLimit: "1",
-      useTimeRestrictions: false,
-      startTime: "",
-      endTime: "",
-      dayRestrictions: [],
-      useDateRestrictions: false,
-      dateRestrictionStart: "",
-      dateRestrictionEnd: ""
+      totalRedemptionLimit: defaultValues?.limitations?.find((l: any) => l.type === "totalRedemptionLimit")?.value?.toString() || "",
+      perCustomerLimit: defaultValues?.limitations?.find((l: any) => l.type === "customerLimit")?.value?.toString() || "1",
+      useTimeRestrictions: defaultValues?.limitations?.some((l: any) => l.type === "startTime" || l.type === "endTime" || l.type === "dayRestrictions") || false,
+      startTime: defaultValues?.limitations?.find((l: any) => l.type === "startTime")?.value || "",
+      endTime: defaultValues?.limitations?.find((l: any) => l.type === "endTime")?.value || "",
+      dayRestrictions: defaultValues?.limitations?.find((l: any) => l.type === "dayRestrictions")?.value || [],
+      useDateRestrictions: defaultValues?.limitations?.some((l: any) => l.type === "dateRestrictionStart" || l.type === "dateRestrictionEnd") || false,
+      dateRestrictionStart: defaultValues?.limitations?.find((l: any) => l.type === "dateRestrictionStart")?.value || "",
+      dateRestrictionEnd: defaultValues?.limitations?.find((l: any) => l.type === "dateRestrictionEnd")?.value || ""
     },
 
     // New fields for Active Period
-    hasActivePeriod: false,
+    hasActivePeriod: defaultValues?.hasActivePeriod || false,
     activePeriod: {
-      startDate: "",
-      endDate: "",
-      startTime: "09:00",
-      endTime: "17:00"
+      startDate: defaultValues?.activePeriod?.startDate ? new Date(defaultValues.activePeriod.startDate).toISOString().split('T')[0] : "",
+      endDate: defaultValues?.activePeriod?.endDate ? new Date(defaultValues.activePeriod.endDate).toISOString().split('T')[0] : "",
+      startTime: defaultValues?.activePeriod?.startDate ? (() => {
+        const date = new Date(defaultValues.activePeriod.startDate);
+        return `${date.getUTCHours().toString().padStart(2, '0')}:${date.getUTCMinutes().toString().padStart(2, '0')}`;
+      })() : "09:00",
+      endTime: defaultValues?.activePeriod?.endDate ? (() => {
+        const date = new Date(defaultValues.activePeriod.endDate);
+        return `${date.getUTCHours().toString().padStart(2, '0')}:${date.getUTCMinutes().toString().padStart(2, '0')}`;
+      })() : "17:00"
     },
     
     // Summary text for the reward
-    rewardSummary: "",
+    rewardSummary: defaultValues?.rewardSummary || "",
   })
 
   // Validation functions
@@ -226,6 +235,92 @@ export function CreateRewardPopup({
       fetchMerchantCustomers();
     }
   }, [open, formData.rewardVisibility, user]);
+
+  // Update form data when defaultValues changes (for editing)
+  useEffect(() => {
+    if (defaultValues && isEditing) {
+      setFormData({
+        // Basic Details
+        rewardName: defaultValues?.rewardName || "",
+        description: defaultValues?.description || "",
+        type: defaultValues?.rewardTypeDetails?.type || "",
+        rewardVisibility: defaultValues?.newcx ? "new" : 
+                         defaultValues?.rewardVisibility === "specific" ? "specific" : "all",
+        specificCustomerIds: customerId ? [customerId] : defaultValues?.specificCustomerIds || [],
+        specificCustomerNames: customerName ? [customerName] : defaultValues?.specificCustomerNames || [],
+        pin: defaultValues?.pin || "",
+        pointsCost: defaultValues?.pointsCost?.toString() || "",
+        isActive: defaultValues?.isActive ?? true,
+        delayedVisibility: !!defaultValues?.delayedVisibility,
+        delayedVisibilityType: defaultValues?.delayedVisibility?.type === "totaltransactions" ? "transactions" : "spend",
+        delayedVisibilityTransactions: defaultValues?.delayedVisibility?.type === "totaltransactions" ? 
+                                      defaultValues.delayedVisibility.value?.toString() || "" : "",
+        delayedVisibilitySpend: defaultValues?.delayedVisibility?.type === "totalLifetimeSpend" ? 
+                               defaultValues.delayedVisibility.value?.toString() || "" : "",
+        
+        // Reward type specific fields
+        discountValue: defaultValues?.rewardTypeDetails?.discountValue?.toString() || "",
+        discountAppliesTo: defaultValues?.rewardTypeDetails?.appliesTo || "",
+        minimumPurchase: defaultValues?.rewardTypeDetails?.minimumPurchase?.toString() || "",
+        itemName: defaultValues?.rewardTypeDetails?.itemName || "",
+        itemDescription: defaultValues?.rewardTypeDetails?.itemDescription || "",
+        requiredPurchase: defaultValues?.rewardTypeDetails?.requiredPurchase || "",
+        bonusItem: defaultValues?.rewardTypeDetails?.bonusItem || "",
+        bundleDiscountType: defaultValues?.rewardTypeDetails?.bundleDiscountType || "free",
+        bundleDiscountValue: defaultValues?.rewardTypeDetails?.bundleDiscountValue?.toString() || "",
+        mysteryOptions: "",
+        revealAtCheckout: false,
+        customRewardDetails: "",
+        voucherAmount: "",
+        
+        // Conditions
+        conditions: {
+          useTransactionRequirements: defaultValues?.conditions?.some((c: any) => c.type === "minimumTransactions" || c.type === "maximumTransactions") || false,
+          useSpendingRequirements: defaultValues?.conditions?.some((c: any) => c.type === "minimumLifetimeSpend" || c.type === "minimumPointsBalance") || false,
+          useTimeRequirements: defaultValues?.conditions?.some((c: any) => c.type === "daysSinceJoined") || false,
+          minimumTransactions: defaultValues?.conditions?.find((c: any) => c.type === "minimumTransactions")?.value?.toString() || "",
+          maximumTransactions: defaultValues?.conditions?.find((c: any) => c.type === "maximumTransactions")?.value?.toString() || "",
+          daysSinceJoined: defaultValues?.conditions?.find((c: any) => c.type === "daysSinceJoined")?.value?.toString() || "",
+          minimumLifetimeSpend: defaultValues?.conditions?.find((c: any) => c.type === "minimumLifetimeSpend")?.value?.toString() || "",
+          minimumPointsBalance: defaultValues?.conditions?.find((c: any) => c.type === "minimumPointsBalance")?.value?.toString() || "",
+          membershipLevel: defaultValues?.conditions?.find((c: any) => c.type === "membershipLevel")?.value || "Bronze",
+          newCustomer: defaultValues?.newcx || false,
+          useMembershipRequirements: !defaultValues?.newcx
+        },
+
+        // Limitations
+        limitations: {
+          totalRedemptionLimit: defaultValues?.limitations?.find((l: any) => l.type === "totalRedemptionLimit")?.value?.toString() || "",
+          perCustomerLimit: defaultValues?.limitations?.find((l: any) => l.type === "customerLimit")?.value?.toString() || "1",
+          useTimeRestrictions: defaultValues?.limitations?.some((l: any) => l.type === "startTime" || l.type === "endTime" || l.type === "dayRestrictions") || false,
+          startTime: defaultValues?.limitations?.find((l: any) => l.type === "startTime")?.value || "",
+          endTime: defaultValues?.limitations?.find((l: any) => l.type === "endTime")?.value || "",
+          dayRestrictions: defaultValues?.limitations?.find((l: any) => l.type === "dayRestrictions")?.value || [],
+          useDateRestrictions: defaultValues?.limitations?.some((l: any) => l.type === "dateRestrictionStart" || l.type === "dateRestrictionEnd") || false,
+          dateRestrictionStart: defaultValues?.limitations?.find((l: any) => l.type === "dateRestrictionStart")?.value || "",
+          dateRestrictionEnd: defaultValues?.limitations?.find((l: any) => l.type === "dateRestrictionEnd")?.value || ""
+        },
+
+        // New fields for Active Period
+        hasActivePeriod: defaultValues?.hasActivePeriod || false,
+        activePeriod: {
+          startDate: defaultValues?.activePeriod?.startDate ? new Date(defaultValues.activePeriod.startDate).toISOString().split('T')[0] : "",
+          endDate: defaultValues?.activePeriod?.endDate ? new Date(defaultValues.activePeriod.endDate).toISOString().split('T')[0] : "",
+          startTime: defaultValues?.activePeriod?.startDate ? (() => {
+            const date = new Date(defaultValues.activePeriod.startDate);
+            return `${date.getUTCHours().toString().padStart(2, '0')}:${date.getUTCMinutes().toString().padStart(2, '0')}`;
+          })() : "09:00",
+          endTime: defaultValues?.activePeriod?.endDate ? (() => {
+            const date = new Date(defaultValues.activePeriod.endDate);
+            return `${date.getUTCHours().toString().padStart(2, '0')}:${date.getUTCMinutes().toString().padStart(2, '0')}`;
+          })() : "17:00"
+        },
+        
+        // Summary text for the reward
+        rewardSummary: defaultValues?.rewardSummary || "",
+      });
+    }
+  }, [defaultValues, isEditing]);
 
   const validateBasicDetails = () => {
     const nameValid = formData.rewardName?.trim() !== '';
@@ -590,38 +685,60 @@ export function CreateRewardPopup({
 
       }
 
-      // Create in merchant's rewards subcollection
-      const merchantRewardsRef = collection(db, 'merchants', user.uid, 'rewards');
-      const newRewardRef = await addDoc(merchantRewardsRef, {
-        ...rewardData,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-      
-      // Add the ID to the reward data
-      const rewardWithId = {
-        ...rewardData,
-        id: newRewardRef.id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      
-      // Update the merchant's reward with the ID
-      await updateDoc(
-        doc(db, 'merchants', user.uid, 'rewards', newRewardRef.id),
-        { id: newRewardRef.id }
-      );
+      if (isEditing && rewardId) {
+        // Update existing reward
+        const updateData = {
+          ...rewardData,
+          id: rewardId,
+          updatedAt: new Date().toISOString()
+        };
+        
+        // Update merchant's rewards subcollection
+        const merchantRewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId);
+        await updateDoc(merchantRewardRef, updateData);
+        
+        // Update top-level rewards collection
+        const topLevelRewardRef = doc(db, 'rewards', rewardId);
+        await updateDoc(topLevelRewardRef, updateData);
+        
+        toast({
+          title: "Reward Updated",
+          description: "Your reward has been successfully updated.",
+        });
+      } else {
+        // Create new reward
+        const merchantRewardsRef = collection(db, 'merchants', user.uid, 'rewards');
+        const newRewardRef = await addDoc(merchantRewardsRef, {
+          ...rewardData,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+        
+        // Add the ID to the reward data
+        const rewardWithId = {
+          ...rewardData,
+          id: newRewardRef.id,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        // Update the merchant's reward with the ID
+        await updateDoc(
+          doc(db, 'merchants', user.uid, 'rewards', newRewardRef.id),
+          { id: newRewardRef.id }
+        );
 
-      // Also save to top-level rewards collection
-      await setDoc(
-        doc(db, 'rewards', newRewardRef.id),
-        rewardWithId
-      );
-      
-      toast({
-        title: "Reward Created",
-        description: "Your new reward has been successfully created.",
-      });
+        // Also save to top-level rewards collection
+        await setDoc(
+          doc(db, 'rewards', newRewardRef.id),
+          rewardWithId
+        );
+        
+        toast({
+          title: "Reward Created",
+          description: "Your new reward has been successfully created.",
+        });
+      }
       
       // Close the popup
       onOpenChange(false);
@@ -725,10 +842,10 @@ export function CreateRewardPopup({
             <div className="w-80 border-r bg-gray-50 flex flex-col h-full">
               <div className="p-6 border-b flex-shrink-0">
                 <h2 className="text-lg font-semibold text-gray-900 mb-2">
-                  <span className="text-blue-500">Create</span> Reward
+                  <span className="text-blue-500">{isEditing ? 'Edit' : 'Create'}</span> Reward
                 </h2>
                 <p className="text-sm text-gray-600">
-                  Offer rewards that motivate customers to engage with your loyalty program
+                  {isEditing ? 'Modify this reward to better engage with your customers' : 'Offer rewards that motivate customers to engage with your loyalty program'}
                 </p>
                 
                 <div className="flex items-center space-x-1 mt-4">
@@ -2253,7 +2370,7 @@ export function CreateRewardPopup({
                         Creating...
                       </>
                     ) : (
-                      currentStep === 5 ? 'Create Reward' : 'Next'
+                      currentStep === 5 ? (isEditing ? 'Update Reward' : 'Create Reward') : 'Next'
                     )}
                   </Button>
                 </div>

@@ -195,6 +195,16 @@ const formatCreatedDate = (createdAt: any) => {
   }
 };
 
+// Helper function to format Melbourne time (treats stored UTC string as Melbourne local time)
+const formatMelbourneTime = (utcString: string) => {
+  const date = new Date(utcString);
+  const hours = date.getUTCHours();
+  const minutes = date.getUTCMinutes();
+  const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  return `${format(date, 'MMM d, yyyy')} ${displayHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+};
+
 // Component interfaces
 interface Reward {
   id: string;
@@ -2197,6 +2207,7 @@ const RewardsTabContent = () => {
   const [hasMoreRewards, setHasMoreRewards] = useState(true)
   const [allRewardsLoaded, setAllRewardsLoaded] = useState(false)
   const [showCreateRewardPopup, setShowCreateRewardPopup] = useState(false)
+  const [editingReward, setEditingReward] = useState<Reward | null>(null)
 
     // Function to get customer name by ID from top-level customers collection
   const getCustomerName = async (customerId: string): Promise<string> => {
@@ -2651,6 +2662,11 @@ const RewardsTabContent = () => {
   const handleViewReward = (rewardId: string) => {
     setSelectedRewardId(rewardId);
     setIsRewardDetailOpen(true);
+  };
+
+  const handleEditReward = (reward: Reward) => {
+    setEditingReward(reward);
+    setShowCreateRewardPopup(true);
   };
 
   // Bulk selection functions
@@ -3418,8 +3434,8 @@ const RewardsTabContent = () => {
                                 </TooltipTrigger>
                                 <TooltipContent>
                                   <div className="text-xs space-y-1">
-                                    <div><strong>Start:</strong> {reward.activePeriod.startDate ? format(new Date(reward.activePeriod.startDate), 'MMM d, yyyy h:mm a') : 'Not set'}</div>
-                                    <div><strong>End:</strong> {reward.activePeriod.endDate ? format(new Date(reward.activePeriod.endDate), 'MMM d, yyyy h:mm a') : 'Not set'}</div>
+                                    <div><strong>Start:</strong> {reward.activePeriod.startDate ? formatMelbourneTime(reward.activePeriod.startDate) : 'Not set'}</div>
+                                    <div><strong>End:</strong> {reward.activePeriod.endDate ? formatMelbourneTime(reward.activePeriod.endDate) : 'Not set'}</div>
                                     {reward.manuallyOverridden && (
                                       <div className="pt-1 mt-1 border-t border-red-200">
                                         <div className="text-red-700 font-medium">⚠️ Auto-scheduling disabled</div>
@@ -3459,7 +3475,7 @@ const RewardsTabContent = () => {
                                 <Eye className="h-4 w-4 mr-2" />
                                 View
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => router.push(`/store/${reward.id}/edit`)}>
+                              <DropdownMenuItem onClick={() => handleEditReward(reward)}>
                                 <Edit className="h-4 w-4 mr-2" />
                                 Edit
                               </DropdownMenuItem>
@@ -3617,8 +3633,8 @@ const RewardsTabContent = () => {
                                 </TooltipTrigger>
                                 <TooltipContent>
                                   <div className="text-xs space-y-1">
-                                    <div><strong>Start:</strong> {reward.activePeriod.startDate ? format(new Date(reward.activePeriod.startDate), 'MMM d, yyyy h:mm a') : 'Not set'}</div>
-                                    <div><strong>End:</strong> {reward.activePeriod.endDate ? format(new Date(reward.activePeriod.endDate), 'MMM d, yyyy h:mm a') : 'Not set'}</div>
+                                    <div><strong>Start:</strong> {reward.activePeriod.startDate ? formatMelbourneTime(reward.activePeriod.startDate) : 'Not set'}</div>
+                                    <div><strong>End:</strong> {reward.activePeriod.endDate ? formatMelbourneTime(reward.activePeriod.endDate) : 'Not set'}</div>
                                     {reward.manuallyOverridden && (
                                       <div className="pt-1 mt-1 border-t border-red-200">
                                         <div className="text-red-700 font-medium">⚠️ Auto-scheduling disabled</div>
@@ -3655,7 +3671,7 @@ const RewardsTabContent = () => {
                                 <Eye className="h-4 w-4 mr-2" />
                                 View
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => router.push(`/store/${reward.id}/edit`)}>
+                              <DropdownMenuItem onClick={() => handleEditReward(reward)}>
                                 <Edit className="h-4 w-4 mr-2" />
                                 Edit
                               </DropdownMenuItem>
@@ -3794,10 +3810,18 @@ const RewardsTabContent = () => {
       )}
 
       {/* Create Reward Popup */}
-      <CreateRewardPopup
-        open={showCreateRewardPopup}
-        onOpenChange={setShowCreateRewardPopup}
-      />
+              <CreateRewardPopup
+          open={showCreateRewardPopup}
+          onOpenChange={(open) => {
+            setShowCreateRewardPopup(open);
+            if (!open) {
+              setEditingReward(null);
+            }
+          }}
+          defaultValues={editingReward || undefined}
+          isEditing={!!editingReward}
+          rewardId={editingReward?.id}
+        />
     </div>
   );
 };

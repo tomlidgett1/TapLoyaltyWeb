@@ -42,6 +42,7 @@ import { CreateBannerDialog } from "@/components/create-banner-dialog"
 import { CreatePointsRulePopup } from "@/components/create-points-rule-popup"
 import { WelcomePopup } from "@/components/welcome-popup"
 import { CreateManualProgramDialog } from "@/components/create-manual-program-dialog"
+import { SettingsDialog } from "@/components/settings-dialog"
 
 // Import Create Agent Modal Component
 import {
@@ -124,6 +125,8 @@ export default function GetStartedPage() {
   const [showCreateBanner, setShowCreateBanner] = useState(false)
   const [showCreatePointsRule, setShowCreatePointsRule] = useState(false)
   const [showNetworkReward, setShowNetworkReward] = useState(false)
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false)
+  const [settingsActiveSection, setSettingsActiveSection] = useState("Memberships")
   
   // Program type selector states
   const [programTypeSelectorOpen, setProgramTypeSelectorOpen] = useState(false)
@@ -209,6 +212,20 @@ export default function GetStartedPage() {
       actionType: 'popup',
       actionText: 'Setup',
       popupAction: () => setProgramTypeSelectorOpen(true)
+    },
+    {
+      id: 'membership-tiers',
+      title: 'Set Membership Tiers',
+      description: 'Create different membership levels for your loyalty program. Set tier requirements, benefits, and rewards to encourage customers to reach higher levels.',
+      icon: Star,
+      completed: false,
+      category: 'loyalty',
+      actionType: 'popup',
+      actionText: 'Setup',
+      popupAction: () => {
+        setSettingsActiveSection("Memberships")
+        setShowSettingsDialog(true)
+      }
     },
     {
       id: 'create-banner',
@@ -408,6 +425,22 @@ export default function GetStartedPage() {
       }
     )
 
+    const unsubscribeMembershipTiers = onSnapshot(
+      collection(db, `merchants/${user.uid}/membershipTiers`),
+      (snapshot) => {
+        const hasMembershipTiers = !snapshot.empty
+        setChecklistItems(prev => prev.map(item => {
+          if (item.id === 'membership-tiers') {
+            return { ...item, completed: hasMembershipTiers }
+          }
+          return item
+        }))
+      },
+      (error) => {
+        console.error('Error listening to membership tiers collection:', error)
+      }
+    )
+
     const unsubscribeAgents = onSnapshot(
       collection(db, `merchants/${user.uid}/agents`),
       (snapshot) => {
@@ -429,6 +462,7 @@ export default function GetStartedPage() {
       unsubscribeRewards()
       unsubscribeBanners()
       unsubscribePointsRules()
+      unsubscribeMembershipTiers()
       unsubscribeAgents()
     }
   }, [user?.uid, updateCompletionStatus])
@@ -1152,6 +1186,12 @@ export default function GetStartedPage() {
       <WelcomePopup 
         open={showWelcomePopup} 
         onOpenChange={setShowWelcomePopup} 
+      />
+      
+      <SettingsDialog 
+        open={showSettingsDialog} 
+        onOpenChange={setShowSettingsDialog}
+        initialActiveSection={settingsActiveSection}
       />
 
       {/* Program Type Selector Popup */}

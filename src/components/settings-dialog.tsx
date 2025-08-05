@@ -52,9 +52,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
-import { doc, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs, onSnapshot, orderBy, writeBatch, addDoc } from "firebase/firestore"
+import { doc, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs, onSnapshot, orderBy, writeBatch, addDoc, setDoc } from "firebase/firestore"
 import { db, auth } from "@/lib/firebase"
 import { signInWithEmailAndPassword, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth"
 import { toast } from "@/components/ui/use-toast"
@@ -103,11 +104,18 @@ interface Membership {
   customerCount?: number;
 }
 
-export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenChange?: (open: boolean) => void }) {
+export function SettingsDialog({ open, onOpenChange, initialActiveSection }: { open?: boolean, onOpenChange?: (open: boolean) => void, initialActiveSection?: string }) {
   const { user } = useAuth()
-  const [activeSection, setActiveSection] = useState("Business")
+  const [activeSection, setActiveSection] = useState(initialActiveSection || "Business")
   const [loading, setLoading] = useState(false)
   const [dataLoading, setDataLoading] = useState(true)
+  
+  // Update active section when initialActiveSection prop changes
+  useEffect(() => {
+    if (initialActiveSection) {
+      setActiveSection(initialActiveSection)
+    }
+  }, [initialActiveSection])
   
   // Days of the week
   const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -220,6 +228,39 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
   // Membership-related state variables
   const [memberships, setMemberships] = useState<Membership[]>([])
   const [membershipLoading, setMembershipLoading] = useState(false)
+  const [showCreateMembershipDialog, setShowCreateMembershipDialog] = useState(false)
+  
+  // Create membership form state
+  const [membershipFormData, setMembershipFormData] = useState<Omit<Membership, 'id' | 'createdAt' | 'updatedAt' | 'customerCount'>>({
+    name: "",
+    description: "",
+    order: 0,
+    isActive: true,
+    conditions: {
+      lifetimeTransactions: { enabled: false, value: 0 },
+      lifetimeSpend: { enabled: false, value: 0 },
+      numberOfRedemptions: { enabled: false, value: 0 },
+      averageTransactionsPerWeek: { enabled: false, value: 0 },
+      daysSinceJoined: { enabled: false, value: 0 },
+      daysSinceLastVisit: { enabled: false, value: 0 }
+    }
+  })
+  
+  // Condition form state (separate from the actual saved conditions)
+  const [membershipConditionSettings, setMembershipConditionSettings] = useState({
+    lifetimeTransactions: {
+      enabled: false,
+      value: 0
+    },
+    lifetimeSpend: {
+      enabled: false,
+      value: 0
+    },
+    numberOfRedemptions: {
+      enabled: false,
+      value: 0
+    }
+  })
   
   // Support box state
   const [supportBoxOpen, setSupportBoxOpen] = useState(false)
@@ -671,6 +712,185 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
       });
     } finally {
       setSupportLoading(false);
+    }
+  };
+
+  const resetMembershipFormData = () => {
+    setMembershipFormData({
+      name: "",
+      description: "",
+      order: memberships.length + 1,
+      isActive: true,
+      conditions: {
+        lifetimeTransactions: { enabled: false, value: 0 },
+        lifetimeSpend: { enabled: false, value: 0 },
+        numberOfRedemptions: { enabled: false, value: 0 },
+        averageTransactionsPerWeek: { enabled: false, value: 0 },
+        daysSinceJoined: { enabled: false, value: 0 },
+        daysSinceLastVisit: { enabled: false, value: 0 }
+      }
+    })
+    
+    setMembershipConditionSettings({
+      lifetimeTransactions: {
+        enabled: false,
+        value: 0
+      },
+      lifetimeSpend: {
+        enabled: false,
+        value: 0
+      },
+      numberOfRedemptions: {
+        enabled: false,
+        value: 0
+      }
+    })
+  }
+
+  const handleMembershipConditionSettingChange = (type: 'lifetimeTransactions' | 'lifetimeSpend' | 'numberOfRedemptions', field: 'enabled' | 'value', value: boolean | number) => {
+    setMembershipConditionSettings(prev => ({
+      ...prev,
+      [type]: {
+        ...prev[type],
+        [field]: value
+      }
+    }))
+  }
+
+  const handleCreateMembership = () => {
+    // Check if all tiers already exist
+    const availableTiers = ['Bronze', 'Silver', 'Gold'].filter(tierName => 
+      !memberships.some(m => m.name.toLowerCase() === tierName.toLowerCase())
+    )
+    
+    if (availableTiers.length === 0) {
+      toast({
+        title: "All Tiers Created",
+        description: "You have already created all available membership tiers (Bronze, Silver, Gold).",
+        variant: "default"
+      })
+      return
+    }
+    
+    resetMembershipFormData()
+    setShowCreateMembershipDialog(true)
+  }
+
+  const handleSaveMembership = async () => {
+    if (!user?.uid) return
+    
+    try {
+      if (!membershipFormData.name) {
+        toast({
+          title: "Error",
+          description: "Please select a tier name",
+          variant: "destructive"
+        })
+        return
+      }
+      
+      // Validate that only Bronze, Silver, Gold are allowed
+      const allowedTiers = ['Bronze', 'Silver', 'Gold']
+      if (!allowedTiers.includes(membershipFormData.name)) {
+        toast({
+          title: "Error",
+          description: "Only Bronze, Silver, and Gold tiers are allowed",
+          variant: "destructive"
+        })
+        return
+      }
+      
+      // Check if tier already exists
+      const existingTier = memberships.find(m => m.name.toLowerCase() === membershipFormData.name.toLowerCase())
+      if (existingTier) {
+        toast({
+          title: "Error",
+          description: `${membershipFormData.name} tier already exists`,
+          variant: "destructive"
+        })
+        return
+      }
+      
+      // Create conditions object with the correct structure
+      const conditions = {
+        lifetimeTransactions: { 
+          enabled: membershipConditionSettings.lifetimeTransactions.enabled, 
+          value: membershipConditionSettings.lifetimeTransactions.value 
+        },
+        lifetimeSpend: { 
+          enabled: membershipConditionSettings.lifetimeSpend.enabled, 
+          value: membershipConditionSettings.lifetimeSpend.value 
+        },
+        numberOfRedemptions: { 
+          enabled: membershipConditionSettings.numberOfRedemptions.enabled, 
+          value: membershipConditionSettings.numberOfRedemptions.value 
+        },
+        // Include other condition types with default values
+        averageTransactionsPerWeek: { enabled: false, value: 0 },
+        daysSinceJoined: { enabled: false, value: 0 },
+        daysSinceLastVisit: { enabled: false, value: 0 }
+      }
+      
+      // Check if any conditions are enabled
+      const hasEnabledConditions = 
+        membershipConditionSettings.lifetimeTransactions.enabled || 
+        membershipConditionSettings.lifetimeSpend.enabled || 
+        membershipConditionSettings.numberOfRedemptions.enabled;
+      
+      // If there are no conditions, make the tier inactive
+      const updatedIsActive = hasEnabledConditions ? membershipFormData.isActive : false;
+      
+      if (!hasEnabledConditions && membershipFormData.isActive) {
+        toast({
+          title: "Warning",
+          description: "Tier has been set to inactive because it has no conditions",
+          variant: "default"
+        })
+      }
+      
+      const membershipData = {
+        ...membershipFormData,
+        isActive: updatedIsActive,
+        conditions, // Use the new conditions object format
+        updatedAt: serverTimestamp()
+      }
+      
+      // Check if we're editing an existing membership
+      const existingMembership = memberships.find(m => m.name.toLowerCase() === membershipFormData.name.toLowerCase())
+      
+      if (existingMembership) {
+        // Update existing membership
+        await updateDoc(
+          doc(db, 'merchants', user.uid, 'memberships', existingMembership.id),
+          membershipData
+        )
+        
+        toast({
+          title: "Success",
+          description: "Membership tier updated successfully"
+        })
+      } else {
+        // Create new membership
+        const newDocRef = doc(collection(db, 'merchants', user.uid, 'memberships'))
+        await setDoc(newDocRef, {
+          ...membershipData,
+          createdAt: serverTimestamp()
+        })
+        
+        toast({
+          title: "Success",
+          description: "Membership tier created successfully"
+        })
+      }
+      
+      setShowCreateMembershipDialog(false)
+    } catch (error) {
+      console.error("Error saving membership:", error)
+      toast({
+        title: "Error",
+        description: "Failed to save membership tier",
+        variant: "destructive"
+      })
     }
   };
 
@@ -1674,105 +1894,160 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
               <div className="flex items-center justify-center h-32">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
-            ) : memberships.length === 0 ? (
-              <div className="bg-muted/50 border rounded-md shadow-sm p-8 text-center">
-                <Award className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-base font-medium mb-2">No Membership Tiers</h3>
-                <p className="text-xs text-gray-600 mb-4 max-w-md mx-auto">
-                  Create membership tiers to segment your customers and offer targeted rewards.
-                </p>
-              </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {memberships.map(membership => (
-                  <div key={membership.id} className="border rounded-md p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Award className="h-5 w-5 text-blue-600" />
-                        <h3 className="font-medium">{membership.name}</h3>
-                        {membership.name.toLowerCase() === 'bronze' && (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                            <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
-                            Default
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                                          <span className="text-xs text-gray-600">
-                    {membership.isActive ? 'Active' : 'Inactive'}
-                  </span>
-                        <Switch 
-                          checked={membership.isActive}
-                          onCheckedChange={async (checked) => {
-                            try {
-                              await updateDoc(
-                                doc(db, 'merchants', user!.uid!, 'memberships', membership.id),
-                                {
-                                  isActive: checked,
-                                  updatedAt: serverTimestamp()
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {['Bronze', 'Silver', 'Gold'].map(tierName => {
+                  const existingMembership = memberships.find(m => m.name.toLowerCase() === tierName.toLowerCase())
+                  const isConfigured = !!existingMembership
+                  
+                  return (
+                    <div key={tierName} className="border border-blue-200 bg-white rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Award className="h-5 w-5 text-blue-600" />
+                          <h3 className="font-medium">{tierName}</h3>
+                          {tierName.toLowerCase() === 'bronze' && (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                              <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+                              Default
+                            </span>
+                          )}
+                        </div>
+                        {isConfigured && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-600">
+                              {existingMembership.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                            <Switch 
+                              checked={existingMembership.isActive}
+                              onCheckedChange={async (checked) => {
+                                try {
+                                  await updateDoc(
+                                    doc(db, 'merchants', user!.uid!, 'memberships', existingMembership.id),
+                                    {
+                                      isActive: checked,
+                                      updatedAt: serverTimestamp()
+                                    }
+                                  )
+                                  
+                                  toast({
+                                    title: "Status Updated",
+                                    description: `${tierName} tier is now ${checked ? 'active' : 'inactive'}`,
+                                  })
+                                } catch (error) {
+                                  console.error("Error updating membership status:", error)
+                                  toast({
+                                    title: "Error",
+                                    description: "Failed to update tier status. Please try again.",
+                                    variant: "destructive"
+                                  })
                                 }
-                              )
-                              
-                              toast({
-                                title: "Status Updated",
-                                description: `${membership.name} tier is now ${checked ? 'active' : 'inactive'}`,
-                              })
-                            } catch (error) {
-                              console.error("Error updating membership status:", error)
-                              toast({
-                                title: "Error",
-                                description: "Failed to update tier status. Please try again.",
-                                variant: "destructive"
-                              })
-                            }
-                          }}
-                          disabled={membership.name.toLowerCase() === 'bronze'}
-                        />
-                      </div>
-                    </div>
-                    
-                    <p className="text-xs text-gray-600 mb-3">{membership.description}</p>
-                    
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span>Customers:</span>
-                        <span className="font-medium">{membership.customerCount || 0}</span>
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <span className="text-xs font-medium">Requirements:</span>
-                        {membership.conditions && Object.entries(membership.conditions).map(([type, condition]) => {
-                          if (!condition.enabled) return null;
-                          
-                          return (
-                            <div key={type} className="flex items-center justify-between text-xs">
-                              <span>
-                                {type === "lifetimeTransactions" 
-                                  ? "Lifetime Transactions" 
-                                  : type === "lifetimeSpend"
-                                  ? "Lifetime Spend"
-                                  : type === "numberOfRedemptions"
-                                  ? "Number of Redemptions"
-                                  : type}
-                              </span>
-                              <span className="font-medium">
-                                {type === "lifetimeSpend"
-                                  ? `$${condition.value.toFixed(2)}`
-                                  : condition.value}
-                              </span>
-                            </div>
-                          );
-                        })}
-                        
-                        {(!membership.conditions || Object.entries(membership.conditions).filter(([_, c]) => c.enabled).length === 0) && (
-                          <div className="text-xs text-gray-600">
-                            No active conditions
+                              }}
+                              disabled={tierName.toLowerCase() === 'bronze'}
+                            />
                           </div>
                         )}
                       </div>
+                      
+                      {isConfigured ? (
+                        <>
+                          <p className="text-xs text-gray-600 mb-3">{existingMembership.description}</p>
+                          
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span>Customers:</span>
+                              <span className="font-medium">{existingMembership.customerCount || 0}</span>
+                            </div>
+                            
+                            <div className="space-y-1">
+                              <span className="text-xs font-medium">Requirements:</span>
+                              {existingMembership.conditions && Object.entries(existingMembership.conditions).map(([type, condition]) => {
+                                if (!condition.enabled) return null;
+                                
+                                return (
+                                  <div key={type} className="flex items-center justify-between text-xs">
+                                    <span>
+                                      {type === "lifetimeTransactions" 
+                                        ? "Lifetime Transactions" 
+                                        : type === "lifetimeSpend"
+                                        ? "Lifetime Spend"
+                                        : type === "numberOfRedemptions"
+                                        ? "Number of Redemptions"
+                                        : type}
+                                    </span>
+                                    <span className="font-medium">
+                                      {type === "lifetimeSpend"
+                                        ? `$${condition.value.toFixed(2)}`
+                                        : condition.value}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                              
+                              {(!existingMembership.conditions || Object.entries(existingMembership.conditions).filter(([_, c]) => c.enabled).length === 0) && (
+                                <div className="text-xs text-gray-600">
+                                  No active conditions
+                                </div>
+                              )}
+                            </div>
+                            
+                            <Button
+                              onClick={() => {
+                                // Set form data for editing
+                                setMembershipFormData({
+                                  name: existingMembership.name,
+                                  description: existingMembership.description,
+                                  order: existingMembership.order,
+                                  isActive: existingMembership.isActive,
+                                  conditions: existingMembership.conditions
+                                })
+                                
+                                // Set condition settings for editing
+                                setMembershipConditionSettings({
+                                  lifetimeTransactions: {
+                                    enabled: existingMembership.conditions.lifetimeTransactions?.enabled || false,
+                                    value: existingMembership.conditions.lifetimeTransactions?.value || 0
+                                  },
+                                  lifetimeSpend: {
+                                    enabled: existingMembership.conditions.lifetimeSpend?.enabled || false,
+                                    value: existingMembership.conditions.lifetimeSpend?.value || 0
+                                  },
+                                  numberOfRedemptions: {
+                                    enabled: existingMembership.conditions.numberOfRedemptions?.enabled || false,
+                                    value: existingMembership.conditions.numberOfRedemptions?.value || 0
+                                  }
+                                })
+                                
+                                setShowCreateMembershipDialog(true)
+                              }}
+                              variant="outline"
+                              size="sm"
+                              className="w-full mt-3"
+                            >
+                              Edit Parameters
+                            </Button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-center py-4">
+                          <p className="text-xs text-gray-500 mb-3">
+                            {tierName} tier has not been configured yet.
+                          </p>
+                          <Button
+                            onClick={() => {
+                              resetMembershipFormData()
+                              setMembershipFormData(prev => ({ ...prev, name: tierName }))
+                              setShowCreateMembershipDialog(true)
+                            }}
+                            className="w-full bg-[#007AFF] hover:bg-[#0071e3] text-white rounded-md shadow-sm h-8 text-xs"
+                          >
+                            Set Up Now
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
@@ -2142,6 +2417,205 @@ export function SettingsDialog({ open, onOpenChange }: { open?: boolean, onOpenC
             disabled={verifyingPassword || !verificationPassword || !newAbn}
           >
             {verifyingPassword ? "Verifying..." : "Update ABN"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    
+    {/* Create Membership Tier Dialog */}
+    <Dialog open={showCreateMembershipDialog} onOpenChange={setShowCreateMembershipDialog}>
+      <DialogContent className="sm:max-w-md max-h-[97vh] overflow-y-auto rounded-md border-0 shadow-lg">
+        <DialogTitle>
+          {memberships.find(m => m.name.toLowerCase() === membershipFormData.name.toLowerCase()) ? 'Edit' : 'Create'} Membership Tier
+        </DialogTitle>
+        <DialogDescription>
+          Set the conditions that customers must meet to qualify for this tier
+        </DialogDescription>
+        
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="membershipName">Tier Name</Label>
+            <select 
+              id="membershipName"
+              value={membershipFormData.name}
+              onChange={(e) => setMembershipFormData(prev => ({ ...prev, name: e.target.value }))}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="">Select a tier...</option>
+              {['Bronze', 'Silver', 'Gold'].filter(tierName => 
+                !memberships.some(m => m.name.toLowerCase() === tierName.toLowerCase())
+              ).map(tierName => (
+                <option key={tierName} value={tierName}>
+                  {tierName}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Only Bronze, Silver, and Gold tiers are allowed. You can only create tiers that don't already exist.
+            </p>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="membershipDescription">Description</Label>
+            <Input
+              id="membershipDescription"
+              value={membershipFormData.description}
+              onChange={(e) => setMembershipFormData(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="e.g. Top tier customers"
+              className="rounded-md"
+            />
+          </div>
+          
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="membershipIsActive" className="cursor-pointer">Active Status</Label>
+            </div>
+            <Switch 
+              id="membershipIsActive" 
+              checked={membershipFormData.isActive} 
+              onCheckedChange={(checked) => setMembershipFormData({...membershipFormData, isActive: checked})}
+            />
+          </div>
+          
+          <Separator />
+          
+          <div>
+            <h3 className="text-sm font-medium mb-3">Qualification Requirements</h3>
+            <div className="space-y-4">
+              {/* Lifetime Transactions */}
+              <div className="border rounded-md p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center flex-1">
+                    <ShoppingBag className="h-4 w-4 mr-2 text-muted-foreground" />
+                    <Label htmlFor="membershipLifetimeTransactions" className="text-sm">Lifetime Transactions</Label>
+                  </div>
+                  
+                  {membershipConditionSettings.lifetimeTransactions.enabled && (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="membershipLifetimeTransactions"
+                        type="number"
+                        min="0"
+                        value={membershipConditionSettings.lifetimeTransactions.value}
+                        onChange={(e) => handleMembershipConditionSettingChange('lifetimeTransactions', 'value', parseInt(e.target.value))}
+                        className="w-20 h-8 text-xs rounded-md"
+                        placeholder="0"
+                      />
+                    </div>
+                  )}
+                  
+                  <Switch 
+                    id="membershipLifetimeTransactionsEnabled" 
+                    checked={membershipConditionSettings.lifetimeTransactions.enabled} 
+                    onCheckedChange={(checked) => handleMembershipConditionSettingChange("lifetimeTransactions", "enabled", checked)}
+                    className="rounded-full"
+                  />
+                </div>
+                {membershipConditionSettings.lifetimeTransactions.enabled && (
+                  <p className="text-xs text-muted-foreground mt-2 ml-6">
+                    Customer qualifies after this many completed transactions
+                  </p>
+                )}
+              </div>
+              
+              {/* Lifetime Spend */}
+              <div className="border rounded-md p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center flex-1">
+                    <DollarSign className="h-4 w-4 mr-2 text-muted-foreground" />
+                    <Label htmlFor="membershipLifetimeSpend" className="text-sm">Lifetime Spend</Label>
+                  </div>
+                  
+                  {membershipConditionSettings.lifetimeSpend.enabled && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">$</span>
+                      <Input
+                        id="membershipLifetimeSpend"
+                        type="number"
+                        min="0"
+                        value={membershipConditionSettings.lifetimeSpend.value}
+                        onChange={(e) => handleMembershipConditionSettingChange('lifetimeSpend', 'value', parseInt(e.target.value))}
+                        className="w-20 h-8 text-xs rounded-md"
+                        placeholder="0"
+                      />
+                    </div>
+                  )}
+                  
+                  <Switch 
+                    id="membershipLifetimeSpendEnabled" 
+                    checked={membershipConditionSettings.lifetimeSpend.enabled} 
+                    onCheckedChange={(checked) => handleMembershipConditionSettingChange("lifetimeSpend", "enabled", checked)}
+                    className="rounded-full"
+                  />
+                </div>
+                {membershipConditionSettings.lifetimeSpend.enabled && (
+                  <p className="text-xs text-muted-foreground mt-2 ml-6">
+                    Customer qualifies after spending this amount
+                  </p>
+                )}
+              </div>
+              
+              {/* Number of Redemptions */}
+              <div className="border rounded-md p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center flex-1">
+                    <Award className="h-4 w-4 mr-2 text-muted-foreground" />
+                    <Label htmlFor="membershipNumberOfRedemptions" className="text-sm">Number of Redemptions</Label>
+                  </div>
+                  
+                  {membershipConditionSettings.numberOfRedemptions.enabled && (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="membershipNumberOfRedemptions"
+                        type="number"
+                        min="0"
+                        value={membershipConditionSettings.numberOfRedemptions.value}
+                        onChange={(e) => handleMembershipConditionSettingChange('numberOfRedemptions', 'value', parseInt(e.target.value))}
+                        className="w-20 h-8 text-xs rounded-md"
+                        placeholder="0"
+                      />
+                    </div>
+                  )}
+                  
+                  <Switch 
+                    id="membershipNumberOfRedemptionsEnabled" 
+                    checked={membershipConditionSettings.numberOfRedemptions.enabled} 
+                    onCheckedChange={(checked) => handleMembershipConditionSettingChange("numberOfRedemptions", "enabled", checked)}
+                    className="rounded-full"
+                  />
+                </div>
+                {membershipConditionSettings.numberOfRedemptions.enabled && (
+                  <p className="text-xs text-muted-foreground mt-2 ml-6">
+                    Customer qualifies after redeeming this many rewards
+                  </p>
+                )}
+              </div>
+            </div>
+            
+            <div className="mt-3 text-xs text-muted-foreground">
+              <div className="flex items-center">
+                <Info className="h-3 w-3 mr-1" />
+                <span>Customers only need to meet ONE of the enabled conditions to qualify</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex justify-end gap-2 mt-6">
+          <Button 
+            variant="outline" 
+            onClick={() => setShowCreateMembershipDialog(false)}
+            className="rounded-md shadow-sm border-0 ring-1 ring-gray-200 hover:bg-gray-50 h-9"
+          >
+            Cancel
+          </Button>
+          <Button 
+            type="submit" 
+            onClick={handleSaveMembership}
+            disabled={!membershipFormData.name}
+            className="bg-[#007AFF] hover:bg-[#0071e3] text-white rounded-md shadow-sm h-9 disabled:bg-gray-300 disabled:cursor-not-allowed"
+          >
+            {memberships.find(m => m.name.toLowerCase() === membershipFormData.name.toLowerCase()) ? 'Save Changes' : 'Create Tier'}
           </Button>
         </div>
       </DialogContent>

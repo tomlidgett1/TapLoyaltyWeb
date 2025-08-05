@@ -22,7 +22,9 @@ import {
   MessageSquare,
   FileText,
   Info,
-  Plus
+  Plus,
+  Settings as SettingsIcon,
+  Repeat
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
@@ -39,6 +41,7 @@ import { NetworkRewardPopup } from "@/components/network-reward-popup"
 import { CreateBannerDialog } from "@/components/create-banner-dialog"
 import { CreatePointsRulePopup } from "@/components/create-points-rule-popup"
 import { WelcomePopup } from "@/components/welcome-popup"
+import { CreateManualProgramDialog } from "@/components/create-manual-program-dialog"
 
 // Import Create Agent Modal Component
 import {
@@ -121,6 +124,11 @@ export default function GetStartedPage() {
   const [showCreateBanner, setShowCreateBanner] = useState(false)
   const [showCreatePointsRule, setShowCreatePointsRule] = useState(false)
   const [showNetworkReward, setShowNetworkReward] = useState(false)
+  
+  // Program type selector states
+  const [programTypeSelectorOpen, setProgramTypeSelectorOpen] = useState(false)
+  const [createManualProgramOpen, setCreateManualProgramOpen] = useState(false)
+  const [createRecurringOpen, setCreateRecurringOpen] = useState(false)
 
   // Create Agent Modal States
   const [isCreateAgentModalOpen, setIsCreateAgentModalOpen] = useState(false)
@@ -200,7 +208,7 @@ export default function GetStartedPage() {
       category: 'loyalty',
       actionType: 'popup',
       actionText: 'Setup',
-      popupAction: () => setShowCreateProgram(true)
+      popupAction: () => setProgramTypeSelectorOpen(true)
     },
     {
       id: 'create-banner',
@@ -1144,6 +1152,91 @@ export default function GetStartedPage() {
       <WelcomePopup 
         open={showWelcomePopup} 
         onOpenChange={setShowWelcomePopup} 
+      />
+
+      {/* Program Type Selector Popup */}
+      {programTypeSelectorOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] animate-in fade-in duration-200" 
+          style={{ backdropFilter: 'blur(2px)' }}
+          onClick={() => setProgramTypeSelectorOpen(false)}
+        >
+          <div 
+            className="bg-white rounded-lg max-w-md mx-4 shadow-lg border border-gray-200 overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">
+                <span style={{ color: '#007AFF' }}>Create</span> Program
+              </h3>
+            </div>
+            
+            {/* Body */}
+            <div className="p-6">
+              <div className="space-y-2">
+                <button
+                  onClick={() => {
+                    setCreateManualProgramOpen(true);
+                    requestAnimationFrame(() => {
+                      setProgramTypeSelectorOpen(false);
+                    });
+                  }}
+                  className="w-full p-3 text-left border border-gray-200 rounded-md hover:bg-gray-50 hover:border-blue-300 transition-colors"
+                >
+                  <div className="flex items-start gap-3">
+                    <SettingsIcon className="h-5 w-5 text-gray-500 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 text-left">
+                      <h4 className="font-medium text-gray-900">Custom Program</h4>
+                      <p className="text-sm text-gray-600">Create a manual program with custom rewards and conditions</p>
+                    </div>
+                  </div>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setCreateRecurringOpen(true);
+                    requestAnimationFrame(() => {
+                      setProgramTypeSelectorOpen(false);
+                    });
+                  }}
+                  className="w-full p-3 text-left border border-gray-200 rounded-md hover:bg-gray-50 hover:border-blue-300 transition-colors"
+                >
+                  <div className="flex items-start gap-3">
+                    <Repeat className="h-5 w-5 text-gray-500 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 text-left">
+                      <h4 className="font-medium text-gray-900">Recurring Program</h4>
+                      <p className="text-sm text-gray-600">Set up coffee programs, vouchers, or cashback rewards</p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setProgramTypeSelectorOpen(false)}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Program Creation Dialogs */}
+      <CreateManualProgramDialog 
+        open={createManualProgramOpen} 
+        onOpenChange={setCreateManualProgramOpen} 
+      />
+      
+      <CreateRecurringRewardDialog 
+        open={createRecurringOpen} 
+        onOpenChange={setCreateRecurringOpen} 
       />
 
       {/* Create Agent Modal */}

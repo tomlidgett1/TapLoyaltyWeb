@@ -135,7 +135,8 @@ import {
   X,
   ArrowUpRight,
   List,
-  Megaphone
+  Megaphone,
+  Coffee
 } from "lucide-react"
 
 // Kibo Table Components
@@ -214,7 +215,7 @@ interface Reward {
   type: string;
   programtype?: string;
   programType?: string; // Add this field for the actual data
-  category: "individual" | "customer-specific" | "program" | "agent";
+  category: "customer-specific" | "program" | "agent";
   pointsCost: number;
   redemptionCount: number;
   status: string;
@@ -241,13 +242,26 @@ interface Reward {
   viewCount?: number;
   isAgentGenerated?: boolean;
   isIntroductoryReward?: boolean; // Add this field for introductory rewards
+  isNetworkReward?: boolean; // Add this field for network rewards
   // Additional fields for program rewards
   uniqueCustomerIds?: string[];
   uniqueCustomersCount?: number;
   lastRedeemedAt?: any;
   rewardType?: string;
   voucherAmount?: number;
-  rewardTypeDetails?: any;
+  rewardTypeDetails?: {
+    type?: string;
+    discountValue?: number;
+    discountType?: string;
+    appliesTo?: string;
+    minimumPurchase?: number;
+    itemName?: string;
+    itemDescription?: string;
+    requiredPurchase?: string;
+    bonusItem?: string;
+    bundleDiscountType?: string;
+    bundleDiscountValue?: number;
+  };
   manuallyOverridden?: boolean;
 }
 
@@ -2181,12 +2195,97 @@ const VisibilityStats = ({ rewardId }: { rewardId: string }) => {
   )
 }
 
+// Helper function to get redemption limits
+const getRedemptionLimits = (reward: Reward) => {
+  const totalLimit = reward.limitations?.find(l => l.type === 'totalRedemptionLimit')?.value;
+  const customerLimit = reward.limitations?.find(l => l.type === 'customerLimit')?.value;
+  
+  return {
+    totalLimit: totalLimit || null,
+    customerLimit: customerLimit || null
+  };
+};
+
+// Helper function to get reward type display
+const getRewardTypeDisplay = (reward: Reward) => {
+  const { rewardTypeDetails, programType, programtype } = reward;
+  
+  // Check if it's a program reward first
+  if (programType === "agent") {
+    return {
+      type: "Agent",
+      description: "AI-generated reward",
+      icon: Brain
+    };
+  }
+  
+  if (programType === "coffeeprogramnew") {
+    return {
+      type: "Coffee Program",
+      description: "Free coffee reward from loyalty program",
+      icon: Coffee
+    };
+  }
+  
+  if (programType === "voucherprogramnew") {
+    return {
+      type: "Voucher Program", 
+      description: `$${reward.voucherAmount || 0} voucher from loyalty program`,
+      icon: Ticket
+    };
+  }
+  
+  if (programType === "transactionrewardsnew") {
+    return {
+      type: "Transaction Rewards",
+      description: "Reward from transaction-based program",
+      icon: CreditCard
+    };
+  }
+  
+  // Check rewardTypeDetails for standard rewards
+  if (rewardTypeDetails?.type) {
+    switch (rewardTypeDetails.type) {
+      case 'percentageDiscount':
+        return {
+          type: "Percentage Discount",
+          description: `${rewardTypeDetails.discountValue || 0}% off ${rewardTypeDetails.appliesTo || 'purchase'}`,
+          icon: Percent
+        };
+      case 'fixedDiscount':
+        return {
+          type: "Dollar Discount",
+          description: `$${rewardTypeDetails.discountValue || 0} off${rewardTypeDetails.minimumPurchase ? ` (min $${rewardTypeDetails.minimumPurchase})` : ''}`,
+          icon: DollarSign
+        };
+      case 'freeItem':
+        return {
+          type: "Free Item",
+          description: `Free ${rewardTypeDetails.itemName || 'item'}${rewardTypeDetails.itemDescription ? ` - ${rewardTypeDetails.itemDescription}` : ''}`,
+          icon: Gift
+        };
+      case 'bundleOffer':
+        const discountText = rewardTypeDetails.bundleDiscountType === 'free' ? 'free' :
+          rewardTypeDetails.bundleDiscountType === 'percentage' ? `${rewardTypeDetails.bundleDiscountValue}% off` :
+          `$${rewardTypeDetails.bundleDiscountValue} off`;
+        return {
+          type: "Buy X Get Y",
+          description: `Buy ${rewardTypeDetails.requiredPurchase || 'item'}, get ${rewardTypeDetails.bonusItem || 'item'} ${discountText}`,
+          icon: ShoppingBag
+        };
+    }
+  }
+  
+  // Fallback - return null to not show any badge
+  return null;
+};
+
 const RewardsTabContent = () => {
   const router = useRouter()
   const { user } = useAuth()
   const [rewardsData, setRewardsData] = useState<Reward[]>([])
   const [searchQuery, setSearchQuery] = useState("")
-  const [rewardCategory, setRewardCategory] = useState<"all" | "individual" | "customer-specific" | "programs" | "agent" | "customer-search">("all")
+  const [rewardCategory, setRewardCategory] = useState<"all" | "customer-specific" | "programs" | "agent" | "customer-search">("all")
   
   // Rewards subtab refs for measuring widths
   const rewardTabRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({})
@@ -2328,7 +2427,7 @@ const RewardsTabContent = () => {
             type: data.type || 'gift',
             programtype: data.programtype || '',
             programType: data.programType || '', // Include programType
-            category: data.category || 'individual',
+            category: data.category || 'program',
             pointsCost: data.pointsCost || 0,
             redemptionCount: data.redemptionCount || 0,
             status: data.status || 'active',
@@ -2370,7 +2469,7 @@ const RewardsTabContent = () => {
   // Measure rewards subtab dimensions for sliding animation
   useEffect(() => {
     const measureRewardTabs = () => {
-      const tabs = ['all', 'individual', 'customer-specific', 'programs', 'agent', 'customer-search']
+      const tabs = ['all', 'customer-specific', 'programs', 'agent', 'customer-search']
       const newDimensions: { [key: string]: { width: number; left: number } } = {}
       
       tabs.forEach(tab => {
@@ -2469,6 +2568,18 @@ const RewardsTabContent = () => {
             });
           }
           return isProgram;
+        }
+        if (rewardCategory === "customer-specific") {
+          // Check for rewards assigned to specific customers
+          const hasAssignedCustomers = reward.customers && reward.customers.length > 0;
+          if (hasAssignedCustomers) {
+            console.log('✅ Customer-specific reward passed filter:', {
+              name: reward.rewardName,
+              customers: reward.customers,
+              customerCount: reward.customers?.length || 0
+            });
+          }
+          return hasAssignedCustomers;
         }
         return reward.category === rewardCategory
       })
@@ -2571,7 +2682,7 @@ const RewardsTabContent = () => {
             type: data.type || 'gift',
             programtype: data.programtype || '',
             programType: data.programType || '',
-            category: data.category || 'individual',
+            category: data.category || 'program',
             pointsCost: data.pointsCost || 0,
             redemptionCount: data.redemptionCount || 0,
             status: data.status || 'active',
@@ -3038,19 +3149,7 @@ const RewardsTabContent = () => {
               <Package className="h-3 w-3" />
               All Rewards
             </button>
-            <button
-              ref={(el) => rewardTabRefs.current['individual'] = el}
-              onClick={() => setRewardCategory("individual")}
-              className={cn(
-                "relative z-10 flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
-                rewardCategory === "individual"
-                  ? "text-gray-800"
-                  : "text-gray-600 hover:text-gray-700"
-              )}
-            >
-              <Gift className="h-3 w-3" />
-              Individual
-            </button>
+
             <button
               ref={(el) => rewardTabRefs.current['customer-specific'] = el}
               onClick={() => setRewardCategory("customer-specific")}
@@ -3168,6 +3267,22 @@ const RewardsTabContent = () => {
             <ProgramRewardsTable />
           ) : rewardCategory === "customer-search" ? (
             <CustomerSearchTabContent />
+          ) : rewardCategory === "agent" ? (
+            <Card className="rounded-md overflow-hidden">
+              <CardContent className="p-0">
+                <div className="p-12 text-center">
+                  <div className="mx-auto w-24 h-24 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mb-6">
+                    <Sparkles className="h-12 w-12 text-blue-500" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-3">
+                    <GradientText>AI Agent Rewards</GradientText>
+                  </h3>
+                  <p className="text-muted-foreground mb-2 text-lg">Coming Soon</p>
+                  <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
           ) : (
           <div className="w-full bg-white border border-gray-200 rounded-md shadow-sm overflow-hidden">
             {/* Bulk Actions Bar */}
@@ -3358,7 +3473,20 @@ const RewardsTabContent = () => {
                                 {getRewardTypeIcon(reward.type)}
                               </div>
                               <div className="min-w-0">
-                                <div className="truncate font-medium text-sm">{reward.rewardName}</div>
+                                <div className="flex items-center gap-2">
+                                  <div className="truncate font-medium text-sm">{reward.rewardName}</div>
+                                  {(reward as any).isRecentlyUpdated && (reward as any).lastEditedAt && (() => {
+                                    const editedDate = new Date((reward as any).lastEditedAt);
+                                    const now = new Date();
+                                    const hoursDiff = (now.getTime() - editedDate.getTime()) / (1000 * 60 * 60);
+                                    return hoursDiff <= 24;
+                                  })() && (
+                                    <span className="inline-flex items-center gap-0.5 text-xs text-gray-500 flex-shrink-0">
+                                      <div className="h-1 w-1 bg-blue-500 rounded-full"></div>
+                                      Updated
+                                    </span>
+                                  )}
+                                </div>
                                 <div className="text-xs text-muted-foreground line-clamp-1">
                                   {reward.description}
                                 </div>
@@ -3367,33 +3495,90 @@ const RewardsTabContent = () => {
                           )}
                         </TableCell>
                         <TableCell className="text-center px-6 py-2.5">
-                          <div className="flex flex-col items-center gap-1">
-                            {reward.programType === "agent" ? (
-                              <div className="font-semibold">
-                                <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-orange-600">
-                                  Agent
-                                </span>
-                              </div>
-                            ) : reward.programType ? (
-                              <div className="font-medium text-gray-800">
-                                {reward.programType === "coffeeprogramnew" ? "Coffee Program" :
-                                 reward.programType === "voucherprogramnew" ? "Voucher Program" :
-                                 reward.programType === "transactionrewardsnew" ? "Transaction Rewards" :
-                                 reward.programType.charAt(0).toUpperCase() + reward.programType.slice(1)}
-                              </div>
-                            ) : (
-                              <div className="font-medium text-gray-800">
-                                {reward.programtype 
-                                  ? reward.programtype.charAt(0).toUpperCase() + reward.programtype.slice(1)
-                                  : "Individual Reward"}
-                              </div>
-                            )}
-                            {reward.isIntroductoryReward === true && (
-                              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                                <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
-                                Introductory
-                              </span>
-                            )}
+                          <div className="flex flex-col items-start gap-2">
+                            {/* Main Type Badge with Customer Specific */}
+                            <div className="flex items-center gap-2">
+                              {(() => {
+                                const typeInfo = getRewardTypeDisplay(reward);
+                                if (!typeInfo) return null;
+                                
+                                return (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 w-fit ${
+                                          typeInfo.type === "Coffee Program" ? "border border-gray-400" : "border border-gray-200"
+                                        }`}>
+                                          <typeInfo.icon className="h-3 w-3 text-gray-500" />
+                                          {typeInfo.type}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p className="max-w-xs">{typeInfo.description}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                );
+                              })()}
+                              
+                              {/* Customer Specific Badge to the right */}
+                              {reward.customers && reward.customers.length > 0 && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-gray-50 text-gray-500 border border-gray-300 w-fit">
+                                        <User className="h-3 w-3 text-gray-400" />
+                                        Customer Specific
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Visible to {reward.customers.length} specific customer{reward.customers.length > 1 ? 's' : ''}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                            </div>
+                            
+                            {/* Additional Special Badges Below */}
+                            <div className="flex flex-wrap gap-1 justify-start">
+                              {/* Introductory Reward Badge */}
+                              {reward.isIntroductoryReward === true && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                        <img 
+                                          src="/taplogo.png" 
+                                          alt="Tap" 
+                                          className="h-3 w-3 rounded-none flex-shrink-0"
+                                        />
+                                        Introductory
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Special reward for new customers joining your loyalty program</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                              
+                              {/* Network Reward Badge */}
+                              {reward.isNetworkReward === true && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                        <Globe className="h-3 w-3 text-gray-500" />
+                                        Network
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>Reward available across the entire network</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-center px-6 py-2.5">
@@ -3403,9 +3588,42 @@ const RewardsTabContent = () => {
                           </div>
                         </TableCell>
                         <TableCell className="text-center px-6 py-2.5">
-                          <div className="font-medium text-gray-800">
-                            {reward.redemptionCount || 0}
-                          </div>
+                          {(() => {
+                            const limits = getRedemptionLimits(reward);
+                            const currentCount = reward.redemptionCount || 0;
+                            
+                            return (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="font-medium text-gray-800 cursor-help">
+                                      {limits.totalLimit ? (
+                                        <span className={currentCount >= limits.totalLimit ? 'text-red-600' : ''}>
+                                          {currentCount} / {limits.totalLimit}
+                                        </span>
+                                      ) : (
+                                        currentCount
+                                      )}
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <div className="text-xs space-y-1">
+                                      <div><strong>Current Redemptions:</strong> {currentCount}</div>
+                                      {limits.totalLimit && (
+                                        <div><strong>Total Limit:</strong> {limits.totalLimit}</div>
+                                      )}
+                                      {limits.customerLimit && (
+                                        <div><strong>Per Customer:</strong> {limits.customerLimit} max</div>
+                                      )}
+                                      {!limits.totalLimit && !limits.customerLimit && (
+                                        <div>No redemption limits set</div>
+                                      )}
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            );
+                          })()}
                         </TableCell>
 
                         <TableCell className="text-center px-6 py-2.5">
@@ -3417,7 +3635,7 @@ const RewardsTabContent = () => {
                           </div>
                         </TableCell>
                         <TableCell className="text-center px-6 py-2.5">
-                          {reward.hasActivePeriod && reward.activePeriod?.startDate && reward.activePeriod?.endDate && (
+                          {reward.hasActivePeriod && reward.activePeriod?.startDate && reward.activePeriod?.endDate ? (
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -3443,6 +3661,20 @@ const RewardsTabContent = () => {
                                       </div>
                                     )}
                                   </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium w-fit cursor-help bg-gray-50 text-gray-500 border border-gray-300">
+                                    <Clock className="h-3 w-3 text-gray-400" />
+                                    No Schedule
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>This reward has no scheduled start/end dates and will remain active until manually disabled</p>
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
@@ -3541,8 +3773,10 @@ const RewardsTabContent = () => {
           )}
         </TabsContent>
 
-        {/* Add other tab contents for individual, customer-specific, programs, agent */}
-        <TabsContent value="individual" className="mt-0">
+        {/* Add other tab contents for customer-specific, programs, agent */}
+
+        {/* Similar structure for other tabs... */}
+        <TabsContent value="customer-specific" className="mt-0">
           <Card className="rounded-md overflow-hidden">
             <CardContent className="p-0">
               <Table>
@@ -3552,6 +3786,7 @@ const RewardsTabContent = () => {
                     <TableHead className="text-center">Type</TableHead>
                     <TableHead className="text-center">Points</TableHead>
                     <TableHead className="text-center">Redemptions</TableHead>
+                    <TableHead className="text-center">Customers</TableHead>
                     <TableHead className="text-center">Created</TableHead>
                     <TableHead className="text-center">Scheduled</TableHead>
                     <TableHead className="text-center">Active</TableHead>
@@ -3561,23 +3796,24 @@ const RewardsTabContent = () => {
                 <TableBody>
                   {loadingRewards ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-24 text-center">
+                      <TableCell colSpan={9} className="h-24 text-center">
                         <div className="flex justify-center">
                           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
                         </div>
                       </TableCell>
                     </TableRow>
-                  ) : getFilteredRewards().filter(r => r.category === "individual").length === 0 ? (
+                  ) : getFilteredRewards().length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-24 text-center">
+                      <TableCell colSpan={9} className="h-24 text-center">
                         <div className="flex flex-col items-center justify-center">
-                          <Gift className="h-8 w-8 mb-2 text-muted-foreground" />
-                          <p className="text-muted-foreground">No individual rewards found</p>
+                          <Users className="h-8 w-8 mb-2 text-muted-foreground" />
+                          <p className="text-muted-foreground">No customer-specific rewards found</p>
+                          <p className="text-xs text-muted-foreground mt-1">Rewards will appear here when they are assigned to specific customers</p>
                         </div>
                       </TableCell>
                     </TableRow>
                   ) : (
-                    getFilteredRewards().filter(r => r.category === "individual").map((reward) => (
+                    getFilteredRewards().map((reward) => (
                       <TableRow 
                         key={reward.id}
                         className="cursor-pointer hover:bg-gray-100/50 transition-colors"
@@ -3596,27 +3832,154 @@ const RewardsTabContent = () => {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-center">
-                          <div className="font-medium text-gray-700">
-                            {reward.type?.charAt(0).toUpperCase() + reward.type?.slice(1) || "Gift"}
+                        <TableCell className="text-center px-6 py-2.5">
+                          <div className="flex flex-col items-start gap-2">
+                            {/* Main Type Badge with Customer Specific */}
+                            <div className="flex items-center gap-2">
+                              {(() => {
+                                const typeInfo = getRewardTypeDisplay(reward);
+                                if (!typeInfo) return null;
+                                
+                                return (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 w-fit ${
+                                          typeInfo.type === "Coffee Program" ? "border border-gray-400" : "border border-gray-200"
+                                        }`}>
+                                          <typeInfo.icon className="h-3 w-3 text-gray-500" />
+                                          {typeInfo.type}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p className="max-w-xs">{typeInfo.description}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                );
+                              })()}
+                            </div>
+                            
+                            {/* Special Badges Row */}
+                            <div className="flex items-start gap-1.5">
+                              {/* Customer Specific Badge - always shown since this tab only shows customer-specific rewards */}
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-gray-50 text-gray-500 border border-gray-300 w-fit">
+                                      <User className="h-3 w-3 text-gray-500" />
+                                      Customer Specific
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>This reward is only visible to {reward.customers?.length || 0} specific customer{(reward.customers?.length || 0) !== 1 ? 's' : ''}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              
+                              {/* Introductory Reward Badge */}
+                              {reward.isIntroductoryReward && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                        <img src="/taplogo.png" className="h-3 w-3 rounded-none flex-shrink-0" />
+                                        Introductory
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>This reward helps introduce new customers to your loyalty program</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                              
+                              {/* Network Reward Badge */}
+                              {reward.isNetworkReward && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                        <Globe className="h-3 w-3 text-gray-500" />
+                                        Network
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>This reward is part of a network-wide promotion</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                            </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center px-6 py-2.5">
                           <div className="inline-flex items-center gap-1.5 bg-white border border-gray-200 px-2 py-1 rounded-md text-xs font-medium text-gray-800">
                             <div className="h-1.5 w-1.5 rounded-full bg-blue-500"></div>
                             {reward.pointsCost > 0 ? `${reward.pointsCost} pts` : 'Free'}
                           </div>
                         </TableCell>
-                        <TableCell className="text-center">
-                          <div className="font-medium" style={{ color: '#007AFF' }}>
-                            {reward.redemptionCount || 0}
-                          </div>
+                        <TableCell className="text-center px-6 py-2.5">
+                          {(() => {
+                            const limits = getRedemptionLimits(reward);
+                            const currentCount = reward.redemptionCount || 0;
+                            
+                            return (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="font-medium text-gray-800 cursor-help">
+                                      {limits.totalLimit ? (
+                                        <span className={currentCount >= limits.totalLimit ? 'text-red-600' : ''}>
+                                          {currentCount} / {limits.totalLimit}
+                                        </span>
+                                      ) : (
+                                        currentCount
+                                      )}
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <div className="text-xs space-y-1">
+                                      <div><strong>Current Redemptions:</strong> {currentCount}</div>
+                                      {limits.totalLimit && (
+                                        <div><strong>Total Limit:</strong> {limits.totalLimit}</div>
+                                      )}
+                                      {limits.customerLimit && (
+                                        <div><strong>Per Customer:</strong> {limits.customerLimit} max</div>
+                                      )}
+                                      {!limits.totalLimit && !limits.customerLimit && (
+                                        <div>No redemption limits set</div>
+                                      )}
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            );
+                          })()}
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center px-6 py-2.5">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-200 px-2 py-1 rounded-md text-xs font-medium text-blue-700 cursor-help">
+                                  <Users className="h-3 w-3" />
+                                  {reward.customers?.length || 0} customer{(reward.customers?.length || 0) !== 1 ? 's' : ''}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <div className="text-xs space-y-1">
+                                  <div><strong>Assigned to:</strong> {reward.customers?.length || 0} specific customer{(reward.customers?.length || 0) !== 1 ? 's' : ''}</div>
+                                  <div>Only these customers can see and redeem this reward</div>
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </TableCell>
+                        <TableCell className="text-center px-6 py-2.5">
                           {formatCreatedDate(reward.createdAt)}
                         </TableCell>
-                        <TableCell className="text-center">
-                          {reward.hasActivePeriod && reward.activePeriod?.startDate && reward.activePeriod?.endDate && (
+                        <TableCell className="text-center px-6 py-2.5">
+                          {reward.hasActivePeriod && reward.activePeriod?.startDate && reward.activePeriod?.endDate ? (
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -3645,9 +4008,23 @@ const RewardsTabContent = () => {
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
+                          ) : (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium w-fit cursor-help bg-gray-50 text-gray-500 border border-gray-300">
+                                    <Clock className="h-3 w-3 text-gray-400" />
+                                    No Schedule
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>This reward has no scheduled start/end dates and will remain active until manually disabled</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           )}
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center px-6 py-2.5">
                           <div onClick={(e) => e.stopPropagation()}>
                             <Switch
                               checked={reward.isActive}
@@ -3655,7 +4032,7 @@ const RewardsTabContent = () => {
                             />
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="px-6 py-2.5">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button 
@@ -3691,7 +4068,7 @@ const RewardsTabContent = () => {
                               <DropdownMenuSeparator />
                               <DropdownMenuItem 
                                 className="text-red-600"
-                                onClick={() => deleteReward(reward.id)}
+                                onClick={() => setRewardToDelete(reward.id)}
                               >
                                 <Trash className="h-4 w-4 mr-2" />
                                 Delete
@@ -3708,21 +4085,6 @@ const RewardsTabContent = () => {
           </Card>
         </TabsContent>
 
-        {/* Similar structure for other tabs... */}
-        <TabsContent value="customer-specific" className="mt-0">
-          <Card className="rounded-md overflow-hidden">
-            <CardContent className="p-0">
-              <div className="p-8 text-center">
-                <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-lg font-medium mb-2">Customer-Specific Rewards</h3>
-                <p className="text-muted-foreground mb-4">
-                  {getFilteredRewards().filter(r => r.category === "customer-specific").length} customer-specific rewards
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         <TabsContent value="programs" className="mt-0">
           <ProgramRewardsTable />
         </TabsContent>
@@ -3730,13 +4092,16 @@ const RewardsTabContent = () => {
         <TabsContent value="agent" className="mt-0">
           <Card className="rounded-md overflow-hidden">
             <CardContent className="p-0">
-              <div className="p-8 text-center">
-                <Sparkles className="h-12 w-12 mx-auto mb-4 text-blue-500" />
-                <h3 className="text-lg font-medium mb-2">
-                  <GradientText>Agent Rewards</GradientText>
+              <div className="p-12 text-center">
+                <div className="mx-auto w-24 h-24 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mb-6">
+                  <Sparkles className="h-12 w-12 text-blue-500" />
+                </div>
+                <h3 className="text-xl font-semibold mb-3">
+                  <GradientText>AI Agent Rewards</GradientText>
                 </h3>
-                <p className="text-muted-foreground mb-4">
-                  {getFilteredRewards().filter(r => r.programtype === "agent").length} AI-generated rewards
+                <p className="text-muted-foreground mb-2 text-lg">Coming Soon</p>
+                <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                  Our AI-powered reward system is being developed to automatically create and optimise personalised rewards for your customers.
                 </p>
               </div>
             </CardContent>
@@ -5643,7 +6008,7 @@ const CustomersTabContent = ({ onCustomerClick }: { onCustomerClick: (customer: 
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="bg-gray-50/80">
                 <TableHead>
                   <SortButton field="fullName">Customer</SortButton>
                 </TableHead>
@@ -7340,7 +7705,7 @@ const ProgramRewardsTable = () => {
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="bg-gray-50/80">
                 <TableHead className="w-[320px]">Preview</TableHead>
                 <TableHead className="text-center">Program Type</TableHead>
                 <TableHead className="text-center">Customer</TableHead>
@@ -7427,7 +7792,7 @@ const ProgramRewardsTable = () => {
                         
                         if (reward.programType === 'coffeeprogramnew') {
                           return (
-                            <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 rounded-md">
+                            <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-400 rounded-md">
                               Free Coffee
                             </Badge>
                           )
@@ -7466,7 +7831,7 @@ const ProgramRewardsTable = () => {
                       {formatCreatedDate(reward.createdAt)}
                     </TableCell>
                     <TableCell className="text-center">
-                      {reward.hasActivePeriod && reward.activePeriod && (
+                      {reward.hasActivePeriod && reward.activePeriod ? (
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -7481,6 +7846,20 @@ const ProgramRewardsTable = () => {
                               <p className="text-xs">
                                 {format(reward.activePeriod.startDate.toDate(), 'MMM d, yyyy h:mm a')} - {format(reward.activePeriod.endDate.toDate(), 'MMM d, yyyy h:mm a')}
                               </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      ) : (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium w-fit cursor-help bg-gray-50 text-gray-500 border border-gray-300">
+                                <Clock className="h-3 w-3 text-gray-400" />
+                                No Schedule
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>This reward has no scheduled start/end dates and will remain active until manually disabled</p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
@@ -7734,7 +8113,7 @@ export default function StoreOverviewPage() {
           description: data.description || '',
           type: data.type || 'gift',
           programtype: data.programtype || '',
-          category: data.category || 'individual',
+          category: data.category || 'program',
           pointsCost: data.pointsCost || 0,
           redemptionCount: data.redemptionCount || 0,
           status: data.status || 'active',
@@ -7745,6 +8124,7 @@ export default function StoreOverviewPage() {
           punchCount: data.punchCount,
           expiryDays: data.expiryDays,
           customerIds: data.customerIds,
+          customers: data.customers || [],
           rewardVisibility: data.rewardVisibility,
           conditions: data.conditions,
           limitations: data.limitations,
@@ -7754,9 +8134,12 @@ export default function StoreOverviewPage() {
           lastRedeemed: data.lastRedeemed ? data.lastRedeemed.toDate() : null,
           programName: data.programName,
           impressions: data.impressions || 0,
-  
           viewCount: data.viewCount || 0,
-          isAgentGenerated: data.isAgentGenerated || false
+          isAgentGenerated: data.isAgentGenerated || false,
+          isIntroductoryReward: data.isIntroductoryReward || false,
+          isNetworkReward: data.isNetworkReward || false,
+          rewardTypeDetails: data.rewardTypeDetails || {},
+          voucherAmount: data.voucherAmount || 0
         } as Reward
       })
       
@@ -8590,7 +8973,7 @@ export default function StoreOverviewPage() {
             ) : (
               <div className="border border-gray-200 rounded-md bg-white">
                 <TableProvider columns={messageColumns} data={getAllMessages()}>
-                  <KiboTableHeader>
+                  <KiboTableHeader className="bg-gray-50/80">
                     {({ headerGroup }) => (
                       <TableHeaderGroup key={headerGroup.id} headerGroup={headerGroup}>
                         {({ header }) => <KiboTableHead key={header.id} header={header} />}

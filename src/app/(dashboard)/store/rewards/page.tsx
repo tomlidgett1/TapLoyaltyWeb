@@ -629,7 +629,7 @@ export default function RewardsPage() {
   // For the "all" tab, we use the existing filteredRewards variable
 
   // For the category tabs, we need to filter by category
-  {["individual", "customer-specific", "programs"].map((category) => {
+  {["customer-specific", "programs"].map((category) => {
     // Filter rewards by category
     const categoryFilteredRewards = rewards
       .filter(reward => {

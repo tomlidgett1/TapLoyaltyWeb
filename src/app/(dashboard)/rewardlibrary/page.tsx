@@ -30,7 +30,6 @@ import { PageHeader } from "@/components/page-header"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { RewardDetailsDialog } from "@/components/reward-details-dialog"
-import { CreateRewardPopup } from "@/components/create-reward-popup"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
 
 // Empty array for reward templates
@@ -362,7 +361,6 @@ export default function RewardLibraryPage() {
   const [selectedReward, setSelectedReward] = useState<typeof rewardTemplates[0] | null>(null)
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
   const [isCreateRewardOpen, setIsCreateRewardOpen] = useState(false)
-  const [editingReward, setEditingReward] = useState<typeof rewardTemplates[0] | null>(null)
 
   const filterRewards = (templates: typeof rewardTemplates, query: string) => {
     if (!query.trim()) return templates
@@ -381,7 +379,6 @@ export default function RewardLibraryPage() {
   }
 
   const handleEdit = () => {
-    setEditingReward(selectedReward)
     setIsDetailsOpen(false)
     setIsCreateRewardOpen(true)
   }
@@ -731,17 +728,10 @@ export default function RewardLibraryPage() {
               onEdit={handleEdit}
               onCreate={handleCreate}
             />
-            <CreateRewardPopup
+            <CreateRewardDialog
               open={isCreateRewardOpen}
-              onOpenChange={(open) => {
-                setIsCreateRewardOpen(open);
-                if (!open) {
-                  setEditingReward(null);
-                }
-              }}
-              defaultValues={editingReward || selectedReward}
-              isEditing={!!editingReward}
-              rewardId={editingReward?.id}
+              onOpenChange={setIsCreateRewardOpen}
+              defaultValues={selectedReward}
             />
           </>
         )}

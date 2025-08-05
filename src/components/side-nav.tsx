@@ -37,7 +37,9 @@ import {
   Mail,
   Camera,
   Upload,
-  Bell
+  Bell,
+  Settings as SettingsIcon,
+  Repeat
 } from "lucide-react"
 import { RiRobot3Line } from "react-icons/ri"
 
@@ -299,6 +301,13 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   // Audio notification
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
+  // Compute if any dialog is open to prevent backdrop flashing
+  const isAnyDialogOpen = createSheetOpen || createRewardSheetOpen || createRewardPopupOpen || 
+    createRecurringOpen || createBannerOpen || broadcastDialogOpen || createRuleOpen || 
+    introRewardOpen || networkRewardOpen || networkRewardPopupOpen || sendBroadcastPopupOpen || 
+    createPointsRulePopupOpen || introductoryRewardPopupOpen || programTypeSelectorOpen || 
+    createManualProgramOpen || settingsDialogOpen
+
   // Sync with parent's collapsed prop (external change)
   useEffect(() => {
     if (collapsed !== undefined && collapsed !== isCollapsed) {
@@ -433,27 +442,63 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
     fetchMerchantData()
   }, [user])
 
-  // Listen for real-time merchant status changes
+  // Listen for real-time merchant data changes (status, isNetworkStore, etc.)
   useEffect(() => {
     if (!user?.uid) {
       setMerchantStatus('active') // Reset to default
+      setMerchantData(null) // Reset merchant data
       return
     }
 
     const merchantRef = doc(db, 'merchants', user.uid)
     const unsubscribe = onSnapshot(merchantRef, (doc) => {
       if (doc.exists()) {
-        const data = doc.data()
+        const data = doc.data() as MerchantData
+        
+        // Update merchant status
         if (data.status) {
           setMerchantStatus(data.status as 'active' | 'inactive')
         }
+        
+        // Update full merchant data (including isNetworkStore and other fields)
+        setMerchantData(prevData => ({
+          ...prevData,
+          ...data
+        }))
+        
+        // Update merchant name if it changed
+        const possibleNameFields = ['name', 'businessName', 'merchantName', 'storeName', 'companyName', 'displayName']
+        let foundName = null
+        for (const field of possibleNameFields) {
+          if (data[field]) {
+            foundName = data[field]
+            break
+          }
+        }
+        if (foundName && foundName !== merchantName) {
+          setMerchantName(foundName)
+          
+          // Update initials
+          const words = foundName.split(' ')
+          if (words.length >= 2) {
+            setInitials(`${words[0][0]}${words[1][0]}`.toUpperCase())
+          } else {
+            setInitials(foundName.substring(0, 2).toUpperCase())
+          }
+        }
+        
+        // Update email if it changed
+        const email = data.email || user.email || ""
+        if (email !== merchantEmail) {
+          setMerchantEmail(email)
+        }
       }
     }, (error) => {
-      console.error("Error listening to merchant status changes:", error)
+      console.error("Error listening to merchant data changes:", error)
     })
 
     return () => unsubscribe()
-  }, [user?.uid])
+  }, [user?.uid, merchantName, merchantEmail])
 
   useEffect(() => {
     const checkOnboardingStatus = async () => {
@@ -1313,8 +1358,15 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
 
       {/* Program Type Selector Popup */}
       {programTypeSelectorOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] animate-in fade-in duration-200">
-          <div className="bg-white rounded-lg max-w-md mx-4 shadow-lg border border-gray-200 overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] animate-in fade-in duration-200" 
+          style={{ backdropFilter: 'blur(2px)' }}
+          onClick={() => setProgramTypeSelectorOpen(false)}
+        >
+          <div 
+            className="bg-white rounded-lg max-w-md mx-4 shadow-lg border border-gray-200 overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="px-6 py-4 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">
@@ -1327,24 +1379,42 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
               <div className="space-y-2">
                 <button
                   onClick={() => {
+                    // Use a more elegant transition approach
                     setCreateManualProgramOpen(true);
-                    setProgramTypeSelectorOpen(false);
+                    // Keep the backdrop visible during transition
+                    requestAnimationFrame(() => {
+                      setProgramTypeSelectorOpen(false);
+                    });
                   }}
                   className="w-full p-3 text-left border border-gray-200 rounded-md hover:bg-gray-50 hover:border-blue-300 transition-colors"
                 >
-                  <h4 className="font-medium text-gray-900">Custom Program</h4>
-                  <p className="text-sm text-gray-600">Create a manual program with custom rewards and conditions</p>
+                  <div className="flex items-start gap-3">
+                    <SettingsIcon className="h-5 w-5 text-gray-500 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 text-left">
+                      <h4 className="font-medium text-gray-900">Custom Program</h4>
+                      <p className="text-sm text-gray-600">Create a manual program with custom rewards and conditions</p>
+                    </div>
+                  </div>
                 </button>
                 
                 <button
                   onClick={() => {
+                    // Use a more elegant transition approach
                     setCreateRecurringOpen(true);
-                    setProgramTypeSelectorOpen(false);
+                    // Keep the backdrop visible during transition
+                    requestAnimationFrame(() => {
+                      setProgramTypeSelectorOpen(false);
+                    });
                   }}
                   className="w-full p-3 text-left border border-gray-200 rounded-md hover:bg-gray-50 hover:border-blue-300 transition-colors"
                 >
-                  <h4 className="font-medium text-gray-900">Recurring Program</h4>
-                  <p className="text-sm text-gray-600">Set up coffee programs, vouchers, or cashback rewards</p>
+                  <div className="flex items-start gap-3">
+                    <Repeat className="h-5 w-5 text-gray-500 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 text-left">
+                      <h4 className="font-medium text-gray-900">Recurring Program</h4>
+                      <p className="text-sm text-gray-600">Set up coffee programs, vouchers, or cashback rewards</p>
+                    </div>
+                  </div>
                 </button>
               </div>
             </div>

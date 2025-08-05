@@ -1,6 +1,6 @@
 "use client"
 
-import { Dialog, DialogPortal } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogPortal } from "@/components/ui/dialog"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { CalendarIcon, X, CheckCircle, Edit as EditIcon, Search, Info, Loader2 } from "lucide-react"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
@@ -84,13 +84,6 @@ interface FormData {
   limitations: {
     totalRedemptionLimit: string
     perCustomerLimit: string
-    useTimeRestrictions: boolean
-    startTime: string
-    endTime: string
-    dayRestrictions: string[]
-    useDateRestrictions: boolean
-    dateRestrictionStart: string
-    dateRestrictionEnd: string
   }
 
   // New fields for Active Period
@@ -123,6 +116,7 @@ export function CreateRewardPopup({
   const [selectedCustomers, setSelectedCustomers] = useState<{ id: string; name: string }[]>([])
     const [customersLoading, setCustomersLoading] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const [formData, setFormData] = useState<FormData>({
     // Basic Details
@@ -175,15 +169,8 @@ export function CreateRewardPopup({
 
     // Limitations
     limitations: {
-      totalRedemptionLimit: defaultValues?.limitations?.find((l: any) => l.type === "totalRedemptionLimit")?.value?.toString() || "",
-      perCustomerLimit: defaultValues?.limitations?.find((l: any) => l.type === "customerLimit")?.value?.toString() || "1",
-      useTimeRestrictions: defaultValues?.limitations?.some((l: any) => l.type === "startTime" || l.type === "endTime" || l.type === "dayRestrictions") || false,
-      startTime: defaultValues?.limitations?.find((l: any) => l.type === "startTime")?.value || "",
-      endTime: defaultValues?.limitations?.find((l: any) => l.type === "endTime")?.value || "",
-      dayRestrictions: defaultValues?.limitations?.find((l: any) => l.type === "dayRestrictions")?.value || [],
-      useDateRestrictions: defaultValues?.limitations?.some((l: any) => l.type === "dateRestrictionStart" || l.type === "dateRestrictionEnd") || false,
-      dateRestrictionStart: defaultValues?.limitations?.find((l: any) => l.type === "dateRestrictionStart")?.value || "",
-      dateRestrictionEnd: defaultValues?.limitations?.find((l: any) => l.type === "dateRestrictionEnd")?.value || ""
+      totalRedemptionLimit: defaultValues?.limitations?.find((l: any) => l.type === "totalRedemptionLimit")?.value?.toString() || "100",
+      perCustomerLimit: defaultValues?.limitations?.find((l: any) => l.type === "customerLimit")?.value?.toString() || "1"
     },
 
     // New fields for Active Period
@@ -208,22 +195,77 @@ export function CreateRewardPopup({
   // Validation functions
   // Fetch customers for specific customer selection
   const fetchMerchantCustomers = async () => {
-    if (!user) return;
+    if (!user?.uid) {
+      console.log("DEBUG: fetchMerchantCustomers - No user ID available");
+      return;
+    }
+    
+    console.log("DEBUG: Starting fetchMerchantCustomers", {
+      merchantId: user.uid,
+      currentCustomers: customers.length
+    });
     
     setCustomersLoading(true);
     try {
-      const customersRef = collection(db, 'merchants', user.uid, 'customers');
-      const customersQuery = query(customersRef, orderBy('createdAt', 'desc'), limit(100));
-      const querySnapshot = await getDocs(customersQuery);
+      // Try the correct subcollection path with the fullName field
+      console.log("DEBUG: Trying merchants/{merchantId}/customers subcollection with fullName field");
+      const subcollectionQuery = query(
+        collection(db, 'merchants', user.uid, 'customers'),
+        orderBy('fullName', 'asc'), // Use fullName instead of createdAt
+        limit(100)
+      );
       
-      const customersData = querySnapshot.docs.map(doc => ({
+      const subcollectionSnapshot = await getDocs(subcollectionQuery);
+      console.log("DEBUG: Subcollection query complete, docs count:", subcollectionSnapshot.docs.length);
+      
+      if (subcollectionSnapshot.docs.length > 0) {
+        const customersData = subcollectionSnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
         id: doc.id,
-        ...doc.data()
-      }));
+            name: data.fullName || data.name || 'Unnamed Customer',
+            email: data.email,
+            pointsBalance: data.pointsBalance || 0,
+            lifetimeTransactionCount: data.lifetimeTransactionCount || 0
+          };
+        });
       
       setCustomers(customersData);
+        console.log("DEBUG: Successfully loaded customers:", customersData.length);
+      } else {
+        // If that fails, try without the orderBy
+        console.log("DEBUG: No customers found with orderBy, trying unordered query");
+        const unorderedQuery = query(
+          collection(db, 'merchants', user.uid, 'customers'),
+          limit(100)
+        );
+        
+        const unorderedSnapshot = await getDocs(unorderedQuery);
+        console.log("DEBUG: Unordered query complete, docs count:", unorderedSnapshot.docs.length);
+        
+        if (unorderedSnapshot.docs.length > 0) {
+          const customersData = unorderedSnapshot.docs.map(doc => {
+            const data = doc.data();
+            const customerName = data.fullName || data.name || data.displayName || data.customerName || 'Unnamed Customer';
+            return {
+              id: doc.id,
+              name: customerName,
+              email: data.email,
+              pointsBalance: data.pointsBalance || 0,
+              lifetimeTransactionCount: data.lifetimeTransactionCount || 0
+            };
+          });
+          
+          setCustomers(customersData);
+          console.log("DEBUG: Successfully loaded customers (unordered):", customersData.length);
+        } else {
+          console.log("DEBUG: No customers found in any query");
+          setCustomers([]);
+        }
+      }
     } catch (error) {
       console.error('Error fetching customers:', error);
+      setCustomers([]);
     } finally {
       setCustomersLoading(false);
     }
@@ -232,9 +274,15 @@ export function CreateRewardPopup({
   // Load customers when opening for specific customer selection
   useEffect(() => {
     if (open && formData.rewardVisibility === 'specific') {
+      console.log("DEBUG: useEffect triggered - loading customers", {
+        open,
+        rewardVisibility: formData.rewardVisibility,
+        userUid: user?.uid,
+        existingCustomersCount: customers.length
+      });
       fetchMerchantCustomers();
     }
-  }, [open, formData.rewardVisibility, user]);
+  }, [open, formData.rewardVisibility, user?.uid]);
 
   // Update form data when defaultValues changes (for editing)
   useEffect(() => {
@@ -290,15 +338,8 @@ export function CreateRewardPopup({
 
         // Limitations
         limitations: {
-          totalRedemptionLimit: defaultValues?.limitations?.find((l: any) => l.type === "totalRedemptionLimit")?.value?.toString() || "",
-          perCustomerLimit: defaultValues?.limitations?.find((l: any) => l.type === "customerLimit")?.value?.toString() || "1",
-          useTimeRestrictions: defaultValues?.limitations?.some((l: any) => l.type === "startTime" || l.type === "endTime" || l.type === "dayRestrictions") || false,
-          startTime: defaultValues?.limitations?.find((l: any) => l.type === "startTime")?.value || "",
-          endTime: defaultValues?.limitations?.find((l: any) => l.type === "endTime")?.value || "",
-          dayRestrictions: defaultValues?.limitations?.find((l: any) => l.type === "dayRestrictions")?.value || [],
-          useDateRestrictions: defaultValues?.limitations?.some((l: any) => l.type === "dateRestrictionStart" || l.type === "dateRestrictionEnd") || false,
-          dateRestrictionStart: defaultValues?.limitations?.find((l: any) => l.type === "dateRestrictionStart")?.value || "",
-          dateRestrictionEnd: defaultValues?.limitations?.find((l: any) => l.type === "dateRestrictionEnd")?.value || ""
+          totalRedemptionLimit: defaultValues?.limitations?.find((l: any) => l.type === "totalRedemptionLimit")?.value?.toString() || "100",
+          perCustomerLimit: defaultValues?.limitations?.find((l: any) => l.type === "customerLimit")?.value?.toString() || "1"
         },
 
         // New fields for Active Period
@@ -322,6 +363,43 @@ export function CreateRewardPopup({
     }
   }, [defaultValues, isEditing]);
 
+  // Cleanup timeout on unmount or popup close
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  // Clear timeout when popup closes
+  useEffect(() => {
+    if (!open && timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+      setIsCreating(false);
+    }
+    
+    // Force cleanup of potential stuck overlays
+    if (!open) {
+      setTimeout(() => {
+        // Remove any stuck dialog overlays
+        const stuckOverlays = document.querySelectorAll('div[data-state="closed"]');
+        stuckOverlays.forEach(overlay => {
+          const htmlOverlay = overlay as HTMLElement;
+          if (htmlOverlay.style.position === 'fixed' && htmlOverlay.style.inset === '0px') {
+            overlay.remove();
+          }
+        });
+        
+        // Ensure body scroll is restored
+        document.body.style.overflow = '';
+        document.body.style.pointerEvents = '';
+      }, 100);
+    }
+  }, [open]);
+
   const validateBasicDetails = () => {
     const nameValid = formData.rewardName?.trim() !== '';
     const descriptionValid = formData.description?.trim() !== '';
@@ -332,6 +410,15 @@ export function CreateRewardPopup({
       : typeof formData.pointsCost === 'number';
     
     return nameValid && descriptionValid && pointsCostValid && typeValid && pinValid;
+  }
+
+  const validateLimitations = () => {
+    const totalLimitValid = formData.limitations.totalRedemptionLimit && 
+                           Number(formData.limitations.totalRedemptionLimit) >= 1;
+    const perCustomerLimitValid = formData.limitations.perCustomerLimit && 
+                                 Number(formData.limitations.perCustomerLimit) >= 1;
+    
+    return totalLimitValid && perCustomerLimitValid;
   }
 
   const handleStepChange = (step: number) => {
@@ -352,6 +439,24 @@ export function CreateRewardPopup({
       toast({
         title: "Complete Basic Details",
         description: `Please fill in all required fields before proceeding: ${missingFields.join(", ")}`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (step === 5 && !validateLimitations()) {
+      const missingFields = [];
+      
+      if (!formData.limitations.totalRedemptionLimit || Number(formData.limitations.totalRedemptionLimit) < 1) {
+        missingFields.push("Total Redemption Limit");
+      }
+      if (!formData.limitations.perCustomerLimit || Number(formData.limitations.perCustomerLimit) < 1) {
+        missingFields.push("Per-Customer Limit");
+      }
+      
+      toast({
+        title: "Complete Limitations",
+        description: `Please fill in all required limitation fields: ${missingFields.join(", ")}`,
         variant: "destructive"
       });
       return;
@@ -474,54 +579,13 @@ export function CreateRewardPopup({
       // Transform limitations into array of objects
       const limitations = []
 
-      // Total Redemption Limit
-      if (formData.limitations.totalRedemptionLimit) {
+      // Total Redemption Limit (always required now)
         limitations.push({
           type: "totalRedemptionLimit",
-          value: Number(formData.limitations.totalRedemptionLimit)
-        });
-      }
+        value: Math.max(1, Number(formData.limitations.totalRedemptionLimit) || 100)
+      });
 
-      // Time Restrictions
-      if (formData.limitations.useTimeRestrictions) {
-        if (formData.limitations.startTime) {
-          limitations.push({
-            type: "startTime",
-            value: formData.limitations.startTime
-          });
-        }
-        
-        if (formData.limitations.endTime) {
-          limitations.push({
-            type: "endTime", 
-            value: formData.limitations.endTime
-          });
-        }
-        
-        if (formData.limitations.dayRestrictions.length > 0) {
-          limitations.push({
-            type: "dayRestrictions",
-            value: formData.limitations.dayRestrictions
-          });
-        }
-      }
 
-      // Date Restrictions
-      if (formData.limitations.useDateRestrictions) {
-        if (formData.limitations.dateRestrictionStart) {
-          limitations.push({
-            type: "dateRestrictionStart",
-            value: formData.limitations.dateRestrictionStart
-          });
-        }
-        
-        if (formData.limitations.dateRestrictionEnd) {
-          limitations.push({
-            type: "dateRestrictionEnd",
-            value: formData.limitations.dateRestrictionEnd
-          });
-        }
-      }
 
       // Ensure Per Customer Limit is always at least 1
       const perCustomerLimit = formData.limitations.perCustomerLimit 
@@ -577,7 +641,7 @@ export function CreateRewardPopup({
         isActive: isActiveBasedOnPeriod,
         pointsCost: formData.rewardVisibility === 'new' ? 0 : Math.max(0, Number(formData.pointsCost)),
         rewardVisibility: formData.rewardVisibility === 'all' ? 'global' : 
-                          formData.rewardVisibility === 'specific' ? 'specific' : 
+                          formData.rewardVisibility === 'specific' ? 'global' : 
                           formData.rewardVisibility === 'new' ? 'global' : 'conditional',
         newcx: formData.rewardVisibility === 'new',
         firstPurchaseRequired: formData.rewardVisibility === 'new',
@@ -602,11 +666,11 @@ export function CreateRewardPopup({
         updatedAt: utcTimestamp,
         minSpend: 0,
         reason: '',
-        customers: [],
+        customers: formData.rewardVisibility === 'specific' ? formData.specificCustomerIds || [] : [],
         redemptionCount: 0,
         uniqueCustomersCount: 0,
         lastRedeemedAt: null,
-        uniqueCustomerIds: customerId ? [customerId] : [],
+        uniqueCustomerIds: customerId ? [customerId] : (formData.rewardVisibility === 'specific' ? formData.specificCustomerIds || [] : []),
         
         // Add active period data
         hasActivePeriod: formData.hasActivePeriod,
@@ -690,7 +754,10 @@ export function CreateRewardPopup({
         const updateData = {
           ...rewardData,
           id: rewardId,
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
+          lastEditedAt: new Date().toISOString(),
+          isRecentlyUpdated: true,
+          editedBy: user.uid
         };
         
         // Update merchant's rewards subcollection
@@ -705,6 +772,13 @@ export function CreateRewardPopup({
           title: "Reward Updated",
           description: "Your reward has been successfully updated.",
         });
+        
+        // Clear loading state immediately for updates
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+        setIsCreating(false);
       } else {
         // Create new reward
         const merchantRewardsRef = collection(db, 'merchants', user.uid, 'rewards');
@@ -738,6 +812,13 @@ export function CreateRewardPopup({
           title: "Reward Created",
           description: "Your new reward has been successfully created.",
         });
+        
+        // Clear loading state immediately for creation
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+        setIsCreating(false);
       }
       
       // Close the popup
@@ -750,6 +831,13 @@ export function CreateRewardPopup({
         description: "Failed to create reward. Please try again.",
         variant: "destructive"
       });
+      
+      // Clear loading state on error
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      setIsCreating(false);
     }
   }
 
@@ -760,9 +848,17 @@ export function CreateRewardPopup({
 
   return (
     <Dialog 
+      key={open ? 'open' : 'closed'}
       open={open} 
-      onOpenChange={(open) => {
-        if (!open) {
+      onOpenChange={(newOpen) => {
+        if (!newOpen) {
+          // Clear any pending timeouts when closing
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
+          setIsCreating(false);
+          
           // Reset form when closing
           setFormData({
             rewardName: "",
@@ -805,15 +901,8 @@ export function CreateRewardPopup({
               useMembershipRequirements: true
             },
             limitations: {
-              totalRedemptionLimit: "",
-              perCustomerLimit: "1",
-              useTimeRestrictions: false,
-              startTime: "",
-              endTime: "",
-              dayRestrictions: [],
-              useDateRestrictions: false,
-              dateRestrictionStart: "",
-              dateRestrictionEnd: ""
+              totalRedemptionLimit: "100",
+              perCustomerLimit: "1"
             },
             hasActivePeriod: false,
             activePeriod: {
@@ -826,7 +915,8 @@ export function CreateRewardPopup({
           })
           setCurrentStep(1)
         }
-        onOpenChange(open)
+        // Always call the parent's onOpenChange to properly manage the dialog state
+        onOpenChange(newOpen)
       }}
     >
       <DialogPortal>
@@ -1962,11 +2052,11 @@ export function CreateRewardPopup({
                         
                         <div className="space-y-4">
                           <div className="space-y-2">
-                            <Label htmlFor="totalRedemptionLimit" className="text-sm">Total Redemption Limit</Label>
+                            <Label htmlFor="totalRedemptionLimit" className="text-sm">Total Redemption Limit <span className="text-red-500">*</span></Label>
                             <Input
                               id="totalRedemptionLimit"
                               type="number"
-                              min="0"
+                              min="1"
                               value={formData.limitations.totalRedemptionLimit}
                               onChange={(e) => {
                                 const value = parseInt(e.target.value, 10);
@@ -1974,15 +2064,15 @@ export function CreateRewardPopup({
                                   ...formData,
                                   limitations: {
                                     ...formData.limitations,
-                                    totalRedemptionLimit: e.target.value === '' ? '' : Math.max(0, value).toString()
+                                    totalRedemptionLimit: e.target.value === '' ? '1' : Math.max(1, value).toString()
                                   }
                                 })
                               }}
-                              placeholder="Unlimited"
+                              placeholder="e.g., 100"
                               className="text-sm h-9"
                             />
                             <p className="text-xs text-gray-500">
-                              Maximum number of times this reward can be redeemed across all customers (leave empty for unlimited)
+                              Maximum number of times this reward can be redeemed across all customers (minimum 1)
                             </p>
                           </div>
                           
@@ -1991,7 +2081,7 @@ export function CreateRewardPopup({
                             <Input
                               id="perCustomerLimit"
                               type="number"
-                              min="0"
+                              min="1"
                               value={formData.limitations.perCustomerLimit}
                               onChange={(e) => {
                                 const value = parseInt(e.target.value, 10);
@@ -1999,260 +2089,21 @@ export function CreateRewardPopup({
                                   ...formData,
                                   limitations: {
                                     ...formData.limitations,
-                                    perCustomerLimit: e.target.value === '' ? '' : Math.max(0, value).toString()
+                                    perCustomerLimit: e.target.value === '' ? '' : Math.max(1, value).toString()
                                   }
                                 })
                               }}
-                              placeholder="Unlimited"
+                              placeholder="1"
                               className="text-sm h-9"
                             />
                             <p className="text-xs text-gray-500">
-                              How many times each individual customer can redeem this reward (leave empty for unlimited)
+                              How many times each individual customer can redeem this reward (minimum 1, leave empty for unlimited)
                             </p>
                           </div>
                         </div>
                       </div>
-
-                      {/* Time Restrictions */}
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-sm">Time Restrictions</Label>
-                          <Switch 
-                            checked={formData.limitations.useTimeRestrictions}
-                            onCheckedChange={(checked) => setFormData({
-                              ...formData,
-                              limitations: {
-                                ...formData.limitations,
-                                useTimeRestrictions: checked
-                              }
-                            })}
-                            className="data-[state=checked]:bg-blue-600"
-                          />
                         </div>
-
-                        <AnimatePresence mode="wait">
-                          {formData.limitations.useTimeRestrictions && (
-                            <motion.div
-                              key="time-restrictions"
-                              initial={{ height: 0, opacity: 0, y: -10 }}
-                              animate={{ height: "auto", opacity: 1, y: 0 }}
-                              exit={{ height: 0, opacity: 0, y: -10 }}
-                              transition={{ 
-                                duration: 0.3,
-                                ease: [0.25, 0.46, 0.45, 0.94]
-                              }}
-                              className="overflow-hidden"
-                            >
-                              <div className="border-l-2 border-blue-100 pl-4 py-2 space-y-6">
-                            <p className="text-sm text-gray-600">
-                              Specify when this reward can be redeemed. This is useful for happy hours, lunch specials, etc.
-                            </p>
-
-                            <div className="grid grid-cols-2 gap-6">
-                              <div className="space-y-2">
-                                <Label htmlFor="timeRestrictionStart">Available From</Label>
-                                <Input
-                                  id="timeRestrictionStart"
-                                  type="time"
-                                  value={formData.limitations.startTime}
-                                  onChange={(e) => setFormData({
-                                    ...formData,
-                                    limitations: {
-                                      ...formData.limitations,
-                                      startTime: e.target.value
-                                    }
-                                  })}
-                                  className="h-9"
-                                />
-                                <p className="text-xs text-gray-500">
-                                  Starting time when this reward can be redeemed
-                                </p>
                               </div>
-                              
-                              <div className="space-y-2">
-                                <Label htmlFor="timeRestrictionEnd">Available Until</Label>
-                                <Input
-                                  id="timeRestrictionEnd"
-                                  type="time"
-                                  value={formData.limitations.endTime}
-                                  onChange={(e) => setFormData({
-                                    ...formData,
-                                    limitations: {
-                                      ...formData.limitations,
-                                      endTime: e.target.value
-                                    }
-                                  })}
-                                  className="h-9"
-                                />
-                                <p className="text-xs text-gray-500">
-                                  Ending time when this reward can be redeemed
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="space-y-3">
-                              <Label>Available Days</Label>
-                              <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
-                                {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => (
-                                  <div
-                                    key={day}
-                                    onClick={() => {
-                                      const dayIndex = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].indexOf(day);
-                                      const newAvailableDays = [...formData.limitations.dayRestrictions];
-                                      if (newAvailableDays.includes(dayIndex.toString())) {
-                                        newAvailableDays.splice(newAvailableDays.indexOf(dayIndex.toString()), 1);
-                                      } else {
-                                        newAvailableDays.push(dayIndex.toString());
-                                      }
-                                      setFormData({
-                                        ...formData,
-                                        limitations: {
-                                          ...formData.limitations,
-                                          dayRestrictions: newAvailableDays
-                                        }
-                                      });
-                                    }}
-                                    className={`cursor-pointer flex items-center justify-center text-xs p-2 rounded-md ${
-                                      formData.limitations.dayRestrictions.includes(
-                                        ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].indexOf(day).toString()
-                                      )
-                                        ? "bg-blue-100 text-blue-800 font-medium"
-                                        : "bg-gray-100 text-gray-500"
-                                    }`}
-                                  >
-                                    {day.substring(0, 3)}
-                                  </div>
-                                ))}
-                              </div>
-                              <p className="text-xs text-gray-500">
-                                Select the days when this reward is available for redemption
-                              </p>
-                            </div>
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-
-                      {/* Date Restrictions */}
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-sm">Date Range Restrictions</Label>
-                          <Switch 
-                            checked={formData.limitations.useDateRestrictions}
-                            onCheckedChange={(checked) => setFormData({
-                              ...formData,
-                              limitations: {
-                                ...formData.limitations,
-                                useDateRestrictions: checked
-                              }
-                            })}
-                            className="data-[state=checked]:bg-blue-600"
-                          />
-                        </div>
-
-                        <AnimatePresence mode="wait">
-                          {formData.limitations.useDateRestrictions && (
-                            <motion.div
-                              key="date-restrictions"
-                              initial={{ height: 0, opacity: 0, y: -10 }}
-                              animate={{ height: "auto", opacity: 1, y: 0 }}
-                              exit={{ height: 0, opacity: 0, y: -10 }}
-                              transition={{ 
-                                duration: 0.3,
-                                ease: [0.25, 0.46, 0.45, 0.94]
-                              }}
-                              className="overflow-hidden"
-                            >
-                              <div className="border-l-2 border-blue-100 pl-4 py-2 space-y-6">
-                            <p className="text-sm text-gray-600">
-                              Set a specific date range when this reward is available. Useful for seasonal promotions.
-                            </p>
-
-                            <div className="grid grid-cols-2 gap-6">
-                              <div className="space-y-2">
-                                <Label htmlFor="dateRestrictionStart">Start Date</Label>
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <Button
-                                      id="dateRestrictionStart"
-                                      variant="outline"
-                                      className={cn(
-                                        "w-full justify-start text-left font-normal h-9",
-                                        !formData.limitations.dateRestrictionStart && "text-muted-foreground"
-                                      )}
-                                    >
-                                      <CalendarIcon className="mr-2 h-4 w-4" />
-                                      {formData.limitations.dateRestrictionStart ? format(new Date(formData.limitations.dateRestrictionStart), "PPP") : <span>Pick a date</span>}
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-auto p-0" align="start">
-                                    <CalendarComponent
-                                      mode="single"
-                                      selected={formData.limitations.dateRestrictionStart ? new Date(formData.limitations.dateRestrictionStart) : undefined}
-                                      onSelect={(date: Date | undefined) => 
-                                        setFormData({
-                                          ...formData,
-                                          limitations: {
-                                            ...formData.limitations,
-                                            dateRestrictionStart: date ? date.toISOString() : ''
-                                          }
-                                        })
-                                      }
-                                      initialFocus
-                                    />
-                                  </PopoverContent>
-                                </Popover>
-                                <p className="text-xs text-gray-500">
-                                  First day when this reward can be redeemed
-                                </p>
-                              </div>
-                              
-                              <div className="space-y-2">
-                                <Label htmlFor="dateRestrictionEnd">End Date</Label>
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <Button
-                                      id="dateRestrictionEnd"
-                                      variant="outline"
-                                      className={cn(
-                                        "w-full justify-start text-left font-normal h-9",
-                                        !formData.limitations.dateRestrictionEnd && "text-muted-foreground"
-                                      )}
-                                    >
-                                      <CalendarIcon className="mr-2 h-4 w-4" />
-                                      {formData.limitations.dateRestrictionEnd ? format(new Date(formData.limitations.dateRestrictionEnd), "PPP") : <span>Pick a date</span>}
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-auto p-0" align="start">
-                                    <CalendarComponent
-                                      mode="single"
-                                      selected={formData.limitations.dateRestrictionEnd ? new Date(formData.limitations.dateRestrictionEnd) : undefined}
-                                      onSelect={(date: Date | undefined) => 
-                                        setFormData({
-                                          ...formData,
-                                          limitations: {
-                                            ...formData.limitations,
-                                            dateRestrictionEnd: date ? date.toISOString() : ''
-                                          }
-                                        })
-                                      }
-                                      initialFocus
-                                    />
-                                  </PopoverContent>
-                                </Popover>
-                                <p className="text-xs text-gray-500">
-                                  Last day when this reward can be redeemed
-                                </p>
-                              </div>
-                            </div>
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    </div>
-                  </div>
                 )}
 
                 {currentStep === 5 && (
@@ -2353,12 +2204,15 @@ export function CreateRewardPopup({
                       if (currentStep < 5) {
                         handleStepChange(currentStep + 1);
                       } else {
+                        // Clear any existing timeout
+                        if (timeoutRef.current) {
+                          clearTimeout(timeoutRef.current);
+                          timeoutRef.current = null;
+                        }
+                        
                         setIsCreating(true);
                         await saveReward();
-                        // Keep loading state for 2 seconds
-                        setTimeout(() => {
-                          setIsCreating(false);
-                        }, 2000);
+                        // Loading state is now cleared in saveReward function
                       }
                     }}
                     disabled={isCreating}
@@ -2367,7 +2221,7 @@ export function CreateRewardPopup({
                     {isCreating ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating...
+                        {isEditing ? 'Updating...' : 'Creating...'}
                       </>
                     ) : (
                       currentStep === 5 ? (isEditing ? 'Update Reward' : 'Create Reward') : 'Next'

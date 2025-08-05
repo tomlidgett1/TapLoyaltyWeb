@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useState, useEffect, useRef } from "react"
-import { X, DollarSign, ShoppingBag, Info, ArrowRight, Users, TrendingUp, Zap, Globe, ChevronUp } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import { X, DollarSign, ShoppingBag, Info, ArrowRight, Users, TrendingUp, Zap, Globe, ChevronUp, ChevronDown } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
@@ -28,6 +29,7 @@ export function NetworkRewardPopup({ open, onOpenChange }: NetworkRewardPopupPro
   const [startX, setStartX] = useState(0)
   const [currentX, setCurrentX] = useState(0)
   const [infoBoxesVisible, setInfoBoxesVisible] = useState(true)
+  const [networkInfoVisible, setNetworkInfoVisible] = useState(true)
   const carouselRef = useRef<HTMLDivElement>(null)
   const [formData, setFormData] = useState({
     rewardName: "",
@@ -410,7 +412,7 @@ export function NetworkRewardPopup({ open, onOpenChange }: NetworkRewardPopupPro
                     {/* Information Boxes with Hide Button */}
                     <div 
                       className={cn(
-                        "relative overflow-hidden transition-all duration-500 ease-in-out",
+                        "relative overflow-hidden transition-all duration-500 ease-in-out pt-6",
                         infoBoxesVisible ? "max-h-[200px] opacity-100 mb-0" : "max-h-0 opacity-0 -mb-4"
                       )}
                     >
@@ -678,78 +680,84 @@ export function NetworkRewardPopup({ open, onOpenChange }: NetworkRewardPopupPro
                 )}
 
                 {currentStep === 2 && (
-                  <div className="mt-0 space-y-4">
-                    <div className="bg-blue-50 border border-blue-100 rounded-md p-3 text-xs text-blue-800">
-                      <div className="flex items-start gap-2">
-                        <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="font-medium">How Network Rewards Work</p>
-                          <ul className="list-disc pl-4 space-y-1 mt-1">
-                            <li>Available to customers with points at <strong>other Tap Network merchants</strong></li>
-                            <li>Customers spend their existing network points to redeem this discount</li>
-                            <li>You receive <strong>full payment</strong> for the minimum spend amount</li>
-                            <li>Great way to <strong>acquire new customers</strong> and increase foot traffic</li>
-                          </ul>
+                  <div className="mt-4 space-y-4">
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                      <div className="flex items-center justify-between p-4 cursor-pointer" onClick={() => setNetworkInfoVisible(!networkInfoVisible)}>
+                        <div className="flex items-start gap-3">
+                          <Info className="h-4 w-4 text-gray-500 mt-0.5 flex-shrink-0" />
+                          <p className="font-medium text-gray-900">How Network Rewards Work</p>
                         </div>
+                        <ChevronDown 
+                          className={cn(
+                            "h-4 w-4 text-gray-400 transition-transform duration-200",
+                            networkInfoVisible && "rotate-180"
+                          )} 
+                        />
                       </div>
+                      
+                      <AnimatePresence>
+                        {networkInfoVisible && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ 
+                              duration: 0.4,
+                              ease: [0.04, 0.62, 0.23, 0.98]
+                            }}
+                            className="overflow-hidden"
+                          >
+                            <div className="px-4 pb-4 text-sm text-gray-700">
+                              <ul className="list-disc pl-4 space-y-1">
+                                <li>Available to customers with points at <strong>other Tap Network merchants</strong></li>
+                                <li>Customers spend their existing network points to redeem this discount</li>
+                                <li>You receive <strong>full payment</strong> for the minimum spend amount</li>
+                                <li>Great way to <strong>acquire new customers</strong> and increase foot traffic</li>
+                              </ul>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
 
-                    <div className="border rounded-md overflow-hidden">
-                      <div className="bg-gray-50 px-3 py-2 border-b">
-                        <h3 className="font-medium text-sm">Reward Preview</h3>
-                      </div>
-                      <div className="p-3 space-y-3">
+                    <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
+                      <div className="bg-gray-50 px-3 py-2 border-b border-gray-200">
                         <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <p className="font-medium text-sm">{formData.rewardName}</p>
-                            <p className="text-gray-600 text-xs">{formData.description}</p>
-                          </div>
-                          <div className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-medium">
+                          <h3 className="font-medium text-sm text-gray-900">Reward Preview</h3>
+                          <div className="bg-[#007AFF] text-white px-2 py-0.5 rounded-md text-xs font-medium">
                             Network
                           </div>
                         </div>
+                      </div>
+                      <div className="p-4 space-y-4">
+                        <div className="space-y-1">
+                          <p className="font-medium text-sm text-gray-900">{formData.rewardName}</p>
+                          <p className="text-gray-600 text-xs">{formData.description}</p>
+                        </div>
 
-                        <div className="flex items-center gap-2 pt-1">
-                          <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                            <DollarSign className="h-4 w-4 text-green-600" />
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500 leading-none">Discount</p>
-                            <p className="text-sm font-medium leading-tight">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <p className="text-xs text-gray-500 font-medium">Discount</p>
+                            <p className="text-sm font-semibold text-gray-900">
                               {rewardType === "dollarOff" 
                                 ? `$${formData.discountValue} off` 
                                 : `${formData.discountValue}% off`}
                             </p>
                           </div>
-                        </div>
 
-                        <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                            <ShoppingBag className="h-4 w-4 text-blue-600" />
+                          <div className="space-y-1">
+                            <p className="text-xs text-gray-500 font-medium">Minimum Spend</p>
+                            <p className="text-sm font-semibold text-gray-900">${formData.minimumSpend}</p>
                           </div>
-                          <div>
-                            <p className="text-xs text-gray-500 leading-none">Minimum Spend</p>
-                            <p className="text-sm font-medium leading-tight">${formData.minimumSpend}</p>
-                          </div>
-                        </div>
 
-                        <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
-                            <Zap className="h-4 w-4 text-orange-600" />
+                          <div className="space-y-1">
+                            <p className="text-xs text-gray-500 font-medium">Network Points</p>
+                            <p className="text-sm font-semibold text-gray-900">{formData.networkPointsCost} points</p>
                           </div>
-                          <div>
-                            <p className="text-xs text-gray-500 leading-none">Network Points Cost</p>
-                            <p className="text-sm font-medium leading-tight">{formData.networkPointsCost} points</p>
-                          </div>
-                        </div>
 
-                        <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
-                            <Users className="h-4 w-4 text-purple-600" />
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500 leading-none">Eligibility</p>
-                            <p className="text-sm font-medium leading-tight">Tap Network customers only</p>
+                          <div className="space-y-1">
+                            <p className="text-xs text-gray-500 font-medium">Eligibility</p>
+                            <p className="text-sm font-semibold text-gray-900">Network customers</p>
                           </div>
                         </div>
                       </div>

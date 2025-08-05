@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, query, getDocs, orderBy, limit, where, doc, getDoc, Timestamp, serverTimestamp, startAfter } from "firebase/firestore"
+import { collection, query, getDocs, orderBy, limit, where, doc, getDoc, Timestamp, serverTimestamp, startAfter, onSnapshot } from "firebase/firestore"
 import { format, formatDistanceToNow, isToday, isYesterday } from "date-fns"
 import Link from "next/link"
 import { useCustomers } from "@/hooks/use-customers"
@@ -183,7 +183,7 @@ const formatCreatedDate = (createdAt: any) => {
     yesterdayStart.setDate(yesterdayStart.getDate() - 1);
 
     if (dateStart.getTime() === todayStart.getTime()) {
-      return "Today";
+      return `Today ${format(date, 'h:mm a')}`;
     } else if (dateStart.getTime() === yesterdayStart.getTime()) {
       return "Yesterday";
     } else {
@@ -238,6 +238,7 @@ interface Reward {
   rewardType?: string;
   voucherAmount?: number;
   rewardTypeDetails?: any;
+  manuallyOverridden?: boolean;
 }
 
 interface Banner {
@@ -2256,104 +2257,103 @@ const RewardsTabContent = () => {
     loadCustomerNames()
   }, [rewardsData, user?.uid])
 
-  // Fetch initial rewards data with pagination
+  // Set up real-time listener for rewards data
   useEffect(() => {
-    const fetchRewardsData = async () => {
-      if (!user?.uid) return
-      
-      try {
-        setLoadingRewards(true)
-        // Reset pagination state
-        setRewardsData([])
-        setLastDoc(null)
-        setHasMoreRewards(true)
-        setAllRewardsLoaded(false)
-        
-        const rewardsRef = collection(db, 'merchants', user.uid, 'rewards')
-        const q = query(rewardsRef, orderBy('createdAt', 'desc'), limit(20))
-        const querySnapshot = await getDocs(q)
-        
-        const fetchedRewards: Reward[] = []
-        let newLastDoc = null
-        
-        querySnapshot.docs.forEach((doc, index) => {
-          if (index === querySnapshot.docs.length - 1) {
-            newLastDoc = doc
-          }
-          try {
-            const data = doc.data()
-            
-            // Debug logging for customer data
-            if (data.programType && (
-              data.programType === "coffeeprogramnew" || 
-              data.programType === "voucherprogramnew" || 
-              data.programType === "transactionrewardsnew"
-            )) {
-              console.log('🔍 Found program reward:', {
-                id: doc.id,
-                rewardName: data.rewardName,
-                programType: data.programType,
-                customers: data.customers,
-                uniqueCustomerIds: data.uniqueCustomerIds
-              });
-            }
-            
-            let createdAt, updatedAt, lastRedeemed;
-            try {
-              // Keep the original data.createdAt value instead of converting to new Date()
-              createdAt = data.createdAt || null;
-              updatedAt = data.updatedAt || data.createdAt || null;
-              lastRedeemed = data.lastRedeemed ? data.lastRedeemed.toDate() : null;
-            } catch (dateError) {
-              createdAt = data.createdAt || null;
-              updatedAt = data.updatedAt || data.createdAt || null;
-              lastRedeemed = null;
-            }
-            
-            fetchedRewards.push({
-              ...data,
-              id: doc.id,
-              rewardName: data.rewardName || data.name || 'Unnamed Reward',
-              description: data.description || '',
-              type: data.type || 'gift',
-              programtype: data.programtype || '',
-              programType: data.programType || '', // Include programType
-              category: data.category || 'individual',
-              pointsCost: data.pointsCost || 0,
-              redemptionCount: data.redemptionCount || 0,
-              status: data.status || 'active',
-              createdAt,
-              updatedAt,
-              lastRedeemed,
-              isActive: !!data.isActive,
-              impressions: data.impressions || 0,
-
-              hasActivePeriod: !!data.hasActivePeriod,
-              activePeriod: data.activePeriod || { startDate: '', endDate: '' },
-              customers: data.customers || [], // Include customers array
-              uniqueCustomerIds: data.uniqueCustomerIds || [], // Include uniqueCustomerIds as fallback
-            } as Reward);
-          } catch (err) {
-            console.error("Error processing reward document:", err, "Document ID:", doc.id);
-          }
-        });
-        
-        setRewardsData(fetchedRewards)
-        setLastDoc(newLastDoc)
-        
-        // Check if we have more rewards to load
-        if (querySnapshot.docs.length < 20) {
-          setHasMoreRewards(false)
-          setAllRewardsLoaded(true)
-        }
-      } catch (error) {
-        console.error("Error fetching rewards:", error)
-      } finally {
-        setLoadingRewards(false);
-      }
-    }
+    if (!user?.uid) return
     
-    fetchRewardsData()
+    setLoadingRewards(true)
+    // Reset pagination state
+    setRewardsData([])
+    setLastDoc(null)
+    setHasMoreRewards(true)
+    setAllRewardsLoaded(false)
+    
+    const rewardsRef = collection(db, 'merchants', user.uid, 'rewards')
+    const q = query(rewardsRef, orderBy('createdAt', 'desc'), limit(20))
+    
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const fetchedRewards: Reward[] = []
+      let newLastDoc = null
+      
+      querySnapshot.docs.forEach((doc, index) => {
+        if (index === querySnapshot.docs.length - 1) {
+          newLastDoc = doc
+        }
+        try {
+          const data = doc.data()
+          
+          // Debug logging for customer data
+          if (data.programType && (
+            data.programType === "coffeeprogramnew" || 
+            data.programType === "voucherprogramnew" || 
+            data.programType === "transactionrewardsnew"
+          )) {
+            console.log('🔍 Found program reward:', {
+              id: doc.id,
+              rewardName: data.rewardName,
+              programType: data.programType,
+              customers: data.customers,
+              uniqueCustomerIds: data.uniqueCustomerIds
+            });
+          }
+          
+          let createdAt, updatedAt, lastRedeemed;
+          try {
+            // Keep the original data.createdAt value instead of converting to new Date()
+            createdAt = data.createdAt || null;
+            updatedAt = data.updatedAt || data.createdAt || null;
+            lastRedeemed = data.lastRedeemed ? data.lastRedeemed.toDate() : null;
+          } catch (dateError) {
+            createdAt = data.createdAt || null;
+            updatedAt = data.updatedAt || data.createdAt || null;
+            lastRedeemed = null;
+          }
+          
+          fetchedRewards.push({
+            ...data,
+            id: doc.id,
+            rewardName: data.rewardName || data.name || 'Unnamed Reward',
+            description: data.description || '',
+            type: data.type || 'gift',
+            programtype: data.programtype || '',
+            programType: data.programType || '', // Include programType
+            category: data.category || 'individual',
+            pointsCost: data.pointsCost || 0,
+            redemptionCount: data.redemptionCount || 0,
+            status: data.status || 'active',
+            createdAt,
+            updatedAt,
+            lastRedeemed,
+            isActive: !!data.isActive,
+            impressions: data.impressions || 0,
+
+            hasActivePeriod: !!data.hasActivePeriod,
+            activePeriod: data.activePeriod || { startDate: '', endDate: '' },
+            customers: data.customers || [], // Include customers array
+            uniqueCustomerIds: data.uniqueCustomerIds || [], // Include uniqueCustomerIds as fallback
+          } as Reward);
+        } catch (err) {
+          console.error("Error processing reward document:", err, "Document ID:", doc.id);
+        }
+      });
+      
+      setRewardsData(fetchedRewards)
+      setLastDoc(newLastDoc)
+      
+      // Check if we have more rewards to load
+      if (querySnapshot.docs.length < 20) {
+        setHasMoreRewards(false)
+        setAllRewardsLoaded(true)
+      }
+      
+      setLoadingRewards(false)
+    }, (error) => {
+      console.error("Error fetching rewards:", error)
+      setLoadingRewards(false)
+    })
+    
+    // Cleanup function to unsubscribe from the listener
+    return () => unsubscribe()
   }, [user])
 
   // Measure rewards subtab dimensions for sliding animation
@@ -2602,16 +2602,25 @@ const RewardsTabContent = () => {
     if (!user?.uid) return;
     
     try {
-      const rewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId);
-      
-      await updateDoc(rewardRef, { 
-        isActive: !currentStatus,
+      const newStatus = !currentStatus;
+      const updateData = {
+        isActive: newStatus,
+        status: newStatus ? 'active' : 'inactive',
+        manuallyOverridden: true, // Flag for scheduled rewards
         updatedAt: new Date()
-      });
+      };
+      
+      // Update merchant's rewards subcollection
+      const rewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId);
+      await updateDoc(rewardRef, updateData);
+      
+      // Update top-level rewards collection
+      const topLevelRewardRef = doc(db, 'rewards', rewardId);
+      await updateDoc(topLevelRewardRef, updateData);
       
       setRewardsData(rewardsData.map(reward => 
         reward.id === rewardId 
-          ? { ...reward, isActive: !currentStatus } 
+          ? { ...reward, isActive: newStatus, manuallyOverridden: true } 
           : reward
       ));
       
@@ -3186,6 +3195,7 @@ const RewardsTabContent = () => {
                         checked={selectedRewardIds.size > 0 && selectedRewardIds.size === getFilteredRewards().length}
                         onCheckedChange={toggleSelectAll}
                         aria-label="Select all rewards"
+                        className="data-[state=checked]:bg-gray-600 data-[state=checked]:border-gray-600 border-gray-300 focus-visible:ring-gray-400"
                       />
                     </TableHead>
                     <TableHead className={cn(
@@ -3259,6 +3269,7 @@ const RewardsTabContent = () => {
                         )}
                       </button>
                     </TableHead>
+                    <TableHead className="text-center text-gray-600">Scheduled</TableHead>
                     <TableHead className="text-center text-gray-600 hover:text-gray-800 transition-colors">
                       <button
                         onClick={() => handleSort("isActive")}
@@ -3276,7 +3287,7 @@ const RewardsTabContent = () => {
                 <TableBody className="divide-y divide-gray-100">
                   {loadingRewards ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="h-32 text-center px-6 py-8">
+                      <TableCell colSpan={10} className="h-32 text-center px-6 py-8">
                         <div className="flex flex-col items-center justify-center">
                           <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600"></div>
                           <p className="text-sm text-gray-500 mt-3">Loading rewards...</p>
@@ -3285,7 +3296,7 @@ const RewardsTabContent = () => {
                     </TableRow>
                   ) : getFilteredRewards().length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="h-40 text-center px-6 py-12">
+                      <TableCell colSpan={10} className="h-40 text-center px-6 py-12">
                         <div className="flex flex-col items-center justify-center">
                           <div className="h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center">
                             <Gift className="h-8 w-8 text-gray-400" />
@@ -3319,6 +3330,7 @@ const RewardsTabContent = () => {
                             onCheckedChange={() => toggleRewardSelection(reward.id)}
                             onClick={(e) => e.stopPropagation()}
                             aria-label={`Select ${reward.rewardName}`}
+                            className="data-[state=checked]:bg-gray-600 data-[state=checked]:border-gray-600 border-gray-300 focus-visible:ring-gray-400"
                           />
                         </TableCell>
                         <TableCell className="font-medium py-2.5 px-2">
@@ -3387,6 +3399,38 @@ const RewardsTabContent = () => {
                           <div className="text-sm text-gray-600">
                             {formatCreatedDate(reward.createdAt)}
                           </div>
+                        </TableCell>
+                        <TableCell className="text-center px-6 py-2.5">
+                          {reward.hasActivePeriod && reward.activePeriod?.startDate && reward.activePeriod?.endDate && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium w-fit cursor-help ${
+                                    reward.manuallyOverridden 
+                                      ? 'bg-red-50 text-red-700 border border-red-200' 
+                                      : 'bg-white text-gray-700 border border-gray-200'
+                                  }`}>
+                                    <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+                                      reward.manuallyOverridden ? 'bg-red-500' : 'bg-orange-500'
+                                    }`}></div>
+                                    {reward.manuallyOverridden ? 'Overridden' : 'Scheduled'}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <div className="text-xs space-y-1">
+                                    <div><strong>Start:</strong> {reward.activePeriod.startDate ? format(new Date(reward.activePeriod.startDate), 'MMM d, yyyy h:mm a') : 'Not set'}</div>
+                                    <div><strong>End:</strong> {reward.activePeriod.endDate ? format(new Date(reward.activePeriod.endDate), 'MMM d, yyyy h:mm a') : 'Not set'}</div>
+                                    {reward.manuallyOverridden && (
+                                      <div className="pt-1 mt-1 border-t border-red-200">
+                                        <div className="text-red-700 font-medium">⚠️ Auto-scheduling disabled</div>
+                                        <div className="text-red-600">Manually controlled by merchant</div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
                         </TableCell>
                         <TableCell className="text-center px-6 py-2.5">
                           <div onClick={(e) => e.stopPropagation()}>
@@ -3493,6 +3537,7 @@ const RewardsTabContent = () => {
                     <TableHead className="text-center">Points</TableHead>
                     <TableHead className="text-center">Redemptions</TableHead>
                     <TableHead className="text-center">Created</TableHead>
+                    <TableHead className="text-center">Scheduled</TableHead>
                     <TableHead className="text-center">Active</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
@@ -3500,7 +3545,7 @@ const RewardsTabContent = () => {
                 <TableBody>
                   {loadingRewards ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="h-24 text-center">
+                      <TableCell colSpan={8} className="h-24 text-center">
                         <div className="flex justify-center">
                           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
                         </div>
@@ -3508,7 +3553,7 @@ const RewardsTabContent = () => {
                     </TableRow>
                   ) : getFilteredRewards().filter(r => r.category === "individual").length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="h-24 text-center">
+                      <TableCell colSpan={8} className="h-24 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <Gift className="h-8 w-8 mb-2 text-muted-foreground" />
                           <p className="text-muted-foreground">No individual rewards found</p>
@@ -3553,6 +3598,38 @@ const RewardsTabContent = () => {
                         </TableCell>
                         <TableCell className="text-center">
                           {formatCreatedDate(reward.createdAt)}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {reward.hasActivePeriod && reward.activePeriod?.startDate && reward.activePeriod?.endDate && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium w-fit cursor-help ${
+                                    reward.manuallyOverridden 
+                                      ? 'bg-red-50 text-red-700 border border-red-200' 
+                                      : 'bg-white text-gray-700 border border-gray-200'
+                                  }`}>
+                                    <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+                                      reward.manuallyOverridden ? 'bg-red-500' : 'bg-orange-500'
+                                    }`}></div>
+                                    {reward.manuallyOverridden ? 'Overridden' : 'Scheduled'}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <div className="text-xs space-y-1">
+                                    <div><strong>Start:</strong> {reward.activePeriod.startDate ? format(new Date(reward.activePeriod.startDate), 'MMM d, yyyy h:mm a') : 'Not set'}</div>
+                                    <div><strong>End:</strong> {reward.activePeriod.endDate ? format(new Date(reward.activePeriod.endDate), 'MMM d, yyyy h:mm a') : 'Not set'}</div>
+                                    {reward.manuallyOverridden && (
+                                      <div className="pt-1 mt-1 border-t border-red-200">
+                                        <div className="text-red-700 font-medium">⚠️ Auto-scheduling disabled</div>
+                                        <div className="text-red-600">Manually controlled by merchant</div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
                         </TableCell>
                         <TableCell className="text-center">
                           <div onClick={(e) => e.stopPropagation()}>
@@ -4697,29 +4774,6 @@ const AdvancedCustomersView = () => {
                         </TooltipTrigger>
                         <TooltipContent>
                           <p>Views in last 90 days</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </th>
-
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px]">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            onClick={() => handleSort('daysSinceLastVisit')}
-                            className="flex items-center gap-1 hover:text-gray-700"
-                          >
-                            Last
-                            {sortField === 'daysSinceLastVisit' && (
-                              sortDirection === 'desc' ? 
-                                <ChevronDown className="h-3 w-3" /> : 
-                                <ChevronUp className="h-3 w-3" />
-                            )}
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Days since last visit</p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
@@ -6622,8 +6676,7 @@ const BannersTabContent = () => {
                         </Button>
                         <Button 
                           variant="outline" 
-                          size="sm" 
-                          className="flex-1"
+                          size="sm"
                           onClick={() => handleScheduleBanner(banner.id)}
                         >
                           <Plus className="h-3.5 w-3.5 mr-1.5" />
@@ -7172,17 +7225,27 @@ const ProgramRewardsTable = () => {
     if (!user?.uid) return
 
     try {
-      const rewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId)
-      await updateDoc(rewardRef, {
-        isActive: !currentStatus,
+      const newStatus = !currentStatus;
+      const updateData = {
+        isActive: newStatus,
+        status: newStatus ? 'active' : 'inactive',
+        manuallyOverridden: true, // Flag for scheduled rewards
         updatedAt: new Date()
-      })
+      };
+
+      // Update merchant's rewards subcollection
+      const rewardRef = doc(db, 'merchants', user.uid, 'rewards', rewardId);
+      await updateDoc(rewardRef, updateData);
+
+      // Update top-level rewards collection
+      const topLevelRewardRef = doc(db, 'rewards', rewardId);
+      await updateDoc(topLevelRewardRef, updateData);
 
       // Update local state
       setProgramRewards(prev => 
         prev.map(reward => 
           reward.id === rewardId 
-            ? { ...reward, isActive: !currentStatus }
+            ? { ...reward, isActive: newStatus, manuallyOverridden: true }
             : reward
         )
       )
@@ -7260,6 +7323,7 @@ const ProgramRewardsTable = () => {
                 <TableHead className="text-center">Value</TableHead>
                 <TableHead className="text-center">Impressions</TableHead>
                 <TableHead className="text-center">Created</TableHead>
+                <TableHead className="text-center">Scheduled</TableHead>
                 <TableHead className="text-center">Active</TableHead>
                 <TableHead className="text-center">Redemption Status</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
@@ -7376,6 +7440,27 @@ const ProgramRewardsTable = () => {
                     </TableCell>
                     <TableCell className="text-center">
                       {formatCreatedDate(reward.createdAt)}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {reward.hasActivePeriod && reward.activePeriod && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center gap-1 cursor-help">
+                                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200">
+                                  <div className="h-1.5 w-1.5 bg-orange-500 rounded-full flex-shrink-0"></div>
+                                  Scheduled
+                                </span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              <p className="text-xs">
+                                {format(reward.activePeriod.startDate.toDate(), 'MMM d, yyyy h:mm a')} - {format(reward.activePeriod.endDate.toDate(), 'MMM d, yyyy h:mm a')}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                     </TableCell>
                     <TableCell className="text-center">
                       <div onClick={(e) => e.stopPropagation()}>

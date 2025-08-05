@@ -98,6 +98,8 @@ interface FormData {
   activePeriod: {
     startDate: string
     endDate: string
+    startTime: string
+    endTime: string
   }
   
   // Summary text for the reward
@@ -185,7 +187,9 @@ export function CreateRewardPopup({
     hasActivePeriod: false,
     activePeriod: {
       startDate: "",
-      endDate: ""
+      endDate: "",
+      startTime: "09:00",
+      endTime: "17:00"
     },
     
     // Summary text for the reward
@@ -443,12 +447,39 @@ export function CreateRewardPopup({
         timestamp.getMinutes()
       ))
 
+      // Check if reward should be active based on active period
+      let isActiveBasedOnPeriod = formData.isActive
+      if (formData.hasActivePeriod && formData.activePeriod.startDate && formData.activePeriod.endDate) {
+        const now = new Date()
+        
+        // Create start datetime using same method as saving (no timezone conversion)
+        const startDate = new Date(formData.activePeriod.startDate)
+        const [startHours, startMinutes] = formData.activePeriod.startTime.split(':')
+        const startYear = startDate.getFullYear()
+        const startMonth = startDate.getMonth() + 1
+        const startDay = startDate.getDate()
+        const utcStartDate = new Date(Date.UTC(startYear, startMonth - 1, startDay, parseInt(startHours), parseInt(startMinutes), 0, 0))
+        
+        // Create end datetime using same method as saving (no timezone conversion)
+        const endDate = new Date(formData.activePeriod.endDate)
+        const [endHours, endMinutes] = formData.activePeriod.endTime.split(':')
+        const endYear = endDate.getFullYear()
+        const endMonth = endDate.getMonth() + 1
+        const endDay = endDate.getDate()
+        const utcEndDate = new Date(Date.UTC(endYear, endMonth - 1, endDay, parseInt(endHours), parseInt(endMinutes), 59, 999))
+        
+        // If current date/time is outside the active period, mark as inactive
+        if (now < utcStartDate || now > utcEndDate) {
+          isActiveBasedOnPeriod = false
+        }
+      }
+
       // Create the base reward data object
       const rewardData: any = {
         rewardName: formData.rewardName,
         description: formData.description,
         programtype: "points",
-        isActive: formData.isActive,
+        isActive: isActiveBasedOnPeriod,
         pointsCost: formData.rewardVisibility === 'new' ? 0 : Math.max(0, Number(formData.pointsCost)),
         rewardVisibility: formData.rewardVisibility === 'all' ? 'global' : 
                           formData.rewardVisibility === 'specific' ? 'specific' : 
@@ -471,7 +502,7 @@ export function CreateRewardPopup({
         limitations,
         pin: formData.pin,
         createdAt: utcTimestamp,
-        status: formData.isActive ? 'active' : 'inactive',
+        status: isActiveBasedOnPeriod ? 'active' : 'inactive',
         merchantId: user.uid,
         updatedAt: utcTimestamp,
         minSpend: 0,
@@ -481,6 +512,39 @@ export function CreateRewardPopup({
         uniqueCustomersCount: 0,
         lastRedeemedAt: null,
         uniqueCustomerIds: customerId ? [customerId] : [],
+        
+        // Add active period data
+        hasActivePeriod: formData.hasActivePeriod,
+        activePeriod: formData.hasActivePeriod ? {
+          startDate: (() => {
+            // Store Melbourne time as UTC without conversion
+            const date = new Date(formData.activePeriod.startDate)
+            const [hours, minutes] = formData.activePeriod.startTime.split(':')
+            
+            // Get date components
+            const year = date.getFullYear()
+            const month = date.getMonth() + 1
+            const day = date.getDate()
+            
+            // Create date with Melbourne time but store as UTC
+            const utcDate = new Date(Date.UTC(year, month - 1, day, parseInt(hours), parseInt(minutes), 0, 0))
+            return utcDate.toISOString()
+          })(),
+          endDate: (() => {
+            // Store Melbourne time as UTC without conversion
+            const date = new Date(formData.activePeriod.endDate)
+            const [hours, minutes] = formData.activePeriod.endTime.split(':')
+            
+            // Get date components
+            const year = date.getFullYear()
+            const month = date.getMonth() + 1
+            const day = date.getDate()
+            
+            // Create date with Melbourne time but store as UTC
+            const utcDate = new Date(Date.UTC(year, month - 1, day, parseInt(hours), parseInt(minutes), 59, 999))
+            return utcDate.toISOString()
+          })()
+        } : null,
         
         // Add the reward summary
         rewardSummary: generateRewardSummary(),
@@ -637,7 +701,9 @@ export function CreateRewardPopup({
             hasActivePeriod: false,
             activePeriod: {
               startDate: "",
-              endDate: ""
+              endDate: "",
+              startTime: "09:00",
+              endTime: "17:00"
             },
             rewardSummary: "",
           })
@@ -1274,7 +1340,7 @@ export function CreateRewardPopup({
                             onCheckedChange={(checked) => setFormData({
                               ...formData,
                               hasActivePeriod: checked,
-                              activePeriod: checked ? formData.activePeriod : { startDate: "", endDate: "" }
+                              activePeriod: checked ? formData.activePeriod : { startDate: "", endDate: "", startTime: "09:00", endTime: "17:00" }
                             })}
                             className="data-[state=checked]:bg-blue-600"
                           />
@@ -1295,76 +1361,104 @@ export function CreateRewardPopup({
                             >
                               <div className="border-l-2 border-blue-100 pl-4 py-2">
                             <p className="text-xs text-gray-600 mb-4">
-                              Set a specific time period when this reward is visible to customers. Additional redemption conditions can be set in the following steps.
+                              Set a specific date and time period when this reward is visible to customers. Times are treated as Melbourne local time. Additional redemption conditions can be set in the following steps.
                             </p>
                             
                             <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-2">
-                                <Label className="text-sm">Start Date</Label>
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      className={cn(
-                                        "w-full justify-start text-left font-normal h-9",
-                                        !formData.activePeriod.startDate && "text-muted-foreground"
-                                      )}
-                                    >
-                                      <CalendarIcon className="mr-2 h-4 w-4" />
-                                      {formData.activePeriod.startDate ? format(new Date(formData.activePeriod.startDate), "PPP") : <span>Pick a date</span>}
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-auto p-0" align="start">
-                                    <CalendarComponent
-                                      mode="single"
-                                      selected={formData.activePeriod.startDate ? new Date(formData.activePeriod.startDate) : undefined}
-                                      onSelect={(date: Date | undefined) => 
-                                        setFormData({
-                                          ...formData,
-                                          activePeriod: {
-                                            ...formData.activePeriod,
-                                            startDate: date ? date.toISOString() : ''
-                                          }
-                                        })
+                                <Label className="text-sm">Start Date & Time</Label>
+                                <div className="space-y-2">
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        className={cn(
+                                          "w-full justify-start text-left font-normal h-9",
+                                          !formData.activePeriod.startDate && "text-muted-foreground"
+                                        )}
+                                      >
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {formData.activePeriod.startDate ? format(new Date(formData.activePeriod.startDate), "PPP") : <span>Pick a date</span>}
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                      <CalendarComponent
+                                        mode="single"
+                                        selected={formData.activePeriod.startDate ? new Date(formData.activePeriod.startDate) : undefined}
+                                        onSelect={(date: Date | undefined) => 
+                                          setFormData({
+                                            ...formData,
+                                            activePeriod: {
+                                              ...formData.activePeriod,
+                                              startDate: date ? date.toISOString() : ''
+                                            }
+                                          })
+                                        }
+                                        initialFocus
+                                      />
+                                    </PopoverContent>
+                                  </Popover>
+                                  <Input
+                                    type="time"
+                                    value={formData.activePeriod.startTime}
+                                    onChange={(e) => setFormData({
+                                      ...formData,
+                                      activePeriod: {
+                                        ...formData.activePeriod,
+                                        startTime: e.target.value
                                       }
-                                      initialFocus
-                                    />
-                                  </PopoverContent>
-                                </Popover>
+                                    })}
+                                    className="h-9"
+                                  />
+                                </div>
                               </div>
                               
                               <div className="space-y-2">
-                                <Label className="text-sm">End Date</Label>
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      className={cn(
-                                        "w-full justify-start text-left font-normal h-9",
-                                        !formData.activePeriod.endDate && "text-muted-foreground"
-                                      )}
-                                    >
-                                      <CalendarIcon className="mr-2 h-4 w-4" />
-                                      {formData.activePeriod.endDate ? format(new Date(formData.activePeriod.endDate), "PPP") : <span>Pick a date</span>}
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-auto p-0" align="start">
-                                    <CalendarComponent
-                                      mode="single"
-                                      selected={formData.activePeriod.endDate ? new Date(formData.activePeriod.endDate) : undefined}
-                                      onSelect={(date: Date | undefined) => 
-                                        setFormData({
-                                          ...formData,
-                                          activePeriod: {
-                                            ...formData.activePeriod,
-                                            endDate: date ? date.toISOString() : ''
-                                          }
-                                        })
+                                <Label className="text-sm">End Date & Time</Label>
+                                <div className="space-y-2">
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        className={cn(
+                                          "w-full justify-start text-left font-normal h-9",
+                                          !formData.activePeriod.endDate && "text-muted-foreground"
+                                        )}
+                                      >
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {formData.activePeriod.endDate ? format(new Date(formData.activePeriod.endDate), "PPP") : <span>Pick a date</span>}
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                      <CalendarComponent
+                                        mode="single"
+                                        selected={formData.activePeriod.endDate ? new Date(formData.activePeriod.endDate) : undefined}
+                                        onSelect={(date: Date | undefined) => 
+                                          setFormData({
+                                            ...formData,
+                                            activePeriod: {
+                                              ...formData.activePeriod,
+                                              endDate: date ? date.toISOString() : ''
+                                            }
+                                          })
+                                        }
+                                        initialFocus
+                                      />
+                                    </PopoverContent>
+                                  </Popover>
+                                  <Input
+                                    type="time"
+                                    value={formData.activePeriod.endTime}
+                                    onChange={(e) => setFormData({
+                                      ...formData,
+                                      activePeriod: {
+                                        ...formData.activePeriod,
+                                        endTime: e.target.value
                                       }
-                                      initialFocus
-                                    />
-                                  </PopoverContent>
-                                </Popover>
+                                    })}
+                                    className="h-9"
+                                  />
+                                </div>
                               </div>
                             </div>
                               </div>

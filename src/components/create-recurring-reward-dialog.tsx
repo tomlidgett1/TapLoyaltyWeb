@@ -93,6 +93,50 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
       if (merchantDoc.exists()) {
         const data = merchantDoc.data()
         
+        // Check for coffee programs
+        if (data.coffeePrograms && Array.isArray(data.coffeePrograms) && data.coffeePrograms.length > 0) {
+          setHasCoffeeProgram(true)
+          const coffeeProgram = data.coffeePrograms[0] // Get the first coffee program
+          setCoffeeFormData({
+            pin: coffeeProgram.pin || '',
+            frequency: coffeeProgram.frequency?.toString() || '5',
+            minimumSpend: coffeeProgram.minspend?.toString() || '0',
+            minimumTimeBetween: coffeeProgram.mintime?.toString() || '0'
+          })
+        }
+        
+        // Check for voucher programs
+        if (data.voucherPrograms && Array.isArray(data.voucherPrograms) && data.voucherPrograms.length > 0) {
+          setHasVoucherProgram(true)
+          const voucherProgram = data.voucherPrograms[0] // Get the first voucher program
+          setVoucherFormData({
+            rewardName: voucherProgram.rewardName || '',
+            description: voucherProgram.description || '',
+            pin: voucherProgram.pin || '',
+            spendRequired: voucherProgram.spendRequired?.toString() || '100',
+            discountAmount: voucherProgram.discountAmount?.toString() || '10',
+            isActive: voucherProgram.isActive !== false
+          })
+        }
+        
+        // Check for transaction programs
+        if (data.transactionRewards && Array.isArray(data.transactionRewards) && data.transactionRewards.length > 0) {
+          setHasTransactionProgram(true)
+          const transactionProgram = data.transactionRewards[0] // Get the first transaction program
+          setTransactionFormData({
+            pin: transactionProgram.pin || '',
+            rewardName: transactionProgram.rewardName || '',
+            description: transactionProgram.description || '',
+            transactionThreshold: transactionProgram.transactionThreshold?.toString() || '5',
+            rewardType: transactionProgram.rewardType || 'dollar_voucher',
+            voucherAmount: transactionProgram.voucherAmount?.toString() || '10',
+            freeItemName: transactionProgram.freeItemName || '',
+            conditions: transactionProgram.conditions || '',
+            iterations: transactionProgram.iterations?.toString() || '15',
+            isActive: transactionProgram.isActive !== false
+          })
+        }
+        
         // Check for cashback program
         if (data.isCashback && data.cashbackProgram) {
           setHasCashbackProgram(true)
@@ -516,13 +560,51 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                         <p className="text-sm text-gray-600 mb-4">
                           Create a digital stamp card where customers buy X drinks and get 1 free
                         </p>
-                        <Button
-                          onClick={() => setShowCoffeeForm(true)}
-                          variant="outline"
-                          className="rounded-md"
-                        >
-                          Set Up Program
-                        </Button>
+                        {!hasCoffeeProgram ? (
+                          <Button
+                            onClick={() => setShowCoffeeForm(true)}
+                            variant="outline"
+                            className="rounded-md"
+                          >
+                            Set Up Program
+                          </Button>
+                        ) : (
+                          <div className="space-y-4">
+                            <div className="bg-white border border-gray-200 rounded-md p-4">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Coffee className="h-4 w-4 text-[#007AFF]" />
+                                <p className="text-sm text-gray-900 font-medium">✓ Coffee Program is Active</p>
+                              </div>
+                              
+                              <div className="space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">PIN Code:</span>
+                                  <span className="text-gray-900 font-medium">{coffeeFormData.pin}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">Frequency:</span>
+                                  <span className="text-gray-900 font-medium">Buy {parseInt(coffeeFormData.frequency) - 1}, get 1 free</span>
+                                </div>
+                                {coffeeFormData.minimumSpend !== '0' && (
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-600">Minimum Spend:</span>
+                                    <span className="text-gray-900 font-medium">${coffeeFormData.minimumSpend}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <Button
+                              onClick={() => setShowCoffeeForm(true)}
+                              variant="outline"
+                              size="sm"
+                              className="rounded-md"
+                            >
+                              <Edit size={14} className="mr-1" />
+                              Edit Settings
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -612,13 +694,53 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                       <p className="text-sm text-gray-600 mb-4">
                         Automatically reward customers with vouchers when they reach spending thresholds
                       </p>
-                      <Button
-                        onClick={() => setShowVoucherForm(true)}
-                        variant="outline"
-                        className="rounded-md"
-                      >
-                        Set Up Program
-                      </Button>
+                      {!hasVoucherProgram ? (
+                        <Button
+                          onClick={() => setShowVoucherForm(true)}
+                          variant="outline"
+                          className="rounded-md"
+                        >
+                          Set Up Program
+                        </Button>
+                      ) : (
+                        <div className="space-y-4">
+                          <div className="bg-white border border-gray-200 rounded-md p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Percent className="h-4 w-4 text-purple-600" />
+                              <p className="text-sm text-gray-900 font-medium">✓ Voucher Program is Active</p>
+                            </div>
+                            
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Reward Name:</span>
+                                <span className="text-gray-900 font-medium">{voucherFormData.rewardName}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">PIN Code:</span>
+                                <span className="text-gray-900 font-medium">{voucherFormData.pin}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Spend Required:</span>
+                                <span className="text-gray-900 font-medium">${voucherFormData.spendRequired}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Discount Amount:</span>
+                                <span className="text-gray-900 font-medium">${voucherFormData.discountAmount}</span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <Button
+                            onClick={() => setShowVoucherForm(true)}
+                            variant="outline"
+                            size="sm"
+                            className="rounded-md"
+                          >
+                            <Edit size={14} className="mr-1" />
+                            Edit Settings
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                   ) : (
@@ -722,13 +844,58 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                       <p className="text-sm text-gray-600 mb-4">
                         Reward customers based on the number of transactions they make
                       </p>
-                      <Button
-                        onClick={() => setShowTransactionForm(true)}
-                        variant="outline"
-                        className="rounded-md"
-                      >
-                        Set Up Program
-                      </Button>
+                      {!hasTransactionProgram ? (
+                        <Button
+                          onClick={() => setShowTransactionForm(true)}
+                          variant="outline"
+                          className="rounded-md"
+                        >
+                          Set Up Program
+                        </Button>
+                      ) : (
+                        <div className="space-y-4">
+                          <div className="bg-white border border-gray-200 rounded-md p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                              <ShoppingBag className="h-4 w-4 text-[#007AFF]" />
+                              <p className="text-sm text-gray-900 font-medium">✓ Transaction Program is Active</p>
+                            </div>
+                            
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Reward Name:</span>
+                                <span className="text-gray-900 font-medium">{transactionFormData.rewardName}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">PIN Code:</span>
+                                <span className="text-gray-900 font-medium">{transactionFormData.pin}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Transaction Threshold:</span>
+                                <span className="text-gray-900 font-medium">{transactionFormData.transactionThreshold} transactions</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Reward Type:</span>
+                                <span className="text-gray-900 font-medium">
+                                  {transactionFormData.rewardType === 'dollar_voucher' 
+                                    ? `$${transactionFormData.voucherAmount} voucher`
+                                    : `Free ${transactionFormData.freeItemName}`
+                                  }
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <Button
+                            onClick={() => setShowTransactionForm(true)}
+                            variant="outline"
+                            size="sm"
+                            className="rounded-md"
+                          >
+                            <Edit size={14} className="mr-1" />
+                            Edit Settings
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                   ) : (

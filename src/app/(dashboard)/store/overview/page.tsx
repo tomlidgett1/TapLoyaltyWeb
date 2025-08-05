@@ -56,6 +56,7 @@ import { BannerPreview, BannerStyle, BannerVisibility } from "@/components/banne
 import { BannerScheduler } from "@/components/banner-scheduler"
 import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
 import { CreateManualProgramDialog } from "@/components/create-manual-program-dialog"
+import { ComprehensiveProgramsDisplay } from "@/components/comprehensive-programs-display"
 import { CreateRewardPopup } from "@/components/create-reward-popup"
 import { cn } from "@/lib/utils"
 import { updateDoc, deleteDoc } from "firebase/firestore"
@@ -1066,6 +1067,17 @@ const ProgramsTabContent = () => {
             })
           }
           
+          // Check cashback program
+          if (merchantData.cashbackProgram && merchantData.cashbackProgram.isActive) {
+            programs.push({ 
+              ...merchantData.cashbackProgram, 
+              type: 'cashback', 
+              originalIndex: 0, 
+              active: merchantData.cashbackProgram.isActive,
+              name: merchantData.cashbackProgram.programName || 'Tap Cash'
+            })
+          }
+          
           setActivePrograms(programs)
         }
       } catch (error) {
@@ -1153,7 +1165,7 @@ const ProgramsTabContent = () => {
     fetchProgramRewardCounts()
   }, [user])
 
-  const toggleProgramActive = async (programIndex: number, programType: 'coffee' | 'voucher' | 'transaction') => {
+  const toggleProgramActive = async (programIndex: number, programType: 'coffee' | 'voucher' | 'transaction' | 'cashback') => {
     if (!user?.uid) return
 
     try {
@@ -1162,6 +1174,24 @@ const ProgramsTabContent = () => {
       
       if (merchantSnapshot.exists()) {
         const merchantData = merchantSnapshot.data()
+        
+        if (programType === 'cashback') {
+          // Handle cashback program toggle
+          if (merchantData.cashbackProgram) {
+            const newActiveStatus = !merchantData.cashbackProgram.isActive
+            await updateDoc(merchantRef, {
+              'cashbackProgram.isActive': newActiveStatus
+            })
+            
+            // Update local state
+            setActivePrograms(prev => prev.map(program => 
+              program.type === 'cashback'
+                ? { ...program, active: newActiveStatus }
+                : program
+            ))
+          }
+          return
+        }
         
         let fieldName = ''
         if (programType === 'coffee') fieldName = 'coffeePrograms'
@@ -1217,7 +1247,7 @@ const ProgramsTabContent = () => {
     }
   }
 
-  const handleEditProgram = (programType: 'coffee' | 'voucher' | 'transaction') => {
+  const handleEditProgram = (programType: 'coffee' | 'voucher' | 'transaction' | 'cashback') => {
     setShowRecurringRewardDialog(true)
   }
 
@@ -1711,85 +1741,13 @@ const ProgramsTabContent = () => {
           </div>
       ) : (activePrograms.length > 0 || customPrograms.length > 0) ? (
         <div className="space-y-6">
-          {/* Built-in Programs */}
-          {activePrograms.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-md font-medium">Built-in Programs</h3>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {activePrograms.map((program, index) => {
-                  const rewardCount = programRewardCounts[program.type] || 0
-                  return (
-                    <div key={index} className={`group relative bg-gray-50 border rounded-lg p-4 transition-all hover:shadow-sm ${
-                      program.active 
-                        ? 'border-blue-200 hover:border-blue-300' 
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}>
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                                              {program.type === 'coffee' ?
-                      <BiSolidCoffeeTogo className="h-4 w-4 text-gray-600" /> : 
-                           program.type === 'voucher' ? 
-                            <TicketIcon className="h-4 w-4 text-gray-600" /> : 
-                            <ShoppingBagHeroIcon className="h-4 w-4 text-gray-600" />}
-                          <h4 className="text-sm font-medium text-gray-900">
-                            {program.type === 'coffee' ? 'Coffee Program' : 
-                             program.type === 'voucher' ? 'Recurring Voucher' : 
-                             'Transaction Program'}
-                          </h4>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleEditProgram(program.type)}
-                            className="opacity-40 hover:opacity-70 transition-opacity"
-                          >
-                            <Settings className="h-3 w-3 text-gray-600" />
-                          </button>
-                          <div className={`h-2 w-2 rounded-full ${
-                            program.active 
-                              ? 'bg-blue-500' 
-                              : 'bg-gray-300 opacity-60'
-                          }`}></div>
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-500 mb-4 line-clamp-2">{program.name || 'Unnamed Program'}</p>
-                      <div className="flex items-center justify-between mb-4">
-                        <div className={`text-xs font-medium ${program.active ? 'text-green-600' : 'text-gray-500'}`}>
-                          {program.active ? 'Active' : 'Inactive'}
-                        </div>
-                        {rewardCount > 0 && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="flex items-center gap-1 text-gray-500 cursor-help">
-                                  <Award className="h-3 w-3" />
-                                  <span className="text-xs font-medium">{rewardCount}</span>
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent side="top">
-                                <p className="text-xs">Unredeemed rewards available for customers</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={program.active}
-                          onCheckedChange={() => toggleProgramActive(program.originalIndex, program.type)}
-                          className="flex-shrink-0"
-                        />
-                        <span className="text-xs text-gray-600 flex-1">
-                          {program.active ? 'Program is active' : 'Program is inactive'}
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
+          {/* All Available Programs */}
+          <ComprehensiveProgramsDisplay 
+            activePrograms={activePrograms}
+            programRewardCounts={programRewardCounts}
+            onEditProgram={handleEditProgram}
+            onToggleProgramActive={toggleProgramActive}
+          />
 
           {/* Custom Manual Programs */}
           {customPrograms.length > 0 && (
@@ -1805,7 +1763,7 @@ const ProgramsTabContent = () => {
                 {customPrograms.map((program) => (
                   <div 
                     key={program.id} 
-                    className={`group relative bg-gray-50 border rounded-lg p-4 transition-all hover:shadow-sm cursor-pointer ${
+                    className={`group relative bg-gray-50 border rounded-xl p-4 transition-all hover:shadow-sm cursor-pointer ${
                       program.isActive 
                         ? 'border-blue-200 hover:border-blue-300' 
                         : 'border-gray-200 hover:border-gray-300'

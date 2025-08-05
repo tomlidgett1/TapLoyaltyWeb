@@ -71,11 +71,12 @@ interface CreateManualProgramDialogProps {
     pin: string
     rewards: any[]
   } | null
+  onSuccess?: () => void
 }
 
-export function CreateManualProgramDialog({ open, onOpenChange, editingProgram }: CreateManualProgramDialogProps) {
+export function CreateManualProgramDialog({ open, onOpenChange, editingProgram, onSuccess }: CreateManualProgramDialogProps) {
   const { user } = useAuth()
-  const [programName, setProgramName] = useState("My Custom Program")
+  const [programName, setProgramName] = useState("Enter name...")
   const [programDescription, setProgramDescription] = useState("")
   const [programPin, setProgramPin] = useState("")
   const [isEditingName, setIsEditingName] = useState(false)
@@ -99,11 +100,12 @@ export function CreateManualProgramDialog({ open, onOpenChange, editingProgram }
       setActiveTab('setup')
     } else {
       // Reset form for new program
-      setProgramName("My Custom Program")
+      setProgramName("Enter name...")
       setProgramDescription("")
       setProgramPin("")
       setRewards([])
       setActiveTab('setup')
+      setIsEditingName(true) // Auto-select name field for new programs
     }
   }, [editingProgram, open])
 
@@ -469,7 +471,7 @@ export function CreateManualProgramDialog({ open, onOpenChange, editingProgram }
       return
     }
 
-    if (!programName.trim() || programName === "My Custom Program") {
+    if (!programName.trim() || programName === "Enter name...") {
       toast({
         title: "Program Name Required",
         description: "Please enter a unique program name.",
@@ -578,6 +580,11 @@ export function CreateManualProgramDialog({ open, onOpenChange, editingProgram }
         title: isEditing ? "Program Updated Successfully" : "Program Saved Successfully",
         description: `"${programName}" has been ${isEditing ? 'updated' : 'saved to your merchant account'}.`
       })
+
+      // Call onSuccess callback if provided
+      if (onSuccess) {
+        onSuccess()
+      }
 
     onOpenChange(false)
     } catch (error) {
@@ -1188,7 +1195,7 @@ export function CreateManualProgramDialog({ open, onOpenChange, editingProgram }
                   </h3>
                   
                   {/* Program Info Preview */}
-                  {(programName !== "My Custom Program" || programDescription) && (
+                  {(programName !== "Enter name..." || programDescription) && (
                     <div className="mb-4 p-3 bg-white rounded-lg border border-gray-200">
                       <h4 className="text-sm font-medium text-gray-900 mb-1" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>
                         {programName}
@@ -1584,7 +1591,7 @@ export function CreateManualProgramDialog({ open, onOpenChange, editingProgram }
                       <div className="bg-gray-900 rounded-md p-4 overflow-x-auto">
                         <pre className="text-green-400 text-xs leading-relaxed">
 {`{
-  "name": "My Custom Program",
+          "name": "Enter name...",
   "pin": "1234",
   "type": "manual",
   "status": "active",

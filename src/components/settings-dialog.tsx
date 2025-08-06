@@ -27,7 +27,15 @@ import {
   ImageIcon,
   X,
   Headphones,
-  Send
+  Send,
+  Check,
+  Phone,
+  Mail,
+  Copy,
+  Cake,
+  Calendar,
+  Gift,
+  Users
 } from "lucide-react"
 
 import {
@@ -1131,40 +1139,54 @@ export function SettingsDialog({ open, onOpenChange, initialActiveSection }: { o
       case "Business":
         return (
           <div className="space-y-6">
-            {/* Business Information */}
-            <Card className="rounded-md">
-              <CardHeader>
-                <div className="flex items-center gap-4">
-                  <div 
-                    className="relative w-16 h-16 rounded-md border-2 border-dashed border-muted hover:border-muted-foreground/50 cursor-pointer transition-colors"
-                    onClick={() => document.getElementById('logo-upload-dialog')?.click()}
-                  >
-                    {logoUrl ? (
-                      <img 
-                        src={logoUrl} 
-                        alt="Business Logo" 
-                        className="w-full h-full object-cover rounded-md"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Upload className="h-6 w-6 text-muted-foreground" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <CardTitle className="text-base font-medium">
-                      {tradingName || legalBusinessName || "Your Business"}
-                    </CardTitle>
-                    <CardDescription className="text-xs text-gray-600">{businessEmail}</CardDescription>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="mt-1 h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
+            {/* Logo and Business Identity Section */}
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-4">
+                    <div 
+                      className="relative group cursor-pointer"
                       onClick={() => document.getElementById('logo-upload-dialog')?.click()}
                     >
-                      Change logo
-                    </Button>
+                      <div className="w-20 h-20 rounded-xl overflow-hidden bg-white shadow-sm border border-gray-200 group-hover:shadow-md transition-shadow">
+                        {logoUrl ? (
+                          <img 
+                            src={logoUrl} 
+                            alt="Business Logo" 
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                            <Store className="h-8 w-8 text-gray-400" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="absolute inset-0 bg-black/50 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Upload className="h-5 w-5 text-white" />
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        {tradingName || legalBusinessName || "Your Business"}
+                      </h3>
+                      <p className="text-sm text-gray-600 mt-0.5">{businessEmail}</p>
+                      <button 
+                        onClick={() => document.getElementById('logo-upload-dialog')?.click()}
+                        className="text-xs text-blue-600 hover:text-blue-700 mt-1.5 font-medium"
+                      >
+                        Change logo
+                      </button>
+                    </div>
                   </div>
+                  
+                  {logoFile && (
+                    <div className="flex items-center gap-2 text-xs bg-white px-3 py-1.5 rounded-md border border-blue-200">
+                      <ImageIcon className="h-3.5 w-3.5 text-blue-600" />
+                      <span className="text-gray-700">{logoFile.name}</span>
+                      <span className="text-gray-500">ready to upload</span>
+                    </div>
+                  )}
                 </div>
                 <input
                   id="logo-upload-dialog"
@@ -1173,56 +1195,66 @@ export function SettingsDialog({ open, onOpenChange, initialActiveSection }: { o
                   onChange={handleLogoChange}
                   accept="image/*"
                 />
-                {logoFile && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <ImageIcon className="h-4 w-4" />
-                    <span>{logoFile.name} ready to upload</span>
-                  </div>
-                )}
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="legalBusinessName" className="text-sm font-medium">Legal Business Name</Label>
+              </div>
+              
+              <div className="p-6 space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <Label htmlFor="legalBusinessName" className="text-xs font-medium text-gray-700 mb-1.5 block">
+                      Legal Business Name
+                    </Label>
                     <Input
                       id="legalBusinessName"
                       value={legalBusinessName}
                       onChange={(e) => setLegalBusinessName(e.target.value)}
-                      placeholder="Legal name as registered"
+                      placeholder="As registered with ASIC"
+                      className="rounded-md border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="tradingName" className="text-sm font-medium">Trading Name</Label>
+                  
+                  <div>
+                    <Label htmlFor="tradingName" className="text-xs font-medium text-gray-700 mb-1.5 block">
+                      Trading Name
+                    </Label>
                     <Input
                       id="tradingName"
                       value={tradingName}
                       onChange={(e) => setTradingName(e.target.value)}
-                      placeholder="Name customers know you by"
+                      placeholder="Name customers see"
+                      className="rounded-md border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                     />
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="businessEmail" className="text-sm font-medium">Primary Email</Label>
-                    <Input
-                      id="businessEmail"
-                      type="email"
-                      value={businessEmail}
-                      readOnly
-                      className="bg-muted"
-                    />
-                    <p className="text-xs text-gray-600">
-                      This is your primary account email and cannot be changed
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <Label htmlFor="businessEmail" className="text-xs font-medium text-gray-700 mb-1.5 block">
+                      Primary Email
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="businessEmail"
+                        type="email"
+                        value={businessEmail}
+                        readOnly
+                        className="rounded-md bg-gray-50 border-gray-200 pr-8"
+                      />
+                      <Key className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Primary account email cannot be changed
                     </p>
                   </div>
-                                        <div className="space-y-2">
-                        <Label htmlFor="businessType" className="text-sm font-medium">Business Type</Label>
+                  
+                  <div>
+                    <Label htmlFor="businessType" className="text-xs font-medium text-gray-700 mb-1.5 block">
+                      Business Type
+                    </Label>
                     <select 
                       id="businessType"
                       value={businessType}
                       onChange={(e) => setBusinessType(e.target.value)}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex h-10 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
                       {businessTypes.map(type => (
                         <option key={type.value} value={type.value}>
@@ -1232,112 +1264,131 @@ export function SettingsDialog({ open, onOpenChange, initialActiveSection }: { o
                     </select>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            {/* ABN & Verification */}
-            <Card className="rounded-md">
-              <CardHeader>
+            {/* ABN & Verification Section */}
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base font-medium">ABN & Verification</CardTitle>
-                    <CardDescription className="text-xs text-gray-600">
-                      Australian Business Number and verification status
-                    </CardDescription>
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                      <ShieldCheck className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-semibold text-gray-900">Business Verification</h3>
+                      <p className="text-xs text-gray-600 mt-0.5">Australian Business Number and verification</p>
+                    </div>
                   </div>
-                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                  
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-white border">
                     {(abnVerificationStatus === "approved" || abnVerificationStatus === "verified") && (
                       <>
-                        <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
-                        Verified
+                        <div className="h-2 w-2 bg-green-500 rounded-full"></div>
+                        <span className="text-green-700">Verified</span>
                       </>
                     )}
                     {abnVerificationStatus === "rejected" && (
                       <>
-                        <div className="h-1.5 w-1.5 bg-red-500 rounded-full flex-shrink-0"></div>
-                        Rejected
+                        <div className="h-2 w-2 bg-red-500 rounded-full"></div>
+                        <span className="text-red-700">Rejected</span>
                       </>
                     )}
                     {abnVerificationUrl && !["approved", "verified", "rejected"].includes(abnVerificationStatus) && (
                       <>
-                        <div className="h-1.5 w-1.5 bg-orange-500 rounded-full flex-shrink-0"></div>
-                        In Review
+                        <div className="h-2 w-2 bg-orange-500 rounded-full"></div>
+                        <span className="text-orange-700">In Review</span>
                       </>
                     )}
                     {!abnVerificationUrl && (
                       <>
-                        <div className="h-1.5 w-1.5 bg-gray-500 rounded-full flex-shrink-0"></div>
-                        Pending
+                        <div className="h-2 w-2 bg-gray-400 rounded-full"></div>
+                        <span className="text-gray-600">Pending</span>
                       </>
                     )}
-                  </span>
+                  </div>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                                      <div className="space-y-2">
-                        <Label htmlFor="abn" className="text-sm font-medium">Australian Business Number (ABN)</Label>
+              </div>
+              
+              <div className="p-6 space-y-5">
+                <div>
+                  <Label htmlFor="abn" className="text-xs font-medium text-gray-700 mb-1.5 block">
+                    Australian Business Number (ABN)
+                  </Label>
                   <div className="flex gap-2">
-                    <Input 
-                      id="abn"
-                      value={abn}
-                      readOnly
-                      placeholder="e.g. 12 345 678 901"
-                      className="bg-muted flex-1"
-                    />
+                    <div className="relative flex-1">
+                      <Input 
+                        id="abn"
+                        value={abn}
+                        readOnly
+                        placeholder="XX XXX XXX XXX"
+                        className="rounded-md bg-gray-50 border-gray-200 pr-10"
+                      />
+                      <ShieldCheck className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    </div>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setShowAbnVerificationDialog(true)}
                       disabled={!abn}
+                      className="rounded-md"
                     >
                       Change
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    We use your ABN to match consumer transactions with your merchant account
+                  <p className="text-xs text-gray-500 mt-1">
+                    Used to match transactions with your merchant account
                   </p>
                 </div>
 
-                <div className="space-y-3">
-                  <Label>Verification Document</Label>
+                {/* Verification Document Upload */}
+                <div>
+                  <Label className="text-xs font-medium text-gray-700 mb-3 block">
+                    Verification Document
+                  </Label>
                   
                   {abnVerificationUrl && (
-                    <div className="flex items-center gap-3 p-3 border rounded-md">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200 mb-3">
+                      <div className="h-10 w-10 rounded-lg bg-white border border-gray-200 flex items-center justify-center">
+                        <FileText className="h-5 w-5 text-gray-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900">
                           {abnVerificationFile?.name || 'Verification Document'}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-gray-500">
                           Uploaded for verification
                         </p>
                       </div>
-                      <Button variant="outline" size="sm" asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        asChild
+                        className="rounded-md"
+                      >
                         <a href={abnVerificationUrl} target="_blank" rel="noopener noreferrer">
-                          View
+                          <span className="text-xs">View</span>
                         </a>
                       </Button>
                     </div>
                   )}
                   
-                  <div className="border-2 border-dashed rounded-md p-6 text-center">
-                    <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                    <div className="space-y-2">
-                      <Button
-                        variant="outline"
-                        onClick={() => document.getElementById('abn-verification')?.click()}
-                      >
-                        {abnVerificationUrl ? 'Replace Document' : 'Upload Document'}
-                      </Button>
-                      <p className="text-xs text-muted-foreground">
-                        PDF, JPG, or PNG files accepted
+                  <div 
+                    className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer"
+                    onClick={() => document.getElementById('abn-verification')?.click()}
+                  >
+                    <Upload className="h-8 w-8 mx-auto mb-3 text-gray-400" />
+                    <p className="text-sm font-medium text-gray-900 mb-1">
+                      {abnVerificationUrl ? 'Replace verification document' : 'Upload verification document'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      PDF, JPG, or PNG (max 5MB)
+                    </p>
+                    {abnVerificationFile && (
+                      <p className="text-xs text-blue-600 mt-2">
+                        {abnVerificationFile.name} ({(abnVerificationFile.size / 1024).toFixed(1)} KB)
                       </p>
-                      {abnVerificationFile && (
-                        <p className="text-sm text-muted-foreground">
-                          {abnVerificationFile.name} ({(abnVerificationFile.size / 1024).toFixed(1)} KB)
-                        </p>
-                      )}
-                    </div>
+                    )}
                     <input
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png"
@@ -1348,17 +1399,23 @@ export function SettingsDialog({ open, onOpenChange, initialActiveSection }: { o
                   </div>
                 </div>
 
+                {/* Status Messages */}
                 {abnVerificationStatus === "rejected" && abnRejectionReason && (
-                  <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-md">
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                     <div className="flex gap-3">
-                      <ShieldAlert className="h-4 w-4 text-destructive mt-0.5" />
-                      <div className="space-y-2">
-                        <p className="text-sm font-medium">Verification Rejected</p>
-                        <p className="text-sm text-muted-foreground">{abnRejectionReason}</p>
+                      <div className="flex-shrink-0">
+                        <div className="h-8 w-8 rounded-full bg-red-100 flex items-center justify-center">
+                          <X className="h-4 w-4 text-red-600" />
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-sm font-semibold text-red-900">Verification Rejected</h4>
+                        <p className="text-xs text-red-700 mt-1">{abnRejectionReason}</p>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => document.getElementById('abn-verification')?.click()}
+                          className="mt-3 text-xs border-red-300 text-red-700 hover:bg-red-50"
                         >
                           Upload New Document
                         </Button>
@@ -1368,159 +1425,237 @@ export function SettingsDialog({ open, onOpenChange, initialActiveSection }: { o
                 )}
                 
                 {(abnVerificationStatus === "approved" || abnVerificationStatus === "verified") && abnVerificationDate && (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                     <div className="flex gap-3">
-                      <ShieldCheck className="h-4 w-4 text-green-600 mt-0.5" />
+                      <div className="flex-shrink-0">
+                        <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
+                          <Check className="h-4 w-4 text-green-600" />
+                        </div>
+                      </div>
                       <div>
-                        <p className="text-sm font-medium text-green-800">ABN Verified</p>
-                        <p className="text-sm text-green-700">
+                        <h4 className="text-sm font-semibold text-green-900">ABN Verified</h4>
+                        <p className="text-xs text-green-700 mt-0.5">
                           Verified on {abnVerificationDate.toDate ? abnVerificationDate.toDate().toLocaleDateString() : new Date(abnVerificationDate).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
         )
 
       case "Location":
         return (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                Search for your business address or click on the map to set your exact location
-              </p>
-              {location.address && location.coordinates && (
-                <div className="flex items-center gap-1.5 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-md">
-                  <MapPin className="h-3 w-3" />
-                  <span>Location set</span>
+            {/* Location Status Header */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                    <MapPin className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">Business Location</h3>
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      Set your exact business location for customers
+                    </p>
+                  </div>
                 </div>
-              )}
+                {location.coordinates?.latitude && location.coordinates?.longitude && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-green-50 border border-green-200">
+                    <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <span className="text-green-700">Location verified</span>
+                  </div>
+                )}
+              </div>
             </div>
             
-            <MapLocationPicker
-              initialAddress={formattedAddress || `${street}, ${suburb}, ${state}, ${postcode}, Australia`}
-              initialLatitude={latitude}
-              initialLongitude={longitude}
-              onLocationChange={(locationData) => {
-                setLatitude(locationData.latitude);
-                setLongitude(locationData.longitude);
-                setFormattedAddress(locationData.formattedAddress || locationData.address);
-                
-                const addressParts = locationData.address.split(',');
-                const simpleAddress = addressParts.length >= 2 
-                  ? `${addressParts[0].trim()}, ${addressParts[1].trim()}`
-                  : locationData.address;
-                
-                setLocation({
-                  address: simpleAddress,
-                  coordinates: {
-                    latitude: locationData.latitude,
-                    longitude: locationData.longitude
-                  },
-                  displayAddress: locationData.formattedAddress || locationData.address
-                });
-                
-                const streetPart = addressParts[0]?.trim() || "";
-                setStreet(streetPart);
-                
-                const suburbPart = addressParts[1]?.trim() || "";
-                setSuburb(suburbPart);
-              }}
-            />
-            
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium text-gray-900">Address Details</h4>
-                <p className="text-xs text-muted-foreground">
-                  Review and edit your address details. The location coordinates are set from the map above.
-                </p>
+            {/* Map Section */}
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="border-b border-gray-100 bg-gray-50 px-6 py-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-gray-700">
+                    Search for your address or click the map to set your location
+                  </p>
+                  {latitude && longitude && (
+                    <p className="text-xs text-gray-500">
+                      {latitude.toFixed(6)}, {longitude.toFixed(6)}
+                    </p>
+                  )}
+                </div>
               </div>
               
-              <div className="space-y-4">
-                                  <div className="space-y-2">
-                    <Label htmlFor="street" className="text-sm font-medium">Street Address</Label>
+              <div className="h-[400px] p-6">
+                <MapLocationPicker
+                  initialAddress={formattedAddress || `${street}, ${suburb}, ${state}, ${postcode}, Australia`}
+                  initialLatitude={latitude}
+                  initialLongitude={longitude}
+                  onLocationChange={(locationData) => {
+                    setLatitude(locationData.latitude);
+                    setLongitude(locationData.longitude);
+                    setFormattedAddress(locationData.formattedAddress || locationData.address);
+                    
+                    const addressParts = locationData.address.split(',');
+                    const simpleAddress = addressParts.length >= 2 
+                      ? `${addressParts[0].trim()}, ${addressParts[1].trim()}`
+                      : locationData.address;
+                    
+                    setLocation({
+                      address: simpleAddress,
+                      coordinates: {
+                        latitude: locationData.latitude,
+                        longitude: locationData.longitude
+                      },
+                      displayAddress: locationData.formattedAddress || locationData.address
+                    });
+                    
+                    const streetPart = addressParts[0]?.trim() || "";
+                    setStreet(streetPart);
+                    
+                    const suburbPart = addressParts[1]?.trim() || "";
+                    setSuburb(suburbPart);
+                  }}
+                />
+              </div>
+            </div>
+            
+            {/* Address Details Form */}
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                    <FileText className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">Address Details</h3>
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      Fine-tune your business address information
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-6 space-y-5">
+                {/* Current Address Display */}
+                {formattedAddress && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-5">
+                    <div className="flex items-start gap-3">
+                      <MapPin className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-xs font-medium text-blue-900 mb-1">Current Address</p>
+                        <p className="text-sm text-blue-800">{formattedAddress}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Street Address */}
+                <div>
+                  <Label htmlFor="street" className="text-xs font-medium text-gray-700 mb-1.5 block">
+                    Street Address
+                  </Label>
+                  <div className="relative">
                     <Input
                       id="street"
                       placeholder="123 Main Street"
                       value={street}
                       onChange={(e) => {
                         setStreet(e.target.value);
-                        // Update location display address
                         setLocation(prev => ({
                           ...prev,
                           address: `${e.target.value}, ${suburb}`,
                           displayAddress: `${e.target.value}, ${suburb}, ${state}, ${postcode}`
                         }));
                       }}
-                      className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
+                      className="rounded-md border-gray-200 focus:border-blue-500 focus:ring-blue-500 pl-10"
                     />
+                    <Store className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                                      <div className="space-y-2">
-                      <Label htmlFor="suburb" className="text-sm font-medium">Suburb</Label>
-                      <Input
-                        id="suburb"
-                        placeholder="Sydney"
-                        value={suburb}
-                        onChange={(e) => {
-                          setSuburb(e.target.value);
-                          // Update location display address
-                          setLocation(prev => ({
-                            ...prev,
-                            address: `${street}, ${e.target.value}`,
-                            displayAddress: `${street}, ${e.target.value}, ${state}, ${postcode}`
-                          }));
-                        }}
-                        className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="postcode" className="text-sm font-medium">Postcode</Label>
-                      <Input
-                        id="postcode"
-                        placeholder="2000"
-                        value={postcode}
-                        onChange={(e) => {
-                          const newPostcode = e.target.value.replace(/\D/g, '').slice(0, 4);
-                          setPostcode(newPostcode);
-                          // Update location display address
-                          setLocation(prev => ({
-                            ...prev,
-                            displayAddress: `${street}, ${suburb}, ${state}, ${newPostcode}`
-                          }));
-                        }}
-                        className="h-10 px-3 text-sm rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
-                      />
-                    </div>
                 </div>
                 
-                                  <div className="space-y-2">
-                    <Label htmlFor="state" className="text-sm font-medium">State</Label>
-                    <select 
-                      id="state"
-                      value={state}
+                {/* Suburb and Postcode Row */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <Label htmlFor="suburb" className="text-xs font-medium text-gray-700 mb-1.5 block">
+                      Suburb / City
+                    </Label>
+                    <Input
+                      id="suburb"
+                      placeholder="Sydney"
+                      value={suburb}
                       onChange={(e) => {
-                        setState(e.target.value);
-                        // Update location display address
+                        setSuburb(e.target.value);
                         setLocation(prev => ({
                           ...prev,
-                          displayAddress: `${street}, ${suburb}, ${e.target.value}, ${postcode}`
+                          address: `${street}, ${e.target.value}`,
+                          displayAddress: `${street}, ${e.target.value}, ${state}, ${postcode}`
                         }));
                       }}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {australianStates.map(state => (
-                        <option key={state.value} value={state.value}>
-                          {state.label}
-                        </option>
-                      ))}
-                    </select>
+                      className="rounded-md border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                    />
                   </div>
+                  
+                  <div>
+                    <Label htmlFor="postcode" className="text-xs font-medium text-gray-700 mb-1.5 block">
+                      Postcode
+                    </Label>
+                    <Input
+                      id="postcode"
+                      placeholder="2000"
+                      value={postcode}
+                      onChange={(e) => {
+                        const newPostcode = e.target.value.replace(/\D/g, '').slice(0, 4);
+                        setPostcode(newPostcode);
+                        setLocation(prev => ({
+                          ...prev,
+                          displayAddress: `${street}, ${suburb}, ${state}, ${newPostcode}`
+                        }));
+                      }}
+                      className="rounded-md border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                      maxLength={4}
+                    />
+                  </div>
+                </div>
+                
+                {/* State Selection */}
+                <div>
+                  <Label htmlFor="state" className="text-xs font-medium text-gray-700 mb-1.5 block">
+                    State / Territory
+                  </Label>
+                  <select 
+                    id="state"
+                    value={state}
+                    onChange={(e) => {
+                      setState(e.target.value);
+                      setLocation(prev => ({
+                        ...prev,
+                        displayAddress: `${street}, ${suburb}, ${e.target.value}, ${postcode}`
+                      }));
+                    }}
+                    className="flex h-10 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    {australianStates.map(state => (
+                      <option key={state.value} value={state.value}>
+                        {state.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                {/* Helper Text */}
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-5">
+                  <div className="flex gap-3">
+                    <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-medium text-amber-900">Important</p>
+                      <p className="text-xs text-amber-800 mt-1">
+                        Make sure your address is accurate. Customers will use this information to find your business.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1529,35 +1664,104 @@ export function SettingsDialog({ open, onOpenChange, initialActiveSection }: { o
       case "Team":
         return (
           <div className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="repName">Primary Representative Name</Label>
-              <Input
-                id="repName"
-                value={repName}
-                onChange={(e) => setRepName(e.target.value)}
-                placeholder="Full name of the main contact"
-              />
+            {/* Team Header */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                  <User className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">Team Management</h3>
+                  <p className="text-xs text-gray-600 mt-0.5">
+                    Manage your primary business contact
+                  </p>
+                </div>
+              </div>
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="repPhone">Phone Number</Label>
-              <Input
-                id="repPhone"
-                value={repPhone}
-                onChange={(e) => setRepPhone(e.target.value)}
-                placeholder="e.g. 0412 345 678"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="repEmail">Email Address</Label>
-              <Input
-                id="repEmail"
-                type="email"
-                value={repEmail}
-                onChange={(e) => setRepEmail(e.target.value)}
-                placeholder="contact@yourbusiness.com"
-              />
+            {/* Primary Representative Section */}
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                    <ShieldCheck className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">Primary Representative</h3>
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      Main point of contact for business matters
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-6 space-y-5">
+                {/* Name Field */}
+                <div>
+                  <Label htmlFor="repName" className="text-xs font-medium text-gray-700 mb-1.5 block">
+                    Full Name
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="repName"
+                      value={repName}
+                      onChange={(e) => setRepName(e.target.value)}
+                      placeholder="John Smith"
+                      className="rounded-md border-gray-200 focus:border-blue-500 focus:ring-blue-500 pl-10"
+                    />
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  </div>
+                </div>
+                
+                {/* Contact Information Row */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <Label htmlFor="repPhone" className="text-xs font-medium text-gray-700 mb-1.5 block">
+                      Phone Number
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="repPhone"
+                        value={repPhone}
+                        onChange={(e) => setRepPhone(e.target.value)}
+                        placeholder="0412 345 678"
+                        className="rounded-md border-gray-200 focus:border-blue-500 focus:ring-blue-500 pl-10"
+                      />
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="repEmail" className="text-xs font-medium text-gray-700 mb-1.5 block">
+                      Email Address
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="repEmail"
+                        type="email"
+                        value={repEmail}
+                        onChange={(e) => setRepEmail(e.target.value)}
+                        placeholder="contact@business.com"
+                        className="rounded-md border-gray-200 focus:border-blue-500 focus:ring-blue-500 pl-10"
+                      />
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Info Box */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-5">
+                  <div className="flex gap-3">
+                    <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-medium text-blue-900">Primary Contact</p>
+                      <p className="text-xs text-blue-800 mt-1">
+                        This person will receive all important business communications and have administrative access.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )
@@ -1565,29 +1769,99 @@ export function SettingsDialog({ open, onOpenChange, initialActiveSection }: { o
       case "Merchant ID":
         return (
           <div className="space-y-6">
-            <div className="bg-muted/30 p-4 rounded-md">
-              <Label htmlFor="merchantId">Your Merchant ID (for API integration)</Label>
-              <div className="flex items-center gap-2 mt-2">
-                <code className="bg-gray-100 p-2 rounded-md text-sm font-mono flex-1 overflow-x-auto">
-                  {merchantId}
-                </code>
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => {
-                    navigator.clipboard.writeText(merchantId);
-                    toast({
-                      title: "Copied!",
-                      description: "Merchant ID copied to clipboard",
-                    });
-                  }}
-                >
-                  Copy
-                </Button>
+            {/* Merchant ID Header */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                  <Key className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">API Integration</h3>
+                  <p className="text-xs text-gray-600 mt-0.5">
+                    Your unique identifier for API access
+                  </p>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                This is your unique merchant identifier for API integration.
-              </p>
+            </div>
+            
+            {/* Merchant ID Display */}
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                    <ShieldCheck className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">Your Merchant ID</h3>
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      Use this ID to authenticate API requests
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-6">
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <Label htmlFor="merchantId" className="text-xs font-medium text-gray-700 mb-3 block">
+                    Merchant ID
+                  </Label>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 bg-white rounded-md border border-gray-200 p-3 font-mono text-sm text-gray-900 overflow-x-auto">
+                      {merchantId}
+                    </div>
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(merchantId);
+                        toast({
+                          title: "Copied!",
+                          description: "Merchant ID copied to clipboard",
+                        });
+                      }}
+                      className="rounded-md shrink-0"
+                    >
+                      <Copy className="h-4 w-4 mr-1.5" />
+                      Copy
+                    </Button>
+                  </div>
+                </div>
+                
+                {/* API Documentation Link */}
+                <div className="mt-5 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex gap-3">
+                    <FileText className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-medium text-blue-900">API Documentation</p>
+                      <p className="text-xs text-blue-800 mt-1">
+                        Visit our developer portal for complete API documentation and integration guides.
+                      </p>
+                      <Button 
+                        variant="link" 
+                        className="text-blue-600 hover:text-blue-700 p-0 h-auto text-xs mt-2"
+                        asChild
+                      >
+                        <a href="https://docs.taployalty.com.au" target="_blank" rel="noopener noreferrer">
+                          View API Docs →
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Security Notice */}
+                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="flex gap-3">
+                    <ShieldAlert className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-medium text-amber-900">Security Notice</p>
+                      <p className="text-xs text-amber-800 mt-1">
+                        Keep your Merchant ID secure. Never share it publicly or commit it to version control.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )
@@ -1595,54 +1869,159 @@ export function SettingsDialog({ open, onOpenChange, initialActiveSection }: { o
       case "Operating Hours":
         return (
           <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-medium">Operating Hours</h3>
-              <p className="text-sm text-muted-foreground">Set your business operating hours for customers</p>
+            {/* Operating Hours Header */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                  <Clock className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">Business Hours</h3>
+                  <p className="text-xs text-gray-600 mt-0.5">
+                    Let customers know when you're open
+                  </p>
+                </div>
+              </div>
             </div>
             
-            <div className="space-y-4">
-              {daysOfWeek.map(day => {
-                const dayLower = day.toLowerCase()
-                return (
-                  <div key={day} className="space-y-2 pb-2 border-b">
-                    <div className="flex items-center gap-3">
-                      <Switch 
-                        id={`open-${dayLower}`}
-                        checked={!operatingHours[dayLower]?.isClosed}
-                        onCheckedChange={(checked) => 
-                          updateOperatingHours(dayLower, 'isClosed', !checked)
-                        }
-                      />
-                      <Label htmlFor={`open-${dayLower}`} className="font-medium">{day}</Label>
+            {/* Hours Configuration */}
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                      <Store className="h-5 w-5 text-blue-600" />
                     </div>
-                    
-                    {!operatingHours[dayLower]?.isClosed && (
-                      <div className="flex items-center gap-4 ml-8 mt-2">
-                        <div className="space-y-1">
-                          <Label htmlFor={`open-time-${dayLower}`} className="text-xs">Open</Label>
-                          <Input
-                            id={`open-time-${dayLower}`}
-                            type="time"
-                            value={operatingHours[dayLower]?.open || "09:00"}
-                            onChange={(e) => updateOperatingHours(dayLower, 'open', e.target.value)}
-                            className="w-32"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor={`close-time-${dayLower}`} className="text-xs">Close</Label>
-                          <Input
-                            id={`close-time-${dayLower}`}
-                            type="time"
-                            value={operatingHours[dayLower]?.close || "17:00"}
-                            onChange={(e) => updateOperatingHours(dayLower, 'close', e.target.value)}
-                            className="w-32"
-                          />
-                        </div>
-                      </div>
-                    )}
+                    <div>
+                      <h3 className="text-base font-semibold text-gray-900">Weekly Schedule</h3>
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        Configure your operating hours for each day
+                      </p>
+                    </div>
                   </div>
-                )
-              })}
+                </div>
+              </div>
+              
+              <div className="divide-y divide-gray-100">
+                {daysOfWeek.map((day, index) => {
+                  const dayLower = day.toLowerCase()
+                  const isOpen = !operatingHours[dayLower]?.isClosed
+                  
+                  return (
+                    <div key={day} className={cn(
+                      "p-4 transition-colors",
+                      index % 2 === 0 ? "bg-white" : "bg-gray-50/50"
+                    )}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Switch 
+                            id={`open-${dayLower}`}
+                            checked={isOpen}
+                            onCheckedChange={(checked) => 
+                              updateOperatingHours(dayLower, 'isClosed', !checked)
+                            }
+                            className="data-[state=checked]:bg-blue-600"
+                          />
+                          <Label 
+                            htmlFor={`open-${dayLower}`} 
+                            className={cn(
+                              "text-sm font-medium cursor-pointer transition-colors",
+                              isOpen ? "text-gray-900" : "text-gray-500"
+                            )}
+                          >
+                            {day}
+                          </Label>
+                        </div>
+                        
+                        {isOpen ? (
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
+                              <Label htmlFor={`open-time-${dayLower}`} className="text-xs text-gray-500">
+                                Opens
+                              </Label>
+                              <Input
+                                id={`open-time-${dayLower}`}
+                                type="time"
+                                value={operatingHours[dayLower]?.open || "09:00"}
+                                onChange={(e) => updateOperatingHours(dayLower, 'open', e.target.value)}
+                                className="w-28 h-8 text-xs rounded-md border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                              />
+                            </div>
+                            
+                            <span className="text-gray-400">—</span>
+                            
+                            <div className="flex items-center gap-2">
+                              <Label htmlFor={`close-time-${dayLower}`} className="text-xs text-gray-500">
+                                Closes
+                              </Label>
+                              <Input
+                                id={`close-time-${dayLower}`}
+                                type="time"
+                                value={operatingHours[dayLower]?.close || "17:00"}
+                                onChange={(e) => updateOperatingHours(dayLower, 'close', e.target.value)}
+                                className="w-28 h-8 text-xs rounded-md border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-500 font-medium">Closed</span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              
+              {/* Quick Actions */}
+              <div className="p-4 bg-gray-50 border-t border-gray-100">
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      daysOfWeek.forEach(day => {
+                        updateOperatingHours(day.toLowerCase(), 'isClosed', false)
+                        updateOperatingHours(day.toLowerCase(), 'open', '09:00')
+                        updateOperatingHours(day.toLowerCase(), 'close', '17:00')
+                      })
+                    }}
+                    className="text-xs rounded-md"
+                  >
+                    Set All 9-5
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      daysOfWeek.forEach(day => {
+                        if (day === 'Saturday' || day === 'Sunday') {
+                          updateOperatingHours(day.toLowerCase(), 'isClosed', true)
+                        } else {
+                          updateOperatingHours(day.toLowerCase(), 'isClosed', false)
+                          updateOperatingHours(day.toLowerCase(), 'open', '09:00')
+                          updateOperatingHours(day.toLowerCase(), 'close', '17:00')
+                        }
+                      })
+                    }}
+                    className="text-xs rounded-md"
+                  >
+                    Weekdays Only
+                  </Button>
+                </div>
+              </div>
+            </div>
+            
+            {/* Info Box */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex gap-3">
+                <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-xs font-medium text-blue-900">Customer Visibility</p>
+                  <p className="text-xs text-blue-800 mt-1">
+                    Your operating hours will be displayed on your store page and in search results to help customers know when to visit.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         )
@@ -1650,62 +2029,165 @@ export function SettingsDialog({ open, onOpenChange, initialActiveSection }: { o
       case "Notifications":
         return (
           <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-medium">Customer Milestones</h3>
-              <p className="text-sm text-muted-foreground">Notifications about customer activity and achievements</p>
+            {/* Notifications Header */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                  <Bell className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">Notification Preferences</h3>
+                  <p className="text-xs text-gray-600 mt-0.5">
+                    Choose which events you want to be notified about
+                  </p>
+                </div>
+              </div>
             </div>
             
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>First Purchase</Label>
-                  <p className="text-sm text-muted-foreground">
-                    When a new customer makes their first purchase
-                  </p>
+            {/* Customer Milestones */}
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                    <Award className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">Customer Milestones</h3>
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      Stay informed about customer achievements and special dates
+                    </p>
+                  </div>
                 </div>
-                <Switch 
-                  checked={notifications.customerFirstPurchase}
-                  onCheckedChange={(checked) => updateNotification('customerFirstPurchase', checked)}
-                />
               </div>
               
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Purchase Milestones</Label>
-                  <p className="text-sm text-muted-foreground">
-                    When customers reach their 10th, 25th, 50th purchase
-                  </p>
+              <div className="divide-y divide-gray-100">
+                {[
+                  {
+                    key: 'customerFirstPurchase',
+                    title: 'First Purchase',
+                    description: 'When a new customer makes their first purchase',
+                    icon: <ShoppingBag className="h-4 w-4 text-gray-400" />
+                  },
+                  {
+                    key: 'customerMilestone',
+                    title: 'Purchase Milestones',
+                    description: 'When customers reach their 10th, 25th, 50th purchase',
+                    icon: <Award className="h-4 w-4 text-gray-400" />
+                  },
+                  {
+                    key: 'customerBirthday',
+                    title: 'Customer Birthdays',
+                    description: "When it's a customer's birthday (if provided)",
+                    icon: <Cake className="h-4 w-4 text-gray-400" />
+                  },
+                  {
+                    key: 'customerAnniversary',
+                    title: 'Loyalty Anniversary',
+                    description: 'When a customer has been in your loyalty program for 1 year',
+                    icon: <Calendar className="h-4 w-4 text-gray-400" />
+                  }
+                ].map((item, index) => (
+                  <div key={item.key} className={cn(
+                    "p-4 transition-colors",
+                    index % 2 === 0 ? "bg-white" : "bg-gray-50/50"
+                  )}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5">{item.icon}</div>
+                        <div className="flex-1">
+                          <Label className="text-sm font-medium text-gray-900 cursor-pointer">
+                            {item.title}
+                          </Label>
+                          <p className="text-xs text-gray-600 mt-0.5">
+                            {item.description}
+                          </p>
+                        </div>
+                      </div>
+                      <Switch 
+                        checked={notifications[item.key as keyof typeof notifications] as boolean}
+                        onCheckedChange={(checked) => updateNotification(item.key, checked)}
+                        className="data-[state=checked]:bg-blue-600"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* More Notification Categories */}
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                    <Store className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">Business Updates</h3>
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      Important updates about your business operations
+                    </p>
+                  </div>
                 </div>
-                <Switch 
-                  checked={notifications.customerMilestone}
-                  onCheckedChange={(checked) => updateNotification('customerMilestone', checked)}
-                />
               </div>
               
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Customer Birthdays</Label>
-                  <p className="text-sm text-muted-foreground">
-                    When it's a customer's birthday (if provided)
-                  </p>
-                </div>
-                <Switch 
-                  checked={notifications.customerBirthday}
-                  onCheckedChange={(checked) => updateNotification('customerBirthday', checked)}
-                />
+              <div className="divide-y divide-gray-100">
+                {[
+                  {
+                    key: 'rewardRedeemed',
+                    title: 'Reward Redemptions',
+                    description: 'When customers redeem rewards',
+                    icon: <Gift className="h-4 w-4 text-gray-400" />
+                  },
+                  {
+                    key: 'dailySummary',
+                    title: 'Daily Summary',
+                    description: 'Daily overview of business activity',
+                    icon: <FileText className="h-4 w-4 text-gray-400" />
+                  },
+                  {
+                    key: 'systemUpdates',
+                    title: 'System Updates',
+                    description: 'Important platform updates and features',
+                    icon: <Settings className="h-4 w-4 text-gray-400" />
+                  }
+                ].map((item, index) => (
+                  <div key={item.key} className={cn(
+                    "p-4 transition-colors",
+                    index % 2 === 0 ? "bg-white" : "bg-gray-50/50"
+                  )}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5">{item.icon}</div>
+                        <div className="flex-1">
+                          <Label className="text-sm font-medium text-gray-900 cursor-pointer">
+                            {item.title}
+                          </Label>
+                          <p className="text-xs text-gray-600 mt-0.5">
+                            {item.description}
+                          </p>
+                        </div>
+                      </div>
+                      <Switch 
+                        checked={notifications[item.key as keyof typeof notifications] as boolean}
+                        onCheckedChange={(checked) => updateNotification(item.key, checked)}
+                        className="data-[state=checked]:bg-blue-600"
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Loyalty Anniversary</Label>
-                  <p className="text-sm text-muted-foreground">
-                    When a customer has been in your loyalty program for 1 year
+            </div>
+            
+            {/* Notification Delivery Info */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex gap-3">
+                <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-xs font-medium text-blue-900">Notification Delivery</p>
+                  <p className="text-xs text-blue-800 mt-1">
+                    Notifications will be sent to your registered email address and appear in your dashboard.
                   </p>
                 </div>
-                <Switch 
-                  checked={notifications.customerAnniversary}
-                  onCheckedChange={(checked) => updateNotification('customerAnniversary', checked)}
-                />
               </div>
             </div>
           </div>
@@ -1714,389 +2196,496 @@ export function SettingsDialog({ open, onOpenChange, initialActiveSection }: { o
       case "Billing":
         return (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <button
-                onClick={() => setSelectedAccountType("standard")}
-                disabled={planLoading}
-                className={cn(
-                  "p-6 rounded-md border-2 text-center transition-all hover:border-[#007AFF] disabled:opacity-50 disabled:cursor-not-allowed",
-                  selectedAccountType === "standard"
-                    ? "border-[#007AFF] bg-blue-50"
-                    : "border-gray-200 hover:bg-gray-50"
-                )}
-              >
-                <div className="space-y-3">
-                  <div className="w-12 h-12 bg-gray-100 rounded-md mx-auto overflow-hidden">
-                    <img 
-                      src="/taplogo.png" 
-                      alt="Tap Standard" 
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">Tap Standard</p>
-                    <p className="text-xs text-gray-500 mt-1">Your rules, your points.</p>
-                    {!isNetworkStore && (
-                      <div className="mt-2">
-                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                          <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
-                          Current Plan
-                        </span>
-                      </div>
-                    )}
-                  </div>
+            {/* Billing Header */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                  <CreditCard className="h-5 w-5 text-blue-600" />
                 </div>
-              </button>
-
-              <button
-                onClick={() => setSelectedAccountType("network")}
-                disabled={planLoading}
-                className={cn(
-                  "p-6 rounded-md border-2 text-center transition-all hover:border-[#007AFF] disabled:opacity-50 disabled:cursor-not-allowed",
-                  selectedAccountType === "network"
-                    ? "border-[#007AFF] bg-blue-50"
-                    : "border-gray-200 hover:bg-gray-50"
-                )}
-              >
-                <div className="space-y-3">
-                  <div className="w-12 h-12 bg-gray-100 rounded-md mx-auto overflow-hidden">
-                    <img 
-                      src="/tappro.png" 
-                      alt="Tap Network" 
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">Tap Network</p>
-                    <p className="text-xs text-gray-500 mt-1">Earn here, spend everywhere.</p>
-                    {isNetworkStore && (
-                      <div className="mt-2">
-                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                          <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
-                          Current Plan
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">Billing & Plans</h3>
+                  <p className="text-xs text-gray-600 mt-0.5">
+                    Manage your subscription and payment details
+                  </p>
                 </div>
-              </button>
+              </div>
             </div>
-
-            <div className="border rounded-md p-6 bg-white">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-gray-100 rounded-md overflow-hidden">
-                    <img 
-                      src={isNetworkStore ? "/tappro.png" : "/taplogo.png"}
-                      alt={isNetworkStore ? "Tap Network" : "Tap Standard"}
-                      className="w-full h-full object-contain"
-                    />
+            
+            {/* Plan Selection */}
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                    <Store className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Current Plan</p>
-                    <p className="font-semibold text-lg text-gray-900">
-                      {isNetworkStore ? "Tap Network" : "Tap Standard"}
+                    <h3 className="text-base font-semibold text-gray-900">Choose Your Plan</h3>
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      Select the plan that best fits your business needs
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                    <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
-                    Active
-                  </span>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    disabled={planLoading || (selectedAccountType === (isNetworkStore ? "network" : "standard"))}
-                    onClick={() => updateMerchantPlan(selectedAccountType === "network")}
-                  >
-                    {planLoading ? (
-                      <div className="flex items-center gap-1">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        Updating...
-                      </div>
-                    ) : selectedAccountType === (isNetworkStore ? "network" : "standard") ? (
-                      "Current Plan"
-                    ) : (
-                      "Change Plan"
+              </div>
+              
+              <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setSelectedAccountType("standard")}
+                    disabled={planLoading}
+                    className={cn(
+                      "relative p-6 rounded-xl border-2 text-center transition-all",
+                      "hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed",
+                      selectedAccountType === "standard"
+                        ? "border-blue-500 bg-blue-50/50"
+                        : "border-gray-200 hover:border-gray-300 bg-white"
                     )}
-                  </Button>
+                  >
+                    {!isNetworkStore && (
+                      <div className="absolute top-3 right-3">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                          <div className="h-1.5 w-1.5 bg-green-500 rounded-full"></div>
+                          Current
+                        </span>
+                      </div>
+                    )}
+                    <div className="space-y-4">
+                      <div className="w-16 h-16 bg-white rounded-xl shadow-sm mx-auto overflow-hidden border border-gray-100">
+                        <img 
+                          src="/taplogo.png" 
+                          alt="Tap Standard" 
+                          className="w-full h-full object-contain p-2"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-base font-semibold text-gray-900">Tap Standard</p>
+                        <p className="text-xs text-gray-600 mt-1">Your rules, your points</p>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setSelectedAccountType("network")}
+                    disabled={planLoading}
+                    className={cn(
+                      "relative p-6 rounded-xl border-2 text-center transition-all",
+                      "hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed",
+                      selectedAccountType === "network"
+                        ? "border-blue-500 bg-blue-50/50"
+                        : "border-gray-200 hover:border-gray-300 bg-white"
+                    )}
+                  >
+                    {isNetworkStore && (
+                      <div className="absolute top-3 right-3">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                          <div className="h-1.5 w-1.5 bg-green-500 rounded-full"></div>
+                          Current
+                        </span>
+                      </div>
+                    )}
+                    <div className="space-y-4">
+                      <div className="w-16 h-16 bg-white rounded-xl shadow-sm mx-auto overflow-hidden border border-gray-100">
+                        <img 
+                          src="/tappro.png" 
+                          alt="Tap Network" 
+                          className="w-full h-full object-contain p-2"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-base font-semibold text-gray-900">Tap Network</p>
+                        <p className="text-xs text-gray-600 mt-1">Earn here, spend everywhere</p>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+                
+                {/* Current Plan Status */}
+                <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-white rounded-lg overflow-hidden border border-gray-200">
+                        <img 
+                          src={isNetworkStore ? "/tappro.png" : "/taplogo.png"}
+                          alt={isNetworkStore ? "Tap Network" : "Tap Standard"}
+                          className="w-full h-full object-contain p-1"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-600">Active Plan</p>
+                        <p className="text-sm font-semibold text-gray-900">
+                          {isNetworkStore ? "Tap Network" : "Tap Standard"}
+                        </p>
+                      </div>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      disabled={planLoading || (selectedAccountType === (isNetworkStore ? "network" : "standard"))}
+                      onClick={() => updateMerchantPlan(selectedAccountType === "network")}
+                      className="rounded-md"
+                    >
+                      {planLoading ? (
+                        <div className="flex items-center gap-1.5">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <span className="text-xs">Updating...</span>
+                        </div>
+                      ) : selectedAccountType === (isNetworkStore ? "network" : "standard") ? (
+                        "Current Plan"
+                      ) : (
+                        "Change Plan"
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Refund Account Section */}
-            <Card className="rounded-md">
-              <CardHeader>
-                <CardTitle className="text-base font-medium">Refund Account</CardTitle>
-                <CardDescription className="text-xs text-gray-600">Bank details for Tap Loyalty funded rewards refunds</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="bg-blue-50 border border-blue-100 rounded-md p-4 text-sm text-blue-800">
-                  <div className="flex items-start gap-2">
-                    <ShieldCheck className="h-4 w-4 text-blue-600 mt-0.5" />
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                    <DollarSign className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">Refund Account</h3>
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      Bank details for Tap Loyalty funded rewards refunds
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-6 space-y-5">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex gap-3">
+                    <ShieldCheck className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
                     <div>
-                      <p>Enter your bank details below to receive refunds for Tap Loyalty funded rewards.</p>
-                      <p className="mt-1">Refunds are processed at the end of each month for all eligible redemptions.</p>
+                      <p className="text-xs font-medium text-blue-900">Monthly Refunds</p>
+                      <p className="text-xs text-blue-800 mt-1">
+                        Enter your bank details to receive refunds for Tap Loyalty funded rewards. Refunds are processed at the end of each month.
+                      </p>
                     </div>
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="bsbNumber" className="text-sm font-medium">BSB Number</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <Label htmlFor="bsbNumber" className="text-xs font-medium text-gray-700 mb-1.5 block">
+                      BSB Number
+                    </Label>
                     <Input
                       id="bsbNumber"
                       value={bsbNumber}
                       onChange={(e) => setBsbNumber(e.target.value)}
-                      placeholder="e.g. 123-456"
+                      placeholder="123-456"
                       maxLength={7}
+                      className="rounded-md border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                     />
                   </div>
                   
-                  <div className="space-y-2">
-                    <Label htmlFor="accountNumber" className="text-sm font-medium">Account Number</Label>
+                  <div>
+                    <Label htmlFor="accountNumber" className="text-xs font-medium text-gray-700 mb-1.5 block">
+                      Account Number
+                    </Label>
                     <Input
                       id="accountNumber"
                       value={accountNumber}
                       onChange={(e) => setAccountNumber(e.target.value)}
-                      placeholder="e.g. 12345678"
+                      placeholder="12345678"
+                      className="rounded-md border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                     />
                   </div>
                 </div>
                 
-                <div className="space-y-2">
-                  <Label htmlFor="accountName" className="text-sm font-medium">Account Name</Label>
+                <div>
+                  <Label htmlFor="accountName" className="text-xs font-medium text-gray-700 mb-1.5 block">
+                    Account Name
+                  </Label>
                   <Input
                     id="accountName"
                     value={accountName}
                     onChange={(e) => setAccountName(e.target.value)}
-                    placeholder="e.g. Business Name Pty Ltd"
+                    placeholder="Business Name Pty Ltd"
+                    className="rounded-md border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                   />
-                  <p className="text-xs text-gray-600">
+                  <p className="text-xs text-gray-500 mt-1">
                     Enter the exact name as it appears on your bank account
                   </p>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
         )
 
       case "Memberships":
         return (
           <div className="space-y-6">
-            <div className="text-xs text-gray-600 space-y-1 pb-4 border-b border-gray-100">
-              <p>All customers automatically start at the <strong>Bronze tier</strong> and are upgraded as they meet conditions for higher tiers.</p>
-              <p>The Bronze tier serves as the default starting point and cannot be modified.</p>
-            </div>
-            
-            <div className="bg-white border border-blue-200 rounded-xl p-3 mb-4">
-              <div className="flex items-start gap-2">
-                <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+            {/* Memberships Header */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                  <Award className="h-5 w-5 text-blue-600" />
+                </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-800 mb-1">Account Activation Required</p>
-                  <p className="text-xs text-gray-700">
-                    You must set up all three membership tiers (Bronze, Silver, and Gold) before your merchant account can be fully activated.
+                  <h3 className="text-sm font-semibold text-gray-900">Membership Tiers</h3>
+                  <p className="text-xs text-gray-600 mt-0.5">
+                    Create loyalty tiers to reward your best customers
                   </p>
                 </div>
               </div>
             </div>
             
-            {membershipLoading ? (
-              <div className="flex items-center justify-center h-32">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {['Bronze', 'Silver', 'Gold'].map(tierName => {
-                  const existingMembership = memberships.find(m => m.name.toLowerCase() === tierName.toLowerCase())
-                  const isConfigured = !!existingMembership
-                  
-                  return (
-                    <div key={tierName} className="border border-blue-200 bg-white rounded-xl p-4 flex flex-col min-h-[200px]">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <Award className="h-5 w-5 text-blue-600" />
-                          <h3 className="font-medium">{tierName}</h3>
-                          {tierName.toLowerCase() === 'bronze' && (
-                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                              <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
-                              Default
-                            </span>
-                          )}
-                        </div>
-                        {isConfigured && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-600">
-                              {existingMembership.isActive ? 'Active' : 'Inactive'}
-                            </span>
-                            <Switch 
-                              checked={existingMembership.isActive}
-                              onCheckedChange={async (checked) => {
-                                try {
-                                  await updateDoc(
-                                    doc(db, 'merchants', user!.uid!, 'memberships', existingMembership.id),
-                                    {
-                                      isActive: checked,
-                                      updatedAt: serverTimestamp()
-                                    }
-                                  )
-                                  
-                                  toast({
-                                    title: "Status Updated",
-                                    description: `${tierName} tier is now ${checked ? 'active' : 'inactive'}`,
-                                  })
-                                } catch (error) {
-                                  console.error("Error updating membership status:", error)
-                                  toast({
-                                    title: "Error",
-                                    description: "Failed to update tier status. Please try again.",
-                                    variant: "destructive"
-                                  })
-                                }
-                              }}
-                              disabled={tierName.toLowerCase() === 'bronze'}
-                            />
-                          </div>
-                        )}
-                      </div>
-                      
-                      {isConfigured ? (
-                        <>
-                          <div className="flex-grow">
-                            <p className="text-xs text-gray-600 mb-3">{existingMembership.description}</p>
-                            
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between text-xs">
-                                <span>Customers:</span>
-                                <span className="font-medium">{existingMembership.customerCount || 0}</span>
-                              </div>
-                              
-                              <div className="space-y-1">
-                                <span className="text-xs font-medium">Requirements:</span>
-                                {existingMembership.conditions && Object.entries(existingMembership.conditions).map(([type, condition]) => {
-                                  if (!condition.enabled) return null;
-                                  
-                                  return (
-                                    <div key={type} className="flex items-center justify-between text-xs">
-                                      <span>
-                                        {type === "lifetimeTransactions" 
-                                          ? "Lifetime Transactions" 
-                                          : type === "lifetimeSpend"
-                                          ? "Lifetime Spend"
-                                          : type === "numberOfRedemptions"
-                                          ? "Number of Redemptions"
-                                          : type}
-                                      </span>
-                                      <span className="font-medium">
-                                        {type === "lifetimeSpend"
-                                          ? `$${condition.value.toFixed(2)}`
-                                          : condition.value}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
-                                
-                                {(!existingMembership.conditions || Object.entries(existingMembership.conditions).filter(([_, c]) => c.enabled).length === 0) && (
-                                  <div className="text-xs text-gray-600">
-                                    No active conditions
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="mt-auto">
-                            <Button
-                              onClick={() => {
-                                // Set form data for editing
-                                setMembershipFormData({
-                                  name: existingMembership.name,
-                                  description: existingMembership.description,
-                                  order: existingMembership.order,
-                                  isActive: existingMembership.isActive,
-                                  conditions: existingMembership.conditions
-                                })
-                                
-                                // Set condition settings for editing
-                                setMembershipConditionSettings({
-                                  lifetimeTransactions: {
-                                    enabled: existingMembership.conditions.lifetimeTransactions?.enabled || false,
-                                    value: existingMembership.conditions.lifetimeTransactions?.value || 0
-                                  },
-                                  lifetimeSpend: {
-                                    enabled: existingMembership.conditions.lifetimeSpend?.enabled || false,
-                                    value: existingMembership.conditions.lifetimeSpend?.value || 0
-                                  },
-                                  numberOfRedemptions: {
-                                    enabled: existingMembership.conditions.numberOfRedemptions?.enabled || false,
-                                    value: existingMembership.conditions.numberOfRedemptions?.value || 0
-                                  }
-                                })
-                                
-                                setShowCreateMembershipDialog(true)
-                              }}
-                              variant="outline"
-                              size="sm"
-                              className="w-full"
-                            >
-                              Edit Parameters
-                            </Button>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="flex-grow flex items-center justify-center">
-                            <p className="text-xs text-gray-500 text-center">
-                              {tierName} tier has not been configured yet.
-                            </p>
-                          </div>
-                          <div className="mt-auto">
-                            <Button
-                              onClick={() => {
-                                resetMembershipFormData()
-                                setMembershipFormData(prev => ({ ...prev, name: tierName }))
-                                setShowCreateMembershipDialog(true)
-                              }}
-                              className="w-full bg-[#007AFF] hover:bg-[#0071e3] text-white rounded-md shadow-sm h-8 text-xs"
-                            >
-                              Set Up Now
-                            </Button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )
-                })}
-                
-                {/* Add Additional Tier Box */}
-                <div className="border border-dashed border-gray-300 bg-gray-50 rounded-xl p-4 flex flex-col min-h-[200px]">
-                  <div className="text-center py-4 flex-grow flex flex-col justify-center">
-                    <PlusCircle className="h-8 w-8 mx-auto text-gray-400 mb-2" />
-                    <h3 className="font-medium text-gray-600 mb-1">Add Additional Tier</h3>
-                    <p className="text-xs text-gray-500 mb-3">
-                      Create custom tiers beyond Bronze, Silver, and Gold.
-                    </p>
+            {/* Tier System Info */}
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                    <Users className="h-5 w-5 text-blue-600" />
                   </div>
-                  <div className="mt-auto">
-                    <Button
-                      onClick={() => {
-                        toast({
-                          title: "Feature Coming Soon",
-                          description: "Additional custom tiers will be available in a future update.",
-                          variant: "default"
-                        })
-                      }}
-                      variant="outline"
-                      className="w-full h-8 text-xs text-gray-600 border-gray-300 hover:bg-gray-100"
-                      disabled
-                    >
-                      Coming Soon
-                    </Button>
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">Tier Management</h3>
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      Configure Bronze, Silver, and Gold membership levels
+                    </p>
                   </div>
                 </div>
               </div>
-            )}
+              
+              <div className="p-6">
+                {/* Info Banner */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                  <div className="flex gap-3">
+                    <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-medium text-blue-900">How Tiers Work</p>
+                      <p className="text-xs text-blue-800 mt-1">
+                        All customers start at Bronze tier and automatically upgrade when they meet higher tier requirements. 
+                        You must configure all three tiers to activate your loyalty program.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Membership Tiers Grid */}
+                {membershipLoading ? (
+                  <div className="flex items-center justify-center h-32">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
+                    {['Bronze', 'Silver', 'Gold'].map(tierName => {
+                      const existingMembership = memberships.find(m => m.name.toLowerCase() === tierName.toLowerCase())
+                      const isConfigured = !!existingMembership
+                      
+                      return (
+                        <div key={tierName} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+                          <div className={cn(
+                            "p-4 border-b",
+                            tierName === 'Bronze' && "bg-amber-50 border-amber-100",
+                            tierName === 'Silver' && "bg-gray-50 border-gray-100",
+                            tierName === 'Gold' && "bg-yellow-50 border-yellow-100"
+                          )}>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className={cn(
+                                  "h-10 w-10 rounded-lg flex items-center justify-center",
+                                  tierName === 'Bronze' && "bg-amber-100",
+                                  tierName === 'Silver' && "bg-gray-200",
+                                  tierName === 'Gold' && "bg-yellow-100"
+                                )}>
+                                  <Award className={cn(
+                                    "h-5 w-5",
+                                    tierName === 'Bronze' && "text-amber-600",
+                                    tierName === 'Silver' && "text-gray-600",
+                                    tierName === 'Gold' && "text-yellow-600"
+                                  )} />
+                                </div>
+                                <div>
+                                  <h3 className="text-base font-semibold text-gray-900">{tierName} Tier</h3>
+                                  {tierName.toLowerCase() === 'bronze' && (
+                                    <p className="text-xs text-gray-600 mt-0.5">Default starting tier</p>
+                                  )}
+                                </div>
+                              </div>
+                              {isConfigured && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-gray-600">
+                                    {existingMembership.isActive ? 'Active' : 'Inactive'}
+                                  </span>
+                                  <Switch 
+                                    checked={existingMembership.isActive}
+                                    onCheckedChange={async (checked) => {
+                                      try {
+                                        await updateDoc(
+                                          doc(db, 'merchants', user!.uid!, 'memberships', existingMembership.id),
+                                          {
+                                            isActive: checked,
+                                            updatedAt: serverTimestamp()
+                                          }
+                                        )
+                                        
+                                        toast({
+                                          title: "Status Updated",
+                                          description: `${tierName} tier is now ${checked ? 'active' : 'inactive'}`,
+                                        })
+                                      } catch (error) {
+                                        console.error("Error updating membership status:", error)
+                                        toast({
+                                          title: "Error",
+                                          description: "Failed to update tier status. Please try again.",
+                                          variant: "destructive"
+                                        })
+                                      }
+                                    }}
+                                    disabled={tierName.toLowerCase() === 'bronze'}
+                                    className="data-[state=checked]:bg-blue-600"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className="p-6">
+                            {isConfigured ? (
+                              <>
+                                <p className="text-sm text-gray-600 mb-4">{existingMembership.description}</p>
+                                
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                                    <span className="text-xs text-gray-500">Active Customers</span>
+                                    <span className="text-sm font-semibold text-gray-900">{existingMembership.customerCount || 0}</span>
+                                  </div>
+                                  
+                                  <div>
+                                    <p className="text-xs font-medium text-gray-700 mb-2">Requirements</p>
+                                    {existingMembership.conditions && Object.entries(existingMembership.conditions).filter(([_, c]) => c.enabled).length > 0 ? (
+                                      <div className="space-y-2">
+                                        {Object.entries(existingMembership.conditions).map(([type, condition]) => {
+                                          if (!condition.enabled) return null;
+                                          
+                                          return (
+                                            <div key={type} className="flex items-center justify-between bg-gray-50 rounded-md p-2">
+                                              <span className="text-xs text-gray-600">
+                                                {type === "lifetimeTransactions" 
+                                                  ? "Lifetime Transactions" 
+                                                  : type === "lifetimeSpend"
+                                                  ? "Lifetime Spend"
+                                                  : type === "numberOfRedemptions"
+                                                  ? "Redemptions"
+                                                  : type}
+                                              </span>
+                                              <span className="text-xs font-medium text-gray-900">
+                                                {type === "lifetimeSpend"
+                                                  ? `$${condition.value.toFixed(2)}`
+                                                  : condition.value}
+                                              </span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs text-gray-500 italic">No requirements set</p>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                                <Button
+                                  onClick={() => {
+                                    // Set form data for editing
+                                    setMembershipFormData({
+                                      name: existingMembership.name,
+                                      description: existingMembership.description,
+                                      order: existingMembership.order,
+                                      isActive: existingMembership.isActive,
+                                      conditions: existingMembership.conditions
+                                    })
+                                    
+                                    // Set condition settings for editing
+                                    setMembershipConditionSettings({
+                                      lifetimeTransactions: {
+                                        enabled: existingMembership.conditions.lifetimeTransactions?.enabled || false,
+                                        value: existingMembership.conditions.lifetimeTransactions?.value || 0
+                                      },
+                                      lifetimeSpend: {
+                                        enabled: existingMembership.conditions.lifetimeSpend?.enabled || false,
+                                        value: existingMembership.conditions.lifetimeSpend?.value || 0
+                                      },
+                                      numberOfRedemptions: {
+                                        enabled: existingMembership.conditions.numberOfRedemptions?.enabled || false,
+                                        value: existingMembership.conditions.numberOfRedemptions?.value || 0
+                                      }
+                                    })
+                                    
+                                    setShowCreateMembershipDialog(true)
+                                  }}
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full mt-4 rounded-md"
+                                >
+                                  Edit Requirements
+                                </Button>
+                              </>
+                            ) : (
+                              <div className="text-center py-8">
+                                <div className={cn(
+                                  "h-12 w-12 rounded-full mx-auto mb-3 flex items-center justify-center",
+                                  tierName === 'Bronze' && "bg-amber-100",
+                                  tierName === 'Silver' && "bg-gray-100",
+                                  tierName === 'Gold' && "bg-yellow-100"
+                                )}>
+                                  <Award className={cn(
+                                    "h-6 w-6",
+                                    tierName === 'Bronze' && "text-amber-600",
+                                    tierName === 'Silver' && "text-gray-600",
+                                    tierName === 'Gold' && "text-yellow-600"
+                                  )} />
+                                </div>
+                                <p className="text-sm text-gray-600 mb-4">
+                                  Configure this tier to start rewarding customers
+                                </p>
+                                <Button
+                                  onClick={() => {
+                                    resetMembershipFormData()
+                                    setMembershipFormData(prev => ({ ...prev, name: tierName }))
+                                    setShowCreateMembershipDialog(true)
+                                  }}
+                                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-md shadow-sm"
+                                  size="sm"
+                                >
+                                  Configure {tierName} Tier
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                    
+                    {/* Add Additional Tier Box */}
+                    <div className="border border-dashed border-gray-300 bg-gray-50 rounded-xl p-6 flex flex-col items-center justify-center min-h-[300px]">
+                      <PlusCircle className="h-12 w-12 text-gray-400 mb-3" />
+                      <h3 className="text-base font-medium text-gray-600 mb-2">Custom Tier</h3>
+                      <p className="text-xs text-gray-500 text-center mb-4 max-w-[200px]">
+                        Additional tiers beyond Bronze, Silver, and Gold
+                      </p>
+                      <Button
+                        onClick={() => {
+                          toast({
+                            title: "Coming Soon",
+                            description: "Custom tiers will be available in a future update.",
+                          })
+                        }}
+                        variant="outline"
+                        className="text-gray-600 border-gray-300 hover:bg-gray-100"
+                        disabled
+                      >
+                        Coming Soon
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )
 
@@ -2346,7 +2935,7 @@ export function SettingsDialog({ open, onOpenChange, initialActiveSection }: { o
             </header>
             
             {/* Scrollable content area */}
-            <div className="flex-1 overflow-y-auto p-4 min-h-0">
+            <div className="flex-1 overflow-y-auto p-4 min-h-0 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
               {renderContent()}
             </div>
             

@@ -684,11 +684,11 @@ export default function GetStartedPage() {
                            onClick={() => toggleItem('account-type')}
                          >
                            <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-white border-2 border-gray-200 rounded-md flex items-center justify-center overflow-hidden">
+                      <div className="flex items-center">
                         <img 
                           src={accountType === 'standard' ? '/taplogo.png' : '/tappro.png'} 
                           alt={accountType === 'standard' ? 'Tap Standard' : 'Tap Network'} 
-                          className="w-full h-full object-cover"
+                          className="w-12 h-auto object-contain rounded-sm"
                         />
                              </div>
                              <div>

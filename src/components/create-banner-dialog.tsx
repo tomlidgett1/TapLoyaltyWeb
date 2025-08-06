@@ -665,6 +665,9 @@ export function CreateBannerDialog({
       
       setLoading(false)
       onOpenChange(false)
+      
+      // Navigate to the banners tab
+      router.push('/store/overview?tab=banners')
     } catch (error) {
       console.error(error)
       setLoading(false)
@@ -828,7 +831,7 @@ export function CreateBannerDialog({
                             {/* Dark Preview */}
                             <div className="flex flex-col">
                               <div 
-                                className={`cursor-pointer transition-all rounded-md overflow-hidden border-2 ${selectedStyle === BannerStyle.DARK ? 'border-blue-500 shadow-sm' : 'border-gray-200 opacity-70 hover:opacity-100'}`}
+                                className={`cursor-pointer transition-all rounded-md overflow-hidden border-2 ${selectedStyle === BannerStyle.DARK ? 'border-gray-300 shadow-md' : 'border-gray-200 opacity-70 hover:opacity-100'}`}
                                 onClick={() => {
                                   setSelectedStyle(BannerStyle.DARK)
                                   setCarouselIndex(stylesArray.indexOf(BannerStyle.DARK))
@@ -851,7 +854,7 @@ export function CreateBannerDialog({
                             {/* Glass Preview */}
                             <div className="flex flex-col">
                               <div 
-                                className={`cursor-pointer transition-all rounded-md overflow-hidden border-2 ${selectedStyle === BannerStyle.GLASS ? 'border-blue-500 shadow-sm' : 'border-gray-200 opacity-70 hover:opacity-100'}`}
+                                className={`cursor-pointer transition-all rounded-md overflow-hidden border-2 ${selectedStyle === BannerStyle.GLASS ? 'border-gray-300 shadow-md' : 'border-gray-200 opacity-70 hover:opacity-100'}`}
                                 onClick={() => {
                                   setSelectedStyle(BannerStyle.GLASS)
                                   setCarouselIndex(stylesArray.indexOf(BannerStyle.GLASS))
@@ -1182,21 +1185,24 @@ export function CreateBannerDialog({
 
                   {/* Bottom Action Bar */}
                   <div className="border-t border-gray-200 p-4 md:p-6 bg-gray-50 flex-shrink-0">
-                    <div className="flex flex-col sm:flex-row justify-between gap-3">
-                      <Button 
-                        variant="outline" 
-                        onClick={() => onOpenChange(false)}
-                        className="rounded-md w-full sm:w-auto"
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={createBanner}
-                        disabled={!title || !description || loading}
-                        className="bg-[#007AFF] hover:bg-[#0062CC] text-white rounded-md w-full sm:w-auto"
-                      >
-                        {loading ? 'Creating...' : 'Create Banner'}
-                      </Button>
+                    <div className="flex flex-col gap-2">
+                      <p className="text-xs text-gray-500 text-center">All fields are mandatory</p>
+                      <div className="flex flex-col sm:flex-row justify-between gap-3">
+                        <Button 
+                          variant="outline" 
+                          onClick={() => onOpenChange(false)}
+                          className="rounded-md w-full sm:w-auto"
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          onClick={createBanner}
+                          disabled={!title || !description || loading}
+                          className="bg-[#007AFF] hover:bg-[#0062CC] text-white rounded-md w-full sm:w-auto"
+                        >
+                          {loading ? 'Creating...' : 'Create Banner'}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>

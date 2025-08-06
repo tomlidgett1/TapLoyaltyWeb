@@ -434,7 +434,7 @@ export function IntroductoryRewardPopup({ open, onOpenChange }: IntroductoryRewa
   const renderExistingRewards = () => {
     return (
       <div className="flex-1 overflow-y-auto p-5 min-h-0">
-        <div className="bg-blue-50 border border-blue-100 rounded-md p-3 text-xs text-blue-800 mb-4">
+        <div className="bg-white border border-gray-200 rounded-xl p-3 text-xs text-gray-800 mb-4">
           <div className="flex items-start gap-2">
             <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
             <div>
@@ -448,7 +448,7 @@ export function IntroductoryRewardPopup({ open, onOpenChange }: IntroductoryRewa
           {existingRewards.map((reward) => {
             const isExpanded = expandedRewards[reward.id] || false;
             return (
-              <Card key={reward.id} className="shadow-sm rounded-md overflow-hidden border border-gray-200">
+              <Card key={reward.id} className="shadow-sm rounded-xl overflow-hidden border border-gray-200">
                 {/* Header - Always Visible */}
                 <div 
                   className="px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors border-b border-gray-100"
@@ -676,8 +676,8 @@ export function IntroductoryRewardPopup({ open, onOpenChange }: IntroductoryRewa
         <div className="flex-1 flex flex-col h-full">
           <div className="flex-1 overflow-y-auto p-6 min-h-0">
             {currentStep === 1 && (
-              <div className="mt-0 space-y-4">
-                <div className="bg-blue-50 border border-blue-100 rounded-md p-3 text-xs text-blue-800 space-y-1">
+              <div className="mt-6 space-y-4">
+                <div className="bg-white border border-gray-200 rounded-xl p-3 text-xs text-gray-900 space-y-1">
                   <div className="flex items-start gap-2">
                     <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
                     <div>

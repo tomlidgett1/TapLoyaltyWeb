@@ -75,6 +75,7 @@ import { SendBroadcastPopup } from "@/components/send-broadcast-popup"
 import { CreatePointsRulePopup } from "@/components/create-points-rule-popup"
 import { IntroductoryRewardPopup } from "@/components/introductory-reward-popup"
 import { CreateManualProgramDialog } from "@/components/create-manual-program-dialog"
+import { CreateBannerDialog } from "@/components/create-banner-dialog"
 import { SettingsDialog } from "@/components/settings-dialog"
 import { NavUser } from "@/components/nav-user"
 import { NavCreate } from "@/components/nav-create"
@@ -1355,6 +1356,9 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
       
       {/* CreateManualProgramDialog component */}
       <CreateManualProgramDialog open={createManualProgramOpen} onOpenChange={setCreateManualProgramOpen} />
+
+      {/* CreateBannerDialog component */}
+      <CreateBannerDialog open={createBannerOpen} onOpenChange={setCreateBannerOpen} />
 
       {/* Program Type Selector Popup */}
       {programTypeSelectorOpen && (

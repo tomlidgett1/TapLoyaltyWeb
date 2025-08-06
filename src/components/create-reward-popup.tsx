@@ -42,6 +42,7 @@ interface FormData {
   rewardVisibility: string
   specificCustomerIds?: string[]
   specificCustomerNames?: string[]
+  selectedCohorts?: string[]
   pin: string
   pointsCost: string
   isActive: boolean
@@ -124,9 +125,11 @@ export function CreateRewardPopup({
     description: defaultValues?.description || "",
     type: defaultValues?.rewardTypeDetails?.type || "",
     rewardVisibility: defaultValues?.newcx ? "new" : 
+                     defaultValues?.selectedCohorts?.length > 0 ? "cohort" :
                      defaultValues?.rewardVisibility === "specific" ? "specific" : "all",
     specificCustomerIds: customerId ? [customerId] : defaultValues?.specificCustomerIds || [],
     specificCustomerNames: customerName ? [customerName] : defaultValues?.specificCustomerNames || [],
+    selectedCohorts: defaultValues?.selectedCohorts || [],
     pin: defaultValues?.pin || "",
     pointsCost: defaultValues?.pointsCost?.toString() || "",
     isActive: defaultValues?.isActive ?? true,
@@ -568,8 +571,8 @@ export function CreateRewardPopup({
         })
       }
 
-      // Membership level condition (always enabled for non-new customers)
-      if (formData.conditions.membershipLevel && formData.rewardVisibility !== 'new') {
+      // Membership level condition (always enabled for non-new and non-cohort customers)
+      if (formData.conditions.membershipLevel && formData.rewardVisibility !== 'new' && formData.rewardVisibility !== 'cohort') {
         conditions.push({
           type: "membershipLevel",
           value: formData.conditions.membershipLevel
@@ -587,10 +590,12 @@ export function CreateRewardPopup({
 
 
 
-      // Ensure Per Customer Limit is always at least 1
-      const perCustomerLimit = formData.limitations.perCustomerLimit 
-        ? Math.max(1, Number(formData.limitations.perCustomerLimit)) 
-        : 1;
+      // Ensure Per Customer Limit is always at least 1, and exactly 1 for cohort rewards
+      const perCustomerLimit = formData.rewardVisibility === 'cohort' 
+        ? 1
+        : formData.limitations.perCustomerLimit 
+          ? Math.max(1, Number(formData.limitations.perCustomerLimit)) 
+          : 1;
       
       limitations.push({
         type: "customerLimit",
@@ -642,16 +647,18 @@ export function CreateRewardPopup({
         pointsCost: formData.rewardVisibility === 'new' ? 0 : Math.max(0, Number(formData.pointsCost)),
         rewardVisibility: formData.rewardVisibility === 'all' ? 'global' : 
                           formData.rewardVisibility === 'specific' ? 'global' : 
-                          formData.rewardVisibility === 'new' ? 'global' : 'conditional',
+                          formData.rewardVisibility === 'new' ? 'global' : 
+                          formData.rewardVisibility === 'cohort' ? 'cohort' : 'conditional',
         newcx: formData.rewardVisibility === 'new',
         firstPurchaseRequired: formData.rewardVisibility === 'new',
+        selectedCohorts: formData.rewardVisibility === 'cohort' ? formData.selectedCohorts : [],
         
         // Add reward type specific data
         rewardTypeDetails: {
           type: formData.type,
         },
         
-        delayedVisibility: formData.rewardVisibility === 'new' || !formData.delayedVisibility ? null : {
+        delayedVisibility: formData.rewardVisibility === 'new' || formData.rewardVisibility === 'cohort' || !formData.delayedVisibility ? null : {
           type: formData.delayedVisibilityType === 'transactions' ? 'totaltransactions' : 'totalLifetimeSpend',
           value: formData.delayedVisibilityType === 'transactions' 
             ? Number(formData.delayedVisibilityTransactions)
@@ -867,6 +874,7 @@ export function CreateRewardPopup({
             rewardVisibility: "all",
             specificCustomerIds: customerId ? [customerId] : [],
             specificCustomerNames: customerName ? [customerName] : [],
+            selectedCohorts: [],
             pin: "",
             pointsCost: "",
             isActive: true,
@@ -1081,7 +1089,7 @@ export function CreateRewardPopup({
 
                       {/* Type-specific fields */}
                       {formData.type === 'percentageDiscount' && (
-                        <div className="space-y-1.5 border-l-2 border-blue-100 pl-4 py-2">
+                        <div className="space-y-1.5 border-l-2 border-gray-200 pl-4 py-2">
                           <Label className="text-sm">Discount Percentage <span className="text-red-500">*</span></Label>
                           <Input
                             type="number"
@@ -1096,7 +1104,7 @@ export function CreateRewardPopup({
                       )}
 
                       {formData.type === 'fixedDiscount' && (
-                        <div className="space-y-1.5 border-l-2 border-blue-100 pl-4 py-2">
+                        <div className="space-y-1.5 border-l-2 border-gray-200 pl-4 py-2">
                           <Label className="text-sm">Discount Amount ($) <span className="text-red-500">*</span></Label>
                           <Input
                             type="number"
@@ -1124,7 +1132,7 @@ export function CreateRewardPopup({
                       )}
 
                       {formData.type === 'freeItem' && (
-                        <div className="space-y-1.5 border-l-2 border-blue-100 pl-4 py-2">
+                        <div className="space-y-1.5 border-l-2 border-gray-200 pl-4 py-2">
                           <Label className="text-sm">Free Item Name <span className="text-red-500">*</span></Label>
                           <Input
                             type="text"
@@ -1137,7 +1145,7 @@ export function CreateRewardPopup({
                       )}
 
                       {formData.type === 'bundleOffer' && (
-                        <div className="space-y-1.5 border-l-2 border-blue-100 pl-4 py-2">
+                        <div className="space-y-1.5 border-l-2 border-gray-200 pl-4 py-2">
                           <div className="space-y-1.5">
                             <Label className="text-sm">Required Purchase <span className="text-red-500">*</span></Label>
                             <Input
@@ -1257,13 +1265,13 @@ export function CreateRewardPopup({
                               }
                             });
                           }}
-                          className="space-y-3"
+                          className="space-y-3 [&_button]:border-gray-300 [&_button]:data-[state=checked]:border-gray-700 [&_button]:data-[state=checked]:bg-gray-700"
                         >
                           <label htmlFor="all-customers" className="block w-full cursor-pointer">
-                            <div className={`flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 transition-all duration-200 ${formData.rewardVisibility === 'all' ? 'bg-blue-50 border-blue-200 shadow-sm' : ''}`}>
+                            <div className={`flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 transition-all duration-200 ${formData.rewardVisibility === 'all' ? 'bg-gray-50 border-gray-300 shadow-sm' : ''}`}>
                               <RadioGroupItem value="all" id="all-customers" className="mt-1" />
                               <div className="flex-1">
-                                <p className={`text-sm font-medium transition-colors duration-200 ${formData.rewardVisibility === 'all' ? 'text-blue-700' : ''}`}>All Customers</p>
+                                <p className={`text-sm font-medium transition-colors duration-200 ${formData.rewardVisibility === 'all' ? 'text-gray-900' : ''}`}>All Customers</p>
                                 <p className="text-xs text-gray-500 mt-1">
                                   This reward will be visible to all your customers in their app
                                 </p>
@@ -1272,10 +1280,10 @@ export function CreateRewardPopup({
                           </label>
                           
                           <label htmlFor="new-customers" className="block w-full cursor-pointer">
-                            <div className={`flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 transition-all duration-200 ${formData.rewardVisibility === 'new' ? 'bg-blue-50 border-blue-200 shadow-sm' : ''}`}>
+                            <div className={`flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 transition-all duration-200 ${formData.rewardVisibility === 'new' ? 'bg-gray-50 border-gray-300 shadow-sm' : ''}`}>
                               <RadioGroupItem value="new" id="new-customers" className="mt-1" />
                               <div className="flex-1">
-                                <p className={`text-sm font-medium transition-colors duration-200 ${formData.rewardVisibility === 'new' ? 'text-blue-700' : ''}`}>New Customers Only</p>
+                                <p className={`text-sm font-medium transition-colors duration-200 ${formData.rewardVisibility === 'new' ? 'text-gray-900' : ''}`}>New Customers Only</p>
                                 <p className="text-xs text-gray-500 mt-1">
                                   Only customers who just joined your loyalty program will see this reward in their app
                                 </p>
@@ -1284,12 +1292,24 @@ export function CreateRewardPopup({
                           </label>
                           
                           <label htmlFor="specific-customers" className="block w-full cursor-pointer">
-                            <div className={`flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 transition-all duration-200 ${formData.rewardVisibility === 'specific' ? 'bg-blue-50 border-blue-200 shadow-sm' : ''}`}>
+                            <div className={`flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 transition-all duration-200 ${formData.rewardVisibility === 'specific' ? 'bg-gray-50 border-gray-300 shadow-sm' : ''}`}>
                               <RadioGroupItem value="specific" id="specific-customers" className="mt-1" />
                               <div className="flex-1">
-                                <p className={`text-sm font-medium transition-colors duration-200 ${formData.rewardVisibility === 'specific' ? 'text-blue-700' : ''}`}>Specific Customers</p>
+                                <p className={`text-sm font-medium transition-colors duration-200 ${formData.rewardVisibility === 'specific' ? 'text-gray-900' : ''}`}>Specific Customers</p>
                                 <p className="text-xs text-gray-500 mt-1">
                                   Choose specific customers who can see this reward in their app
+                                </p>
+                              </div>
+                            </div>
+                          </label>
+                          
+                          <label htmlFor="cohort-customers" className="block w-full cursor-pointer">
+                            <div className={`flex items-start space-x-3 border rounded-md p-3 hover:bg-gray-50 transition-all duration-200 ${formData.rewardVisibility === 'cohort' ? 'bg-gray-50 border-gray-300 shadow-sm' : ''}`}>
+                              <RadioGroupItem value="cohort" id="cohort-customers" className="mt-1" />
+                              <div className="flex-1">
+                                <p className={`text-sm font-medium transition-colors duration-200 ${formData.rewardVisibility === 'cohort' ? 'text-gray-900' : ''}`}>Customer Cohorts</p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Target customers based on their engagement level (active, at risk, churned, resurrected)
                                 </p>
                               </div>
                             </div>
@@ -1310,7 +1330,7 @@ export function CreateRewardPopup({
                               }}
                               className="overflow-hidden"
                             >
-                              <div className="border-l-2 border-blue-100 pl-4 py-2">
+                              <div className="border-l-2 border-gray-200 pl-4 py-2">
                             {customersLoading ? (
                               <div className="flex items-center justify-center p-8">
                                 <div className="text-sm text-gray-500">Loading customers...</div>
@@ -1340,6 +1360,7 @@ export function CreateRewardPopup({
                                       <Checkbox
                                         id={`customer-${customer.id}`}
                                         checked={selectedCustomers.some(c => c.id === customer.id)}
+                                        className="mt-1 mr-3 border-gray-300 data-[state=checked]:bg-gray-700 data-[state=checked]:border-gray-700"
                                         onCheckedChange={(checked) => {
                                           if (checked) {
                                             const newSelectedCustomers = [...selectedCustomers, { 
@@ -1366,7 +1387,7 @@ export function CreateRewardPopup({
                                             });
                                           }
                                         }}
-                                        className="mt-1 mr-3"
+
                                       />
                                       <div className="flex-1">
                                         <label 
@@ -1434,6 +1455,136 @@ export function CreateRewardPopup({
                             </motion.div>
                           )}
                         </AnimatePresence>
+                        
+                        {/* Cohort Selection */}
+                        <AnimatePresence mode="wait">
+                          {formData.rewardVisibility === 'cohort' && (
+                            <motion.div
+                              key="cohort-customers"
+                              initial={{ height: 0, opacity: 0, y: -10 }}
+                              animate={{ height: "auto", opacity: 1, y: 0 }}
+                              exit={{ height: 0, opacity: 0, y: -10 }}
+                              transition={{ 
+                                duration: 0.3,
+                                ease: [0.25, 0.46, 0.45, 0.94]
+                              }}
+                              className="overflow-hidden"
+                            >
+                              <div className="border-l-2 border-gray-200 pl-4 py-2">
+                                <div className="space-y-4">
+                                  <p className="text-sm text-gray-600">
+                                    Select which customer cohorts can see and redeem this reward. Each customer will be limited to 1 redemption.
+                                  </p>
+                                  
+                                  <div className="grid grid-cols-2 gap-3">
+                                    {[
+                                      { 
+                                        id: 'active', 
+                                        name: 'Active', 
+                                        description: 'Regular, engaged customers',
+                                        color: 'green'
+                                      },
+                                      { 
+                                        id: 'at_risk', 
+                                        name: 'At Risk', 
+                                        description: 'Showing signs of disengagement',
+                                        color: 'yellow'
+                                      },
+                                      { 
+                                        id: 'churned', 
+                                        name: 'Churned', 
+                                        description: 'Haven\'t visited in a while',
+                                        color: 'red'
+                                      },
+                                      { 
+                                        id: 'resurrected', 
+                                        name: 'Resurrected', 
+                                        description: 'Recently returned customers',
+                                        color: 'blue'
+                                      }
+                                    ].map((cohort) => (
+                                      <label 
+                                        key={cohort.id} 
+                                        htmlFor={`cohort-${cohort.id}`}
+                                        className="cursor-pointer"
+                                      >
+                                                                                  <div className={`
+                                          relative border rounded-lg p-4 transition-all duration-200
+                                          ${formData.selectedCohorts?.includes(cohort.id) 
+                                            ? 'bg-gray-50 border-gray-300 shadow-sm'
+                                            : 'bg-white border-gray-200 hover:border-gray-300'
+                                          }
+                                        `}>
+                                          <div className="flex items-start gap-3">
+                                            <Checkbox
+                                              id={`cohort-${cohort.id}`}
+                                              checked={formData.selectedCohorts?.includes(cohort.id) || false}
+                                              className="mt-0.5 border-gray-300 data-[state=checked]:bg-gray-700 data-[state=checked]:border-gray-700"
+                                              onCheckedChange={(checked) => {
+                                                const currentCohorts = formData.selectedCohorts || [];
+                                                const newCohorts = checked 
+                                                  ? [...currentCohorts, cohort.id]
+                                                  : currentCohorts.filter(c => c !== cohort.id);
+                                                
+                                                setFormData({
+                                                  ...formData,
+                                                  selectedCohorts: newCohorts,
+                                                  // When cohorts are selected, set conditions appropriately
+                                                  conditions: {
+                                                    ...formData.conditions,
+                                                    useTransactionRequirements: false,
+                                                    useSpendingRequirements: false,
+                                                    useTimeRequirements: false,
+                                                    useMembershipRequirements: false
+                                                  },
+                                                  limitations: {
+                                                    ...formData.limitations,
+                                                    perCustomerLimit: "1" // Automatically set to 1 for cohort rewards
+                                                  }
+                                                });
+                                              }}
+
+                                            />
+                                                                                          <div className="flex-1">
+                                              <div className="flex items-center">
+                                                <h4 className={`text-sm font-medium ${
+                                                  formData.selectedCohorts?.includes(cohort.id) 
+                                                    ? 'text-gray-900'
+                                                    : 'text-gray-900'
+                                                }`}>
+                                                  {cohort.name}
+                                                </h4>
+                                              </div>
+                                              <p className="text-xs text-gray-500 mt-1">
+                                                {cohort.description}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </label>
+                                    ))}
+                                  </div>
+                                  
+                                  {formData.selectedCohorts && formData.selectedCohorts.length > 0 && (
+                                    <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
+                                      <div className="flex gap-2">
+                                        <Info className="h-4 w-4 text-gray-500 flex-shrink-0 mt-0.5" />
+                                        <div className="text-xs text-gray-700">
+                                          <p className="font-medium mb-1">Cohort Reward Settings:</p>
+                                          <ul className="list-disc list-inside space-y-0.5">
+                                            <li>Each customer can only redeem once</li>
+                                            <li>No additional conditions will be applied</li>
+                                            <li>Reward will only be visible to customers in selected cohorts</li>
+                                          </ul>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                       
                       {/* Progressive Unlock */}
@@ -1449,8 +1600,8 @@ export function CreateRewardPopup({
                               delayedVisibilityTransactions: checked ? formData.delayedVisibilityTransactions : "",
                               delayedVisibilitySpend: checked ? formData.delayedVisibilitySpend : ""
                             })}
-                            disabled={formData.rewardVisibility === 'new'}
-                            className="data-[state=checked]:bg-blue-600"
+                            disabled={formData.rewardVisibility === 'new' || formData.rewardVisibility === 'cohort'}
+                            className="data-[state=checked]:bg-gray-700"
                           />
                         </div>
                         
@@ -1467,7 +1618,7 @@ export function CreateRewardPopup({
                               }}
                               className="overflow-hidden"
                             >
-                              <div className="border-l-2 border-blue-100 pl-4 py-2">
+                              <div className="border-l-2 border-gray-200 pl-4 py-2">
                             <p className="text-xs text-gray-600 mb-4">
                               Hide this reward from view until the customer reaches a certain milestone. Once visible, redemption eligibility will still be determined by your conditions and limitations settings.
                             </p>
@@ -1549,7 +1700,7 @@ export function CreateRewardPopup({
                               hasActivePeriod: checked,
                               activePeriod: checked ? formData.activePeriod : { startDate: "", endDate: "", startTime: "09:00", endTime: "17:00" }
                             })}
-                            className="data-[state=checked]:bg-blue-600"
+                            className="data-[state=checked]:bg-gray-700"
                           />
                         </div>
                         
@@ -1566,7 +1717,7 @@ export function CreateRewardPopup({
                               }}
                               className="overflow-hidden"
                             >
-                              <div className="border-l-2 border-blue-100 pl-4 py-2">
+                              <div className="border-l-2 border-gray-200 pl-4 py-2">
                             <p className="text-xs text-gray-600 mb-4">
                               Set a specific date and time period when this reward is visible to customers. Times are treated as Melbourne local time. Additional redemption conditions can be set in the following steps.
                             </p>
@@ -1724,7 +1875,7 @@ export function CreateRewardPopup({
                               }
                             }}
                             disabled={formData.rewardVisibility === 'new'}
-                            className="data-[state=checked]:bg-blue-600"
+                            className="data-[state=checked]:bg-gray-700"
                           />
                         </div>
                         
@@ -1733,18 +1884,30 @@ export function CreateRewardPopup({
                         </p>
                         
                         {formData.rewardVisibility === 'new' && (
-                          <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
+                          <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
                             <div className="flex gap-2">
-                              <Info className="h-5 w-5 text-amber-500 flex-shrink-0" />
-                              <p className="text-xs text-amber-700">
+                              <Info className="h-5 w-5 text-gray-500 flex-shrink-0" />
+                              <p className="text-xs text-gray-700">
                                 When enabled, other conditions will be disabled as this specifically targets new customers only.
                               </p>
                             </div>
                           </div>
                         )}
+                        
+                        {formData.rewardVisibility === 'cohort' && (
+                          <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
+                            <div className="flex gap-2">
+                              <Info className="h-5 w-5 text-gray-500 flex-shrink-0" />
+                              <div className="text-xs text-gray-700">
+                                <p className="font-medium mb-1">Cohort Targeting Active</p>
+                                <p>All conditions are disabled for cohort-based rewards. Eligibility is determined by the customer's current cohort status.</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
-                      <div className={`space-y-4 ${formData.rewardVisibility === 'new' ? 'opacity-50 pointer-events-none' : ''}`}>
+                      <div className={`space-y-4 ${formData.rewardVisibility === 'new' || formData.rewardVisibility === 'cohort' ? 'opacity-50 pointer-events-none' : ''}`}>
                         {/* Transaction Requirements */}
                         <div className="space-y-3">
                           <div className="flex items-center justify-between">
@@ -1759,9 +1922,9 @@ export function CreateRewardPopup({
                                   minimumTransactions: checked ? formData.conditions.minimumTransactions : "",
                                   maximumTransactions: checked ? formData.conditions.maximumTransactions : ""
                                 }
-                              })}
-                              disabled={formData.rewardVisibility === 'new'}
-                              className="data-[state=checked]:bg-blue-600"
+                                                              })}
+                              disabled={formData.rewardVisibility === 'new' || formData.rewardVisibility === 'cohort'}
+                              className="data-[state=checked]:bg-gray-700"
                             />
                           </div>
                         
@@ -1778,7 +1941,7 @@ export function CreateRewardPopup({
                                 }}
                                 className="overflow-hidden"
                               >
-                                <div className="border-l-2 border-blue-100 pl-4 py-2">
+                                <div className="border-l-2 border-gray-200 pl-4 py-2">
                               <p className="text-xs text-gray-600 mb-4">
                                 Set purchase count conditions that determine eligibility based on the number of transactions.
                               </p>
@@ -1846,9 +2009,9 @@ export function CreateRewardPopup({
                                   minimumLifetimeSpend: checked ? formData.conditions.minimumLifetimeSpend : "",
                                   minimumPointsBalance: checked ? formData.conditions.minimumPointsBalance : ""
                                 }
-                              })}
-                              disabled={formData.rewardVisibility === 'new'}
-                              className="data-[state=checked]:bg-blue-600"
+                                                              })}
+                              disabled={formData.rewardVisibility === 'new' || formData.rewardVisibility === 'cohort'}
+                              className="data-[state=checked]:bg-gray-700"
                             />
                           </div>
                         
@@ -1865,7 +2028,7 @@ export function CreateRewardPopup({
                                 }}
                                 className="overflow-hidden"
                               >
-                                <div className="border-l-2 border-blue-100 pl-4 py-2">
+                                <div className="border-l-2 border-gray-200 pl-4 py-2">
                               <p className="text-xs text-gray-600 mb-4">
                                 Set monetary or points requirements that determine eligibility based on spending or point balance.
                               </p>
@@ -1932,9 +2095,9 @@ export function CreateRewardPopup({
                                   useTimeRequirements: checked,
                                   daysSinceJoined: checked ? formData.conditions.daysSinceJoined : ""
                                 }
-                              })}
-                              disabled={formData.rewardVisibility === 'new'}
-                              className="data-[state=checked]:bg-blue-600"
+                                                              })}
+                              disabled={formData.rewardVisibility === 'new' || formData.rewardVisibility === 'cohort'}
+                              className="data-[state=checked]:bg-gray-700"
                             />
                           </div>
                         
@@ -1951,7 +2114,7 @@ export function CreateRewardPopup({
                                 }}
                                 className="overflow-hidden"
                               >
-                                <div className="border-l-2 border-blue-100 pl-4 py-2">
+                                <div className="border-l-2 border-gray-200 pl-4 py-2">
                               <p className="text-xs text-gray-600 mb-4">
                                 Set time-based conditions that determine eligibility based on membership duration or last visit.
                               </p>
@@ -1989,12 +2152,12 @@ export function CreateRewardPopup({
                             <Switch
                               checked={formData.rewardVisibility !== 'new'}
                               disabled={true}
-                              className="data-[state=checked]:bg-blue-600"
+                              className="data-[state=checked]:bg-gray-700"
                             />
                           </div>
                           
                           {formData.rewardVisibility === 'new' ? (
-                            <div className="border-l-2 border-blue-100 pl-4 py-2">
+                            <div className="border-l-2 border-gray-200 pl-4 py-2">
                               <div className="flex items-center gap-2 border border-blue-100 bg-blue-50 p-3 rounded-md">
                                 <div className="h-6 w-6 rounded-full bg-amber-100 flex items-center justify-center text-xs font-medium text-amber-700">B</div>
                                 <div>
@@ -2006,7 +2169,7 @@ export function CreateRewardPopup({
                               </div>
                             </div>
                           ) : (
-                            <div className="border-l-2 border-blue-100 pl-4 py-2 space-y-3">
+                            <div className="border-l-2 border-gray-200 pl-4 py-2 space-y-3">
                               <div className="space-y-2">
                                 <Label htmlFor="membershipLevel" className="text-sm">Minimum Membership Level</Label>
                                 <Select
@@ -2128,7 +2291,7 @@ export function CreateRewardPopup({
                           </Button>
                         </div>
                         
-                        <div className="border-l-2 border-blue-100 pl-4 py-2 space-y-4">
+                        <div className="border-l-2 border-gray-200 pl-4 py-2 space-y-4">
                           <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                             <div>
                               <p className="text-sm font-medium text-gray-500">Reward Name</p>
@@ -2157,6 +2320,28 @@ export function CreateRewardPopup({
                               <p className="text-sm font-medium text-gray-500">Description</p>
                               <p className="text-sm">{formData.description || 'No description provided'}</p>
                             </div>
+                            
+                            {formData.rewardVisibility === 'cohort' && formData.selectedCohorts && formData.selectedCohorts.length > 0 && (
+                              <div className="col-span-2">
+                                <p className="text-sm font-medium text-gray-500">Target Cohorts</p>
+                                <div className="flex flex-wrap gap-2 mt-1">
+                                  {formData.selectedCohorts.map(cohortId => {
+                                    const cohortMap: { [key: string]: { name: string } } = {
+                                      'active': { name: 'Active' },
+                                      'at_risk': { name: 'At Risk' },
+                                      'churned': { name: 'Churned' },
+                                      'resurrected': { name: 'Resurrected' }
+                                    };
+                                    const cohort = cohortMap[cohortId];
+                                    return cohort ? (
+                                      <span key={cohortId} className="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-700 rounded-md text-xs font-medium">
+                                        {cohort.name}
+                                      </span>
+                                    ) : null;
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>

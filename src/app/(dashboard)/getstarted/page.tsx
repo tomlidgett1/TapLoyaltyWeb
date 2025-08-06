@@ -426,12 +426,16 @@ export default function GetStartedPage() {
     )
 
     const unsubscribeMembershipTiers = onSnapshot(
-      collection(db, `merchants/${user.uid}/membershipTiers`),
+      collection(db, `merchants/${user.uid}/memberships`),
       (snapshot) => {
-        const hasMembershipTiers = !snapshot.empty
+        // Check if all three required tiers (Bronze, Silver, Gold) exist
+        const tiers = snapshot.docs.map(doc => doc.data().name?.toLowerCase())
+        const requiredTiers = ['bronze', 'silver', 'gold']
+        const hasAllRequiredTiers = requiredTiers.every(tier => tiers.includes(tier))
+        
         setChecklistItems(prev => prev.map(item => {
           if (item.id === 'membership-tiers') {
-            return { ...item, completed: hasMembershipTiers }
+            return { ...item, completed: hasAllRequiredTiers }
           }
           return item
         }))

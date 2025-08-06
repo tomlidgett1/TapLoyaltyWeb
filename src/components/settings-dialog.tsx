@@ -1890,18 +1890,30 @@ export function SettingsDialog({ open, onOpenChange, initialActiveSection }: { o
               <p>The Bronze tier serves as the default starting point and cannot be modified.</p>
             </div>
             
+            <div className="bg-white border border-blue-200 rounded-xl p-3 mb-4">
+              <div className="flex items-start gap-2">
+                <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-gray-800 mb-1">Account Activation Required</p>
+                  <p className="text-xs text-gray-700">
+                    You must set up all three membership tiers (Bronze, Silver, and Gold) before your merchant account can be fully activated.
+                  </p>
+                </div>
+              </div>
+            </div>
+            
             {membershipLoading ? (
               <div className="flex items-center justify-center h-32">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {['Bronze', 'Silver', 'Gold'].map(tierName => {
                   const existingMembership = memberships.find(m => m.name.toLowerCase() === tierName.toLowerCase())
                   const isConfigured = !!existingMembership
                   
                   return (
-                    <div key={tierName} className="border border-blue-200 bg-white rounded-xl p-4">
+                    <div key={tierName} className="border border-blue-200 bg-white rounded-xl p-4 flex flex-col min-h-[200px]">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <Award className="h-5 w-5 text-blue-600" />
@@ -1951,46 +1963,50 @@ export function SettingsDialog({ open, onOpenChange, initialActiveSection }: { o
                       
                       {isConfigured ? (
                         <>
-                          <p className="text-xs text-gray-600 mb-3">{existingMembership.description}</p>
-                          
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between text-xs">
-                              <span>Customers:</span>
-                              <span className="font-medium">{existingMembership.customerCount || 0}</span>
-                            </div>
+                          <div className="flex-grow">
+                            <p className="text-xs text-gray-600 mb-3">{existingMembership.description}</p>
                             
-                            <div className="space-y-1">
-                              <span className="text-xs font-medium">Requirements:</span>
-                              {existingMembership.conditions && Object.entries(existingMembership.conditions).map(([type, condition]) => {
-                                if (!condition.enabled) return null;
-                                
-                                return (
-                                  <div key={type} className="flex items-center justify-between text-xs">
-                                    <span>
-                                      {type === "lifetimeTransactions" 
-                                        ? "Lifetime Transactions" 
-                                        : type === "lifetimeSpend"
-                                        ? "Lifetime Spend"
-                                        : type === "numberOfRedemptions"
-                                        ? "Number of Redemptions"
-                                        : type}
-                                    </span>
-                                    <span className="font-medium">
-                                      {type === "lifetimeSpend"
-                                        ? `$${condition.value.toFixed(2)}`
-                                        : condition.value}
-                                    </span>
-                                  </div>
-                                );
-                              })}
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between text-xs">
+                                <span>Customers:</span>
+                                <span className="font-medium">{existingMembership.customerCount || 0}</span>
+                              </div>
                               
-                              {(!existingMembership.conditions || Object.entries(existingMembership.conditions).filter(([_, c]) => c.enabled).length === 0) && (
-                                <div className="text-xs text-gray-600">
-                                  No active conditions
-                                </div>
-                              )}
+                              <div className="space-y-1">
+                                <span className="text-xs font-medium">Requirements:</span>
+                                {existingMembership.conditions && Object.entries(existingMembership.conditions).map(([type, condition]) => {
+                                  if (!condition.enabled) return null;
+                                  
+                                  return (
+                                    <div key={type} className="flex items-center justify-between text-xs">
+                                      <span>
+                                        {type === "lifetimeTransactions" 
+                                          ? "Lifetime Transactions" 
+                                          : type === "lifetimeSpend"
+                                          ? "Lifetime Spend"
+                                          : type === "numberOfRedemptions"
+                                          ? "Number of Redemptions"
+                                          : type}
+                                      </span>
+                                      <span className="font-medium">
+                                        {type === "lifetimeSpend"
+                                          ? `$${condition.value.toFixed(2)}`
+                                          : condition.value}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                                
+                                {(!existingMembership.conditions || Object.entries(existingMembership.conditions).filter(([_, c]) => c.enabled).length === 0) && (
+                                  <div className="text-xs text-gray-600">
+                                    No active conditions
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                            
+                          </div>
+                          
+                          <div className="mt-auto">
                             <Button
                               onClick={() => {
                                 // Set form data for editing
@@ -2022,32 +2038,63 @@ export function SettingsDialog({ open, onOpenChange, initialActiveSection }: { o
                               }}
                               variant="outline"
                               size="sm"
-                              className="w-full mt-3"
+                              className="w-full"
                             >
                               Edit Parameters
                             </Button>
                           </div>
                         </>
                       ) : (
-                        <div className="text-center py-4">
-                          <p className="text-xs text-gray-500 mb-3">
-                            {tierName} tier has not been configured yet.
-                          </p>
-                          <Button
-                            onClick={() => {
-                              resetMembershipFormData()
-                              setMembershipFormData(prev => ({ ...prev, name: tierName }))
-                              setShowCreateMembershipDialog(true)
-                            }}
-                            className="w-full bg-[#007AFF] hover:bg-[#0071e3] text-white rounded-md shadow-sm h-8 text-xs"
-                          >
-                            Set Up Now
-                          </Button>
-                        </div>
+                        <>
+                          <div className="flex-grow flex items-center justify-center">
+                            <p className="text-xs text-gray-500 text-center">
+                              {tierName} tier has not been configured yet.
+                            </p>
+                          </div>
+                          <div className="mt-auto">
+                            <Button
+                              onClick={() => {
+                                resetMembershipFormData()
+                                setMembershipFormData(prev => ({ ...prev, name: tierName }))
+                                setShowCreateMembershipDialog(true)
+                              }}
+                              className="w-full bg-[#007AFF] hover:bg-[#0071e3] text-white rounded-md shadow-sm h-8 text-xs"
+                            >
+                              Set Up Now
+                            </Button>
+                          </div>
+                        </>
                       )}
                     </div>
                   )
                 })}
+                
+                {/* Add Additional Tier Box */}
+                <div className="border border-dashed border-gray-300 bg-gray-50 rounded-xl p-4 flex flex-col min-h-[200px]">
+                  <div className="text-center py-4 flex-grow flex flex-col justify-center">
+                    <PlusCircle className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+                    <h3 className="font-medium text-gray-600 mb-1">Add Additional Tier</h3>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Create custom tiers beyond Bronze, Silver, and Gold.
+                    </p>
+                  </div>
+                  <div className="mt-auto">
+                    <Button
+                      onClick={() => {
+                        toast({
+                          title: "Feature Coming Soon",
+                          description: "Additional custom tiers will be available in a future update.",
+                          variant: "default"
+                        })
+                      }}
+                      variant="outline"
+                      className="w-full h-8 text-xs text-gray-600 border-gray-300 hover:bg-gray-100"
+                      disabled
+                    >
+                      Coming Soon
+                    </Button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

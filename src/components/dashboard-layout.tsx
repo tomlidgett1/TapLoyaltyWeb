@@ -28,6 +28,7 @@ import { CreateRewardSheet } from "@/components/create-reward-sheet"
 import { CreatePointsRuleSheet } from "@/components/create-points-rule-sheet"
 import { DemoIPhone } from "@/components/demo-iphone"
 import { useAuth } from "@/contexts/auth-context"
+import { useNotifications } from "@/contexts/notifications-context"
 import { db } from "@/lib/firebase"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import NextImage from "next/image"
@@ -39,7 +40,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
-import { setDoc, writeBatch } from "firebase/firestore"
+import { setDoc } from "firebase/firestore"
 import {
   Sheet,
   SheetContent,
@@ -154,19 +155,7 @@ const scrollbarStyles = `
   }
 `;
 
-interface Notification {
-  id: string
-  message: string
-  type: string
-  customerId?: string
-  dateCreated?: Date
-  idSuffix?: string
-  timestamp: Date
-  read: boolean
-  customerFirstName?: string
-  customerFullName?: string
-  customerProfilePictureUrl?: string
-}
+
 
 interface RewardConfig {
   id: string
@@ -222,9 +211,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     }
   }, []);
   const pathname = usePathname()
-  const [notifications, setNotifications] = useState<Notification[]>([])
-  const [unreadCount, setUnreadCount] = useState(0)
-  const [notificationsLoading, setNotificationsLoading] = useState(true)
+  const { notifications, unreadCount, notificationsLoading, markAsRead, markAllAsRead } = useNotifications()
+
   const router = useRouter()
   
   const [selectedRewards, setSelectedRewards] = useState<RewardConfig[]>([])
@@ -653,40 +641,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     // Check if current path is onboarding
     setIsOnboarding(pathname?.includes('/onboarding') || false)
     
-    // Mock notifications data
-    const mockNotifications: Notification[] = [
-      {
-        id: "1",
-        message: "New customer sign up",
-        timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
-        read: false,
-        type: "INFO"
-      },
-      {
-        id: "2",
-        message: "Reward redeemed",
-        timestamp: new Date(Date.now() - 1000 * 60 * 120), // 2 hours ago
-        read: false,
-        type: "REWARD_REDEEMED"
-      },
-      {
-        id: "3",
-        message: "Points rule update",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-        read: true,
-        type: "WARNING"
-      },
-      {
-        id: "4",
-        message: "Integration connected",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2), // 2 days ago
-        read: true,
-        type: "POINTS_AWARDED"
-      }
-    ]
-    
-    setNotifications(mockNotifications)
-    setUnreadCount(mockNotifications.filter(n => !n.read).length)
+
     
     // Mock selected rewards data
     const mockSelectedRewards: RewardConfig[] = [
@@ -856,284 +811,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     fetchChecklistProgress()
   }, [user?.uid, pathname])
 
-  // Add useEffect to fetch notifications from Firestore
-  useEffect(() => {
-    const fetchNotifications = async () => {
-      if (!user?.uid || isOnboarding) return
-      
-      try {
-        setNotificationsLoading(true)
-        
-        // Create reference to merchant's notifications collection
-        const notificationsRef = collection(db, 'merchants', user.uid, 'notifications')
-        const notificationsQuery = query(
-          notificationsRef,
-          orderBy('dateCreated', 'desc'),
-          limit(10)
-        )
-        
-        const notificationsSnapshot = await getDocs(notificationsQuery)
-        
-        // Get notifications data
-        const notificationsData = notificationsSnapshot.docs.map(doc => {
-          const data = doc.data()
-          return {
-            id: doc.id,
-            message: data.message || 'No message provided',
-            type: data.type || 'INFO',
-            customerId: data.customerId,
-            idSuffix: data.idSuffix,
-            dateCreated: data.dateCreated?.toDate(),
-            timestamp: data.dateCreated?.toDate() || new Date(),
-            read: data.read || false
-          }
-        })
 
-        // Fetch customer data for all notifications that have a customerId
-        const customerIds = notificationsData
-          .filter(n => n.customerId)
-          .map(n => n.customerId as string);
-        
-        // Create a map to hold customer data
-        const customerData: Record<string, { fullName?: string, profilePictureUrl?: string }> = {};
-        
-        // Only fetch customer data if there are customerIds
-        if (customerIds.length > 0) {
-          // Fetch customer data in parallel
-          await Promise.all(
-            customerIds.map(async (customerId) => {
-              try {
-                // Go to top-level customers collection and get the customer document
-                const customerDoc = await getDoc(doc(db, 'customers', customerId));
-                if (customerDoc.exists()) {
-                  const data = customerDoc.data();
-                  
-                  // Extract fullName as the primary identifier 
-                  let customerName = data.fullName || null;
-                  
-                  // If no fullName, try to construct it from firstName and lastName
-                  if (!customerName && (data.firstName || data.lastName)) {
-                    customerName = `${data.firstName || ''} ${data.lastName || ''}`.trim();
-                  }
-                  
-                  // If still no name, try alternative name fields
-                  if (!customerName) {
-                    customerName = data.name || data.nickname || data.displayName;
-                  }
-                  
-                  // Never use tier values as names - if we detect a tier value or have no name, use a generic customer ID
-                  if (!customerName || customerName.toLowerCase() === 'bronze' || customerName.toLowerCase() === 'silver' 
-                      || customerName.toLowerCase() === 'gold' || customerName.toLowerCase() === 'platinum') {
-                    customerName = `Customer ${customerId.substring(0, 4)}`;
-                  }
-                  
-                  // Handle profile picture following memory rules
-                  let profilePictureUrl = null;
-                  console.log(`Customer ${customerId} data:`, {
-                    shareProfileWithMerchants: data.shareProfileWithMerchants,
-                    profilePictureUrl: data.profilePictureUrl
-                  });
-                  
-                  if (data.shareProfileWithMerchants === true && data.profilePictureUrl) {
-                    profilePictureUrl = data.profilePictureUrl;
-                    console.log(`Setting profile picture for customer ${customerId}:`, profilePictureUrl);
-                  }
-                  
-                  customerData[customerId] = { 
-                    fullName: customerName,
-                    profilePictureUrl: profilePictureUrl
-                  };
-                }
-              } catch (error) {
-                console.error(`Error fetching customer ${customerId}:`, error);
-              }
-            })
-          );
-        }
-        
-        // Attach customer names and profile pictures to the notifications
-        const notificationsWithCustomerNames = notificationsData.map(notification => {
-          if (notification.customerId && customerData[notification.customerId]) {
-            const customerInfo = customerData[notification.customerId];
-            console.log(`Attaching customer data for notification ${notification.id}:`, {
-              customerId: notification.customerId,
-              customerFullName: customerInfo.fullName,
-              customerProfilePictureUrl: customerInfo.profilePictureUrl
-            });
-            
-            return {
-              ...notification,
-              customerFullName: customerInfo.fullName,
-              customerProfilePictureUrl: customerInfo.profilePictureUrl
-            };
-          }
-          return notification;
-        });
-        
-        setNotifications(notificationsWithCustomerNames);
-        setUnreadCount(notificationsWithCustomerNames.filter(n => !n.read).length);
-      } catch (error) {
-        console.error('Error fetching notifications:', error)
-        // Set fallback notifications if there's an error
-        const fallbackNotifications: Notification[] = [
-          {
-            id: "fallback-1",
-            message: "Welcome to your loyalty dashboard",
-            timestamp: new Date(),
-            read: false,
-            type: "INFO"
-          }
-        ]
-        setNotifications(fallbackNotifications)
-        setUnreadCount(1)
-      } finally {
-        setNotificationsLoading(false)
-      }
-    }
-    
-    if (user?.uid) {
-      fetchNotifications()
-    }
-  }, [user?.uid, isOnboarding])
 
-  // Add listener for agent inbox notifications
-  useEffect(() => {
-    if (!user?.uid || isOnboarding) return
 
-    // Track if this is the initial snapshot to avoid showing notifications for existing documents
-    let isInitialSnapshot = true
 
-    // Set up real-time listener for agent inbox
-    const agentInboxRef = collection(db, 'merchants', user.uid, 'agentinbox')
-    const agentInboxQuery = query(
-      agentInboxRef,
-      orderBy('createdAt', 'desc'),
-      limit(10)
-    )
 
-    const unsubscribe = onSnapshot(agentInboxQuery, (snapshot) => {
-      // Check for added documents
-      const addedDocs = snapshot.docChanges().filter(change => change.type === 'added')
-      
-      if (addedDocs.length > 0 && !isInitialSnapshot) {
-        // Only process if not the initial load
-        // Create a notification for each new agent inbox item
-        addedDocs.forEach(change => {
-          const docData = change.doc.data()
-          const actionType = docData.type || 'task'
-          let actionDescription = 'new task'
-          let shouldShowNotification = false
-          
-          // Only show notifications for agent or customerservice types
-          if (docData.type === 'agent' || docData.type === 'customerservice') {
-            shouldShowNotification = true
-            actionDescription = docData.type === 'agent' ? 'agent task' : 'customer service task'
-          } else if (docData.type === 'csemail') {
-            actionDescription = 'email response'
-          } else if (docData.type === 'offer') {
-            actionDescription = 'discount offer'
-          } else if (docData.type === 'program') {
-            actionDescription = 'program recommendation'
-          }
-          
-          // Check if this is a customer inquiry before showing notification
-          const classification = docData.classification || {}
-          const isCustomerInquiry = classification.isCustomerInquiry !== false
-          
-          if ((shouldShowNotification || docData.type === 'csemail' || docData.type === 'offer' || docData.type === 'program') && isCustomerInquiry) {
-          // Show toast notification with blue-orange gradient title
-          toast({
-            title: "Agent Notification",
-            description: `New ${actionDescription} requires your approval`,
-            variant: "default",
-              className: "agent-notification-toast",
-            action: (
-              <Button 
-                onClick={() => router.push('/dashboard/agent-inbox')}
-                variant="outline" 
-                  className="h-8 gap-1.5 rounded-xl"
-                size="sm"
-              >
-                View
-              </Button>
-            )
-          })
-          }
-          
-          // Add to notifications array with proper styling
-          const newNotification: Notification = {
-            id: change.doc.id,
-            message: `New ${actionDescription} requires your approval`,
-            type: "AGENT_ACTION",
-            timestamp: docData.createdAt?.toDate() || new Date(),
-            read: false
-          }
-          
-          setNotifications(prev => [newNotification, ...prev])
-        })
-        
-        // Update unread count
-        setUnreadCount(prev => prev + addedDocs.length)
-      }
-      
-      // After first snapshot, set flag to false so future changes show notifications
-      if (isInitialSnapshot) {
-        isInitialSnapshot = false
-      }
-    }, (error) => {
-      console.error('Error listening to agent inbox updates:', error)
-    })
-
-    // Clean up listener on unmount
-    return () => unsubscribe()
-  }, [user?.uid, isOnboarding, toast, router])
-
-  const markAsRead = async (id: string) => {
-    // Update the notification in Firestore
-    try {
-      if (user?.uid) {
-        await setDoc(doc(db, 'merchants', user.uid, 'notifications', id), {
-          read: true
-        }, { merge: true })
-      }
-    } catch (error) {
-      console.error('Error marking notification as read:', error)
-    }
-    
-    // Update local state
-    setNotifications(prev => 
-      prev.map(notification => 
-        notification.id === id 
-          ? { ...notification, read: true } 
-          : notification
-      )
-    )
-    setUnreadCount(prev => Math.max(0, prev - 1))
-  }
-
-  const markAllAsRead = async () => {
-    // Update all notifications in Firestore
-    try {
-      if (user?.uid) {
-        const batch = writeBatch(db)
-        notifications.forEach(notification => {
-          if (!notification.read) {
-            const notificationRef = doc(db, 'merchants', user.uid, 'notifications', notification.id)
-            batch.update(notificationRef, { read: true })
-          }
-        })
-        await batch.commit()
-      }
-    } catch (error) {
-      console.error('Error marking all notifications as read:', error)
-    }
-    
-    // Update local state
-    setNotifications(prev => 
-      prev.map(notification => ({ ...notification, read: true }))
-    )
-    setUnreadCount(0)
-  }
 
   const formatTimeAgo = (date: Date) => {
     return formatDistanceToNow(date, { addSuffix: true })
@@ -2403,7 +2085,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           )}
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-80">
+                      <DropdownMenuContent align="end" className="w-96 rounded-md">
                         <div className="p-3 border-b">
                           <div className="flex items-center justify-between">
                             <h4 className="font-medium text-sm">Notifications</h4>
@@ -2419,31 +2101,41 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                             )}
                           </div>
                         </div>
-                        <div className="max-h-64 overflow-y-auto">
-                          {notifications.length > 0 ? (
+                        <div className="max-h-80 overflow-y-auto">
+                          {notificationsLoading ? (
+                            <div className="p-4 text-center text-gray-500 text-sm">
+                              Loading notifications...
+                            </div>
+                          ) : notifications.length > 0 ? (
                             notifications.map((notification) => (
                               <div 
                                 key={notification.id}
-                                className={`p-3 border-b last:border-b-0 hover:bg-gray-50 cursor-pointer transition-colors ${
+                                className={`p-2.5 border-b last:border-b-0 hover:bg-gray-50 cursor-pointer transition-colors ${
                                   !notification.read ? 'bg-blue-50' : ''
                                 }`}
                                 onClick={() => markAsRead(notification.id)}
                               >
-                                <div className="flex items-start gap-3">
+                                <div className="flex items-start gap-2.5">
                                   {/* Customer Avatar or Notification Icon */}
                                   <div className="flex-shrink-0">
-                                    {notification.customerProfilePictureUrl ? (
+                                    {notification.type === "AGENT_ACTION" ? (
+                                      <img 
+                                        src="/taplogo.png" 
+                                        alt="Tap Agent"
+                                        className="h-7 w-7 rounded-md object-cover border border-gray-200"
+                                      />
+                                    ) : notification.customerProfilePictureUrl ? (
                                       <img 
                                         src={notification.customerProfilePictureUrl} 
                                         alt={notification.customerFullName || 'Customer'}
-                                        className="h-8 w-8 rounded-full object-cover border border-gray-200"
+                                        className="h-7 w-7 rounded-md object-cover border border-gray-200"
                                       />
                                     ) : notification.customerFullName ? (
-                                      <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-gray-100 text-gray-600">
+                                      <div className="h-7 w-7 rounded-md flex items-center justify-center text-xs font-medium border border-gray-200 bg-gray-100 text-gray-600">
                                         {notification.customerFullName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                                       </div>
                                     ) : (
-                                      <div className="h-8 w-8 rounded-full flex items-center justify-center border border-gray-200 bg-gray-100">
+                                      <div className="h-7 w-7 rounded-md flex items-center justify-center border border-gray-200 bg-gray-100">
                                         {getNotificationIcon(notification.type)}
                                       </div>
                                     )}
@@ -2451,43 +2143,38 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                                   
                                   {/* Notification Content */}
                                   <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      {notification.customerFullName && (
-                                        <p className="text-sm font-medium text-gray-900 truncate">
-                                          {notification.customerFullName}
+                                    <div className="flex items-start justify-between gap-2 mb-0.5">
+                                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                        {notification.customerFullName && (
+                                          <p className="text-xs font-medium text-gray-900 truncate">
+                                            {notification.customerFullName}
+                                          </p>
+                                        )}
+                                        {notification.type === "AGENT_ACTION" && (
+                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-blue-500 to-orange-500 text-white flex-shrink-0">
+                                            <Bot className="h-2.5 w-2.5" />
+                                            Agent
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                                        <p className="text-xs text-gray-500 whitespace-nowrap">
+                                          {formatTimeAgo(notification.timestamp)}
                                         </p>
-                                      )}
-                                      {notification.type === "AGENT_ACTION" && (
-                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium bg-gradient-to-r from-blue-500 to-orange-500 text-white">
-                                          <Bot className="h-3 w-3" />
-                                          Agent
-                                        </span>
-                                      )}
+                                        {!notification.read && (
+                                          <div className="h-1.5 w-1.5 bg-blue-500 rounded-full"></div>
+                                        )}
+                                      </div>
                                     </div>
-                                    <p className="text-sm text-gray-800 mb-1">
+                                    <p className="text-xs text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis">
                                       {notification.message}
                                     </p>
-                                    <div className="flex items-center justify-between">
-                                      <p className="text-xs text-gray-500">
-                                        {formatTimeAgo(notification.timestamp)}
-                                      </p>
-                                      {notification.idSuffix && (
-                                        <span className="text-xs text-gray-400">
-                                          #{notification.idSuffix}
-                                        </span>
-                                      )}
-                                    </div>
                                   </div>
-                                  
-                                  {/* Unread Indicator */}
-                                  {!notification.read && (
-                                    <div className="h-2 w-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                                  )}
                                 </div>
                               </div>
                             ))
                           ) : (
-                            <div className="p-6 text-center text-gray-500 text-sm">
+                            <div className="p-4 text-center text-gray-500 text-sm">
                               No notifications yet
                             </div>
                           )}

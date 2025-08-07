@@ -11,7 +11,7 @@ import {onRequest} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import {onCall} from "firebase-functions/v2/https";
 import * as functions from "firebase-functions";
-import cors from 'cors';
+// import cors from 'cors'; // Currently unused
 import * as admin from 'firebase-admin';
 import * as OpenAI from 'openai';
 
@@ -23,8 +23,8 @@ import * as OpenAI from 'openai';
 //   response.send("Hello from Firebase!");
 // });
 
-// Add CORS middleware
-const corsHandler = cors({origin: true});
+// CORS middleware (currently unused but kept for future use)
+// const corsHandler = cors({origin: true});
 
 // Initialize Firebase Admin
 admin.initializeApp();
@@ -219,12 +219,7 @@ export const getOpenAIKeyHttp = onRequest({
 // Add a simple HTTP function to test
 export const hello = onRequest({
   region: "us-central1",
-  cors: {
-    origin: ['https://taployalty.com.au', 'https://taptap--tap-loyalty-fb6d0.us-central1.hosted.app'],
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    maxAge: 3600
-  }
+  cors: ['https://taployalty.com.au', 'https://taptap--tap-loyalty-fb6d0.us-central1.hosted.app']
 }, (request, response) => {
   // Handle preflight requests
   if (request.method === 'OPTIONS') {
@@ -323,32 +318,15 @@ export const checkEnvironment = onRequest({
 // Function to call OpenAI API with dynamic CORS
 export const callOpenAI = onCall({
   region: "us-central1",
-  cors: {
-    origin: (origin) => {
-      // List of allowed origins
-      const allowedOrigins = [
-        'https://taployalty.com.au', 
-        'https://www.taployalty.com.au',
-        'https://taptap--tap-loyalty-fb6d0.us-central1.hosted.app', 
-        'http://localhost:3000',
-        'http://localhost:3001',
-        'http://127.0.0.1:3000',
-        'http://127.0.0.1:3001'
-      ];
-      
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return true;
-      
-      // In development, allow all origins
-      if (process.env.NODE_ENV === 'development') return true;
-      
-      // Check if the origin is in the allowed list
-      return allowedOrigins.includes(origin);
-    },
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    maxAge: 3600
-  }
+  cors: [
+    'https://taployalty.com.au', 
+    'https://www.taployalty.com.au',
+    'https://taptap--tap-loyalty-fb6d0.us-central1.hosted.app', 
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001'
+  ]
 }, async (request) => {
   try {
     logger.info("OpenAI API call requested", {
@@ -438,12 +416,7 @@ export const callOpenAI = onCall({
 // Add this to your existing functions
 export const checkOpenAIConfig = onCall({
   region: "us-central1",
-  cors: {
-    origin: ['https://taployalty.com.au', 'http://localhost:3000'],
-    methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    maxAge: 3600
-  }
+  cors: ['https://taployalty.com.au', 'http://localhost:3000']
 }, async (request) => {
   try {
     // Check if user is authenticated

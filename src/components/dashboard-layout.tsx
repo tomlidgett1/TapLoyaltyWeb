@@ -66,6 +66,7 @@ import {
   AIInputTools,
 } from '@/components/ui/kibo-ui/ai/input'
 import { AIResponse } from '@/components/ui/kibo-ui/ai/response'
+import { RewardCard } from '@/components/reward-card'
 
 // Streaming Markdown Component using kibo-ui AIResponse
 const StreamingMarkdown = ({ text }: { text: string }) => {
@@ -416,7 +417,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       }
       
       // Create SSE connection
-      const functionUrl = 'https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/processMultiStepRequest';
+      const functionUrl = 'https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/createRewardFromPrompt';
       
       // Close any existing EventSource
       if (eventSourceRef.current) {
@@ -1533,245 +1534,64 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     setIsTyping(true)
     
     try {
-      // Prepare the request payload
+      // Call createRewardFromPrompt Firebase function
       const merchantId = user?.uid
-      console.log('Starting SSE stream for:', { merchantId, conversationId: currentConversationId, userPrompt })
+      console.log('Calling createRewardFromPrompt for:', { merchantId, userPrompt })
+      
+      const functions = getFunctions()
+      const createRewardFromPrompt = httpsCallable(functions, 'createRewardFromPrompt')
       
       const payload = {
-        prompt: userPrompt,           // ✅ Changed from 'useCase' to 'prompt'
-        merchantId: merchantId || 'default',  // ✅ Added merchantId field
-        apps: [],
-        params: {},
-        entityId: merchantId || 'default',
-        conversationId: currentConversationId,
-        stream: 'true' // Enable streaming
+        merchantId: merchantId,
+        prompt: userPrompt
       }
       
-      // Create SSE connection
-      const functionUrl = 'https://us-central1-tap-loyalty-fb6d0.cloudfunctions.net/processMultiStepRequest';
-      const queryParams = new URLSearchParams({
-        merchantId: merchantId || 'default',
-        conversationId: currentConversationId || '',
-        stream: 'true'
-      })
+      console.log('Calling function with payload:', payload)
       
-      // Close any existing EventSource
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close()
-      }
-      
-      // Use POST with SSE by sending the payload as form data
-      console.log('Making request to:', functionUrl)
-      console.log('Request method: POST')
-      console.log('Request payload:', payload)
-      
-      const response = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
-        },
-        body: JSON.stringify(payload)
-      })
-      
-      console.log('Response status:', response.status)
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()))
-      
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('HTTP error response:', errorText)
-        throw new Error(`HTTP error! Status: ${response.status} - ${errorText}`)
-      }
-      
-      // Check if response is actually SSE
-      const contentType = response.headers.get('content-type')
-      if (!contentType?.includes('text/event-stream')) {
-        // Fallback to regular JSON response
-        const result = await response.json()
-        console.log('Received regular JSON response:', result)
-        setToolResponse(result)
-        
-        if (result && result.text) {
-          setChatMessages(prev => [...prev, {role: 'assistant', content: result.text}])
-        }
-        return
-      }
-      
-      // Handle SSE stream
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
-      
-      if (!reader) {
-        throw new Error('Failed to get response reader')
-      }
-      
-      let buffer = ''
-      let finalResponse = null
-      
-      while (true) {
-        const { done, value } = await reader.read()
-        
-        if (done) {
-          console.log('SSE stream completed')
-          break
-        }
-        
-        // Decode the chunk and add to buffer
-        const chunk = decoder.decode(value, { stream: true })
-        buffer += chunk
-        
-        // Process complete lines
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || '' // Keep incomplete line in buffer
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6) // Remove 'data: ' prefix
-            
-            if (data === '[DONE]') {
-              console.log('Stream completed with [DONE]')
-              break
-            }
-            
-            try {
-              // Skip empty data
-              if (!data || data.trim() === '') {
-                continue
-              }
-              
-              const parsed = JSON.parse(data)
-              console.log('SSE Event:', parsed)
-              
-              // Validate parsed data structure
-              if (!parsed || typeof parsed !== 'object') {
-                console.warn('Invalid SSE event structure:', parsed)
-                continue
-              }
-              
-              // Handle different event types based on the new SSE structure
-              switch (parsed.type) {
-                case 'status':
-                  // Handle status updates (app detection, tool loading, etc.)
-                  if (parsed.data && parsed.data.message) {
-                    setStreamingStatus(parsed.data.message)
-                  }
-                  break
-                  
-                case 'tool_selected':
-                  // Handle tool selection - add to conversation with loading state
-                  if (parsed.data && parsed.data.tool) {
-                    setChatMessages(prev => [...prev, {
-                      role: 'tool_selection', 
-                      content: '', 
-                      toolNames: [parsed.data.toolDisplayName || parsed.data.tool],
-                      toolCompleted: false,
-                      toolId: parsed.data.id
-                    }])
-                    setStreamingStatus(parsed.data.message || `Using ${parsed.data.toolDisplayName || parsed.data.tool}`)
-                  }
-                  break
-                  
-                case 'tool_complete':
-                  // Handle tool completion - update the corresponding tool selection message
-                  if (parsed.data && parsed.data.tool) {
-                    setChatMessages(prev => {
-                      const messages = [...prev]
-                      // Find the tool_selection message with matching tool name
-                      for (let i = messages.length - 1; i >= 0; i--) {
-                        if (messages[i].role === 'tool_selection' && 
-                            messages[i].toolNames?.includes(parsed.data.toolDisplayName || parsed.data.tool)) {
-                          // If we found a matching tool, it means it was successfully executed
-                          messages[i] = { 
-                            ...messages[i], 
-                            toolCompleted: true,
-                            toolSuccess: true  // Success because we found the matching tool
-                          }
-                          break
-                        }
-                      }
-                      return messages
-                    })
-                    setStreamingStatus(`✅ ${parsed.data.message}`)
-                  }
-                  break
-                  
-                case 'ai_message_chunk':
-                  // Handle streaming AI response chunks
-                  if (parsed.data && parsed.data.delta) {
-                    setTypewriterText(prev => prev + parsed.data.delta)
-                    if (!showTypewriter) {
-                      setShowTypewriter(true)
-                    }
-                  }
-                  break
-                  
-                case 'ai_message':
-                  // Handle final AI message
-                  if (parsed.data && parsed.data.message) {
-                    setChatMessages(prev => [...prev, {
-                      role: 'assistant', 
-                      content: parsed.data.message
-                    }])
-                  }
-                  break
-                  
-                case 'done':
-                  // Handle final completion
-                  finalResponse = parsed.data
-                  setStreamingStatus('✅ Task completed!')
-                  
-                  // Add completion summary if tools were used
-                  if (parsed.data && parsed.data.toolsUsed && parsed.data.toolsUsed.length > 0) {
-                    let successMessage = "## 🛠️ Tools Used:\n\n"
-                    parsed.data.toolsUsed.forEach((tool: any) => {
-                      const status = tool.successful ? '✅' : '❌'
-                      successMessage += `- ${status} **${tool.toolDisplayName || tool.tool}**\n`
-                    })
-                    
-                    setChatMessages(prev => [...prev, {
-                      role: 'assistant', 
-                      content: successMessage
-                    }])
-                  }
-                  break
-                  
-                case 'error':
-                  setStreamingStatus(`❌ ${parsed.data.message}`)
-                  setChatMessages(prev => [...prev, {
-                    role: 'assistant', 
-                    content: `Sorry, I encountered an error: ${parsed.data.message}`
-                  }])
-                  break
-                  
-                // Legacy event types for backwards compatibility  
-                case 'step':
-                  setStreamingStatus(`Step ${parsed.data.turn}: ${parsed.data.action}`)
-                  break
-                  
-                default:
-                  console.log('Unknown SSE event type:', parsed.type, parsed.data)
-              }
-            } catch (e) {
-              console.error('Failed to parse SSE data:', {
-                rawData: data,
-                dataLength: data?.length,
-                error: e instanceof Error ? e.message : String(e),
-                errorType: typeof e
-              })
-              // Don't break the stream for parsing errors, just log and continue
-            }
-          }
-        }
-      }
-      
-      // Process final response
-      if (finalResponse) {
-        console.log('Final response received:', finalResponse)
-        setToolResponse(finalResponse)
-        
-        if (finalResponse.text) {
-          setChatMessages(prev => [...prev, {role: 'assistant', content: finalResponse.text}])
-        }
+             const result = await createRewardFromPrompt(payload)
+       console.log('Function result received')
+       
+       // Handle the response
+       if (result.data && (result.data as any).success) {
+         const responseData = result.data as any
+         const rewardData = responseData.rewardData
+         const message = responseData.message
+         
+         // Safely stringify the reward data without circular references
+         let rewardDataString = ''
+         try {
+           rewardDataString = JSON.stringify(rewardData, null, 2)
+         } catch (stringifyError) {
+           console.error('Error stringifying reward data:', stringifyError)
+           rewardDataString = 'Error displaying reward data - check console for details'
+         }
+         
+                  // Store reward data in the message content itself
+         const rewardMessage = {
+           role: 'assistant' as const,
+           content: JSON.stringify({
+             type: 'REWARD_CARD',
+             rewardData,
+             message
+           })
+         }
+         
+         setChatMessages(prev => [...prev, rewardMessage])
+         
+         // Store the response for display (create a clean copy to avoid circular refs)
+         try {
+           const cleanResponseData = {
+             success: responseData.success,
+             message: responseData.message,
+             rewardData: responseData.rewardData
+           }
+           setToolResponse(cleanResponseData)
+         } catch (copyError) {
+           console.error('Error creating clean response copy:', copyError)
+           setToolResponse({ success: true, message: message })
+         }
+       } else {
+         throw new Error((result.data as any)?.message || 'Failed to create reward configuration')
       }
       
     } catch (error) {
@@ -2073,6 +1893,19 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       Preview
                     </Button>
                     
+                    {/* Agent Button */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="relative"
+                      onClick={() => setShowChatbotPanel(!showChatbotPanel)}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <Bot className="h-4 w-4" />
+                        <span className="text-sm font-medium">Agent</span>
+                      </div>
+                    </Button>
+
                     {/* Notifications */}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -2202,7 +2035,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               }}
             >
               {/* Chat header */}
-              <div className="h-14 px-4 border-b flex items-center justify-between">
+              <div className="h-16 px-4 border-b flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="font-semibold text-sm bg-gradient-to-r from-blue-500 to-orange-400 bg-clip-text text-transparent">
                     Tap Agent
@@ -2272,59 +2105,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     <PlusCircle className="h-3 w-3 text-gray-500" />
                   </Button>
                   
-                  {/* Integrations dropdown */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 w-6 p-0 rounded-md hover:bg-gray-200"
-                        title="Integrations"
-                      >
-                        <Plug className="h-3 w-3 text-gray-500" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48 rounded-md">
-                      <DropdownMenuLabel className="text-xs font-medium text-gray-500 px-2 pt-1.5 pb-1.5 border-b">
-                        Integrations
-                      </DropdownMenuLabel>
-                      {availableIntegrations.map((integration, index) => (
-                        <DropdownMenuItem key={index} className="py-1.5 px-2">
-                          <div className="flex items-center justify-between w-full text-xs">
-                            <div className="flex items-center space-x-2" title={integration.description}>
-                              <div className="h-4 w-4 flex-shrink-0">
-                                <NextImage
-                                  src={`/${integration.logo}`}
-                                  alt={integration.name}
-                                  width={16}
-                                  height={16}
-                                  className="object-contain"
-                                />
-                              </div>
-                              <span className="text-sm truncate">{integration.name}</span>
-                            </div>
-                            <div className="flex items-center">
-                              {integration.status === 'active' && integrationsStatus[integration.id] ? (
-                                <span className="text-xs text-green-600">Connected</span>
-                              ) : integration.status === 'coming-soon' ? (
-                                <span className="text-xs text-gray-400">Soon</span>
-                              ) : (
-                                <span className="text-xs text-gray-500">Available</span>
-                              )}
-                            </div>
-                          </div>
-                        </DropdownMenuItem>
-                      ))}
-                      <DropdownMenuSeparator />
-                      
-                      <DropdownMenuItem 
-                        className="py-1.5 px-2 text-xs text-blue-500" 
-                        onSelect={() => window.location.href = '/dashboard/integrations'}
-                      >
-                        Manage integrations
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+
                   
                   {/* Stop button - show when streaming or typing */}
                   {(isStreaming || isTyping) && (
@@ -2537,7 +2318,45 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                         )
                       }
                     } else {
-                      // Assistant messages - show using kibo-ui AIResponse component
+                      // Assistant messages - check for special content types
+                      let parsedContent = null
+                      try {
+                        parsedContent = JSON.parse(msg.content)
+                      } catch (e) {
+                        // Not JSON, treat as regular message
+                      }
+
+                      if (parsedContent && parsedContent.type === 'REWARD_CARD') {
+                        // Render reward card component
+                        return (
+                          <motion.div 
+                            key={`reward-card-${index}`} 
+                            className="text-sm text-gray-800 leading-relaxed"
+                            initial={{ 
+                              opacity: 0,
+                              y: 20,
+                              scale: 0.98
+                            }}
+                            animate={{ 
+                              opacity: 1,
+                              y: 0,
+                              scale: 1
+                            }}
+                            transition={{ 
+                              type: "spring",
+                              damping: 20,
+                              stiffness: 300,
+                              duration: 0.5
+                            }}
+                          >
+                            <RewardCard 
+                              rewardData={parsedContent.rewardData} 
+                              message={parsedContent.message}
+                            />
+                          </motion.div>
+                        )
+                      } else {
+                        // Regular assistant messages - show using kibo-ui AIResponse component
                       return (
                         <motion.div 
                           key={`assistant-${index}`} 
@@ -2564,6 +2383,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           </AIResponse>
                         </motion.div>
                       )
+                      }
                     }
                   })}
                   

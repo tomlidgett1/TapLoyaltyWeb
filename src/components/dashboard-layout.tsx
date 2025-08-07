@@ -2,7 +2,7 @@
 
 import { SideNav } from "@/components/side-nav"
 import { usePathname } from "next/navigation"
-import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu, Mic, Menu, Pencil, Loader2, ExternalLink, Plug, PanelRight, Send, Activity, Clock, Wrench, Code, Layers, Cog, Info } from "lucide-react"
+import { Bell, Search, Command, FileText, Check, X, ChevronDown, Sparkles, Award, Gift, PlusCircle, Image, MessageSquare, Zap, ShoppingCart, Coffee, Bot, BarChart, Target, Lightbulb, Brain, Cpu, Mic, Menu, Pencil, Loader2, ExternalLink, Plug, PanelRight, Send, Activity, Clock, Wrench, Code, Layers, Cog, Info, Star } from "lucide-react"
 import { AuthGuard } from "@/components/auth-guard"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -67,6 +67,7 @@ import {
 } from '@/components/ui/kibo-ui/ai/input'
 import { AIResponse } from '@/components/ui/kibo-ui/ai/response'
 import { RewardCard } from '@/components/reward-card'
+import AnimatedEmailResponse from '@/components/animated-email-response'
 
 // Streaming Markdown Component using kibo-ui AIResponse
 const StreamingMarkdown = ({ text }: { text: string }) => {
@@ -1262,6 +1263,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   // Add state for integrations panel (replacing popup)
   const [showIntegrationsPanel, setShowIntegrationsPanel] = useState(false)
   
+  // Add state for conversation history UI
+  const [showConversationHistory, setShowConversationHistory] = useState(false)
+  const [editingConversationId, setEditingConversationId] = useState<string | null>(null)
+  const [editingTitle, setEditingTitle] = useState('')
+  
   // Define available integrations
   const availableIntegrations = [
     { id: 'square', name: 'Square', description: 'Point of sale system', logo: 'squarepro.png', status: 'active' },
@@ -1471,36 +1477,152 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       // Generate a unique conversation ID
       const newConversationId = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       
-      // Create conversation via API endpoint
-      const response = await fetch(`/api/merchants/${merchantId}/agent/history/conversations/${newConversationId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          conversationId: newConversationId,
-          merchantId: merchantId,
-          createdAt: new Date().toISOString(),
-          status: 'active'
-        })
-      })
-      
-      if (!response.ok) {
-        throw new Error(`Failed to create conversation: ${response.status}`)
+      // Create empty conversation in Firestore
+      const conversationData = {
+        conversationId: newConversationId,
+        merchantId: merchantId,
+        messages: [], // Start with empty messages array
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        messageCount: 0,
+        lastMessage: '',
+        lastMessageRole: ''
       }
       
-      const conversationData = await response.json()
-      console.log('Created new conversation:', conversationData)
+      await setDoc(
+        doc(db, 'merchants', merchantId, 'chatpanel', newConversationId),
+        conversationData
+      )
+      
+      console.log('Created new conversation in Firestore:', newConversationId)
       
       return newConversationId
     } catch (error) {
       console.error('Error creating new conversation:', error)
-      // Return a fallback conversation ID even if API fails
+      // Return a fallback conversation ID even if Firestore fails
       return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     }
   }
   
   
+  // Function to fetch conversation history from Firestore
+  const fetchConversationHistory = async () => {
+    if (!user?.uid) return
+
+    try {
+      const conversationsRef = collection(db, 'merchants', user.uid, 'chatpanel')
+      const conversationsQuery = query(conversationsRef, orderBy('updatedAt', 'desc'), limit(20))
+      const snapshot = await getDocs(conversationsQuery)
+      
+      const conversationList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        title: doc.data().title || 'New Chat',
+        lastMessage: doc.data().lastMessage || '',
+        timestamp: doc.data().updatedAt?.toDate() || new Date(),
+        messageCount: doc.data().messageCount || 0
+      }))
+      
+      setConversations(conversationList)
+      console.log('Fetched conversations:', conversationList.length)
+    } catch (error) {
+      console.error('Error fetching conversations:', error)
+    }
+  }
+
+  // Function to select and load a conversation
+  const selectConversation = async (selectedConversationId: string) => {
+    if (!user?.uid) return
+
+    try {
+      const conversationDoc = await getDoc(doc(db, 'merchants', user.uid, 'chatpanel', selectedConversationId))
+      
+      if (conversationDoc.exists()) {
+        const conversationData = conversationDoc.data()
+        const messages = conversationData.messages || []
+        
+        // Load the conversation into chat
+        setChatMessages(messages)
+        setConversationId(selectedConversationId)
+        setShowConversationHistory(false)
+        
+        console.log('Loaded conversation:', selectedConversationId, 'Messages:', messages.length)
+      }
+    } catch (error) {
+      console.error('Error loading conversation:', error)
+    }
+  }
+
+  // Function to rename a conversation
+  const renameConversation = async (conversationId: string, newTitle: string) => {
+    if (!user?.uid || !newTitle.trim()) return
+
+    try {
+      await updateDoc(doc(db, 'merchants', user.uid, 'chatpanel', conversationId), {
+        title: newTitle.trim(),
+        updatedAt: serverTimestamp()
+      })
+
+      // Update local state
+      setConversations(prev => prev.map(conv => 
+        conv.id === conversationId 
+          ? { ...conv, title: newTitle.trim() }
+          : conv
+      ))
+
+      setEditingConversationId(null)
+      setEditingTitle('')
+      console.log('Renamed conversation:', conversationId, 'to:', newTitle)
+    } catch (error) {
+      console.error('Error renaming conversation:', error)
+    }
+  }
+
+  // Function to save conversation to Firestore in simple format
+  const saveConversationToFirestore = async (messages: Array<{ role: string; content: string }>, conversationId: string) => {
+    if (!user?.uid || !conversationId) return
+
+    try {
+      // Save entire conversation as a single document with simple messages array
+      const conversationData = {
+        conversationId,
+        merchantId: user.uid,
+        messages: messages.map(msg => ({
+          role: msg.role,
+          content: msg.content,
+          timestamp: new Date().toISOString()
+        })),
+        createdAt: messages.length === 1 ? serverTimestamp() : undefined, // Only set on first message
+        updatedAt: serverTimestamp(),
+        messageCount: messages.length,
+        lastMessage: messages[messages.length - 1]?.content || '',
+        lastMessageRole: messages[messages.length - 1]?.role || ''
+      }
+
+      // Remove undefined fields
+      if (conversationData.createdAt === undefined) {
+        delete conversationData.createdAt
+      }
+
+      await setDoc(
+        doc(db, 'merchants', user.uid, 'chatpanel', conversationId),
+        conversationData,
+        { merge: false } // Overwrite the entire document
+      )
+
+      console.log('Conversation saved to Firestore:', conversationId, 'Messages:', messages.length)
+    } catch (error) {
+      console.error('Error saving conversation to Firestore:', error)
+    }
+  }
+
+  // Fetch conversations when component mounts or user changes
+  useEffect(() => {
+    if (user?.uid) {
+      fetchConversationHistory()
+    }
+  }, [user?.uid])
+
   // Add function to handle sending messages to the chatbot with SSE streaming
   const handleSendMessage = async () => {
     if (!userInput.trim()) return
@@ -1527,6 +1649,20 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     const userPrompt = userInput.trim()
     setUserInput('')
     
+          // Save updated conversation to Firestore and update title for first message
+      if (currentConversationId) {
+        const updatedMessages = [...chatMessages, newMessage]
+        await saveConversationToFirestore(updatedMessages, currentConversationId)
+        
+        // If this is the first user message, update the title
+        if (chatMessages.length === 0 && user?.uid) {
+          const title = userPrompt.length > 30 ? userPrompt.substring(0, 30) + '...' : userPrompt
+          await updateDoc(doc(db, 'merchants', user.uid, 'chatpanel', currentConversationId), {
+            title: title
+          })
+        }
+      }
+    
     // Textarea height is now handled by the kibo-ui component
     
     // Start streaming
@@ -1534,16 +1670,17 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     setIsTyping(true)
     
     try {
-      // Call createRewardFromPrompt Firebase function
+      // Call AI chatbot Firebase function
       const merchantId = user?.uid
-      console.log('Calling createRewardFromPrompt for:', { merchantId, userPrompt })
+      console.log('Calling AI chatbot for:', { merchantId, userPrompt, conversationId: currentConversationId })
       
       const functions = getFunctions()
       const createRewardFromPrompt = httpsCallable(functions, 'createRewardFromPrompt')
       
       const payload = {
         merchantId: merchantId,
-        prompt: userPrompt
+        prompt: userPrompt,
+        conversationId: currentConversationId
       }
       
       console.log('Calling function with payload:', payload)
@@ -1554,29 +1691,55 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
        // Handle the response
        if (result.data && (result.data as any).success) {
          const responseData = result.data as any
-         const rewardData = responseData.rewardData
          const message = responseData.message
          
-         // Safely stringify the reward data without circular references
-         let rewardDataString = ''
-         try {
-           rewardDataString = JSON.stringify(rewardData, null, 2)
-         } catch (stringifyError) {
-           console.error('Error stringifying reward data:', stringifyError)
-           rewardDataString = 'Error displaying reward data - check console for details'
+         let assistantMessage: { role: 'assistant'; content: string }
+         
+         if (responseData.isConversational) {
+           // AI responded conversationally - just display the message
+           console.log('Received conversational response from AI')
+           assistantMessage = {
+             role: 'assistant' as const,
+             content: message
+           }
+         } else if (responseData.rewardData) {
+           // AI created a reward - display as reward card
+           console.log('Received reward creation response from AI')
+           const rewardData = responseData.rewardData
+           
+           // Safely stringify the reward data without circular references
+           let rewardDataString = ''
+           try {
+             rewardDataString = JSON.stringify(rewardData, null, 2)
+           } catch (stringifyError) {
+             console.error('Error stringifying reward data:', stringifyError)
+             rewardDataString = 'Error displaying reward data - check console for details'
+           }
+           
+           // Store reward data in the message content itself
+           assistantMessage = {
+             role: 'assistant' as const,
+             content: JSON.stringify({
+               type: 'REWARD_CARD',
+               rewardData,
+               message
+             })
+           }
+         } else {
+           // Fallback to plain text response
+           assistantMessage = {
+             role: 'assistant' as const,
+             content: message
+           }
          }
          
-                  // Store reward data in the message content itself
-         const rewardMessage = {
-           role: 'assistant' as const,
-           content: JSON.stringify({
-             type: 'REWARD_CARD',
-             rewardData,
-             message
-           })
-         }
-         
-         setChatMessages(prev => [...prev, rewardMessage])
+         setChatMessages(prev => [...prev, assistantMessage])
+        
+        // Save updated conversation to Firestore
+        if (currentConversationId) {
+          const updatedMessages = [...chatMessages, newMessage, assistantMessage]
+          await saveConversationToFirestore(updatedMessages, currentConversationId)
+        }
          
          // Store the response for display (create a clean copy to avoid circular refs)
          try {
@@ -1609,10 +1772,17 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       }
       
       setStreamingStatus(`❌ Error: ${errorMessage}`)
-      setChatMessages(prev => [...prev, {
+      const errorAssistantMessage = {
         role: 'assistant', 
         content: `Sorry, I encountered an error while processing your request: ${errorMessage}\n\nPlease try again.`
-      }])
+      }
+      setChatMessages(prev => [...prev, errorAssistantMessage])
+      
+      // Save updated conversation to Firestore
+      if (currentConversationId) {
+        const updatedMessages = [...chatMessages, newMessage, errorAssistantMessage]
+        await saveConversationToFirestore(updatedMessages, currentConversationId)
+      }
     } finally {
       setIsStreaming(false)
       setIsTyping(false)
@@ -2106,6 +2276,21 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   </Button>
                   
 
+                  {/* Conversation History Button */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 rounded-md hover:bg-gray-200"
+                    onClick={() => {
+                      setShowConversationHistory(!showConversationHistory)
+                      if (!showConversationHistory) {
+                        fetchConversationHistory()
+                      }
+                    }}
+                    title="Conversation History"
+                  >
+                    <Clock className="h-3 w-3 text-gray-500" />
+                  </Button>
                   
                   {/* Stop button - show when streaming or typing */}
                   {(isStreaming || isTyping) && (
@@ -2148,7 +2333,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 ref={chatContainerRef}
                 className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar"
               >
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {/* Display all messages with smooth transitions */}
                   {chatMessages.map((msg, index) => {
                     const isLastUserMessage = msg.role === 'user' && index === chatMessages.length - 1
@@ -2223,98 +2408,67 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       // User messages - show in gray box when it's the last message and streaming, otherwise show normally
                       if (isLastUserMessage && (isStreaming || streamingStatus)) {
                         return (
-                          <motion.div 
-                            key={`user-${index}`} 
-                            data-message-index={index}
-                            className="bg-gray-100 border border-gray-200 rounded-md p-2 relative min-h-fit flex items-start gap-2"
-                            initial={{ 
-                              opacity: 0,
-                              y: 60,
-                              scale: 0.95
-                            }}
-                            animate={{ 
-                              opacity: 1,
-                              y: 0,
-                              scale: 1,
-                              height: "auto"
-                            }}
-                            transition={{ 
-                              type: "spring",
-                              damping: 25,
-                              stiffness: 300,
-                              duration: 0.6
-                            }}
-                          >
-                            {/* Merchant logo in top-left corner - fixed position */}
-                            {merchant?.logoUrl && (
-                              <div className="flex-shrink-0 mt-0.5">
-                                <img 
-                                  src={merchant.logoUrl} 
-                                  alt="Merchant logo"
-                                  className="w-5 h-5 rounded-md object-cover"
-                                />
+                          <div className="flex justify-end">
+                            <motion.div 
+                              key={`user-${index}`} 
+                              data-message-index={index}
+                              className="bg-gray-100 text-gray-800 rounded-xl px-3 py-2 relative min-h-fit max-w-[80%] ml-auto"
+                              initial={{ 
+                                opacity: 0,
+                                y: 60,
+                                scale: 0.95
+                              }}
+                              animate={{ 
+                                opacity: 1,
+                                y: 0,
+                                scale: 1,
+                                height: "auto"
+                              }}
+                              transition={{ 
+                                type: "spring",
+                                damping: 25,
+                                stiffness: 300,
+                                duration: 0.6
+                              }}
+                            >
+                              <div className="text-sm leading-relaxed flex items-center min-h-[20px]">
+                                {msg.content}
                               </div>
-                            )}
-                            
-                            <div className="text-sm text-gray-800 leading-relaxed flex-1 pb-8 pt-0 flex items-center min-h-[20px]">
-                              {msg.content}
-                            </div>
-                  
-                            {/* SSE updates in bottom left corner */}
-                            <div className="absolute bottom-2 left-2">
-                              <div className="flex items-center gap-2">
-                                <div className="h-3 w-3 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
-                                <span 
-                                  key={streamingStatus} 
-                                  className="text-xs text-gray-600 font-medium animate-in fade-in duration-300"
-                                >
-                                  {streamingStatus || 'Processing...'}
-                                </span>
-                              </div>
-                            </div>
-                          </motion.div>
+                            </motion.div>
+                          </div>
                         )
                       } else {
                         // Regular user message display - collapsed state after streaming
                         return (
-                          <motion.div 
-                            key={`user-${index}`} 
-                            data-message-index={index}
-                            className="bg-gray-100 border border-gray-200 rounded-md p-2 min-h-fit flex items-start gap-2"
-                            initial={{ 
-                              opacity: 0,
-                              y: 60,
-                              scale: 0.95
-                            }}
-                            animate={{ 
-                              opacity: 1,
-                              y: 0,
-                              scale: 1,
-                              height: "auto"
-                            }}
-                            transition={{ 
-                              type: "spring",
-                              damping: 25,
-                              stiffness: 300,
-                              duration: 0.6
-                            }}
-                            layout
-                          >
-                            {/* Merchant logo in top-left corner - fixed position */}
-                            {merchant?.logoUrl && (
-                              <div className="flex-shrink-0 mt-0.5">
-                                <img 
-                                  src={merchant.logoUrl} 
-                                  alt="Merchant logo"
-                                  className="w-5 h-5 rounded-md object-cover"
-                                />
+                          <div className="flex justify-end">
+                            <motion.div 
+                              key={`user-${index}`} 
+                              data-message-index={index}
+                              className="bg-gray-100 text-gray-800 rounded-xl px-3 py-2 min-h-fit max-w-[80%] ml-auto"
+                              initial={{ 
+                                opacity: 0,
+                                y: 60,
+                                scale: 0.95
+                              }}
+                              animate={{ 
+                                opacity: 1,
+                                y: 0,
+                                scale: 1,
+                                height: "auto"
+                              }}
+                              transition={{ 
+                                type: "spring",
+                                damping: 25,
+                                stiffness: 300,
+                                duration: 0.6
+                              }}
+                              layout
+                            >
+                              <div className="text-sm leading-relaxed flex items-center min-h-[20px]">
+                                {msg.content}
                               </div>
-                            )}
-                            
-                            <div className="text-sm text-gray-800 leading-relaxed flex-1 pt-0 flex items-center min-h-[20px]">
-                              {msg.content}
-                            </div>
-                          </motion.div>
+                            </motion.div>
+                          </div>
                         )
                       }
                     } else {
@@ -2329,9 +2483,41 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       if (parsedContent && parsedContent.type === 'REWARD_CARD') {
                         // Render reward card component
                         return (
+                          <div className="flex justify-start">
+                            <motion.div 
+                              key={`reward-card-${index}`} 
+                              className="text-sm text-gray-800 leading-relaxed max-w-[80%]"
+                              initial={{ 
+                                opacity: 0,
+                                y: 20,
+                                scale: 0.98
+                              }}
+                              animate={{ 
+                                opacity: 1,
+                                y: 0,
+                                scale: 1
+                              }}
+                              transition={{ 
+                                type: "spring",
+                                damping: 20,
+                                stiffness: 300,
+                                duration: 0.5
+                              }}
+                            >
+                              <RewardCard 
+                                rewardData={parsedContent.rewardData} 
+                                message={parsedContent.message}
+                              />
+                            </motion.div>
+                          </div>
+                        )
+                      } else {
+                        // Regular assistant messages - show using kibo-ui AIResponse component
+                      return (
+                        <div className="flex justify-start">
                           <motion.div 
-                            key={`reward-card-${index}`} 
-                            className="text-sm text-gray-800 leading-relaxed"
+                            key={`assistant-${index}`} 
+                            className="text-sm text-gray-800 leading-relaxed max-w-[80%]"
                             initial={{ 
                               opacity: 0,
                               y: 20,
@@ -2349,64 +2535,220 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                               duration: 0.5
                             }}
                           >
-                            <RewardCard 
-                              rewardData={parsedContent.rewardData} 
-                              message={parsedContent.message}
+                            <AnimatedEmailResponse 
+                              html={msg.content}
+                              className="prose prose-sm max-w-none prose-headings:text-gray-800 prose-p:text-gray-800 prose-li:text-gray-800 prose-strong:text-gray-800"
                             />
                           </motion.div>
-                        )
-                      } else {
-                        // Regular assistant messages - show using kibo-ui AIResponse component
-                      return (
-                        <motion.div 
-                          key={`assistant-${index}`} 
-                          className="text-sm text-gray-800 leading-relaxed"
-                          initial={{ 
-                            opacity: 0,
-                            y: 20,
-                            scale: 0.98
-                          }}
-                          animate={{ 
-                            opacity: 1,
-                            y: 0,
-                            scale: 1
-                          }}
-                          transition={{ 
-                            type: "spring",
-                            damping: 20,
-                            stiffness: 300,
-                            duration: 0.5
-                          }}
-                        >
-                          <AIResponse className="prose prose-sm max-w-none prose-headings:text-gray-800 prose-p:text-gray-800 prose-li:text-gray-800 prose-strong:text-gray-800">
-                            {msg.content}
-                          </AIResponse>
-                        </motion.div>
+                        </div>
                       )
                       }
                     }
                   })}
                   
+                  {/* Thinking indicator - show immediately when streaming starts */}
+                  {isStreaming && !showTypewriter && (
+                    <div className="flex justify-start">
+                      <motion.div 
+                        className="text-sm text-gray-500 leading-relaxed max-w-[80%] flex items-center gap-2"
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        transition={{ 
+                          type: "spring",
+                          damping: 20,
+                          stiffness: 300,
+                          duration: 0.4
+                        }}
+                      >
+                        <div className="flex items-center gap-1">
+                          <motion.div
+                            className="w-1 h-1 bg-gray-400 rounded-full"
+                            animate={{ 
+                              scale: [1, 1.5, 1],
+                              opacity: [0.4, 1, 0.4]
+                            }}
+                            transition={{ 
+                              duration: 1.2,
+                              repeat: Infinity,
+                              ease: "easeInOut"
+                            }}
+                          />
+                          <motion.div
+                            className="w-1 h-1 bg-gray-400 rounded-full"
+                            animate={{ 
+                              scale: [1, 1.5, 1],
+                              opacity: [0.4, 1, 0.4]
+                            }}
+                            transition={{ 
+                              duration: 1.2,
+                              repeat: Infinity,
+                              ease: "easeInOut",
+                              delay: 0.2
+                            }}
+                          />
+                          <motion.div
+                            className="w-1 h-1 bg-gray-400 rounded-full"
+                            animate={{ 
+                              scale: [1, 1.5, 1],
+                              opacity: [0.4, 1, 0.4]
+                            }}
+                            transition={{ 
+                              duration: 1.2,
+                              repeat: Infinity,
+                              ease: "easeInOut",
+                              delay: 0.4
+                            }}
+                          />
+                        </div>
+                        <span className="font-medium">Thinking...</span>
+                      </motion.div>
+                    </div>
+                  )}
+
                   {/* Typewriter Animation - show when done event is received */}
                   {showTypewriter && typewriterText && (
-                    <motion.div 
-                      className="text-sm text-gray-800 leading-relaxed"
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ 
-                        type: "tween",
-                        duration: 0.2,
-                        ease: "easeOut"
-                      }}
-                    >
-                      <StreamingMarkdown text={typewriterText} />
-                    </motion.div>
+                    <div className="flex justify-start">
+                      <motion.div 
+                        className="text-sm text-gray-800 leading-relaxed max-w-[80%]"
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ 
+                          type: "tween",
+                          duration: 0.2,
+                          ease: "easeOut"
+                        }}
+                      >
+                        <StreamingMarkdown text={typewriterText} />
+                      </motion.div>
+                    </div>
                   )}
                 </div>
               </div>
               
+              {/* Conversation History Dropdown */}
+              {showConversationHistory && (
+                <div className="absolute top-16 right-4 w-80 bg-white rounded-xl shadow-lg border border-gray-200 z-50">
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-medium text-sm text-gray-700">Recent Conversations</h4>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 hover:bg-gray-100 rounded-md"
+                        onClick={() => setShowConversationHistory(false)}
+                      >
+                        <X className="h-3 w-3 text-gray-400" />
+                      </Button>
+                    </div>
+                    
+                    <div className="max-h-72 overflow-y-auto custom-scrollbar">
+                      {conversations.length === 0 ? (
+                        <p className="text-xs text-gray-500 text-center py-6">No conversations yet</p>
+                      ) : (
+                        <div className="space-y-1">
+                          {conversations.map((conv: any) => (
+                            <div
+                              key={conv.id}
+                              className="group p-3 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors"
+                              onClick={() => selectConversation(conv.id)}
+                            >
+                              <div className="flex items-start justify-between">
+                                {editingConversationId === conv.id ? (
+                                  <input
+                                    type="text"
+                                    value={editingTitle}
+                                    onChange={(e) => setEditingTitle(e.target.value)}
+                                    onBlur={() => renameConversation(conv.id, editingTitle)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        renameConversation(conv.id, editingTitle)
+                                      } else if (e.key === 'Escape') {
+                                        setEditingConversationId(null)
+                                        setEditingTitle('')
+                                      }
+                                    }}
+                                    className="text-sm font-medium text-gray-800 bg-transparent border-none outline-none w-full"
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-gray-800 truncate leading-tight">{conv.title}</p>
+                                    <p className="text-xs text-gray-500 truncate mt-1 leading-tight">{conv.lastMessage}</p>
+                                    <div className="flex items-center gap-3 mt-1">
+                                      <span className="text-xs text-gray-400">
+                                        {conv.messageCount} messages
+                                      </span>
+                                      <span className="text-xs text-gray-400">
+                                        {formatDistanceToNow(conv.timestamp, { addSuffix: true })}
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {editingConversationId !== conv.id && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity rounded-md hover:bg-gray-200"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setEditingConversationId(conv.id)
+                                      setEditingTitle(conv.title)
+                                    }}
+                                  >
+                                    <Pencil className="h-3 w-3 text-gray-400" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Quick Action Buttons - only show when no messages yet */}
+              {chatMessages.length === 0 && (
+                <div className="px-4 py-3 bg-white">
+                  <div className="flex flex-col gap-1">
+                  <button
+                    className="flex items-center gap-2 py-2 px-3 text-gray-600 hover:text-gray-800 hover:bg-gray-100 text-sm font-medium transition-colors rounded-md"
+                    onClick={() => {
+                      setUserInput('Create a reward for all customers')
+                    }}
+                  >
+                    <Star className="h-4 w-4" />
+                    Create Reward
+                  </button>
+                  
+                  <button
+                    className="flex items-center gap-2 py-2 px-3 text-gray-600 hover:text-gray-800 hover:bg-gray-100 text-sm font-medium transition-colors rounded-md"
+                    onClick={() => {
+                      setUserInput('Create a multi reward program for customers')
+                    }}
+                  >
+                    <Gift className="h-4 w-4" />
+                    Create Multi Reward Program
+                  </button>
+                  
+                  <button
+                    className="flex items-center gap-2 py-2 px-3 text-gray-600 hover:text-gray-800 hover:bg-gray-100 text-sm font-medium transition-colors rounded-md"
+                    onClick={() => {
+                      setUserInput('Create a banner for my store')
+                    }}
+                  >
+                    <Image className="h-4 w-4" />
+                    Create Banner
+                  </button>
+                </div>
+              </div>
+              )}
+              
               {/* Chat input at bottom - fixed position */}
-              <div className="p-4 bg-white">
+              <div className="p-4 pt-2 bg-white">
                 <AIInput onSubmit={(e: React.FormEvent) => {
                   e.preventDefault()
                   if (!isStreaming && userInput.trim()) {

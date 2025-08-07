@@ -68,6 +68,7 @@ import {
 import { AIResponse } from '@/components/ui/kibo-ui/ai/response'
 import { RewardCard } from '@/components/reward-card'
 import AnimatedEmailResponse from '@/components/animated-email-response'
+import { RiRobot3Line } from "react-icons/ri"
 
 // Streaming Markdown Component using kibo-ui AIResponse
 const StreamingMarkdown = ({ text }: { text: string }) => {
@@ -1478,8 +1479,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       
       // Create empty conversation in Firestore
       const conversationData = {
-        conversationId: newConversationId,
-        merchantId: merchantId,
+          conversationId: newConversationId,
+          merchantId: merchantId,
         messages: [], // Start with empty messages array
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -2133,19 +2134,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       />
                       Preview
                     </Button>
-                    
-                    {/* Agent Button */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="relative"
-                      onClick={() => setShowChatbotPanel(!showChatbotPanel)}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <Bot className="h-4 w-4" />
-                        <span className="text-sm font-medium">Agent</span>
-                      </div>
-                    </Button>
 
                     {/* Notifications */}
                     <DropdownMenu>
@@ -2255,6 +2243,18 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                         </div>
                       </DropdownMenuContent>
                     </DropdownMenu>
+
+                    {/* Chat Panel Button */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="relative"
+                      onClick={() => setShowChatbotPanel(!showChatbotPanel)}
+                    >
+                      <div className="flex items-center">
+                        <PanelRight className="h-4 w-4 text-gray-600" strokeWidth={2.75} />
+                      </div>
+                    </Button>
                   </div>
                 </div>
               )}
@@ -2279,7 +2279,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <div className="h-16 px-4 border-b flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="font-semibold text-sm bg-gradient-to-r from-blue-500 to-orange-400 bg-clip-text text-transparent">
-                    Tap Agent
+                    Reward Agent
                   </div>
                 </div>
                 
@@ -2348,10 +2348,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   
 
                   {/* Conversation History Button */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0 rounded-md hover:bg-gray-200"
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 w-6 p-0 rounded-md hover:bg-gray-200"
                     onClick={() => {
                       setShowConversationHistory(!showConversationHistory)
                       if (!showConversationHistory) {
@@ -2361,7 +2361,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     title="Conversation History"
                   >
                     <Clock className="h-3 w-3 text-gray-500" />
-                  </Button>
+                      </Button>
                   
                   {/* Stop button - show when streaming or typing */}
                   {(isStreaming || isTyping) && (
@@ -2480,61 +2480,61 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       if (isLastUserMessage && (isStreaming || streamingStatus)) {
                         return (
                           <div className="flex justify-end">
-                            <motion.div 
-                              key={`user-${index}`} 
-                              data-message-index={index}
+                          <motion.div 
+                            key={`user-${index}`} 
+                            data-message-index={index}
                               className="bg-gray-100 text-gray-800 rounded-xl px-3 py-2 relative min-h-fit max-w-[80%] ml-auto"
-                              initial={{ 
-                                opacity: 0,
-                                y: 60,
-                                scale: 0.95
-                              }}
-                              animate={{ 
-                                opacity: 1,
-                                y: 0,
-                                scale: 1,
-                                height: "auto"
-                              }}
-                              transition={{ 
-                                type: "spring",
-                                damping: 25,
-                                stiffness: 300,
-                                duration: 0.6
-                              }}
-                            >
+                            initial={{ 
+                              opacity: 0,
+                              y: 60,
+                              scale: 0.95
+                            }}
+                            animate={{ 
+                              opacity: 1,
+                              y: 0,
+                              scale: 1,
+                              height: "auto"
+                            }}
+                            transition={{ 
+                              type: "spring",
+                              damping: 25,
+                              stiffness: 300,
+                              duration: 0.6
+                            }}
+                          >
                               <div className="text-sm leading-relaxed min-h-[20px] break-words">
-                                {msg.content}
-                              </div>
-                            </motion.div>
+                              {msg.content}
+                            </div>
+                          </motion.div>
                           </div>
                         )
                       } else {
                         // Regular user message display - collapsed state after streaming
                         return (
                           <div className="flex justify-end">
-                            <motion.div 
-                              key={`user-${index}`} 
-                              data-message-index={index}
+                          <motion.div 
+                            key={`user-${index}`} 
+                            data-message-index={index}
                               className="bg-gray-100 text-gray-800 rounded-xl px-3 py-2 min-h-fit max-w-[80%] ml-auto"
-                              initial={{ 
-                                opacity: 0,
-                                y: 60,
-                                scale: 0.95
-                              }}
-                              animate={{ 
-                                opacity: 1,
-                                y: 0,
-                                scale: 1,
-                                height: "auto"
-                              }}
-                              transition={{ 
-                                type: "spring",
-                                damping: 25,
-                                stiffness: 300,
-                                duration: 0.6
-                              }}
-                              layout
-                            >
+                            initial={{ 
+                              opacity: 0,
+                              y: 60,
+                              scale: 0.95
+                            }}
+                            animate={{ 
+                              opacity: 1,
+                              y: 0,
+                              scale: 1,
+                              height: "auto"
+                            }}
+                            transition={{ 
+                              type: "spring",
+                              damping: 25,
+                              stiffness: 300,
+                              duration: 0.6
+                            }}
+                            layout
+                          >
                               <div className="text-sm leading-relaxed min-h-[20px] break-words">
                                 {msg.content}
                               </div>
@@ -2612,9 +2612,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                                     <AnimatedEmailResponse 
                                       html={parsedContent.message}
                                       className="prose prose-sm max-w-none prose-headings:text-gray-800 prose-p:text-gray-800 prose-li:text-gray-800 prose-strong:text-gray-800"
-                                    />
-                                  </div>
-                                )}
+                                />
+                              </div>
+                            )}
                                 {parsedContent.rewardDataArray.map((rewardData: any, rewardIndex: number) => (
                                   <motion.div
                                     key={`reward-${rewardIndex}`}
@@ -2642,39 +2642,39 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                                     />
                                   </motion.div>
                                 ))}
-                              </div>
-                            </motion.div>
+                            </div>
+                          </motion.div>
                           </div>
                         )
-                      } else {
+                    } else {
                         // Regular assistant messages - show using kibo-ui AIResponse component
                       return (
                         <div className="flex justify-start">
-                          <motion.div 
-                            key={`assistant-${index}`} 
+                        <motion.div 
+                          key={`assistant-${index}`} 
                             className="text-sm text-gray-800 leading-relaxed max-w-[80%]"
-                            initial={{ 
-                              opacity: 0,
-                              y: 20,
-                              scale: 0.98
-                            }}
-                            animate={{ 
-                              opacity: 1,
-                              y: 0,
-                              scale: 1
-                            }}
-                            transition={{ 
-                              type: "spring",
-                              damping: 20,
-                              stiffness: 300,
-                              duration: 0.5
-                            }}
-                          >
+                          initial={{ 
+                            opacity: 0,
+                            y: 20,
+                            scale: 0.98
+                          }}
+                          animate={{ 
+                            opacity: 1,
+                            y: 0,
+                            scale: 1
+                          }}
+                          transition={{ 
+                            type: "spring",
+                            damping: 20,
+                            stiffness: 300,
+                            duration: 0.5
+                          }}
+                        >
                             <AnimatedEmailResponse 
                               html={msg.content}
                               className="prose prose-sm max-w-none prose-headings:text-gray-800 prose-p:text-gray-800 prose-li:text-gray-800 prose-strong:text-gray-800"
                             />
-                          </motion.div>
+                        </motion.div>
                         </div>
                       )
                       }
@@ -2740,22 +2740,22 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       </motion.div>
                     </div>
                   )}
-
+                  
                   {/* Typewriter Animation - show when done event is received */}
                   {showTypewriter && typewriterText && (
                     <div className="flex justify-start">
-                      <motion.div 
+                    <motion.div 
                         className="text-sm text-gray-800 leading-relaxed max-w-[80%]"
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ 
-                          type: "tween",
-                          duration: 0.2,
-                          ease: "easeOut"
-                        }}
-                      >
-                        <StreamingMarkdown text={typewriterText} />
-                      </motion.div>
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ 
+                        type: "tween",
+                        duration: 0.2,
+                        ease: "easeOut"
+                      }}
+                    >
+                      <StreamingMarkdown text={typewriterText} />
+                    </motion.div>
                     </div>
                   )}
                   
@@ -2765,8 +2765,18 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </div>
               
               {/* Conversation History Dropdown */}
-              {showConversationHistory && (
-                <div className="absolute top-16 right-4 w-80 bg-white rounded-xl shadow-lg border border-gray-200 z-50">
+              <AnimatePresence>
+                {showConversationHistory && (
+                  <motion.div 
+                    className="absolute top-16 right-4 w-80 bg-white rounded-xl shadow-lg border border-gray-200 z-50"
+                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                    transition={{
+                      duration: 0.2,
+                      ease: [0.04, 0.62, 0.23, 0.98]
+                    }}
+                  >
                   <div className="p-4">
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="font-medium text-sm text-gray-700">Recent Conversations</h4>
@@ -2839,8 +2849,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       )}
                     </div>
                   </div>
-                </div>
-              )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Quick Action Buttons - only show when no messages yet */}
               {chatMessages.length === 0 && (
@@ -3241,4 +3252,4 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     </div>
     </AuthGuard>
   )
-}
+} 

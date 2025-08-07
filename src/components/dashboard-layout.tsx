@@ -1365,7 +1365,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   
   // Remove hardcoded integrations array since we're using integrationsStatus
   
-  // Scroll to show new messages after animation completes
+  // Scroll to position the latest user message at the top of the visible area
   useEffect(() => {
     if (chatContainerRef.current && chatMessages.length > 0) {
       const container = chatContainerRef.current
@@ -1376,18 +1376,17 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         const lastUserMessageIndex = chatMessages.map((m, i) => m.role === 'user' ? i : -1).filter(i => i !== -1).pop()
         
         if (lastUserMessageIndex !== undefined) {
-          // Scroll to position the user message near the top with some padding
+          // Scroll to position the user message at the very top with minimal padding
           requestAnimationFrame(() => {
             const userMessageElement = container.querySelector(`[data-message-index="${lastUserMessageIndex}"]`)
             
             if (userMessageElement && userMessageElement instanceof HTMLElement) {
               const containerRect = container.getBoundingClientRect()
               const elementRect = userMessageElement.getBoundingClientRect()
-              const headerHeight = 60 // Chat header height
-              const padding = 20 // Padding from top
+              const padding = 8 // Minimal padding from top
               
-              // Calculate scroll position to place message near top
-              const targetScrollTop = container.scrollTop + (elementRect.top - containerRect.top) - headerHeight - padding
+              // Calculate scroll position to place the user message at the very top
+              const targetScrollTop = container.scrollTop + (elementRect.top - containerRect.top) - padding
               
               container.scrollTo({
                 top: Math.max(0, targetScrollTop),
@@ -1623,6 +1622,60 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     }
   }, [user?.uid])
 
+  // Function to scroll to the latest user message at the top of viewport
+  const scrollToLatestUserMessage = () => {
+    if (chatContainerRef.current) {
+      const container = chatContainerRef.current
+      
+      // Use requestAnimationFrame for better timing
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          // Find the last message element
+          const allMessages = container.querySelectorAll('[data-message-index]')
+          if (allMessages.length > 0) {
+            // Get the most recent message (last in DOM)
+            const lastMessage = allMessages[allMessages.length - 1] as HTMLElement
+            
+            if (lastMessage) {
+              // Calculate the position where the last message would be at the top
+              const messageOffsetTop = lastMessage.offsetTop
+              const containerPadding = parseInt(getComputedStyle(container).paddingTop) || 16
+              const headerHeight = 60 // Account for chat header height
+              const safetyPadding = 8 // Small safety margin
+              
+              // Calculate target scroll position ensuring we don't go above header
+              const targetScrollTop = Math.max(0, messageOffsetTop - containerPadding - headerHeight - safetyPadding)
+              
+              // Custom smooth animation using requestAnimationFrame
+              const startScrollTop = container.scrollTop
+              const distance = targetScrollTop - startScrollTop
+              const duration = 400 // 400ms animation duration
+              const startTime = performance.now()
+              
+              // Smooth easing function (cubic-bezier equivalent)
+              const easeOut = (t: number) => 1 - Math.pow(1 - t, 3)
+              
+              const animateScroll = (currentTime: number) => {
+                const elapsed = currentTime - startTime
+                const progress = Math.min(elapsed / duration, 1)
+                const easedProgress = easeOut(progress)
+                
+                const currentScrollTop = startScrollTop + (distance * easedProgress)
+                container.scrollTop = currentScrollTop
+                
+                if (progress < 1) {
+                  requestAnimationFrame(animateScroll)
+                }
+              }
+              
+              requestAnimationFrame(animateScroll)
+            }
+          }
+        })
+      })
+    }
+  }
+
   // Add function to handle sending messages to the chatbot with SSE streaming
   const handleSendMessage = async () => {
     if (!userInput.trim()) return
@@ -1648,6 +1701,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     setChatMessages(prev => [...prev, newMessage])
     const userPrompt = userInput.trim()
     setUserInput('')
+    
+    // Scroll to show the user message at the top
+    scrollToLatestUserMessage()
     
           // Save updated conversation to Firestore and update title for first message
       if (currentConversationId) {
@@ -1702,29 +1758,44 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
              role: 'assistant' as const,
              content: message
            }
-         } else if (responseData.rewardData) {
-           // AI created a reward - display as reward card
-           console.log('Received reward creation response from AI')
-           const rewardData = responseData.rewardData
-           
-           // Safely stringify the reward data without circular references
-           let rewardDataString = ''
-           try {
-             rewardDataString = JSON.stringify(rewardData, null, 2)
-           } catch (stringifyError) {
-             console.error('Error stringifying reward data:', stringifyError)
-             rewardDataString = 'Error displaying reward data - check console for details'
-           }
-           
-           // Store reward data in the message content itself
-           assistantMessage = {
-             role: 'assistant' as const,
-             content: JSON.stringify({
-               type: 'REWARD_CARD',
-               rewardData,
-               message
-             })
-           }
+                 } else if (responseData.rewardData) {
+          // AI created reward(s) - display as reward card(s)
+          console.log('Received reward creation response from AI')
+          
+          if (responseData.isMultipleRewards && Array.isArray(responseData.rewardData)) {
+            // Multiple rewards created - display as multiple reward cards
+            console.log(`Received ${responseData.rewardData.length} rewards from AI`)
+            assistantMessage = {
+              role: 'assistant' as const,
+              content: JSON.stringify({
+                type: 'MULTIPLE_REWARD_CARDS',
+                rewardDataArray: responseData.rewardData,
+                message
+              })
+            }
+          } else {
+            // Single reward created - display as single reward card
+            const rewardData = responseData.rewardData
+            
+            // Safely stringify the reward data without circular references
+            let rewardDataString = ''
+            try {
+              rewardDataString = JSON.stringify(rewardData, null, 2)
+            } catch (stringifyError) {
+              console.error('Error stringifying reward data:', stringifyError)
+              rewardDataString = 'Error displaying reward data - check console for details'
+            }
+            
+            // Store reward data in the message content itself
+            assistantMessage = {
+              role: 'assistant' as const,
+              content: JSON.stringify({
+                type: 'REWARD_CARD',
+                rewardData,
+                message
+              })
+            }
+          }
          } else {
            // Fallback to plain text response
            assistantMessage = {
@@ -2431,7 +2502,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                                 duration: 0.6
                               }}
                             >
-                              <div className="text-sm leading-relaxed flex items-center min-h-[20px]">
+                              <div className="text-sm leading-relaxed min-h-[20px] break-words">
                                 {msg.content}
                               </div>
                             </motion.div>
@@ -2464,7 +2535,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                               }}
                               layout
                             >
-                              <div className="text-sm leading-relaxed flex items-center min-h-[20px]">
+                              <div className="text-sm leading-relaxed min-h-[20px] break-words">
                                 {msg.content}
                               </div>
                             </motion.div>
@@ -2481,7 +2552,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       }
 
                       if (parsedContent && parsedContent.type === 'REWARD_CARD') {
-                        // Render reward card component
+                        // Render single reward card component
                         return (
                           <div className="flex justify-start">
                             <motion.div 
@@ -2508,6 +2579,70 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                                 rewardData={parsedContent.rewardData} 
                                 message={parsedContent.message}
                               />
+                            </motion.div>
+                          </div>
+                        )
+                      } else if (parsedContent && parsedContent.type === 'MULTIPLE_REWARD_CARDS') {
+                        // Render multiple reward cards
+                        return (
+                          <div className="flex justify-start">
+                            <motion.div 
+                              key={`multiple-rewards-${index}`} 
+                              className="text-sm text-gray-800 leading-relaxed max-w-[80%]"
+                              initial={{ 
+                                opacity: 0,
+                                y: 20,
+                                scale: 0.98
+                              }}
+                              animate={{ 
+                                opacity: 1,
+                                y: 0,
+                                scale: 1
+                              }}
+                              transition={{ 
+                                type: "spring",
+                                damping: 20,
+                                stiffness: 300,
+                                duration: 0.5
+                              }}
+                            >
+                              <div className="space-y-4">
+                                {parsedContent.message && (
+                                  <div className="mb-4">
+                                    <AnimatedEmailResponse 
+                                      html={parsedContent.message}
+                                      className="prose prose-sm max-w-none prose-headings:text-gray-800 prose-p:text-gray-800 prose-li:text-gray-800 prose-strong:text-gray-800"
+                                    />
+                                  </div>
+                                )}
+                                {parsedContent.rewardDataArray.map((rewardData: any, rewardIndex: number) => (
+                                  <motion.div
+                                    key={`reward-${rewardIndex}`}
+                                    initial={{ 
+                                      opacity: 0,
+                                      y: 20,
+                                      scale: 0.98
+                                    }}
+                                    animate={{ 
+                                      opacity: 1,
+                                      y: 0,
+                                      scale: 1
+                                    }}
+                                    transition={{ 
+                                      type: "spring",
+                                      damping: 20,
+                                      stiffness: 300,
+                                      duration: 0.5,
+                                      delay: rewardIndex * 0.1
+                                    }}
+                                  >
+                                    <RewardCard 
+                                      rewardData={rewardData} 
+                                      message={undefined}
+                                    />
+                                  </motion.div>
+                                ))}
+                              </div>
                             </motion.div>
                           </div>
                         )
@@ -2623,6 +2758,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       </motion.div>
                     </div>
                   )}
+                  
+                  {/* Spacer to allow last message to scroll to top */}
+                  <div style={{ height: '70vh' }}></div>
                 </div>
               </div>
               
@@ -2646,14 +2784,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       {conversations.length === 0 ? (
                         <p className="text-xs text-gray-500 text-center py-6">No conversations yet</p>
                       ) : (
-                        <div className="space-y-1">
+                        <div className="space-y-0.5">
                           {conversations.map((conv: any) => (
                             <div
                               key={conv.id}
-                              className="group p-3 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors"
+                              className="group p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                               onClick={() => selectConversation(conv.id)}
                             >
-                              <div className="flex items-start justify-between">
+                              <div className="flex items-center justify-between">
                                 {editingConversationId === conv.id ? (
                                   <input
                                     type="text"
@@ -2672,32 +2810,26 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                                     autoFocus
                                   />
                                 ) : (
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-gray-800 truncate leading-tight">{conv.title}</p>
-                                    <p className="text-xs text-gray-500 truncate mt-1 leading-tight">{conv.lastMessage}</p>
-                                    <div className="flex items-center gap-3 mt-1">
-                                      <span className="text-xs text-gray-400">
-                                        {conv.messageCount} messages
-                                      </span>
-                                      <span className="text-xs text-gray-400">
-                                        {formatDistanceToNow(conv.timestamp, { addSuffix: true })}
-                                      </span>
-                                    </div>
-                                  </div>
+                                  <>
+                                    <p className="text-sm font-medium text-gray-800 truncate leading-tight flex-1 mr-2">{conv.title}</p>
+                                    <span className="text-xs text-gray-400 flex-shrink-0">
+                                      {formatDistanceToNow(conv.timestamp, { addSuffix: true })}
+                                    </span>
+                                  </>
                                 )}
                                 
                                 {editingConversationId !== conv.id && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity rounded-md hover:bg-gray-200"
+                                    className="h-5 w-5 p-0 ml-1 opacity-0 group-hover:opacity-100 transition-opacity rounded-md hover:bg-gray-200"
                                     onClick={(e) => {
                                       e.stopPropagation()
                                       setEditingConversationId(conv.id)
                                       setEditingTitle(conv.title)
                                     }}
                                   >
-                                    <Pencil className="h-3 w-3 text-gray-400" />
+                                    <Pencil className="h-2.5 w-2.5 text-gray-400" />
                                   </Button>
                                 )}
                               </div>
@@ -3109,6 +3241,4 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     </div>
     </AuthGuard>
   )
-} 
-
-// Add this useEffect to clean up the timer when the component unmounts
+}

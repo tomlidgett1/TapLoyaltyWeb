@@ -28,11 +28,16 @@ export default {
             'background-position': 'right center'
           },
         },
+        shine: {
+          '0%': { 'background-position': '200% 0, 0 0' },
+          '100%': { 'background-position': '-200% 0, 0 0' },
+        },
       },
       animation: {
         fadeIn: 'fadeIn 0.5s ease-in-out',
         slowFadeIn: 'slowFadeIn 1s ease-in-out',
         'gradient-x': 'gradientX 3s ease infinite',
+        shine: 'shine 5s linear infinite',
       },
   		colors: {
   			background: 'hsl(var(--background))',

@@ -70,6 +70,7 @@ import { RewardCard } from '@/components/reward-card'
 import AnimatedEmailResponse from '@/components/animated-email-response'
 import { RiRobot3Line } from "react-icons/ri"
 
+
 // Streaming Markdown Component using kibo-ui AIResponse
 const StreamingMarkdown = ({ text }: { text: string }) => {
   const [displayText, setDisplayText] = useState('')
@@ -2179,6 +2180,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       Preview
                     </Button>
 
+
+
                     {/* Notifications */}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -2737,59 +2740,26 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   {/* Thinking indicator - show immediately when streaming starts */}
                   {isStreaming && !showTypewriter && (
                     <div className="flex justify-start">
-                      <motion.div 
-                        className="text-sm text-gray-500 leading-relaxed max-w-[80%] flex items-center gap-2"
+                      <motion.div
+                        className="text-sm leading-relaxed max-w-[80%] flex items-center"
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -20 }}
-                        transition={{ 
-                          type: "spring",
-                          damping: 20,
-                          stiffness: 300,
-                          duration: 0.4
-                        }}
+                        transition={{ type: "spring", damping: 20, stiffness: 300, duration: 0.4 }}
                       >
-                        <div className="flex items-center gap-1">
-                          <motion.div
-                            className="w-1 h-1 bg-gray-400 rounded-full"
-                            animate={{ 
-                              scale: [1, 1.5, 1],
-                              opacity: [0.4, 1, 0.4]
-                            }}
-                            transition={{ 
-                              duration: 1.2,
-                              repeat: Infinity,
-                              ease: "easeInOut"
-                            }}
-                          />
-                          <motion.div
-                            className="w-1 h-1 bg-gray-400 rounded-full"
-                            animate={{ 
-                              scale: [1, 1.5, 1],
-                              opacity: [0.4, 1, 0.4]
-                            }}
-                            transition={{ 
-                              duration: 1.2,
-                              repeat: Infinity,
-                              ease: "easeInOut",
-                              delay: 0.2
-                            }}
-                          />
-                          <motion.div
-                            className="w-1 h-1 bg-gray-400 rounded-full"
-                            animate={{ 
-                              scale: [1, 1.5, 1],
-                              opacity: [0.4, 1, 0.4]
-                            }}
-                            transition={{ 
-                              duration: 1.2,
-                              repeat: Infinity,
-                              ease: "easeInOut",
-                              delay: 0.4
-                            }}
-                          />
-                        </div>
-                        <span className="font-medium">Thinking...</span>
+                        <span
+                          className="font-medium"
+                          style={{
+                            background: 'linear-gradient(90deg, #6B7280, #9CA3AF, #D1D5DB, #6B7280)',
+                            backgroundSize: '200% 100%',
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent',
+                            backgroundClip: 'text',
+                            animation: 'gradient-shift 2s ease-in-out infinite',
+                          }}
+                        >
+                          Thinking...
+                        </span>
                       </motion.div>
                     </div>
                   )}
@@ -3256,6 +3226,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         onOpenChange={setShowBroadcastDialog}
       />
       
+
+
       {/* Integrations Dialog */}
       <Dialog open={showIntegrationsPopup} onOpenChange={setShowIntegrationsPopup}>
         <DialogContent className="max-w-xl max-h-[70vh] overflow-y-auto">

@@ -27,16 +27,7 @@ export function PageHeader({ title, subtitle, children }: PageHeaderProps) {
         )}
       </div>
       <div className="mt-4">
-        <div style={{
-          width: "100vw",
-          position: "relative",
-          left: "50%",
-          right: "50%",
-          marginLeft: "-50vw",
-          marginRight: "-50vw",
-          height: "1px",
-          backgroundColor: "rgb(229, 231, 235)"
-        }}></div>
+        <div className="h-px w-full bg-gray-200" />
       </div>
     </div>
   )

@@ -1199,6 +1199,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   
   // Add state for chatbot panel
   const [showChatbotPanel, setShowChatbotPanel] = useState(false)
+  // Resizable chat panel width state and helpers
+  const [chatPanelWidth, setChatPanelWidth] = useState<number>(480)
+  const isResizingChatRef = useRef<boolean>(false)
+  const startChatResize = (e: React.MouseEvent<HTMLDivElement>) => {
+    isResizingChatRef.current = true
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'col-resize'
+    e.preventDefault()
+  }
   const [chatMessages, setChatMessages] = useState<{role: string, content: string, toolNames?: string[], toolCompleted?: boolean, toolId?: string, toolSuccess?: boolean}[]>([])
   const [userInput, setUserInput] = useState('')
   const [isTyping, setIsTyping] = useState(false)
@@ -1425,6 +1434,35 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         eventSourceRef.current.close()
         eventSourceRef.current = null
       }
+    }
+  }, [])
+
+  // Global mouse move/up handlers for chat panel resize
+  useEffect(() => {
+    const RIGHT_GAP_PX = 8 // matches right-2
+    const MIN_WIDTH = 320
+    const MAX_WIDTH = 720
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!isResizingChatRef.current) return
+      const viewportWidth = window.innerWidth
+      const newWidth = Math.min(
+        MAX_WIDTH,
+        Math.max(MIN_WIDTH, viewportWidth - event.clientX - RIGHT_GAP_PX)
+      )
+      setChatPanelWidth(newWidth)
+    }
+    const handleMouseUp = () => {
+      if (isResizingChatRef.current) {
+        isResizingChatRef.current = false
+        document.body.style.userSelect = ''
+        document.body.style.cursor = ''
+      }
+    }
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
     }
   }, [])
   
@@ -2073,7 +2111,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 pathname?.includes('/email') ? '' : 'border border-gray-200'
               }`}
               style={{
-                marginRight: showChatbotPanel ? '488px' : showLogsPanel ? '488px' : showIntegrationsPanel ? '408px' : '0', // Chat/Logs: 480px + 8px gap, Integrations: 400px + 8px gap
+                marginRight: showChatbotPanel
+                  ? `${chatPanelWidth + 8}px`
+                  : showLogsPanel
+                    ? '488px'
+                    : showIntegrationsPanel
+                      ? '408px'
+                      : '0', // Chat uses dynamic width + 8px gap; Logs fixed 480+8; Integrations fixed 400+8
                 transition: 'margin-right 0.4s ease-in-out'
               }}
             >
@@ -2269,12 +2313,21 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <div 
               className="absolute right-2 top-2 bottom-2 bg-white rounded-md border border-gray-200 overflow-hidden flex flex-col"
               style={{
-                width: '480px',
+                width: `${chatPanelWidth}px`,
                 transform: showChatbotPanel ? 'translateX(0)' : 'translateX(calc(100% + 8px))',
                 opacity: showChatbotPanel ? 1 : 0,
                 transition: 'transform 0.4s ease-in-out, opacity 0.4s ease-in-out'
               }}
             >
+              {/* Resize handle (left edge) */}
+              <div
+                onMouseDown={startChatResize}
+                className="absolute top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-gray-100 active:bg-gray-200"
+                style={{ left: -6, borderRadius: 6 }}
+                aria-label="Resize chat panel"
+                role="separator"
+                aria-orientation="vertical"
+              />
               {/* Chat header */}
               <div className="h-16 px-4 border-b flex items-center justify-between">
                 <div className="flex items-center gap-2">

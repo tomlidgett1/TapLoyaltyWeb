@@ -9,8 +9,23 @@ import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/components/ui/use-toast"
-import { Clock, Info, ChevronLeft, ChevronRight } from "lucide-react"
+import { Clock, Info, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Edit3, MoreVertical } from "lucide-react"
 import { format } from "date-fns"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 interface BannerSchedulerProps {
   banners: any[]
@@ -37,6 +52,17 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
     conflictingBanner: undefined,
     conflictType: null
   });
+
+  // Manual editing states
+  const [showEditDialog, setShowEditDialog] = useState(false)
+  const [editingBanner, setEditingBanner] = useState<any>(null)
+  const [editStartTime, setEditStartTime] = useState('')
+  const [editEndTime, setEditEndTime] = useState('')
+  
+  // Viewport state (5 hours = 300 minutes)
+  const [viewportStart, setViewportStart] = useState(0) // Start at midnight
+  const viewportDuration = 5 * 60 // 5 hours in minutes
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   // Process banners to include scheduling information
   useEffect(() => {
@@ -79,6 +105,17 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
     }, 60000); // Update every minute
     
     return () => clearInterval(timer);
+  }, []);
+
+  // Scroll to current time on mount
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      const currentTimeMinutes = currentHour * 60 + currentMinute
+      const pixelPosition = (currentTimeMinutes / 15) * 75
+      // Center the current time in the viewport
+      const viewportWidth = scrollContainerRef.current.clientWidth
+      scrollContainerRef.current.scrollLeft = Math.max(0, pixelPosition - viewportWidth / 2)
+    }
   }, []);
 
   // Modify the checkForConflicts function
@@ -126,11 +163,11 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
     let newEndTime = draggedBanner.scheduleEndMinutes;
     
     if (dragType === 'start') {
-      // Don't allow start to go beyond end - 15 minutes
+      // Don't allow start to go beyond end - 15 minutes (minimum duration)
       newStartTime = Math.min(constrainedMinutePosition, draggedBanner.scheduleEndMinutes - 15);
       newEndTime = draggedBanner.scheduleEndMinutes;
     } else if (dragType === 'end') {
-      // Don't allow end to go before start + 15 minutes or beyond 24 hours
+      // Don't allow end to go before start + 15 minutes (minimum duration) or beyond 24 hours
       newStartTime = draggedBanner.scheduleStartMinutes;
       newEndTime = Math.max(constrainedMinutePosition, draggedBanner.scheduleStartMinutes + 15);
       newEndTime = Math.min(newEndTime, 24 * 60); // Constrain to 24 hours unless extending past midnight
@@ -280,6 +317,117 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
     return `${displayHours}:${mins.toString().padStart(2, '0')} ${period}`
   }
 
+  // Handle horizontal scrolling
+  const handleScroll = () => {
+    if (!scrollContainerRef.current || !timelineRef.current) return
+    
+    const scrollLeft = scrollContainerRef.current.scrollLeft
+    const containerWidth = scrollContainerRef.current.clientWidth
+    const totalWidth = timelineRef.current.scrollWidth
+    
+    // Calculate which 5-hour window we're viewing based on scroll position
+    const scrollPercentage = scrollLeft / (totalWidth - containerWidth)
+    const newViewportStart = Math.round(scrollPercentage * (24 * 60 - viewportDuration))
+    
+    if (Math.abs(newViewportStart - viewportStart) > 15) { // Only update if changed significantly
+      setViewportStart(newViewportStart)
+    }
+  }
+
+  // Convert time string (HH:MM) to minutes
+  const timeStringToMinutes = (timeStr: string): number => {
+    const [hours, minutes] = timeStr.split(':').map(Number)
+    return (hours || 0) * 60 + (minutes || 0)
+  }
+
+  // Convert minutes to time string (HH:MM)
+  const minutesToTimeString = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60)
+    const mins = minutes % 60
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`
+  }
+
+  // Handle manual time editing
+  const handleEditBanner = (banner: any) => {
+    setEditingBanner(banner)
+    setEditStartTime(minutesToTimeString(banner.scheduleStartMinutes))
+    setEditEndTime(minutesToTimeString(banner.scheduleEndMinutes))
+    setShowEditDialog(true)
+  }
+
+  // Save manual time edits
+  const saveTimeEdit = async () => {
+    if (!editingBanner) return
+
+    const startMinutes = timeStringToMinutes(editStartTime)
+    const endMinutes = timeStringToMinutes(editEndTime)
+
+    // Validation
+    if (startMinutes >= endMinutes) {
+      toast({
+        title: "Invalid Time Range",
+        description: "End time must be after start time.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (endMinutes - startMinutes < 15) {
+      toast({
+        title: "Duration Too Short",
+        description: "Minimum duration is 15 minutes.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    // Check for conflicts
+    const hasConflict = checkForConflicts(editingBanner.id, startMinutes, endMinutes)
+    if (hasConflict) {
+      toast({
+        title: "Schedule Conflict",
+        description: `This time slot conflicts with "${scheduleConflict.conflictingBanner?.title}".`,
+        variant: "destructive"
+      })
+      return
+    }
+
+    try {
+      await onBannerUpdate(editingBanner.id, {
+        scheduleStartMinutes: startMinutes,
+        scheduleEndMinutes: endMinutes,
+        scheduleStartHour: Math.floor(startMinutes / 60),
+        scheduleEndHour: Math.ceil(endMinutes / 60)
+      })
+
+      setScheduledBanners(prev => 
+        prev.map(banner => 
+          banner.id === editingBanner.id 
+            ? { 
+                ...banner, 
+                scheduleStartMinutes: startMinutes,
+                scheduleEndMinutes: endMinutes,
+                duration: endMinutes - startMinutes
+              } 
+            : banner
+        )
+      )
+
+      toast({
+        title: "Schedule Updated",
+        description: `${editingBanner.title} schedule updated successfully.`
+      })
+
+      setShowEditDialog(false)
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update schedule. Please try again.",
+        variant: "destructive"
+      })
+    }
+  }
+
   // Start dragging a banner
   const startDrag = (banner: any, type: 'start' | 'end' | 'move') => {
     setIsDragging(true)
@@ -308,11 +456,7 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
       endMinutes = draggedEndTime;
     }
     
-    // Constrain values to ensure they're within the 24-hour timeline
-    startMinutes = Math.max(0, Math.min(24 * 60 - 15, startMinutes));
-    endMinutes = Math.max(startMinutes + 15, Math.min(24 * 60, endMinutes));
-    
-    // Calculate position and width as percentages
+    // Calculate position and width as percentages of the full 24-hour timeline
     const left = `${(startMinutes / (24 * 60)) * 100}%`;
     const width = `${((endMinutes - startMinutes) / (24 * 60)) * 100}%`;
     
@@ -328,6 +472,7 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
             <Clock className="h-3 w-3" />
             <span>Current time: {formatTime(new Date().getMinutes() + new Date().getHours() * 60)}</span>
           </Badge>
+
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -338,10 +483,13 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
               <div className="space-y-2">
                 <h4 className="font-medium">How to use the scheduler</h4>
                 <ul className="text-sm space-y-1">
+                  <li>• <strong>Scroll horizontally</strong> to view different times</li>
                   <li>• Drag the <span className="text-blue-500">left edge</span> to change start time</li>
                   <li>• Drag the <span className="text-blue-500">right edge</span> to change end time</li>
                   <li>• Drag the <span className="text-blue-500">middle</span> to move the entire schedule</li>
-                  <li>• Click a banner to see details</li>
+                  <li>• Click the <strong>⋮ button</strong> to edit times manually</li>
+                  <li>• <strong>Precision:</strong> Times snap to 15-minute increments</li>
+                  <li>• <strong>Minimum duration:</strong> 15 minutes</li>
                 </ul>
               </div>
             </PopoverContent>
@@ -349,66 +497,131 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
         </div>
       </div>
       
-      {/* Timeline header */}
-      <div className="flex border-b mb-2">
-        {Array.from({ length: 24 }).map((_, hour) => (
-          <div 
-            key={hour} 
-            className={`flex-1 text-xs text-center pb-1 ${hour === currentHour ? 'font-bold text-blue-600' : ''}`}
-          >
-            {hour === 0 || hour === 12 ? (hour === 0 ? '12 AM' : '12 PM') : (hour < 12 ? `${hour} AM` : `${hour-12} PM`)}
-          </div>
-        ))}
-      </div>
-      
-      {/* Timeline grid */}
+      {/* Scrollable Timeline Container */}
       <div 
-        ref={timelineRef}
-        className="relative h-[300px] border-b border-t border-gray-100"
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        ref={scrollContainerRef}
+        className="overflow-x-auto overflow-y-hidden border rounded-md"
+        onScroll={handleScroll}
+        style={{ 
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#cbd5e1 #f1f5f9'
+        }}
       >
-        {/* Vertical hour lines */}
-        <div className="absolute inset-0 flex pointer-events-none">
-          {Array.from({ length: 24 }).map((_, hour) => (
-            <div 
-              key={hour} 
-              className={`flex-1 border-r border-gray-100 ${hour === currentHour ? 'bg-blue-50' : ''}`}
-            />
-          ))}
-        </div>
-        
-        {/* Current time indicator */}
-        <div 
-          className="absolute top-0 bottom-0 w-0.5 bg-blue-500 z-10"
-          style={{ 
-            left: `${((currentHour * 60 + currentMinute) / (24 * 60)) * 100}%`,
-            boxShadow: '0 0 8px rgba(59, 130, 246, 0.5)'
-          }}
-        />
-        
-        {/* Current time pulsing effect */}
-        <div 
-          className="absolute top-0 h-4 w-4 rounded-full bg-blue-500 z-10 animate-pulse"
-          style={{ 
-            left: `calc(${((currentHour * 60 + currentMinute) / (24 * 60)) * 100}% - 8px)`,
-            marginTop: '-8px'
-          }}
-        />
-        
-        {/* Scheduled banners */}
-        <div className="absolute inset-0 p-2">
-          {scheduledBanners.map((banner, index) => {
-            const { left, width } = getBannerStyle(banner)
-            const isBeingDragged = isDragging && draggedBanner?.id === banner.id
+        {/* Timeline with fixed width (each hour = 300px) */}
+        <div style={{ width: `${24 * 300}px` }}>
+          {/* Timeline header with minute markers */}
+          <div className="border-b">
+            {/* Hour labels */}
+            <div className="flex">
+              {Array.from({ length: 24 }).map((_, hour) => (
+                <div 
+                  key={hour} 
+                  className={`text-xs text-center pb-1 ${hour === currentHour ? 'font-bold text-blue-600' : ''}`}
+                  style={{ width: '300px' }}
+                >
+                  {hour === 0 || hour === 12 ? (hour === 0 ? '12 AM' : '12 PM') : (hour < 12 ? `${hour} AM` : `${hour-12} PM`)}
+                </div>
+              ))}
+            </div>
             
-            // Calculate position and width based on time
-            const startPercent = (banner.scheduleStartMinutes / (24 * 60)) * 100;
-            const widthPercent = (banner.duration / (24 * 60)) * 100;
-            
-            // Check if banner ends at midnight (or very close to it)
-            const endsAtMidnight = Math.abs(banner.scheduleEndMinutes - 24 * 60) < 15; // Within 15 minutes of midnight
+            {/* 15-minute subdivision markers */}
+            <div className="flex h-4 border-t border-gray-100">
+              {Array.from({ length: 24 * 4 }).map((_, index) => {
+                const minutes = index * 15;
+                const minuteOfHour = minutes % 60;
+                const showLabel = minuteOfHour === 15 || minuteOfHour === 30 || minuteOfHour === 45;
+                
+                return (
+                  <div 
+                    key={index} 
+                    className={`border-r ${showLabel ? 'border-gray-200' : 'border-gray-100'}`}
+                    style={{ width: '75px' }}
+                  >
+                    {showLabel && (
+                      <div className="text-[9px] text-gray-400 text-center leading-none">
+                        :{minuteOfHour.toString().padStart(2, '0')}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+      
+          {/* Timeline grid */}
+          <div 
+            ref={timelineRef}
+            className="relative h-[300px] border-t border-gray-100"
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+          >
+            {/* Vertical time lines - 15-minute subdivisions */}
+            <div className="absolute inset-0 flex pointer-events-none">
+              {Array.from({ length: 24 * 4 }).map((_, index) => {
+                const minutes = index * 15;
+                const hour = Math.floor(minutes / 60);
+                const isHourMark = minutes % 60 === 0;
+                const isQuarterHour = minutes % 60 === 15 || minutes % 60 === 30 || minutes % 60 === 45;
+                
+                return (
+                  <div 
+                    key={index} 
+                    className={`${
+                      isHourMark 
+                        ? `border-r border-gray-200 ${hour === currentHour ? 'bg-blue-50' : ''}` 
+                        : 'border-r border-gray-100'
+                    }`}
+                    style={{ width: '75px' }}
+                  />
+                );
+              })}
+            </div>
+        
+            {/* Current time indicator */}
+            {(() => {
+              const currentTimeMinutes = currentHour * 60 + currentMinute
+              const pixelPosition = (currentTimeMinutes / 15) * 75 // 75px per 15-minute slot
+              
+              return (
+                <>
+                  <div 
+                    className="absolute top-0 bottom-0 w-0.5 bg-blue-500 z-10"
+                    style={{ 
+                      left: `${pixelPosition}px`,
+                      boxShadow: '0 0 8px rgba(59, 130, 246, 0.5)'
+                    }}
+                  />
+                  <div 
+                    className="absolute top-0 h-4 w-4 rounded-full bg-blue-500 z-10 animate-pulse"
+                    style={{ 
+                      left: `${pixelPosition - 8}px`,
+                      marginTop: '-8px'
+                    }}
+                  />
+                </>
+              )
+            })()}
+        
+            {/* Scheduled banners */}
+            <div className="absolute inset-0 p-2">
+              {scheduledBanners.map((banner, index) => {
+                const isBeingDragged = isDragging && draggedBanner?.id === banner.id
+                
+                // Calculate pixel positions based on 75px per 15-minute slot
+                let startMinutes = banner.scheduleStartMinutes;
+                let endMinutes = banner.scheduleEndMinutes;
+                
+                if (isBeingDragged && draggedStartTime !== null && draggedEndTime !== null) {
+                  startMinutes = draggedStartTime;
+                  endMinutes = draggedEndTime;
+                }
+                
+                const leftPixels = (startMinutes / 15) * 75;
+                const widthPixels = ((endMinutes - startMinutes) / 15) * 75;
+                
+                // Check if banner ends at midnight (or very close to it)
+                const endsAtMidnight = Math.abs(banner.scheduleEndMinutes - 24 * 60) < 15;
             
             return (
               <div 
@@ -420,9 +633,9 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
                     ? 'border border-green-300 bg-gradient-to-r from-green-50 to-green-100' 
                     : 'border border-blue-300 bg-gradient-to-r from-blue-50 to-blue-100'}`}
                 style={{
-                  left: `${startPercent}%`,
-                  width: `${widthPercent}%`,
-                  minWidth: '80px',
+                  left: `${leftPixels}px`,
+                  width: `${widthPixels}px`,
+                  minWidth: '75px', // Minimum 15-minute slot
                   top: `${index * 80 + 10}px`,
                   cursor: isBeingDragged ? (dragType === 'move' ? 'grabbing' : 'col-resize') : 'grab',
                   transition: isBeingDragged ? 'none' : 'all 0.2s ease'
@@ -441,14 +654,36 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
                   
                   {/* Banner info */}
                   <div className="ml-2 flex-1 min-w-0 flex flex-col justify-center">
-                    <div className="flex items-center">
-                      <p className="text-xs font-medium truncate">{banner.title}</p>
-                      {banner.isActive && (
-                        <span className="ml-1.5 flex items-center text-[9px] text-green-700 bg-green-100 px-1 py-0.5 rounded-sm">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-0.5 animate-pulse"></span>
-                          Live
-                        </span>
-                      )}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <p className="text-xs font-medium truncate">{banner.title}</p>
+                        {banner.isActive && (
+                          <span className="ml-1.5 flex items-center text-[9px] text-green-700 bg-green-100 px-1 py-0.5 rounded-sm">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-0.5 animate-pulse"></span>
+                            Live
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Edit Menu */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 w-5 p-0 hover:bg-white/80"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MoreVertical className="h-3 w-3" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenuItem onClick={() => handleEditBanner(banner)}>
+                            <Edit3 className="h-4 w-4 mr-2" />
+                            Edit Schedule
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                     
                     {/* Time display */}
@@ -540,6 +775,8 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
               </div>
             )
           })}
+            </div>
+          </div>
         </div>
       </div>
       
@@ -559,6 +796,54 @@ export function BannerScheduler({ banners, onBannerUpdate }: BannerSchedulerProp
           </div>
         </div>
       )}
+
+      {/* Manual Time Edit Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Banner Schedule</DialogTitle>
+            <DialogDescription>
+              Set precise start and end times for "{editingBanner?.title}"
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="start-time">Start Time</Label>
+              <Input
+                id="start-time"
+                type="time"
+                value={editStartTime}
+                onChange={(e) => setEditStartTime(e.target.value)}
+                className="w-full"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="end-time">End Time</Label>
+              <Input
+                id="end-time"
+                type="time"
+                value={editEndTime}
+                onChange={(e) => setEditEndTime(e.target.value)}
+                className="w-full"
+              />
+            </div>
+            <div className="text-sm text-gray-600">
+              Duration: {editStartTime && editEndTime ? 
+                `${Math.max(0, timeStringToMinutes(editEndTime) - timeStringToMinutes(editStartTime))} minutes` : 
+                '0 minutes'
+              }
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveTimeEdit}>
+              Save Changes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

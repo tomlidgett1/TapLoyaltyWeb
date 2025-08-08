@@ -949,7 +949,7 @@ export function CreateBannerDialog({
                               </div>
                               
                               <div className="space-y-2">
-                                <Label className="text-sm font-medium">Button Text</Label>
+                                <Label className="text-sm font-medium">Button Text <span className="text-red-500">*</span></Label>
                                 <Select value={buttonText} onValueChange={setButtonText}>
                                   <SelectTrigger className="h-9">
                                     <SelectValue placeholder="Select button text" />
@@ -1197,7 +1197,7 @@ export function CreateBannerDialog({
                         </Button>
                         <Button
                           onClick={createBanner}
-                          disabled={!title || !description || loading}
+                          disabled={!title || !description || !buttonText || loading}
                           className="bg-[#007AFF] hover:bg-[#0062CC] text-white rounded-md w-full sm:w-auto"
                         >
                           {loading ? 'Creating...' : 'Create Banner'}

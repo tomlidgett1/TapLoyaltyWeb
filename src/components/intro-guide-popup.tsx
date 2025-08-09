@@ -51,12 +51,13 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
   
   const pages: {
     title: string
-    subtitle: string
+    subtitle: string | React.ReactNode
     description?: string
     features?: { icon: any; text: string }[]
     visual?: "welcome" | "rewards" | "programs" | "messages" | "intro-rewards" | "banners" | "tapcash" | "customprograms" | "pointsrules" | "membershiptiers"
     key: string
   }[] = [
+    // Introduction & Overview
     {
       title: "Welcome to Tap",
       subtitle: "Build lasting customer relationships",
@@ -69,16 +70,20 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
       key: "welcome"
     },
     {
-      title: "How Tap Works",
-      subtitle: "Simple, powerful, effective",
-      description: "Three core components work together to create a complete loyalty experience.",
+      title: "Why Loyalty Programs Win",
+      subtitle: "The future is frictionless",
+      description: "Merchants with loyalty programs see 3x more repeat customers. But traditional programs are broken – cards get lost, apps forgotten, QR codes ignored.",
       features: [
-        { icon: Gift, text: "Rewards that customers love" },
-        { icon: Layers, text: "Programs that run themselves" },
-        { icon: MessageSquare, text: "Messages that drive action" }
+        { icon: TrendingUp, text: "67% higher customer lifetime value" },
+        { icon: Repeat, text: "3x more repeat visits than competitors" },
+        { icon: Sparkles, text: "Frictionless = 90% participation rate" },
+        { icon: Zap, text: "Seamless experiences are the future" },
+        { icon: Award, text: "Be the store customers choose first" }
       ],
-      key: "what"
+      key: "whyloyalty"
     },
+    
+    // What Makes Tap Special
     {
       title: "Why Tap is Different",
       subtitle: "Australia's first bank-linked loyalty",
@@ -93,6 +98,30 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
       key: "different"
     },
     {
+      title: "What is Bank-Linked Loyalty?",
+      subtitle: "Powered by Open Banking technology",
+      description: "When a customer pays with their usual card, Tap quietly gives them points – no extra gadgets or work for you.",
+      features: [
+        { icon: CreditCard, text: "Customer pays as normal" },
+        { icon: X, text: "No loyalty cards or apps" },
+        { icon: Zap, text: "Points added automatically" },
+        { icon: Smile, text: "Happy, loyal customers" }
+      ],
+      key: "openbanking"
+    },
+    {
+      title: "No Hardware, No Worries",
+      subtitle: "Zero equipment needed",
+      description: "Unlike other providers, you don't need any hardware. No QR code scanners, no card readers, nothing to install or maintain.",
+      features: [
+        { icon: X, text: "No QR codes to scan" },
+        { icon: CreditCard, text: "No physical loyalty cards" },
+        { icon: Zap, text: "Everything happens automatically" },
+        { icon: Shield, text: "Simpler than food delivery apps" }
+      ],
+      key: "nohardware"
+    },
+    {
       title: "Join Our Growing Network",
       subtitle: "You're joining a growing network of stores across Melbourne",
       description: "Every new customer who joins Tap becomes a potential customer for your store too.",
@@ -104,17 +133,19 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
       ],
       key: "networkeffect"
     },
+    
+    // How Points & Rewards Work
     {
-      title: "What is Bank-Linked Loyalty?",
-      subtitle: "Powered by Open Banking technology",
-      description: "When a customer pays with their usual card, Tap quietly gives them points – no extra gadgets or work for you.",
+      title: "How Do Points Work",
+      subtitle: "Simple, universal points system",
+      description: "Every customer earns 3 points for every $1 spent – it's the same across all Tap stores, keeping it simple for everyone.",
       features: [
-        { icon: CreditCard, text: "Customer pays as normal" },
-        { icon: X, text: "No loyalty cards or apps" },
-        { icon: Zap, text: "Points added automatically" },
-        { icon: Smile, text: "Happy, loyal customers" }
+        { icon: Coins, text: "$1 = 3 points at every store" },
+        { icon: Users, text: "Same system everywhere for clarity" },
+        { icon: Zap, text: "Apply boosters during quiet times" },
+        { icon: TrendingUp, text: "Strategic multipliers to drive traffic" }
       ],
-      key: "openbanking"
+      key: "howpointswork"
     },
     {
       title: "Types of Rewards",
@@ -141,6 +172,20 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
       ],
       key: "rewardsvsprograms"
     },
+    
+    // Features Deep Dive
+    {
+      title: "Intro Rewards",
+      subtitle: "Free welcome gifts – funded by Tap Loyalty, not you!",
+      description: "Customers get ONE free gift across all Tap stores. You create options, Tap covers the cost.",
+      features: [
+        { icon: Gift, text: "Zero cost to you" },
+        { icon: Users, text: "Attracts new customers" },
+        { icon: Sparkles, text: "Builds loyalty from day one" }
+      ],
+      visual: "intro-rewards",
+      key: "introrewards"
+    },
     {
       title: "Rewards",
       subtitle: "Create offers customers can't resist",
@@ -149,7 +194,7 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
       key: "rewards"
     },
     {
-      title: "Programs",
+      title: "Recurring Programs",
       subtitle: "Automated loyalty that scales",
       description: "Coffee cards, cashback, and custom programs that keep customers coming back.",
       visual: "programs",
@@ -166,18 +211,6 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
       ],
       visual: "customprograms",
       key: "customprograms"
-    },
-    {
-      title: "How Do Points Work",
-      subtitle: "Simple, universal points system",
-      description: "Every customer earns 3 points for every $1 spent – it's the same across all Tap stores, keeping it simple for everyone.",
-      features: [
-        { icon: Coins, text: "$1 = 3 points at every store" },
-        { icon: Users, text: "Same system everywhere for clarity" },
-        { icon: Zap, text: "Apply boosters during quiet times" },
-        { icon: TrendingUp, text: "Strategic multipliers to drive traffic" }
-      ],
-      key: "howpointswork"
     },
     {
       title: "Points Rules",
@@ -206,7 +239,11 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
     },
     {
       title: "Membership Tiers",
-      subtitle: "Bronze, Silver & Gold status levels",
+      subtitle: (
+        <span>
+          <span className="text-amber-600">Bronze</span>, <span className="text-gray-500">Silver</span> & <span className="text-yellow-600">Gold</span> status levels
+        </span>
+      ),
       description: "Customers automatically progress through tiers based on their spending. Tap sets the thresholds based on your industry and store type.",
       features: [
         { icon: Award, text: "Bronze: Entry level for all customers" },
@@ -214,9 +251,10 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
         { icon: Target, text: "Thresholds tailored to your industry" },
         { icon: Sparkles, text: "Automatic progression, no manual work" }
       ],
-      visual: "membershiptiers",
       key: "membershiptiers"
     },
+    
+    // Communication & Operations
     {
       title: "Messages",
       subtitle: "Right message, right time, right customer",
@@ -225,23 +263,23 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
       key: "messages"
     },
     {
-      title: "Intro Rewards",
-      subtitle: "Free welcome gifts – funded by Tap Loyalty, not you!",
-      description: "Customers get ONE free gift across all Tap stores. You create options, Tap covers the cost.",
-      features: [
-        { icon: Gift, text: "Zero cost to you" },
-        { icon: Users, text: "Attracts new customers" },
-        { icon: Sparkles, text: "Builds loyalty from day one" }
-      ],
-      visual: "intro-rewards",
-      key: "introrewards"
-    },
-    {
       title: "Banners",
       subtitle: "Eye-catching promotions in the customer app",
       description: "Create beautiful banners that appear at the top of the customer app homepage to announce sales, events, or special offers.",
       visual: "banners",
       key: "banners"
+    },
+    {
+      title: "How Do Redemptions Work",
+      subtitle: "Simple PIN-based system",
+      description: "When customers want to redeem a reward, you simply share a 4-digit PIN with them. No scanning, no complexity.",
+      features: [
+        { icon: Coins, text: "You set a unique 4-digit PIN for each reward" },
+        { icon: MessageSquare, text: "Just tell the customer the PIN" },
+        { icon: CheckCircle2, text: "Customer enters PIN in their app" },
+        { icon: Target, text: "Only eligible rewards show in customer app" }
+      ],
+      key: "redemptions"
     },
     {
       title: "Ready to Get Started?",
@@ -622,57 +660,7 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
     }
     
     if (type === "membershiptiers") {
-      return (
-        <div className="relative w-full mt-8">
-          {/* Membership Tiers Visual */}
-          <div className="space-y-3 max-w-xs">
-            <div className="bg-white rounded-xl px-4 py-3 shadow-sm border-2 border-amber-200">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
-                    <Award className="h-4 w-4 text-amber-600" />
-                  </div>
-                  <h4 className="text-[14px] font-semibold text-gray-900">Bronze</h4>
-                </div>
-                <span className="text-[11px] text-gray-500">Entry level</span>
-              </div>
-              <p className="text-[11px] text-gray-600">All new customers start here</p>
-            </div>
-            
-            <div className="bg-white rounded-xl px-4 py-3 shadow-sm border-2 border-gray-300">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                    <Crown className="h-4 w-4 text-gray-600" />
-                  </div>
-                  <h4 className="text-[14px] font-semibold text-gray-900">Silver</h4>
-                </div>
-                <span className="text-[11px] text-gray-500">Regular customer</span>
-              </div>
-              <p className="text-[11px] text-gray-600">Threshold set by Tap for your industry</p>
-            </div>
-            
-            <div className="bg-white rounded-xl px-4 py-3 shadow-sm border-2 border-yellow-400">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center">
-                    <Crown className="h-4 w-4 text-yellow-600" />
-                  </div>
-                  <h4 className="text-[14px] font-semibold text-gray-900">Gold</h4>
-                </div>
-                <span className="text-[11px] text-gray-500">VIP customer</span>
-              </div>
-              <p className="text-[11px] text-gray-600">Your most loyal customers</p>
-            </div>
-            
-            <div className="bg-blue-50 rounded-md p-3 mt-3">
-              <p className="text-[11px] text-blue-800">
-                <span className="font-medium">Industry-specific:</span> Tap automatically sets spending thresholds based on your store type
-              </p>
-            </div>
-          </div>
-        </div>
-      )
+      return null // Visual removed per request
     }
     
     // removed analytics visual per request
@@ -702,33 +690,35 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="px-8 py-5 bg-gradient-to-r from-gray-50 to-white">
+          <div className="px-8 py-4 border-b border-gray-100 bg-white">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <img src="/taplogo.png" alt="Tap" className="w-7 h-7 object-contain rounded-sm" />
-                <span className="text-base font-semibold text-gray-900">Tap Loyalty</span>
+              <div className="flex items-center gap-3">
+                <img
+                  src="/taplogo.png"
+                  alt="Tap Logo"
+                  className="h-7 w-7 object-contain rounded-sm"
+                />
+                <div className="h-6 w-px bg-gray-200" />
+                <span className="text-sm font-medium text-gray-600">Step {index + 1} of {pages.length}</span>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-1">
-                  {pages.map((_, i) => (
-                    <div 
-                      key={i} 
-                      className={cn(
-                        "h-1.5 transition-all duration-300",
-                        i === index 
-                          ? "w-8 bg-[#007AFF] rounded-full" 
-                          : "w-1.5 bg-gray-300 rounded-full hover:bg-gray-400"
-                      )} 
-                    />
-                  ))}
+              
+              <div className="flex items-center gap-3">
+                {/* Progress bar */}
+                <div className="w-32 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-[#007AFF] to-[#0051D5] transition-all duration-300 ease-out"
+                    style={{ width: `${((index + 1) / pages.length) * 100}%` }}
+                  />
                 </div>
-                <button 
-                  aria-label="Close" 
-                  onClick={() => onOpenChange(false)} 
-                  className="p-2 rounded-md hover:bg-gray-100 transition-colors"
+                
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-md hover:bg-gray-100"
+                  onClick={() => onOpenChange(false)}
                 >
-                  <X className="h-4 w-4 text-gray-500" />
-                </button>
+                  <X className="h-4 w-4 text-gray-400" />
+                </Button>
               </div>
             </div>
           </div>
@@ -738,9 +728,27 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
             <div className="min-h-full w-full flex items-start justify-center py-4">
                             <div className="max-w-lg w-full">
                  <div className="mb-2 text-left">
-                   <div className="relative mb-2">
-                     <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[#007AFF] to-[#0051D5]">{current.title}</h2>
-                     <div className="absolute -bottom-1 left-0 h-[1px] w-12 bg-gradient-to-r from-[#007AFF] to-[#0051D5] rounded-full opacity-30"></div>
+                   <div className="relative mb-2 flex items-start justify-between">
+                     <div className="relative">
+                       <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[#007AFF] to-[#0051D5]">{current.title}</h2>
+                       <div className="absolute -bottom-1 left-0 h-[1px] w-12 bg-gradient-to-r from-[#007AFF] to-[#0051D5] rounded-full opacity-30"></div>
+                     </div>
+                     {/* Preview button aligned with title */}
+                     {(current.visual === "rewards" || current.visual === "programs" || current.visual === "intro-rewards" || current.visual === "tapcash" || current.visual === "customprograms") && (
+                       <Button
+                         variant="outline"
+                         size="sm"
+                         className="rounded-md border-gray-200 hover:bg-gray-50 flex items-center gap-2 h-8 ml-4"
+                         onClick={() => setShowDemoIPhone(true)}
+                       >
+                         <img
+                           src="/apple-logo.png"
+                           alt="Apple"
+                           className="w-4 h-4 object-contain"
+                         />
+                         <span className="text-xs">Preview</span>
+                       </Button>
+                     )}
                    </div>
                    <p className="text-[13.5px] text-gray-600 leading-relaxed mt-3">{current.subtitle}</p>
                   {current.description && (
@@ -775,23 +783,7 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
                 {current.visual && (
                   <div className="text-left">
                     <ModernVisual type={current.visual} />
-                    {(current.visual === "rewards" || current.visual === "programs" || current.visual === "intro-rewards" || current.visual === "tapcash" || current.visual === "customprograms") && (
-                      <div className="mt-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="rounded-md border-gray-200 hover:bg-gray-50 flex items-center gap-2"
-                          onClick={() => setShowDemoIPhone(true)}
-                        >
-                          <img 
-                            src="/apple-logo.png" 
-                            alt="Apple" 
-                            className="w-4 h-4 object-contain"
-                          />
-                          <span className="text-[13.5px]">Preview in App</span>
-                        </Button>
-                      </div>
-                    )}
+
                   </div>
                 )}
               </div>

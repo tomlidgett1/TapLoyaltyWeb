@@ -36,7 +36,8 @@ import { DemoIPhone } from "@/components/demo-iphone"
     Award,
     Info,
     Fingerprint,
-    ChevronDown
+    ChevronDown,
+    Clock
   } from "lucide-react"
 
 type IntroGuidePopupProps = {
@@ -53,7 +54,7 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
     subtitle: string
     description?: string
     features?: { icon: any; text: string }[]
-    visual?: "welcome" | "rewards" | "programs" | "messages" | "intro-rewards" | "banners" | "tapcash" | "customprograms"
+    visual?: "welcome" | "rewards" | "programs" | "messages" | "intro-rewards" | "banners" | "tapcash" | "customprograms" | "pointsrules" | "membershiptiers"
     key: string
   }[] = [
     {
@@ -167,6 +168,31 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
       key: "customprograms"
     },
     {
+      title: "How Do Points Work",
+      subtitle: "Simple, universal points system",
+      description: "Every customer earns 3 points for every $1 spent – it's the same across all Tap stores, keeping it simple for everyone.",
+      features: [
+        { icon: Coins, text: "$1 = 3 points at every store" },
+        { icon: Users, text: "Same system everywhere for clarity" },
+        { icon: Zap, text: "Apply boosters during quiet times" },
+        { icon: TrendingUp, text: "Strategic multipliers to drive traffic" }
+      ],
+      key: "howpointswork"
+    },
+    {
+      title: "Points Rules",
+      subtitle: "Boost earnings with smart multipliers",
+      description: "Create rules that multiply points during happy hours, weekends, or special occasions.",
+      features: [
+        { icon: Zap, text: "Double points during quiet hours" },
+        { icon: Coins, text: "Weekend bonuses to drive traffic" },
+        { icon: Target, text: "Minimum spend thresholds" },
+        { icon: Clock, text: "Time-based multipliers" }
+      ],
+      visual: "pointsrules",
+      key: "pointsrules"
+    },
+    {
       title: "Tap Cash",
       subtitle: "Store credit that keeps customers coming back",
       description: "Customers earn cashback on every purchase, building up credit they can use on future visits to your store.",
@@ -177,6 +203,19 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
       ],
       visual: "tapcash",
       key: "tapcash"
+    },
+    {
+      title: "Membership Tiers",
+      subtitle: "Bronze, Silver & Gold status levels",
+      description: "Customers automatically progress through tiers based on their spending. Tap sets the thresholds based on your industry and store type.",
+      features: [
+        { icon: Award, text: "Bronze: Entry level for all customers" },
+        { icon: Crown, text: "Silver & Gold: For your loyal customers" },
+        { icon: Target, text: "Thresholds tailored to your industry" },
+        { icon: Sparkles, text: "Automatic progression, no manual work" }
+      ],
+      visual: "membershiptiers",
+      key: "membershiptiers"
     },
     {
       title: "Messages",
@@ -525,6 +564,117 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
       )
     }
     
+    if (type === "pointsrules") {
+      return (
+        <div className="relative w-full mt-8 space-y-3">
+          {/* Points Rule Card Examples */}
+          <div className="bg-white rounded-xl px-3 py-2.5 shadow-sm border border-gray-200 max-w-xs">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <Zap className="h-4 w-4 text-blue-600" />
+                  <h4 className="text-[13px] font-semibold text-black">Morning Coffee Bonus</h4>
+                </div>
+                <p className="text-[11px] text-gray-500 mb-2">1.5x points multiplier</p>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="h-3 w-3 text-gray-400" />
+                    <span className="text-[10px] text-gray-600">7:00 AM - 10:00 AM</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Target className="h-3 w-3 text-gray-400" />
+                    <span className="text-[10px] text-gray-600">Mon-Fri only</span>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-blue-100 text-blue-700 rounded-md px-2 py-0.5">
+                <span className="text-xs font-medium">Active</span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-xl px-3 py-2.5 shadow-sm border border-gray-200 max-w-xs">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <Zap className="h-4 w-4 text-blue-600" />
+                  <h4 className="text-[13px] font-semibold text-black">Weekend Treat</h4>
+                </div>
+                <p className="text-[11px] text-gray-500 mb-2">3x points multiplier</p>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <Coins className="h-3 w-3 text-gray-400" />
+                    <span className="text-[10px] text-gray-600">Min. spend $20</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Target className="h-3 w-3 text-gray-400" />
+                    <span className="text-[10px] text-gray-600">Sat-Sun all day</span>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-blue-100 text-blue-700 rounded-md px-2 py-0.5">
+                <span className="text-xs font-medium">Active</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    }
+    
+    if (type === "membershiptiers") {
+      return (
+        <div className="relative w-full mt-8">
+          {/* Membership Tiers Visual */}
+          <div className="space-y-3 max-w-xs">
+            <div className="bg-white rounded-xl px-4 py-3 shadow-sm border-2 border-amber-200">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+                    <Award className="h-4 w-4 text-amber-600" />
+                  </div>
+                  <h4 className="text-[14px] font-semibold text-gray-900">Bronze</h4>
+                </div>
+                <span className="text-[11px] text-gray-500">Entry level</span>
+              </div>
+              <p className="text-[11px] text-gray-600">All new customers start here</p>
+            </div>
+            
+            <div className="bg-white rounded-xl px-4 py-3 shadow-sm border-2 border-gray-300">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                    <Crown className="h-4 w-4 text-gray-600" />
+                  </div>
+                  <h4 className="text-[14px] font-semibold text-gray-900">Silver</h4>
+                </div>
+                <span className="text-[11px] text-gray-500">Regular customer</span>
+              </div>
+              <p className="text-[11px] text-gray-600">Threshold set by Tap for your industry</p>
+            </div>
+            
+            <div className="bg-white rounded-xl px-4 py-3 shadow-sm border-2 border-yellow-400">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center">
+                    <Crown className="h-4 w-4 text-yellow-600" />
+                  </div>
+                  <h4 className="text-[14px] font-semibold text-gray-900">Gold</h4>
+                </div>
+                <span className="text-[11px] text-gray-500">VIP customer</span>
+              </div>
+              <p className="text-[11px] text-gray-600">Your most loyal customers</p>
+            </div>
+            
+            <div className="bg-blue-50 rounded-md p-3 mt-3">
+              <p className="text-[11px] text-blue-800">
+                <span className="font-medium">Industry-specific:</span> Tap automatically sets spending thresholds based on your store type
+              </p>
+            </div>
+          </div>
+        </div>
+      )
+    }
+    
     // removed analytics visual per request
     
     return null
@@ -583,10 +733,10 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
             </div>
           </div>
 
-          {/* Body */}
+                    {/* Body */}
           <div className="px-8 py-6 flex-1 overflow-y-auto text-[13.5px] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-            <div className="min-h-full w-full flex items-center justify-center py-4">
-                             <div className="max-w-lg w-full">
+            <div className="min-h-full w-full flex items-start justify-center py-4">
+                            <div className="max-w-lg w-full">
                  <div className="mb-2 text-left">
                    <div className="relative mb-2">
                      <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[#007AFF] to-[#0051D5]">{current.title}</h2>

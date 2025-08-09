@@ -16,9 +16,10 @@ interface DemoIPhoneProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   isDemoMode?: boolean
+  initialTab?: 'rewards' | 'programs'
 }
 
-export function DemoIPhone({ open, onOpenChange, isDemoMode = false }: DemoIPhoneProps) {
+export function DemoIPhone({ open, onOpenChange, isDemoMode = false, initialTab = 'rewards' }: DemoIPhoneProps) {
   const { user } = useAuth()
   const [logoUrl, setLogoUrl] = useState<string>("")
   const [merchantName, setMerchantName] = useState<string>("")
@@ -31,7 +32,7 @@ export function DemoIPhone({ open, onOpenChange, isDemoMode = false }: DemoIPhon
   const [isClosing, setIsClosing] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const [shouldAnimate, setShouldAnimate] = useState(false)
-  const [activeTab, setActiveTab] = useState<'rewards' | 'programs'>('rewards')
+  const [activeTab, setActiveTab] = useState<'rewards' | 'programs'>(initialTab)
 
   const toggleProgramExpansion = (programId: string) => {
     setExpandedPrograms(prev => {
@@ -227,6 +228,7 @@ export function DemoIPhone({ open, onOpenChange, isDemoMode = false }: DemoIPhon
       setIsClosing(false)
       setIsVisible(true)
       setShouldAnimate(false)
+      setActiveTab(initialTab) // Reset to initial tab when opening
       // Small delay to ensure the element is rendered off-screen first, then animate in
       setTimeout(() => {
         setShouldAnimate(true)
@@ -236,7 +238,7 @@ export function DemoIPhone({ open, onOpenChange, isDemoMode = false }: DemoIPhon
       setIsVisible(false)
       setShouldAnimate(false)
     }
-  }, [user?.uid, open, isDemoMode])
+  }, [user?.uid, open, isDemoMode, initialTab])
 
   // Handle escape key press
   useEffect(() => {

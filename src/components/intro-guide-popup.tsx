@@ -35,7 +35,8 @@ import { DemoIPhone } from "@/components/demo-iphone"
     Shield,
     Award,
     Info,
-    Fingerprint
+    Fingerprint,
+    ChevronDown
   } from "lucide-react"
 
 type IntroGuidePopupProps = {
@@ -52,7 +53,7 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
     subtitle: string
     description?: string
     features?: { icon: any; text: string }[]
-    visual?: "welcome" | "rewards" | "programs" | "messages" | "intro-rewards" | "banners" | "tapcash"
+    visual?: "welcome" | "rewards" | "programs" | "messages" | "intro-rewards" | "banners" | "tapcash" | "customprograms"
     key: string
   }[] = [
     {
@@ -91,6 +92,18 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
       key: "different"
     },
     {
+      title: "Join Our Growing Network",
+      subtitle: "You're joining a growing network of stores across Melbourne",
+      description: "Every new customer who joins Tap becomes a potential customer for your store too.",
+      features: [
+        { icon: Users, text: "Tap customers shop at multiple stores" },
+        { icon: TrendingUp, text: "Your store gets discovered by new customers" },
+        { icon: Sparkles, text: "Free exposure in the customer app" },
+        { icon: Award, text: "Growing stronger together, every day" }
+      ],
+      key: "networkeffect"
+    },
+    {
       title: "What is Bank-Linked Loyalty?",
       subtitle: "Powered by Open Banking technology",
       description: "When a customer pays with their usual card, Tap quietly gives them points – no extra gadgets or work for you.",
@@ -117,13 +130,13 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
     {
       title: "Rewards vs Programs",
       subtitle: "What's the difference?",
-      description: "Think of it like this: Rewards are instant treats, Programs are journey rewards.",
+      description: "Think of it like this: Rewards are instant treats, Programs are collections of rewards that are progressively unlocked.",
       features: [
         { icon: Gift, text: "Rewards: One-time treats customers can grab right away" },
         { icon: Target, text: "Example: 20% off next purchase, free dessert today" },
-        { icon: Layers, text: "Programs: Multi-visit journeys with a big prize at the end" },
-        { icon: Coffee, text: "Example: Buy 9 coffees, get the 10th free" },
-        { icon: Repeat, text: "Programs keep customers coming back to reach their goal!" }
+        { icon: Layers, text: "Programs: Collections of rewards unlocked step-by-step" },
+        { icon: Coffee, text: "Example: Unlock rewards at 5, 10, 15 visits" },
+        { icon: Repeat, text: "Programs create a journey with multiple milestones!" }
       ],
       key: "rewardsvsprograms"
     },
@@ -140,6 +153,18 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
       description: "Coffee cards, cashback, and custom programs that keep customers coming back.",
       visual: "programs",
       key: "programs"
+    },
+    {
+      title: "Custom Programs",
+      subtitle: "Multi-step journeys that drive engagement",
+      description: "Create collections of rewards that customers unlock progressively as they reach milestones.",
+      features: [
+        { icon: Layers, text: "Multiple rewards in one journey" },
+        { icon: TrendingUp, text: "Progressive unlocking system" },
+        { icon: Target, text: "Milestone-based achievements" }
+      ],
+      visual: "customprograms",
+      key: "customprograms"
     },
     {
       title: "Tap Cash",
@@ -439,6 +464,67 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
       )
     }
     
+    if (type === "customprograms") {
+      return (
+        <div className="relative w-full mt-8">
+          {/* Custom Program Card - styled exactly like demo-iphone.tsx */}
+          <div className="bg-white rounded-xl px-3 py-2 shadow-sm border border-gray-200 max-w-xs">
+            <div className="flex items-start justify-between mb-1.5">
+              <div className="flex-1">
+                <h4 className="text-[13px] font-semibold text-black">VIP Journey</h4>
+                <p className="text-[11px] text-gray-500">Complete milestones to unlock exclusive rewards</p>
+              </div>
+              <div className="text-right">
+                <div className="text-[12px] font-bold text-blue-500">1/4</div>
+                <div className="text-[9px] text-gray-500 mb-0.5">Available</div>
+                <ChevronDown className="h-3.5 w-3.5 text-gray-400 ml-auto -mb-1.5" />
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-between mb-0.5">
+              <div className="text-[10px] text-gray-500">Program Progress</div>
+              <div className="text-[11px] font-medium text-blue-500">25% Complete</div>
+            </div>
+            
+            {/* Progress Bar */}
+            <div className="w-full bg-gray-200 rounded-full h-1 mb-2">
+              <div className="bg-blue-500 h-1 rounded-full" style={{ width: '25%' }}></div>
+            </div>
+            
+            {/* Rewards Preview */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full border-2 border-blue-500 bg-blue-500 flex items-center justify-center">
+                  <div className="text-white font-bold text-[8px] leading-none">✓</div>
+                </div>
+                <div className="flex-1">
+                  <div className="text-[11px] font-medium text-black">First Purchase Bonus</div>
+                  <div className="text-[9px] text-green-500">Earned</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center">
+                  <div className="w-2 h-2 bg-gray-300 rounded-full"></div>
+                </div>
+                <div className="flex-1">
+                  <div className="text-[11px] font-medium text-gray-700">Regular Customer</div>
+                  <div className="text-[9px] text-gray-500">5 visits needed</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 opacity-50">
+                <div className="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center">
+                  <div className="w-2 h-2 bg-gray-300 rounded-full"></div>
+                </div>
+                <div className="flex-1">
+                  <div className="text-[11px] font-medium text-gray-500">2 more rewards...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    }
+    
     // removed analytics visual per request
     
     return null
@@ -500,10 +586,13 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
           {/* Body */}
           <div className="px-8 py-6 flex-1 overflow-y-auto text-[13.5px] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             <div className="min-h-full w-full flex items-center justify-center py-4">
-              <div className="max-w-lg w-full">
-                <div className="mb-2 text-left">
-                  <h2 className="text-2xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-[#007AFF] to-[#0051D5]">{current.title}</h2>
-                  <p className="text-[13.5px] text-gray-600 leading-relaxed">{current.subtitle}</p>
+                             <div className="max-w-lg w-full">
+                 <div className="mb-2 text-left">
+                   <div className="relative mb-2">
+                     <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[#007AFF] to-[#0051D5]">{current.title}</h2>
+                     <div className="absolute -bottom-1 left-0 h-[1px] w-12 bg-gradient-to-r from-[#007AFF] to-[#0051D5] rounded-full opacity-30"></div>
+                   </div>
+                   <p className="text-[13.5px] text-gray-600 leading-relaxed mt-3">{current.subtitle}</p>
                   {current.description && (
                     <p className="text-[13.5px] text-gray-500 mt-2 leading-relaxed">{current.description}</p>
                   )}
@@ -536,7 +625,7 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
                 {current.visual && (
                   <div className="text-left">
                     <ModernVisual type={current.visual} />
-                    {(current.visual === "rewards" || current.visual === "programs" || current.visual === "intro-rewards" || current.visual === "tapcash") && (
+                    {(current.visual === "rewards" || current.visual === "programs" || current.visual === "intro-rewards" || current.visual === "tapcash" || current.visual === "customprograms") && (
                       <div className="mt-4">
                         <Button
                           variant="outline"
@@ -609,6 +698,7 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
         open={showDemoIPhone} 
         onOpenChange={setShowDemoIPhone}
         isDemoMode={true}
+        initialTab={(current.visual === "programs" || current.visual === "customprograms") ? "programs" : "rewards"}
       />
     </div>
   )

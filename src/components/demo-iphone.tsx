@@ -15,9 +15,10 @@ import { doc, getDoc, collection, query, orderBy, getDocs, where } from "firebas
 interface DemoIPhoneProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  isDemoMode?: boolean
 }
 
-export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
+export function DemoIPhone({ open, onOpenChange, isDemoMode = false }: DemoIPhoneProps) {
   const { user } = useAuth()
   const [logoUrl, setLogoUrl] = useState<string>("")
   const [merchantName, setMerchantName] = useState<string>("")
@@ -46,6 +47,102 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
 
   useEffect(() => {
     const fetchMerchantData = async () => {
+      // If in demo mode, set dummy data
+      if (isDemoMode) {
+        setLogoUrl("")
+        setMerchantName("Coffee Corner")
+        setDisplayAddress("123 Main St, Melbourne VIC 3000")
+        
+        // Set dummy coffee program
+        setCoffeeProgram({
+          active: true,
+          frequency: 10,
+          description: "Buy 9 coffees, get the 10th free!"
+        })
+        
+        // Set dummy cashback program
+        setCashbackProgram({
+          isActive: true,
+          description: "Earn cashback on every purchase"
+        })
+        
+        // Set dummy rewards
+        setRewards([
+          {
+            id: '1',
+            rewardName: 'Welcome Gift',
+            description: 'Free coffee on your first visit',
+            type: 'gift',
+            programType: '',
+            pointsCost: 0,
+            voucherAmount: 0,
+            isIntroductoryReward: true,
+            category: 'individual',
+            isNetworkReward: false
+          },
+          {
+            id: '2',
+            rewardName: 'Birthday Reward',
+            description: '20% off your entire order',
+            type: 'discount',
+            programType: '',
+            pointsCost: 500,
+            voucherAmount: 0,
+            isIntroductoryReward: false,
+            category: 'individual',
+            isNetworkReward: false
+          },
+          {
+            id: '3',
+            rewardName: 'Free Pastry',
+            description: 'Redeem for any pastry in store',
+            type: 'gift',
+            programType: '',
+            pointsCost: 300,
+            voucherAmount: 0,
+            isIntroductoryReward: false,
+            category: 'individual',
+            isNetworkReward: false
+          }
+        ])
+        
+        // Set dummy custom program
+        setCustomPrograms([
+          {
+            id: 'prog1',
+            name: 'VIP Journey',
+            description: 'Complete milestones to unlock exclusive rewards',
+            status: 'active',
+            totalRewards: 4,
+            rewards: [
+              {
+                name: 'First Purchase Bonus',
+                description: '50 bonus points',
+                conditions: [{ type: 'minimumSpend', amount: 10 }]
+              },
+              {
+                name: 'Regular Customer',
+                description: 'Free size upgrade',
+                limitations: [{ value: 5 }]
+              },
+              {
+                name: 'Loyal Fan',
+                description: '$5 voucher',
+                conditions: [{ type: 'minimumSpend', amount: 100 }]
+              },
+              {
+                name: 'VIP Status',
+                description: 'Exclusive monthly rewards',
+                limitations: [{ value: 20 }]
+              }
+            ]
+          }
+        ])
+        
+        return
+      }
+      
+      // Otherwise fetch real data
       if (!user?.uid) return
       
       try {
@@ -139,7 +236,7 @@ export function DemoIPhone({ open, onOpenChange }: DemoIPhoneProps) {
       setIsVisible(false)
       setShouldAnimate(false)
     }
-  }, [user?.uid, open])
+  }, [user?.uid, open, isDemoMode])
 
   // Handle escape key press
   useEffect(() => {

@@ -16,7 +16,6 @@ import {
   RotateCcw,
   Image as ImageIcon,
   Zap,
-  Users,
   Bot,
   ExternalLink,
   MessageSquare,
@@ -37,7 +36,6 @@ import Link from "next/link"
 import { IntroductoryRewardPopup } from "@/components/introductory-reward-popup"
 import { CreateRewardPopup } from "@/components/create-reward-popup"
 import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
-import { NetworkRewardPopup } from "@/components/network-reward-popup"
 import { CreateBannerDialog } from "@/components/create-banner-dialog"
 import { CreatePointsRulePopup } from "@/components/create-points-rule-popup"
 import { WelcomePopup } from "@/components/welcome-popup"
@@ -124,7 +122,7 @@ export default function GetStartedPage() {
   const [showCreateProgram, setShowCreateProgram] = useState(false)
   const [showCreateBanner, setShowCreateBanner] = useState(false)
   const [showCreatePointsRule, setShowCreatePointsRule] = useState(false)
-  const [showNetworkReward, setShowNetworkReward] = useState(false)
+  // Removed network reward popup state
   const [showSettingsDialog, setShowSettingsDialog] = useState(false)
   const [settingsActiveSection, setSettingsActiveSection] = useState("Memberships")
   
@@ -193,7 +191,7 @@ export default function GetStartedPage() {
     },
     {
       id: 'individual-reward',
-      title: 'Create Individual Reward',
+      title: 'Create Basic Reward',
       description: 'Set up rewards that customers can redeem with their earned points. These could be discounts, free products, or special perks that keep customers coming back.',
       icon: Gift,
       completed: false,
@@ -249,17 +247,7 @@ export default function GetStartedPage() {
       actionText: 'Setup',
       popupAction: () => setShowCreatePointsRule(true)
     },
-    {
-      id: 'network-reward',
-      title: 'Create Network Reward',
-      description: 'Set up rewards that can be shared across your network of partners or locations. This helps create a more comprehensive loyalty experience for your customers.',
-      icon: Users,
-      completed: false,
-      category: 'loyalty',
-      actionType: 'popup',
-      actionText: 'Setup',
-      popupAction: () => setShowNetworkReward(true)
-    },
+    // Removed network reward card per request
     {
       id: 'setup-customer-service',
       title: 'Setup Customer Service Email Agent',
@@ -375,15 +363,9 @@ export default function GetStartedPage() {
         // Check for individual rewards (not network rewards)
         const hasIndividualRewards = rewards.some(reward => !reward.isNetworkReward)
         
-        // Check for network rewards
-        const hasNetworkRewards = rewards.some(reward => reward.isNetworkReward === true)
-        
         setChecklistItems(prev => prev.map(item => {
           if (item.id === 'individual-reward') {
             return { ...item, completed: hasIndividualRewards }
-          }
-          if (item.id === 'network-reward') {
-            return { ...item, completed: hasNetworkRewards }
           }
           return item
         }))
@@ -628,10 +610,7 @@ export default function GetStartedPage() {
     .filter(item => item.category === 'loyalty')
     .sort((a, b) => Number(a.completed) - Number(b.completed))
   // Define specific order for merchant items to maintain proper separator placement
-  const merchantItemOrder = ['setup-customer-service', 'email-summary-agent', 'create-manual-agent']
-  const merchantItems = merchantItemOrder
-    .map(id => checklistItems.find(item => item.id === id))
-    .filter(Boolean) as ChecklistItem[]
+  // Remove merchant items section (only Tap Loyalty shown)
   const completedCount = checklistItems.filter(item => item.completed).length
 
   return (
@@ -646,243 +625,216 @@ export default function GetStartedPage() {
         }}
       >
         <div className="max-w-6xl mx-auto px-6 py-8">
-
-          {/* Two Column Layout with Separator */}
-          <div className="relative">
-            {/* Vertical Separator Line - starts at first card level */}
-            <div className="absolute left-1/2 w-px bg-gray-200 transform -translate-x-1/2 hidden lg:block" style={{ top: '75px', bottom: '0' }}></div>
+          {/* Header Section */}
+          <div className="text-center mb-8">
+            {/* Tap Logo */}
+            <div className="flex justify-center mb-6">
+              <img src="/taplogo.png" alt="Tap" className="w-12 h-12 object-contain rounded-[4px]" />
+            </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Welcome Message */}
+            <h1 className="text-2xl font-semibold text-gray-900 mb-3">Let's get started</h1>
+            <p className="text-base text-gray-600 max-w-2xl mx-auto mb-2">
+              Complete these steps to set up your loyalty program.
+            </p>
+           
+          </div>
+
+          <div className="relative">
+            <div className="grid grid-cols-1 gap-4">
               
-              {/* Tap Loyalty Column */}
+              {/* Loyalty Tasks Section */}
               <div className="space-y-4">
-                {/* Tap Loyalty Badge */}
-                <div className="flex justify-center mb-6">
-                  <div className="flex items-center gap-3 px-6 py-3 bg-white rounded-full border border-gray-200 shadow-sm relative z-10">
-                    <img src="/taplogo.png" alt="Tap" className="w-5 h-5 object-contain rounded-[2px]" />
-                    <span className="text-sm font-semibold text-gray-900">Tap Loyalty</span>
-                       </div>
-                     </div>
-                     
-                     {/* Hidden file input for logo upload */}
-                     <input
-                       id="logo-upload-getstarted"
-                       type="file"
-                       accept="image/*"
-                       onChange={handleLogoUpload}
-                       className="hidden"
-                     />
-                     
-                     {/* Account Type Selection */}
-              <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-md">
-                       <Collapsible
-                         open={openItems.includes('account-type')}
-                         onOpenChange={() => toggleItem('account-type')}
-                       >
-                         <div 
-                           className="flex items-center justify-between cursor-pointer"
-                           onClick={() => toggleItem('account-type')}
-                         >
-                           <div className="flex items-center gap-3">
-                      <div className="flex items-center">
-                        <img 
-                          src={accountType === 'standard' ? '/taplogo.png' : '/tappro.png'} 
-                          alt={accountType === 'standard' ? 'Tap Standard' : 'Tap Network'} 
-                          className="w-12 h-auto object-contain rounded-sm"
-                        />
-                             </div>
-                             <div>
-                               <h4 className="text-sm font-medium text-gray-900">Select Account Type</h4>
-                               <p className="text-xs text-gray-500">Choose between Standard or Network for your business</p>
-                             </div>
-                           </div>
-                           <div className="flex items-center gap-2">
-                             <div className="relative flex items-center bg-gray-100 p-0.5 rounded-md">
-                               {/* Animated white background */}
-                               <motion.div
-                                 className="absolute inset-y-0.5 bg-white rounded-md shadow-sm"
-                                 initial={false}
-                                 animate={{
-                                   x: accountType === 'standard' ? 0 : '100%',
-                                   width: '50%'
-                                 }}
-                                 transition={{
-                                   type: "spring",
-                                   stiffness: 400,
-                                   damping: 30
-                                 }}
-                               />
-                               
-                               {/* Tab buttons */}
-                               <button
-                                 onClick={(e) => {
-                                   e.stopPropagation()
-                                   setAccountType('standard')
-                                 }}
-                                 className={cn(
-                                   "relative z-10 px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
-                                   accountType === 'standard'
-                                     ? "text-gray-800" 
-                                     : "text-gray-600 hover:text-gray-700"
-                                 )}
-                               >
-                                 Standard
-                               </button>
-                               
-                               <button
-                                 onClick={(e) => {
-                                   e.stopPropagation()
-                                   setAccountType('network')
-                                 }}
-                                 className={cn(
-                                   "relative z-10 px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
-                                   accountType === 'network'
-                                     ? "text-gray-800" 
-                                     : "text-gray-600 hover:text-gray-700"
-                                 )}
-                               >
-                                 Network
-                               </button>
-                             </div>
-                             <CollapsibleTrigger asChild>
-                               <Button
-                                 variant="ghost"
-                                 size="sm"
-                                 className="p-1 h-8 w-8"
-                                 onClick={(e) => e.stopPropagation()}
-                               >
-                                 <ChevronDown 
-                                   className={cn(
-                                     "h-4 w-4 text-gray-400 transition-transform duration-200",
-                                     openItems.includes('account-type') && "rotate-180"
-                                   )} 
-                                 />
-                               </Button>
-                             </CollapsibleTrigger>
-                           </div>
-                         </div>
-                         
-                         <AnimatePresence>
-                           {openItems.includes('account-type') && (
-                             <motion.div
-                               initial={{ height: 0, opacity: 0 }}
-                               animate={{ height: "auto", opacity: 1 }}
-                               exit={{ height: 0, opacity: 0 }}
-                               transition={{ 
-                                 duration: 0.4,
-                                 ease: [0.04, 0.62, 0.23, 0.98]
-                               }}
-                               className="overflow-hidden"
-                         >
-                           <div className="px-3 pb-3 border-t border-gray-100 mt-3">
-                             <div className="space-y-3">
-                               <div className="p-3 bg-white rounded-md border border-gray-200">
-                                 <h5 className="text-xs font-medium text-gray-900 mb-2">Tap Standard</h5>
-                                 <p className="text-xs text-gray-600 mb-2">Perfect for individual businesses and single locations.</p>
-                                 <ul className="text-xs text-gray-600 space-y-1">
-                                   <li>• Single business management</li>
-                                   <li>• Basic loyalty features</li>
-                                   <li>• Customer analytics</li>
-                                   <li>• Email marketing tools</li>
-                                 </ul>
-                               </div>
-                               
-                               <div className="p-3 bg-white rounded-md border border-gray-200">
-                                 <h5 className="text-xs font-medium text-gray-900 mb-2">Tap Network</h5>
-                                 <p className="text-xs text-gray-600 mb-2">Ideal for multi-location chains, franchises, and business networks.</p>
-                                 <ul className="text-xs text-gray-600 space-y-1">
-                                   <li>• Multi-location management</li>
-                                   <li>• Advanced network features</li>
-                                   <li>• Cross-location rewards</li>
-                                   <li>• Centralized reporting</li>
-                                   <li>• Franchise management tools</li>
-                                 </ul>
-                               </div>
-                             </div>
-                           </div>
-                             </motion.div>
-                           )}
-                         </AnimatePresence>
-                       </Collapsible>
-                     </div>
-              
-              {/* Loyalty Tasks */}
-              <div className="space-y-3">
+                {/* Hidden file input for logo upload */}
+                <input
+                  id="logo-upload-getstarted"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  className="hidden"
+                />
+                
+                {/* Task Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {loyaltyItems.map((item, index) => (
                   <div 
                     key={item.id} 
                     className={cn(
-                      "border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-all duration-200 min-h-[80px]",
-                      item.completed && "opacity-60 bg-gray-100"
+                      "border border-gray-200 rounded-xl bg-white hover:bg-gray-50 transition-all duration-200 min-h-[140px] shadow-sm",
+                      item.completed && "bg-white"
                     )}
                   >
                     <Collapsible
                       open={openItems.includes(item.id)}
                       onOpenChange={() => toggleItem(item.id)}
                     >
-                      <div 
-                        className="flex items-center gap-3 p-4 cursor-pointer"
-                        onClick={() => toggleItem(item.id)}
-                      >
-                        <div className="w-10 h-5 flex items-center justify-center">
-                          {item.completed ? (
-                            <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                              <Check className="h-3 w-3 text-white" />
-                            </div>
-                          ) : (
-                            <item.icon className="h-5 w-5 text-gray-400" />
+                      <div className="p-4 h-full flex flex-col">
+                        {/* Header with icon and status */}
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="w-8 h-8 flex items-center justify-center">
+                            {item.completed ? (
+                              <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                                <Check className="h-4 w-4 text-white" />
+                              </div>
+                            ) : (
+                              <item.icon className="h-6 w-6 text-gray-400" />
+                            )}
+                          </div>
+                          
+                          {item.completed && (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-green-700 border border-green-200">
+                              <div className="h-1.5 w-1.5 bg-green-500 rounded-full"></div>
+                              Complete
+                            </span>
                           )}
                         </div>
-                       
-                        <div className="flex-1 text-left">
+                        
+                        {/* Title and key points */}
+                        <div className="flex-1 mb-4">
                           <h3 className={cn(
-                            "text-sm font-medium",
+                            "text-sm font-medium mb-2",
                             item.completed ? "text-gray-600" : "text-gray-900"
                           )}>{item.title}</h3>
-                          <p className="text-xs text-gray-500">Click to learn more</p>
+                          <div className="text-xs text-gray-500 space-y-1">
+                            {item.id === 'upload-logo' && (
+                              <>
+                                <div className="flex items-start gap-1">
+                                  <span className="text-gray-400 mt-0.5">•</span>
+                                  <span>Personalise your loyalty program</span>
+                                </div>
+                                <div className="flex items-start gap-1">
+                                  <span className="text-gray-400 mt-0.5">•</span>
+                                  <span>Make it recognisable to customers</span>
+                                </div>
+                              </>
+                            )}
+                            {item.id === 'intro-reward' && (
+                              <>
+                                <div className="flex items-start gap-1">
+                                  <span className="text-gray-400 mt-0.5">•</span>
+                                  <span>Welcome new customers with special rewards</span>
+                                </div>
+                                <div className="flex items-start gap-1">
+                                  <span className="text-gray-400 mt-0.5">•</span>
+                                  <span>Encourage first purchase with incentives</span>
+                                </div>
+                              </>
+                            )}
+                            {item.id === 'individual-reward' && (
+                              <>
+                                <div className="flex items-start gap-1">
+                                  <span className="text-gray-400 mt-0.5">•</span>
+                                  <span>Create point-based rewards for customers</span>
+                                </div>
+                                <div className="flex items-start gap-1">
+                                  <span className="text-gray-400 mt-0.5">•</span>
+                                  <span>Discounts, free products, or special perks</span>
+                                </div>
+                              </>
+                            )}
+                            {item.id === 'create-program' && (
+                              <>
+                                <div className="flex items-start gap-1">
+                                  <span className="text-gray-400 mt-0.5">•</span>
+                                  <span>Design your complete loyalty structure</span>
+                                </div>
+                                <div className="flex items-start gap-1">
+                                  <span className="text-gray-400 mt-0.5">•</span>
+                                  <span>Define earning rules and available rewards</span>
+                                </div>
+                              </>
+                            )}
+                            {item.id === 'membership-tiers' && (
+                              <>
+                                <div className="flex items-start gap-1">
+                                  <span className="text-gray-400 mt-0.5">•</span>
+                                  <span>Create Bronze, Silver, Gold tiers</span>
+                                </div>
+                                <div className="flex items-start gap-1">
+                                  <span className="text-gray-400 mt-0.5">•</span>
+                                  <span>Set tier requirements and benefits</span>
+                                </div>
+                              </>
+                            )}
+                            {item.id === 'create-banner' && (
+                              <>
+                                <div className="flex items-start gap-1">
+                                  <span className="text-gray-400 mt-0.5">•</span>
+                                  <span>Design eye-catching promotional banners</span>
+                                </div>
+                                <div className="flex items-start gap-1">
+                                  <span className="text-gray-400 mt-0.5">•</span>
+                                  <span>Encourage customers to join your program</span>
+                                </div>
+                              </>
+                            )}
+                            {item.id === 'points-rule' && (
+                              <>
+                                <div className="flex items-start gap-1">
+                                  <span className="text-gray-400 mt-0.5">•</span>
+                                  <span>Set how customers earn points</span>
+                                </div>
+                                <div className="flex items-start gap-1">
+                                  <span className="text-gray-400 mt-0.5">•</span>
+                                  <span>Purchases, referrals, social engagement</span>
+                                </div>
+                              </>
+                            )}
+                            {/* Network reward card removed */}
+                          </div>
                         </div>
-                       
-                        <div className="flex items-center gap-2">
+                        
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2 mt-auto">
                           {/* Special handling for logo upload with upload button */}
                           {item.id === 'upload-logo' && uploadedLogo && !uploadedUrl && (
                             <Button 
                               size="sm" 
                               variant="outline"
-                              className="text-xs"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              uploadToFirebaseStorage()
-                            }}
+                              className="text-xs flex-1 h-8"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                uploadToFirebaseStorage()
+                              }}
                               disabled={isUploading}
                             >
                               {isUploading ? "Uploading..." : "Upload"}
                             </Button>
                           )}
-                          <Button 
-                            size="sm" 
-                            className={cn(
-                              "text-xs px-3 py-1.5 text-white",
-                              item.completed 
-                                ? "bg-gray-500 hover:bg-gray-600" 
-                                : "bg-[#007aff] hover:bg-[#339fff]"
-                            )}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              item.popupAction?.()
-                            }}
-                          >
-                            {item.completed && item.id === 'upload-logo' 
-                              ? "Change Logo" 
-                              : item.completed 
-                                ? "Modify" 
-                                : item.actionText}
-                          </Button>
+                          {!item.completed && !(item.id === 'upload-logo' && uploadedLogo && !uploadedUrl) && (
+                            <Button 
+                              size="sm" 
+                              className={cn(
+                                "text-xs px-3 py-1.5 text-white flex-1 h-8",
+                                "bg-[#007aff] hover:bg-[#339fff]"
+                              )}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                item.popupAction?.()
+                              }}
+                            >
+                              {item.actionText}
+                            </Button>
+                          )}
+                          {item.completed && (
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              className="text-xs flex-1 h-8"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                item.popupAction?.()
+                              }}
+                            >
+                              {item.id === 'upload-logo' ? "Change Logo" : "Modify"}
+                            </Button>
+                          )}
                           
                           <CollapsibleTrigger asChild>
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="p-1 h-8 w-8"
+                              className="p-1 h-8 w-8 shrink-0"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <ChevronDown 
@@ -909,29 +861,10 @@ export default function GetStartedPage() {
                             className="overflow-hidden"
                       >
                         <div className="px-4 pb-4 border-t border-gray-100">
-                          <p className="text-xs text-gray-600 mb-4 mt-3">
-                            {item.description}
-                          </p>
-                          <Button 
-                            size="sm" 
-                                className={cn(
-                                  "text-white inline-flex items-center gap-2",
-                                  item.completed 
-                                    ? "bg-gray-500 hover:bg-gray-600" 
-                                    : "bg-[#007aff] hover:bg-[#339fff]"
-                                )}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              item.popupAction?.()
-                            }}
-                          >
-                                {item.completed && item.id === 'upload-logo' 
-                                  ? "Change Logo" 
-                                  : item.completed 
-                                    ? "Modify" 
-                                    : item.actionText}
-                            <ExternalLink className="h-3 w-3" />
-                          </Button>
+                          <div className="text-xs text-gray-600 mt-3">
+                            <p className="font-medium mb-2">What this does:</p>
+                            <p>{item.description}</p>
+                          </div>
                         </div>
                           </motion.div>
                         )}
@@ -939,208 +872,13 @@ export default function GetStartedPage() {
                     </Collapsible>
                   </div>
                 ))}
-              </div>
-            </div>
-            
-            {/* Tap Merchant Column */}
-            <div className="space-y-4">
-              {/* Tap Merchant Badge */}
-              <div className="flex justify-center mb-6">
-                <div className="flex items-center gap-3 px-6 py-3 bg-white rounded-full border border-gray-200 shadow-sm relative z-10">
-                  <img src="/gmailnew.png" alt="Gmail" className="w-5 h-5 object-contain" />
-                  <span className="text-sm font-semibold text-gray-900">Tap Merchant</span>
-                     </div>
-                   </div>
-                 
-              {/* Merchant Tasks */}
-              <div className="space-y-3">
-                {merchantItems.map((item, index) => (
-                  <React.Fragment key={item.id}>
-                  <div 
-                    className={cn(
-                      "border border-gray-200 rounded-md bg-gray-50 hover:bg-gray-100 transition-all duration-200 min-h-[80px]",
-                      item.completed && "opacity-60 bg-gray-100"
-                    )}
-                  >
-                    <Collapsible
-                      open={openItems.includes(item.id)}
-                      onOpenChange={() => toggleItem(item.id)}
-                    >
-                      <div 
-                        className="flex items-center gap-3 p-4 cursor-pointer"
-                        onClick={() => toggleItem(item.id)}
-                      >
-                                                 <div className="w-10 h-5 flex items-center justify-center">
-                           {item.completed ? (
-                             <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                               <Check className="h-3 w-3 text-white" />
-                             </div>
-                           ) : item.icon === 'gmail' ? (
-                             <div className="relative w-10 h-5">
-                               <div className="absolute left-0 top-0 w-5 h-5 bg-white rounded-full border border-gray-200 flex items-center justify-center z-10">
-                                 <img src="/gmailnew.png" alt="Gmail" className="w-4 h-4 object-contain" />
-                               </div>
-                               <div className="absolute right-0 top-0 w-5 h-5 bg-white rounded-full border border-gray-200 flex items-center justify-center">
-                                 <img src="/outlook.png" alt="Outlook" className="w-4 h-4 object-contain" />
-                               </div>
-                             </div>
-                           ) : item.icon === 'outlook' ? (
-                             <div className="relative w-10 h-5">
-                               <div className="absolute left-0 top-0 w-5 h-5 bg-white rounded-full border border-gray-200 flex items-center justify-center z-10">
-                                 <img src="/gmailnew.png" alt="Gmail" className="w-4 h-4 object-contain" />
-                               </div>
-                               <div className="absolute right-0 top-0 w-5 h-5 bg-white rounded-full border border-gray-200 flex items-center justify-center">
-                                 <img src="/outlook.png" alt="Outlook" className="w-4 h-4 object-contain" />
-                               </div>
-                             </div>
-                           ) : (
-                             <item.icon className="h-5 w-5 text-gray-400" />
-                           )}
-                         </div>
-                        
-                                                 <div className="flex-1 text-left">
-                           <h3 className={cn(
-                             "text-sm font-medium",
-                             item.completed ? "text-gray-600" : "text-gray-900"
-                           )}>{item.title}</h3>
-                           <p className="text-xs text-gray-500">Click to learn more</p>
-                         </div>
-                        
-                        <div className="flex items-center gap-2">
-                          {item.actionType === 'url' ? (
-                            <Button 
-                              size="sm" 
-                              asChild
-                              className={cn(
-                                "text-xs px-3 py-1.5 text-white",
-                                item.completed 
-                                  ? "bg-gray-500 hover:bg-gray-600" 
-                                  : "bg-[#007aff] hover:bg-[#339fff]"
-                              )}
-                            >
-                              <Link 
-                                href={item.actionUrl!}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {item.completed ? "Modify" : item.actionText}
-                              </Link>
-                            </Button>
-                          ) : (
-                            <Button 
-                              size="sm" 
-                              className={cn(
-                                "text-xs px-3 py-1.5 text-white",
-                                item.completed 
-                                  ? "bg-gray-500 hover:bg-gray-600" 
-                                  : "bg-[#007aff] hover:bg-[#339fff]"
-                              )}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                item.popupAction?.()
-                              }}
-                            >
-                              {item.completed ? "Modify" : item.actionText}
-                            </Button>
-                          )}
-                          
-                          <CollapsibleTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="p-1 h-8 w-8"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <ChevronDown 
-                                className={cn(
-                                  "h-4 w-4 text-gray-400 transition-transform duration-200",
-                                  openItems.includes(item.id) && "rotate-180"
-                                )} 
-                              />
-                            </Button>
-                          </CollapsibleTrigger>
-                        </div>
-                      </div>
-                     
-                      <AnimatePresence>
-                        {openItems.includes(item.id) && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ 
-                              duration: 0.4,
-                              ease: [0.04, 0.62, 0.23, 0.98]
-                            }}
-                            className="overflow-hidden"
-                      >
-                        <div className="px-4 pb-4 border-t border-gray-100">
-                         <p className="text-xs text-gray-600 mb-4 mt-3">
-                           {item.description}
-                         </p>
-                           {item.actionType === 'url' ? (
-                             <Button 
-                               size="sm" 
-                               asChild
-                               className={cn(
-                                 "text-white",
-                                 item.completed 
-                                   ? "bg-gray-500 hover:bg-gray-600" 
-                                   : "bg-[#007aff] hover:bg-[#339fff]"
-                               )}
-                             >
-                               <Link 
-                                 href={item.actionUrl!} 
-                                 className="inline-flex items-center gap-2"
-                                 onClick={(e) => e.stopPropagation()}
-                               >
-                                 {item.completed ? "Modify" : item.actionText}
-                                 <ExternalLink className="h-3 w-3" />
-                               </Link>
-                             </Button>
-                           ) : (
-                             <Button 
-                               size="sm" 
-                               className={cn(
-                                 "text-white inline-flex items-center gap-2",
-                                 item.completed 
-                                   ? "bg-gray-500 hover:bg-gray-600" 
-                                   : "bg-[#007aff] hover:bg-[#339fff]"
-                               )}
-                               onClick={(e) => {
-                                 e.stopPropagation()
-                                 item.popupAction?.()
-                               }}
-                             >
-                               {item.completed ? "Modify" : item.actionText}
-                               <ExternalLink className="h-3 w-3" />
-                             </Button>
-                           )}
-                       </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                   </Collapsible>
-               </div>
-               
-               {/* Add separator after email-summary-agent */}
-               {item.id === 'email-summary-agent' && (
-                 <div className="my-6 flex items-center">
-                   <div className="flex-1 h-px bg-gray-200"></div>
-                   <div className="px-4">
-                     <span className="text-xs font-medium text-gray-500 bg-white px-2">Custom Agents</span>
-                   </div>
-                   <div className="flex-1 h-px bg-gray-200"></div>
-                 </div>
-               )}
-             </React.Fragment>
-             ))}
+                </div>
               </div>
             </div>
           </div>
-           </div>
 
                       {/* Simple Completion Message */}
-           {completedCount === checklistItems.length && (
+           {completedCount === loyaltyItems.length && (
              <div className="mt-8 p-6 bg-green-50 border border-green-200 rounded-md">
                <div className="flex items-center gap-3">
                  <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
@@ -1182,10 +920,7 @@ export default function GetStartedPage() {
         onOpenChange={setShowCreatePointsRule} 
       />
       
-      <NetworkRewardPopup 
-        open={showNetworkReward} 
-        onOpenChange={setShowNetworkReward} 
-      />
+      {/* NetworkRewardPopup removed */}
       
       <WelcomePopup 
         open={showWelcomePopup} 

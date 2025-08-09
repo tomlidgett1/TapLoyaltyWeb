@@ -80,6 +80,7 @@ import { SettingsDialog } from "@/components/settings-dialog"
 import { NavUser } from "@/components/nav-user"
 import { NavCreate } from "@/components/nav-create"
 import { motion, AnimatePresence } from "framer-motion"
+import IntroGuidePopup from "@/components/intro-guide-popup"
 
 // Get auth instance
 const auth = getAuth();
@@ -267,6 +268,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   const [supportMessage, setSupportMessage] = useState("")
   const [supportLoading, setSupportLoading] = useState(false)
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false)
+  const [introGuideOpen, setIntroGuideOpen] = useState(false)
   
   // Merchant status and plan state
   const [merchantStatus, setMerchantStatus] = useState<'active' | 'inactive'>('active')
@@ -971,6 +973,23 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
         <div className="border-t border-gray-200"></div>
       </div>
       
+      {/* Intro test button */}
+      <div className="px-3 mb-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setIntroGuideOpen(true)}
+          className={cn(
+            "w-full h-7 rounded-md text-sm font-medium flex items-center gap-2",
+            "hover:bg-gray-200"
+          )}
+          title="Intro"
+        >
+          <Sparkles className="h-4 w-4 text-gray-600" />
+          {!isCollapsed && <span className="text-gray-800">Intro</span>}
+        </Button>
+      </div>
+
       <nav 
         className={cn(
           "px-3 py-1.5 flex-1",
@@ -1527,6 +1546,9 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
 
       {/* Settings Dialog */}
       <SettingsDialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen} />
+
+      {/* Intro Guide Popup */}
+      <IntroGuidePopup open={introGuideOpen} onOpenChange={setIntroGuideOpen} />
     </div>
   )
 }

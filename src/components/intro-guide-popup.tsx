@@ -37,7 +37,8 @@ import { DemoIPhone } from "@/components/demo-iphone"
     Info,
     Fingerprint,
     ChevronDown,
-    Clock
+    Clock,
+    Download
   } from "lucide-react"
 
 type IntroGuidePopupProps = {
@@ -54,7 +55,7 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
     subtitle: string | React.ReactNode
     description?: string
     features?: { icon: any; text: string }[]
-    visual?: "welcome" | "rewards" | "programs" | "messages" | "intro-rewards" | "banners" | "tapcash" | "customprograms" | "pointsrules" | "membershiptiers"
+    visual?: "welcome" | "rewards" | "programs" | "messages" | "intro-rewards" | "banners" | "tapcash" | "customprograms" | "pointsrules" | "membershiptiers" | "appdownload"
     key: string
   }[] = [
     // Introduction & Overview
@@ -132,6 +133,19 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
         { icon: Award, text: "Growing stronger together, every day" }
       ],
       key: "networkeffect"
+    },
+    {
+      title: "How It Works for Customers",
+      subtitle: "Simple 3-step process",
+      description: "Your customers join once and earn everywhere – no cards, no scanning, just seamless rewards.",
+      features: [
+        { icon: Download, text: "Download the Tap app from App Store" },
+        { icon: Shield, text: "Connect their bank (ACCC & Government approved)" },
+        { icon: CreditCard, text: "Shop normally – points add automatically" },
+        { icon: Sparkles, text: "Redeem rewards with a simple PIN" }
+      ],
+      visual: "appdownload",
+      key: "howcustomers"
     },
     
     // How Points & Rewards Work
@@ -661,6 +675,29 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
     
     if (type === "membershiptiers") {
       return null // Visual removed per request
+    }
+    
+    if (type === "appdownload") {
+      return (
+        <div className="relative w-full mt-8 space-y-4 text-left">
+          <img
+            src="/appstore.svg"
+            alt="Available on App Store"
+            className="h-12 mb-4"
+          />
+          <p className="text-sm text-gray-600 mb-2">
+            Currently available on iOS
+          </p>
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <Shield className="h-3.5 w-3.5" />
+            <span>ACCC & Government Approved</span>
+          </div>
+          <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-white rounded-md border border-gray-200">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <span className="text-xs font-medium text-gray-700">Android coming soon</span>
+          </div>
+        </div>
+      )
     }
     
     // removed analytics visual per request

@@ -504,6 +504,9 @@ export default function GetStartedPage() {
       // Create preview URL
       const previewUrl = URL.createObjectURL(file)
       setLogoPreview(previewUrl)
+      
+      // Auto-upload the file immediately, passing the file directly
+      uploadToFirebaseStorage(file)
     }
   }
 
@@ -512,13 +515,23 @@ export default function GetStartedPage() {
     fileInput?.click()
   }
 
-  const uploadToFirebaseStorage = async () => {
-    if (!uploadedLogo || !user?.uid) {
-      toast({
-        title: "Upload failed",
-        description: !uploadedLogo ? 'Please select a logo first' : 'Authentication required',
-        variant: "destructive"
-      })
+  const uploadToFirebaseStorage = async (fileToUpload?: File) => {
+    const fileToUse = fileToUpload || uploadedLogo
+    
+    if (!fileToUse || !user?.uid) {
+      if (!fileToUse) {
+        toast({
+          title: "Upload failed",
+          description: 'Please select a logo first',
+          variant: "destructive"
+        })
+      } else {
+        toast({
+          title: "Upload failed", 
+          description: 'Authentication required',
+          variant: "destructive"
+        })
+      }
       return
     }
 
@@ -530,8 +543,8 @@ export default function GetStartedPage() {
       
       // Upload to Firebase Storage
       const storageRef = ref(getStorage(), storagePath)
-      const uploadTask = uploadBytesResumable(storageRef, uploadedLogo, { 
-        contentType: uploadedLogo.type || 'application/octet-stream' 
+      const uploadTask = uploadBytesResumable(storageRef, fileToUse, { 
+        contentType: fileToUse.type || 'application/octet-stream' 
       })
       
       await new Promise<void>((resolve, reject) => {
@@ -706,6 +719,12 @@ export default function GetStartedPage() {
                                   <span className="text-gray-400 mt-0.5">•</span>
                                   <span>Make it recognisable to customers</span>
                                 </div>
+                                {uploadedLogo && !item.completed && (
+                                  <div className="flex items-start gap-1 mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                                    <span className="text-blue-600 mt-0.5">📁</span>
+                                    <span className="text-blue-700 font-medium">File selected: {uploadedLogo.name}</span>
+                                  </div>
+                                )}
                               </>
                             )}
                             {item.id === 'intro-reward' && (
@@ -786,22 +805,14 @@ export default function GetStartedPage() {
                         
                         {/* Action buttons */}
                         <div className="flex items-center gap-2 mt-auto">
-                          {/* Special handling for logo upload with upload button */}
-                          {item.id === 'upload-logo' && uploadedLogo && !uploadedUrl && (
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              className="text-xs flex-1 h-8"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                uploadToFirebaseStorage()
-                              }}
-                              disabled={isUploading}
-                            >
-                              {isUploading ? "Uploading..." : "Upload"}
-                            </Button>
+                          {/* Special handling for logo upload - show status when uploading */}
+                          {item.id === 'upload-logo' && isUploading && (
+                            <div className="flex items-center gap-2 flex-1 h-8 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-md">
+                              <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
+                              <span className="text-xs text-blue-700 font-medium">Uploading...</span>
+                            </div>
                           )}
-                          {!item.completed && !(item.id === 'upload-logo' && uploadedLogo && !uploadedUrl) && (
+                          {!item.completed && !isUploading && (
                             <Button 
                               size="sm" 
                               className={cn(

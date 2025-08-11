@@ -1,25 +1,19 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { createUserWithEmailAndPassword, updateProfile, getAuth, fetchSignInMethodsForEmail } from "firebase/auth"
-import { doc, setDoc, GeoPoint } from "firebase/firestore"
+import { createUserWithEmailAndPassword, updateProfile, fetchSignInMethodsForEmail } from "firebase/auth"
+import { doc, setDoc, collection, query, where, getDocs } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { toast } from "@/components/ui/use-toast"
-import { Eye, EyeOff, ArrowRight, Loader2, ChevronLeft, ChevronRight, ShieldCheck, Users, Zap, Mail } from "lucide-react"
+import { Eye, EyeOff, ArrowRight, Loader2, ChevronLeft, ChevronRight, Mail } from "lucide-react"
 import Link from "next/link"
-import Image from "next/image"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { collection, query, where, getDocs, getDoc } from "firebase/firestore"
-import Script from "next/script"
-import { PageTransition } from "@/components/page-transition"
 import { cn } from "@/lib/utils"
 import { MapLocationPicker } from "@/components/map-location-picker"
 
@@ -80,7 +74,7 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [currentStep, setCurrentStep] = useState(1)
-  const totalSteps = 8
+  const totalSteps = 7
   const [validationErrors, setValidationErrors] = useState<string[]>([])
   
   // Step 1: Basic Auth
@@ -88,146 +82,6 @@ export default function SignupPage() {
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   
-  // Step 2: Template Selection (NEW)
-  const [selectedTemplate, setSelectedTemplate] = useState<string>("")
-  const [availableTemplates, setAvailableTemplates] = useState<Array<{value: string, label: string, description: string, address: string, data: any}>>([])
-  const [loadingTemplates, setLoadingTemplates] = useState(false)
-  
-  // Load available templates
-  useEffect(() => {
-    const loadTemplates = async () => {
-      setLoadingTemplates(true)
-      try {
-        // Fetch templates from Firestore
-        const templatesRef = collection(db, 'templatemerchant')
-        const templatesSnapshot = await getDocs(templatesRef)
-        
-        const templates = templatesSnapshot.docs.map(doc => {
-          const data = doc.data()
-          console.log('Template data:', doc.id, data) // Debug log
-          
-          // Handle both old structure (name) and new structure (merchantName)
-          const displayName = data.merchantName || data.name || `${data.businessType || 'Unknown'} Template`
-          const businessType = data.businessType || 'Unknown'
-          const address = data.location?.address || `${data.address?.street || ''} ${data.address?.suburb || ''}`.trim() || ''
-          
-          return {
-            value: doc.id,
-            label: displayName,
-            description: businessType,
-            address: address,
-            data: data
-          }
-        })
-        
-        // Add "Start from Scratch" option
-        templates.push({
-          value: "custom",
-          label: "Start from Scratch",
-          description: "Build your own custom setup",
-          address: "",
-          data: {}
-        })
-        
-        setAvailableTemplates(templates)
-      } catch (error) {
-        console.error("Error loading templates:", error)
-        // Set default templates if Firestore fails
-        setAvailableTemplates([
-          { value: "custom", label: "Start from Scratch", description: "Build your own custom setup", address: "", data: {} }
-        ])
-      } finally {
-        setLoadingTemplates(false)
-      }
-    }
-    
-    loadTemplates()
-  }, [])
-  
-  // Apply template data when template is selected
-  const applyTemplate = async (templateId: string) => {
-    if (templateId === "custom") return // Skip for custom
-    
-    try {
-      const templateDoc = await getDoc(doc(db, 'templatemerchant', templateId))
-      if (templateDoc.exists()) {
-        const templateData = templateDoc.data()
-        
-        // Apply business details
-        if (templateData.businessType) setBusinessType(templateData.businessType)
-        if (templateData.merchantName) {
-          setTradingName(templateData.merchantName)
-          setLegalBusinessName(templateData.merchantName) // Use same for legal name
-        }
-        if (templateData.businessPhone) setBusinessPhone(templateData.businessPhone)
-        
-        // Apply address information
-        if (templateData.address) {
-          if (templateData.address.street) setStreet(templateData.address.street)
-          if (templateData.address.suburb) setSuburb(templateData.address.suburb)
-          if (templateData.address.state) setState(templateData.address.state)
-          if (templateData.address.postcode) setPostcode(templateData.address.postcode)
-          if (templateData.address.latitude) setLatitude(templateData.address.latitude)
-          if (templateData.address.longitude) setLongitude(templateData.address.longitude)
-          if (templateData.address.formattedAddress) setFormattedAddress(templateData.address.formattedAddress)
-        }
-        
-        // Apply location coordinates if available
-        if (templateData.location?.coordinates) {
-          setLatitude(templateData.location.coordinates.latitude)
-          setLongitude(templateData.location.coordinates.longitude)
-          if (templateData.location.displayAddress) setFormattedAddress(templateData.location.displayAddress)
-        }
-        
-        // Apply operating hours - handle both formats
-        if (templateData.operatingHours) {
-          const convertedHours: OperatingHours = {}
-          Object.keys(templateData.operatingHours).forEach(day => {
-            const dayData = templateData.operatingHours[day]
-            convertedHours[day] = {
-              isOpen: dayData.isOpen,
-              openTime: dayData.open || dayData.openTime || "09:00",
-              closeTime: dayData.close || dayData.closeTime || "17:00"
-            }
-          })
-          setOperatingHours(convertedHours)
-        }
-        
-        // Apply business systems
-        if (templateData.pointOfSale) setPointOfSale(templateData.pointOfSale)
-        if (templateData.paymentProvider) setPaymentProvider(templateData.paymentProvider)
-        
-        // Apply representative details if available
-        if (templateData.representative) {
-          if (templateData.representative.name) setRepName(templateData.representative.name)
-          if (templateData.representative.phone) setRepPhone(templateData.representative.phone)
-        }
-        
-        // Set business email to a template-based email if not provided
-        if (templateData.merchantName && !businessEmail) {
-          const emailDomain = templateData.website ? 
-            templateData.website.replace(/https?:\/\//, '').replace(/^www\./, '') : 
-            `${templateData.merchantName.toLowerCase().replace(/\s+/g, '')}.com.au`
-          setBusinessEmail(`info@${emailDomain}`)
-        }
-        
-        // Store complete template data for later use
-        setTemplateData(templateData)
-        
-        toast({
-          title: "Template Applied!",
-          description: `${templateData.merchantName || templateData.name || 'Template'} has been applied to your account.`,
-        })
-      }
-    } catch (error) {
-      console.error("Error applying template:", error)
-      toast({
-        title: "Error",
-        description: "Failed to apply template. Please try again.",
-        variant: "destructive"
-      })
-    }
-  }
   
   // Step 3: Business Details (was Step 2)
   const [legalBusinessName, setLegalBusinessName] = useState("")
@@ -265,11 +119,9 @@ export default function SignupPage() {
   
   // Step 7: Business Verification & Systems (was Step 6)
   const [abn, setAbn] = useState("")
-  const [pointOfSale, setPointOfSale] = useState("lightspeed")
-  const [paymentProvider, setPaymentProvider] = useState("square")
+  const [pointOfSale, setPointOfSale] = useState("")
+  const [paymentProvider, setPaymentProvider] = useState("")
   
-  // Template data storage for complete address and location
-  const [templateData, setTemplateData] = useState<any>(null)
   
   // Australian phone number validation function
   const validateAustralianPhone = (phone: string) => {
@@ -337,12 +189,7 @@ export default function SignupPage() {
         if (password && password.length < 8) errors.push("Password must be at least 8 characters")
         if (password !== confirmPassword) errors.push("Passwords do not match")
         break
-        
-      case 2: // Template Selection
-        if (!selectedTemplate) errors.push("Template is required")
-        break
-        
-      case 3: // Business Details
+      case 2: // Business Details
         if (!legalBusinessName) errors.push("Legal business name is required")
         if (!tradingName) errors.push("Trading name is required")
         if (!businessEmail) errors.push("Business email is required")
@@ -351,7 +198,7 @@ export default function SignupPage() {
         if (businessPhone && !validateAustralianPhone(businessPhone)) errors.push("Invalid Australian phone number format")
         break
         
-      case 4:
+      case 3:
         if (!latitude || !longitude) errors.push("Please select your store location on the map")
         if (!street) errors.push("Street address is required")
         if (!suburb) errors.push("Suburb is required")
@@ -360,7 +207,7 @@ export default function SignupPage() {
         if (postcode && (postcode.length !== 4 || !/^\d+$/.test(postcode))) errors.push("Postcode must be 4 digits")
         break
         
-      case 5: // Address Details
+      case 4: // Address Details
         if (!street) errors.push("Street address is required")
         if (!suburb) errors.push("Suburb is required")
         if (!state) errors.push("State is required")
@@ -368,7 +215,7 @@ export default function SignupPage() {
         if (postcode && (postcode.length !== 4 || !/^\d+$/.test(postcode))) errors.push("Postcode must be 4 digits")
         break
         
-      case 6: // Operating Hours
+      case 5: // Operating Hours
         // Basic validation for operating hours
         for (const day of daysOfWeek) {
           const dayLower = day.toLowerCase()
@@ -379,14 +226,16 @@ export default function SignupPage() {
         }
         break
         
-      case 7: // Representative
+      case 6: // Representative
         if (!repName) errors.push("Representative name is required")
         if (!repPhone) errors.push("Contact phone is required")
         if (repPhone && !validateAustralianPhone(repPhone)) errors.push("Invalid Australian phone number format")
         break
         
-      case 8: // ABN & Verification
+      case 7: // ABN & Verification
         if (!abn) errors.push("ABN is required")
+        if (!pointOfSale) errors.push("Point of Sale system is required")
+        if (!paymentProvider) errors.push("Payment provider is required")
         if (abn && (abn.length !== 11 || !/^\d+$/.test(abn))) errors.push("ABN must be 11 digits")
         break
     }
@@ -402,10 +251,11 @@ export default function SignupPage() {
     if (currentStep === 1) {
       setLoading(true);
       try {
-        console.log("Checking if email exists:", email);
+        const normalizedEmail = email.trim().toLowerCase();
+        console.log("Checking if email exists:", normalizedEmail);
         
         // First check with Firebase Auth
-        const signInMethods = await fetchSignInMethodsForEmail(auth, email);
+        const signInMethods = await fetchSignInMethodsForEmail(auth, normalizedEmail);
         if (signInMethods.length > 0) {
           setValidationErrors(["An account with this email already exists. Please use a different email or sign in."]);
           setLoading(false);
@@ -414,7 +264,7 @@ export default function SignupPage() {
         
         // Also check Firestore for existing merchants
         const merchantsRef = collection(db, 'merchants');
-        const q = query(merchantsRef, where('businessEmail', '==', email));
+        const q = query(merchantsRef, where('businessEmail', '==', normalizedEmail));
         const querySnapshot = await getDocs(q);
         
         if (!querySnapshot.empty) {
@@ -471,17 +321,14 @@ export default function SignupPage() {
       const merchantData = {
         // Auth info
         userId: user.uid,
-        email: email,
+         email: email.trim().toLowerCase(),
         
         // Business details
         legalBusinessName,
         merchantName: tradingName, // Save trading name as merchantName
-        businessEmail,
+         businessEmail: businessEmail.trim().toLowerCase(),
         businessPhone,
         businessType,
-        
-        // Template reference
-        ...(selectedTemplate && selectedTemplate !== "custom" && { merchantId: selectedTemplate }),
         
         // Address - use user-selected location data
         address: {
@@ -519,12 +366,8 @@ export default function SignupPage() {
         
         // Business verification
         abn,
-        pointOfSale,
-        paymentProvider,
-        
-        // Additional template fields
-        ...(templateData?.website && { website: templateData.website }),
-        ...(templateData?.posCategory && { posCategory: templateData.posCategory }),
+        ...(pointOfSale && { pointOfSale }),
+        ...(paymentProvider && { paymentProvider }),
         
         // System fields
         createdAt: new Date(),
@@ -573,13 +416,12 @@ export default function SignupPage() {
   const getStepTitle = () => {
     switch (currentStep) {
       case 1: return "Create your account"
-      case 2: return "Choose a template"
-      case 3: return "Tell us about your business"
-      case 4: return "Where are you located?"
-      case 5: return "Address Details"
-      case 6: return "When are you open?"
-      case 7: return "Who should we contact?"
-      case 8: return "Let's verify your business"
+      case 2: return "Tell us about your business"
+      case 3: return "Where are you located?"
+      case 4: return "Address Details"
+      case 5: return "When are you open?"
+      case 6: return "Who should we contact?"
+      case 7: return "Let's verify your business"
       default: return "Create Account"
     }
   }
@@ -587,13 +429,12 @@ export default function SignupPage() {
   const getStepDescription = () => {
     switch (currentStep) {
       case 1: return "Start by creating your secure account"
-      case 2: return "Choose a template to get started quickly"
-      case 3: return "Help us understand your business better"
-      case 4: return "We need your business address for customer matching"
-      case 5: return "Review and edit your store address"
-      case 6: return "Set your operating hours for customer visibility"
-      case 7: return "Primary contact for your loyalty program"
-      case 8: return "Final details to get you started"
+      case 2: return "Help us understand your business better"
+      case 3: return "Help customers find your store location"
+      case 4: return "Review and edit your store address"
+      case 5: return "Set your operating hours for customer visibility"
+      case 6: return "Primary contact for your loyalty program"
+      case 7: return "Final details to get you started"
       default: return ""
     }
   }
@@ -604,7 +445,7 @@ export default function SignupPage() {
         return (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-gray-900">Email address</Label>
+              <Label htmlFor="email" className="text-sm font-medium text-gray-900">Email address<span className="text-red-500 ml-0.5">*</span></Label>
               <Input
                 id="email"
                 type="email"
@@ -617,7 +458,7 @@ export default function SignupPage() {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-medium text-gray-900">Password</Label>
+              <Label htmlFor="password" className="text-sm font-medium text-gray-900">Password<span className="text-red-500 ml-0.5">*</span></Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -639,7 +480,7 @@ export default function SignupPage() {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-900">Confirm password</Label>
+              <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-900">Confirm password<span className="text-red-500 ml-0.5">*</span></Label>
               <Input
                 id="confirmPassword"
                 type="password"
@@ -654,50 +495,10 @@ export default function SignupPage() {
         )
         
       case 2:
-         return (
-           <div className="space-y-6">
-             <div className="space-y-2">
-               <Label htmlFor="template" className="text-sm font-medium text-gray-900">Select Template</Label>
-               {loadingTemplates ? (
-                 <div className="flex items-center justify-center py-4">
-                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                   <span className="text-sm text-gray-500">Loading templates...</span>
-                 </div>
-               ) : (
-                 <Select 
-                   value={selectedTemplate} 
-                   onValueChange={(value) => {
-                     setSelectedTemplate(value)
-                     applyTemplate(value)
-                   }}
-                 >
-                   <SelectTrigger className="h-10 rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF]">
-                     <SelectValue placeholder="Choose a template to get started" />
-                   </SelectTrigger>
-                   <SelectContent>
-                     {availableTemplates.map(template => (
-                       <SelectItem key={template.value} value={template.value}>
-                         <div className="flex flex-col items-start">
-                           <span className="font-medium">{template.label}</span>
-                           <div className="flex gap-2 text-xs text-gray-500">
-                             <span>{template.description}</span>
-                             {template.address && <span>• {template.address}</span>}
-                           </div>
-                         </div>
-                       </SelectItem>
-                     ))}
-                   </SelectContent>
-                 </Select>
-               )}
-             </div>
-           </div>
-         )
-        
-      case 3:
         return (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="legalBusinessName" className="text-sm font-medium text-gray-900">Legal Business Name</Label>
+              <Label htmlFor="legalBusinessName" className="text-sm font-medium text-gray-900">Legal Business Name<span className="text-red-500 ml-0.5">*</span></Label>
               <Input
                 id="legalBusinessName"
                 placeholder="As registered with ASIC"
@@ -709,7 +510,7 @@ export default function SignupPage() {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="tradingName" className="text-sm font-medium text-gray-900">Trading Name</Label>
+              <Label htmlFor="tradingName" className="text-sm font-medium text-gray-900">Trading Name<span className="text-red-500 ml-0.5">*</span></Label>
               <Input
                 id="tradingName"
                 placeholder="What customers know you as"
@@ -722,7 +523,7 @@ export default function SignupPage() {
             
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="businessEmail" className="text-sm font-medium text-gray-900">Business Email</Label>
+                <Label htmlFor="businessEmail" className="text-sm font-medium text-gray-900">Business Email<span className="text-red-500 ml-0.5">*</span></Label>
                 <Input
                   id="businessEmail"
                   type="email"
@@ -735,7 +536,7 @@ export default function SignupPage() {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="businessPhone" className="text-sm font-medium text-gray-900">Business Phone</Label>
+                <Label htmlFor="businessPhone" className="text-sm font-medium text-gray-900">Business Phone<span className="text-red-500 ml-0.5">*</span></Label>
                 <Input
                   id="businessPhone"
                   placeholder="0412 345 678 or 12345678"
@@ -775,11 +576,11 @@ export default function SignupPage() {
           </div>
         )
         
-      case 4:
+      case 3:
         return (
           <div className="space-y-4">
             <div className="space-y-2">
-              <h3 className="text-sm font-medium text-gray-900">Store Location</h3>
+              <h3 className="text-sm font-medium text-gray-900">Store Location<span className="text-red-500 ml-0.5">*</span></h3>
               <p className="text-xs text-gray-600">
                 Search for your business address or click on the map to set your exact location
               </p>
@@ -812,7 +613,7 @@ export default function SignupPage() {
           </div>
         )
         
-      case 5:
+      case 4:
         return (
           <div className="space-y-4">
             <div className="space-y-2">
@@ -824,7 +625,7 @@ export default function SignupPage() {
             
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="street" className="text-sm font-medium text-gray-900">Street Address</Label>
+                <Label htmlFor="street" className="text-sm font-medium text-gray-900">Street Address<span className="text-red-500 ml-0.5">*</span></Label>
                 <Input
                   id="street"
                   placeholder="123 Main Street"
@@ -837,7 +638,7 @@ export default function SignupPage() {
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="suburb" className="text-sm font-medium text-gray-900">Suburb</Label>
+                  <Label htmlFor="suburb" className="text-sm font-medium text-gray-900">Suburb<span className="text-red-500 ml-0.5">*</span></Label>
                   <Input
                     id="suburb"
                     placeholder="Sydney"
@@ -849,7 +650,7 @@ export default function SignupPage() {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="postcode" className="text-sm font-medium text-gray-900">Postcode</Label>
+                  <Label htmlFor="postcode" className="text-sm font-medium text-gray-900">Postcode<span className="text-red-500 ml-0.5">*</span></Label>
                   <Input
                     id="postcode"
                     placeholder="2000"
@@ -862,7 +663,7 @@ export default function SignupPage() {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="state" className="text-sm font-medium text-gray-900">State</Label>
+                <Label htmlFor="state" className="text-sm font-medium text-gray-900">State<span className="text-red-500 ml-0.5">*</span></Label>
                 <Select value={state} onValueChange={setState}>
                   <SelectTrigger className="h-10 rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF]">
                     <SelectValue placeholder="Select state" />
@@ -878,10 +679,10 @@ export default function SignupPage() {
               </div>
               
               {formattedAddress && (
-                <div className="p-3 bg-blue-50 border border-blue-100 rounded-md">
-                  <p className="text-xs text-blue-600 font-medium mb-1">Selected Location:</p>
-                  <p className="text-sm text-blue-800">{formattedAddress}</p>
-                  <p className="text-xs text-blue-600 mt-1">
+                <div className="p-3 bg-white border border-gray-200 rounded-xl">
+                  <p className="text-xs text-blue-600 font-medium mb-1">Selectedd Location:</p>
+                  <p className="text-sm text-black-800">{formattedAddress}</p>
+                  <p className="text-xs text-black-600 mt-1">
                     Coordinates: {latitude?.toFixed(6)}, {longitude?.toFixed(6)}
                   </p>
                 </div>
@@ -889,8 +690,7 @@ export default function SignupPage() {
             </div>
           </div>
         )
-        
-      case 6:
+      case 5:
         return (
           <div className="space-y-4">
             <p className="text-sm text-gray-600 mb-4">
@@ -963,7 +763,7 @@ export default function SignupPage() {
           </div>
         )
         
-      case 7:
+      case 6:
         return (
           <div className="space-y-4">
             <p className="text-sm text-gray-600 mb-4">
@@ -971,7 +771,7 @@ export default function SignupPage() {
             </p>
             
             <div className="space-y-2">
-              <Label htmlFor="repName" className="text-sm font-medium text-gray-900">Contact Name</Label>
+              <Label htmlFor="repName" className="text-sm font-medium text-gray-900">Contact Name<span className="text-red-500 ml-0.5">*</span></Label>
               <Input
                 id="repName"
                 placeholder="John Smith"
@@ -983,7 +783,7 @@ export default function SignupPage() {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="repPhone" className="text-sm font-medium text-gray-900">Contact Phone</Label>
+              <Label htmlFor="repPhone" className="text-sm font-medium text-gray-900">Contact Phone<span className="text-red-500 ml-0.5">*</span></Label>
               <Input
                 id="repPhone"
                 placeholder="0412 345 678 or 12345678"
@@ -1006,11 +806,11 @@ export default function SignupPage() {
           </div>
         )
         
-      case 8:
+      case 7:
         return (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="abn" className="text-sm font-medium text-gray-900">ABN (Australian Business Number)</Label>
+              <Label htmlFor="abn" className="text-sm font-medium text-gray-900">ABN (Australian Business Number)<span className="text-red-500 ml-0.5">*</span></Label>
               <Input
                 id="abn"
                 placeholder="11 digit ABN"
@@ -1026,7 +826,7 @@ export default function SignupPage() {
             
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="pointOfSale" className="text-sm font-medium text-gray-900">Point of Sale System</Label>
+                <Label htmlFor="pointOfSale" className="text-sm font-medium text-gray-900">Point of Sale System<span className="text-red-500 ml-0.5">*</span></Label>
                 <Select value={pointOfSale} onValueChange={setPointOfSale}>
                   <SelectTrigger className="h-10 rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF]">
                     <SelectValue placeholder="Select POS system" />
@@ -1042,7 +842,7 @@ export default function SignupPage() {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="paymentProvider" className="text-sm font-medium text-gray-900">Payment Provider</Label>
+                <Label htmlFor="paymentProvider" className="text-sm font-medium text-gray-900">Payment Provider<span className="text-red-500 ml-0.5">*</span></Label>
                 <Select value={paymentProvider} onValueChange={setPaymentProvider}>
                   <SelectTrigger className="h-10 rounded-md border-gray-300 focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF]">
                     <SelectValue placeholder="Select payment provider" />

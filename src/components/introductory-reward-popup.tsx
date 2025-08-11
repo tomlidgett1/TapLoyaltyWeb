@@ -63,6 +63,7 @@ export function IntroductoryRewardPopup({ open, onOpenChange }: IntroductoryRewa
   const [existingRewards, setExistingRewards] = useState<ExistingReward[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [showExistingRewards, setShowExistingRewards] = useState(false)
   const [expandedRewards, setExpandedRewards] = useState<Record<string, boolean>>({})
   const { toast } = useToast()
   const { user } = useAuth()
@@ -93,8 +94,15 @@ export function IntroductoryRewardPopup({ open, onOpenChange }: IntroductoryRewa
         
         setExistingRewards(rewards);
         
-        // If they have no rewards or less than max, show create form by default
-        setShowCreateForm(rewards.length === 0);
+        // If they have no rewards, show create form by default
+        // Otherwise show existing rewards first
+        if (rewards.length === 0) {
+          setShowCreateForm(true);
+          setShowExistingRewards(false);
+        } else {
+          setShowCreateForm(false);
+          setShowExistingRewards(true);
+        }
         
         // Reset expanded state - all collapsed by default
         setExpandedRewards({});
@@ -266,6 +274,7 @@ export function IntroductoryRewardPopup({ open, onOpenChange }: IntroductoryRewa
       })
       setCurrentStep(1)
       setShowCreateForm(false)
+      setShowExistingRewards(true)
       
       // Refresh the existing rewards list
       const updatedRewards = [...existingRewards, rewardWithId as ExistingReward];
@@ -430,175 +439,7 @@ export function IntroductoryRewardPopup({ open, onOpenChange }: IntroductoryRewa
     }
   }
 
-  // Render the existing rewards view
-  const renderExistingRewards = () => {
-    return (
-      <div className="flex-1 overflow-y-auto p-5 min-h-0">
-        <div className="bg-white border border-gray-200 rounded-xl p-3 text-xs text-gray-800 mb-4">
-          <div className="flex items-start gap-2">
-            <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="font-medium">Introductory Rewards ({existingRewards.length}/{MAX_INTRODUCTORY_REWARDS})</p>
-              <p className="text-xs">You can create up to {MAX_INTRODUCTORY_REWARDS} different introductory rewards to welcome new customers.</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="space-y-2">
-          {existingRewards.map((reward) => {
-            const isExpanded = expandedRewards[reward.id] || false;
-            return (
-              <Card key={reward.id} className="shadow-sm rounded-xl overflow-hidden border border-gray-200">
-                {/* Header - Always Visible */}
-                <div 
-                  className="px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors border-b border-gray-100"
-                  onClick={() => toggleRewardExpansion(reward.id)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      {/* Icon */}
-                      <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                        {reward.type === "voucher" ? (
-                          <DollarSign className="h-3 w-3 text-blue-600" />
-                        ) : (
-                          <Coffee className="h-3 w-3 text-blue-600" />
-                        )}
-                      </div>
-                      
-                      {/* Title and Type */}
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-sm text-gray-900 truncate">{reward.rewardName}</h3>
-                        <p className="text-xs text-gray-500">
-                          {reward.type === "voucher" 
-                            ? `$${reward.voucherAmount?.toFixed(2)} voucher` 
-                            : `Free ${reward.itemName}`}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    {/* Right side controls */}
-                    <div className="flex items-center gap-3">
-                      {/* Active Switch */}
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={reward.isActive}
-                          onCheckedChange={() => handleToggleActive(reward)}
-                          size="sm"
-                        />
-                        <span className="text-xs text-gray-500">
-                          {reward.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </div>
-                      
-                      {/* Expand Icon */}
-                      <div className="text-gray-400">
-                        {isExpanded ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Collapsible Content */}
-                <div className={cn(
-                  "overflow-hidden transition-all duration-200 ease-in-out",
-                  isExpanded ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
-                )}>
-                  <CardContent className="pb-2 px-4 pt-3 space-y-3">
-                    {/* Description */}
-                    <div>
-                      <p className="text-xs text-gray-600 leading-relaxed">{reward.description}</p>
-                    </div>
-                    
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
-                      <div className="flex items-center gap-2">
-                        <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                          <Sparkles className="h-3 w-3 text-blue-600" />
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 leading-none">Customer Cost</p>
-                          <p className="text-sm font-medium leading-tight">Free (0 points)</p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <div className="h-6 w-6 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
-                          <CheckCircle className="h-3 w-3 text-purple-600" />
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 leading-none">Redemptions</p>
-                          <p className="text-sm font-medium leading-tight">{reward.redemptionCount} times</p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <div className="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                          <Info className="h-3 w-3 text-gray-600" />
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 leading-none">Created</p>
-                          <p className="text-sm font-medium leading-tight">{formatDate(reward.createdAt)}</p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <div className="h-6 w-6 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
-                          <Gift className="h-3 w-3 text-orange-600" />
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 leading-none">PIN Code</p>
-                          <p className="text-sm font-medium leading-tight font-mono">{reward.pin}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                  
-                  {/* Actions */}
-                  <CardFooter className="flex space-x-2 border-t border-gray-100 pt-3 pb-3 px-4">
-                    <Button 
-                      className="bg-[#007AFF] hover:bg-[#0071E3] text-white text-xs h-7 flex-1" 
-                      size="sm" 
-                      onClick={() => handleViewReward(reward.id)}
-                    >
-                      View Details
-                      <ExternalLink className="ml-1 h-3 w-3" />
-                    </Button>
-                    
-                    <Button 
-                      variant="destructive" 
-                      className="flex items-center justify-center gap-1 text-xs h-7 px-3"
-                      size="sm"
-                      onClick={() => handleDeleteReward(reward)}
-                      disabled={isSubmitting}
-                    >
-                      <Trash className="h-3 w-3" />
-                    </Button>
-                  </CardFooter>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-        
-        {existingRewards.length < MAX_INTRODUCTORY_REWARDS && (
-          <div className="mt-4 pt-4 border-t">
-            <Button 
-              onClick={() => setShowCreateForm(true)}
-              className="w-full bg-[#007AFF] hover:bg-[#0071E3] text-white text-sm h-9"
-              disabled={isSubmitting}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Create New Introductory Reward
-            </Button>
-          </div>
-        )}
-      </div>
-    );
-  }
+
 
   // Render create form with left panel navigation
   const renderCreateForm = () => {
@@ -632,42 +473,102 @@ export function IntroductoryRewardPopup({ open, onOpenChange }: IntroductoryRewa
             </div>
           </div>
           
-          {/* Steps navigation */}
+          {/* Navigation */}
           <div className="flex-1 p-6 overflow-y-auto min-h-0">
             <nav className="space-y-2">
-              {[
-                { step: 1, title: "Create Reward", desc: "Set up reward details" },
-                { step: 2, title: "Review & Submit", desc: "Confirm and create" }
-              ].map((item) => (
+              {/* View toggle buttons */}
+              <div className="space-y-2 mb-4">
                 <button
-                  key={item.step}
-                  onClick={() => handleStepChange(item.step)}
+                  onClick={() => {
+                    setShowCreateForm(true);
+                    setShowExistingRewards(false);
+                    setCurrentStep(1);
+                  }}
                   className={`w-full text-left p-3 rounded-md transition-colors ${
-                    currentStep === item.step
+                    showCreateForm
                       ? "bg-blue-100 text-blue-900 border border-blue-200"
-                      : item.step < currentStep
-                      ? "bg-white text-gray-700 hover:bg-gray-50"
-                      : "bg-white text-gray-400 cursor-not-allowed"
+                      : "bg-white text-gray-700 hover:bg-gray-50"
                   }`}
-                  disabled={item.step > currentStep + 1}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-                      currentStep === item.step
-                        ? "bg-blue-600 text-white"
-                        : item.step < currentStep
-                        ? "bg-green-500 text-white"
-                        : "bg-gray-200 text-gray-400"
+                      showCreateForm ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-600"
                     }`}>
-                      {item.step < currentStep ? "✓" : item.step}
+                      <Plus className="h-3 w-3" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium">{item.title}</p>
-                      <p className="text-xs text-gray-500">{item.desc}</p>
+                      <p className="text-sm font-medium">Create New Reward</p>
+                      <p className="text-xs text-gray-500">Set up new introductory reward</p>
                     </div>
                   </div>
                 </button>
-              ))}
+                
+                {existingRewards.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setShowCreateForm(false);
+                      setShowExistingRewards(true);
+                    }}
+                    className={`w-full text-left p-3 rounded-md transition-colors ${
+                      showExistingRewards
+                        ? "bg-blue-100 text-blue-900 border border-blue-200"
+                        : "bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                        showExistingRewards ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-600"
+                      }`}>
+                        <Gift className="h-3 w-3" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">Existing Rewards</p>
+                        <p className="text-xs text-gray-500">Manage {existingRewards.length} reward{existingRewards.length !== 1 ? 's' : ''}</p>
+                      </div>
+                    </div>
+                  </button>
+                )}
+              </div>
+              
+              {/* Steps navigation - only show when creating */}
+              {showCreateForm && (
+                <div className="pt-4 border-t border-gray-200">
+                  <p className="text-xs font-medium text-gray-600 mb-2 px-1">Creation Steps</p>
+                  {[
+                    { step: 1, title: "Create Reward", desc: "Set up reward details" },
+                    { step: 2, title: "Review & Submit", desc: "Confirm and create" }
+                  ].map((item) => (
+                    <button
+                      key={item.step}
+                      onClick={() => handleStepChange(item.step)}
+                      className={`w-full text-left p-3 rounded-md transition-colors ${
+                        currentStep === item.step
+                          ? "bg-blue-50 text-blue-900 border border-blue-200"
+                          : item.step < currentStep
+                          ? "bg-white text-gray-700 hover:bg-gray-50"
+                          : "bg-white text-gray-400 cursor-not-allowed"
+                      }`}
+                      disabled={item.step > currentStep + 1}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                          currentStep === item.step
+                            ? "bg-blue-600 text-white"
+                            : item.step < currentStep
+                            ? "bg-green-500 text-white"
+                            : "bg-gray-200 text-gray-400"
+                        }`}>
+                          {item.step < currentStep ? "✓" : item.step}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{item.title}</p>
+                          <p className="text-xs text-gray-500">{item.desc}</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </nav>
           </div>
         </div>
@@ -675,7 +576,163 @@ export function IntroductoryRewardPopup({ open, onOpenChange }: IntroductoryRewa
         {/* Right Panel - Content */}
         <div className="flex-1 flex flex-col h-full">
           <div className="flex-1 overflow-y-auto p-6 min-h-0">
-            {currentStep === 1 && (
+            {showExistingRewards && (
+              <div className="h-full">
+                <div className="mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Existing Introductory Rewards</h3>
+                  <div className="bg-white border border-gray-200 rounded-xl p-3 text-xs text-gray-800 mb-4">
+                    <div className="flex items-start gap-2">
+                      <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="font-medium">Introductory Rewards ({existingRewards.length}/{MAX_INTRODUCTORY_REWARDS})</p>
+                        <p className="text-xs">You can create up to {MAX_INTRODUCTORY_REWARDS} different introductory rewards to welcome new customers.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  {existingRewards.map((reward) => {
+                    const isExpanded = expandedRewards[reward.id] || false;
+                    return (
+                      <Card key={reward.id} className="shadow-sm rounded-xl overflow-hidden border border-gray-200">
+                        {/* Header - Always Visible */}
+                        <div 
+                          className="px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors border-b border-gray-100"
+                          onClick={() => toggleRewardExpansion(reward.id)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              {/* Icon */}
+                              <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                {reward.type === "voucher" ? (
+                                  <DollarSign className="h-3 w-3 text-blue-600" />
+                                ) : (
+                                  <Coffee className="h-3 w-3 text-blue-600" />
+                                )}
+                              </div>
+                              
+                              {/* Title and Type */}
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-medium text-sm text-gray-900 truncate">{reward.rewardName}</h3>
+                                <p className="text-xs text-gray-500">
+                                  {reward.type === "voucher" 
+                                    ? `$${reward.voucherAmount?.toFixed(2)} voucher` 
+                                    : `Free ${reward.itemName}`}
+                                </p>
+                              </div>
+                            </div>
+                            
+                            {/* Right side controls */}
+                            <div className="flex items-center gap-3">
+                              {/* Active Switch */}
+                              <div className="flex items-center gap-2">
+                                <Switch
+                                  checked={reward.isActive}
+                                  onCheckedChange={() => handleToggleActive(reward)}
+                                />
+                                <span className="text-xs text-gray-500">
+                                  {reward.isActive ? "Active" : "Inactive"}
+                                </span>
+                              </div>
+                              
+                              {/* Expand Icon */}
+                              <div className="text-gray-400">
+                                {isExpanded ? (
+                                  <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4" />
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Collapsible Content */}
+                        <div className={cn(
+                          "overflow-hidden transition-all duration-200 ease-in-out",
+                          isExpanded ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+                        )}>
+                          <CardContent className="pb-2 px-4 pt-3 space-y-3">
+                            {/* Description */}
+                            <div>
+                              <p className="text-xs text-gray-600 leading-relaxed">{reward.description}</p>
+                            </div>
+                            
+                            {/* Stats Grid */}
+                            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+                              <div className="flex items-center gap-2">
+                                <Sparkles className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                <div>
+                                  <p className="text-xs text-gray-500 leading-none">Customer Cost</p>
+                                  <p className="text-sm font-medium leading-tight">Free (0 points)</p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-2">
+                                <CheckCircle className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                <div>
+                                  <p className="text-xs text-gray-500 leading-none">Redemptions</p>
+                                  <p className="text-sm font-medium leading-tight">{reward.redemptionCount} times</p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-2">
+                                <Info className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                <div>
+                                  <p className="text-xs text-gray-500 leading-none">Created</p>
+                                  <p className="text-sm font-medium leading-tight">{formatDate(reward.createdAt)}</p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-2">
+                                <Gift className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                <div>
+                                  <p className="text-xs text-gray-500 leading-none">PIN Code</p>
+                                  <p className="text-sm font-medium leading-tight font-mono">{reward.pin}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                          
+                          {/* Actions */}
+                          <CardFooter className="flex space-x-2 border-t border-gray-100 pt-3 pb-3 px-4">
+                            <Button 
+                              variant="destructive" 
+                              className="flex items-center justify-center gap-1 text-xs h-7 px-3 ml-auto"
+                              size="sm"
+                              onClick={() => handleDeleteReward(reward)}
+                              disabled={isSubmitting}
+                            >
+                              <Trash className="h-3 w-3" />
+                            </Button>
+                          </CardFooter>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+                
+                {existingRewards.length < MAX_INTRODUCTORY_REWARDS && (
+                  <div className="mt-4 pt-4 border-t">
+                    <Button 
+                      onClick={() => {
+                        setShowCreateForm(true);
+                        setShowExistingRewards(false);
+                        setCurrentStep(1);
+                      }}
+                      className="w-full bg-[#007AFF] hover:bg-[#0071E3] text-white text-sm h-9"
+                      disabled={isSubmitting}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create New Introductory Reward
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {showCreateForm && currentStep === 1 && (
               <div className="mt-6 space-y-4">
                 <div className="bg-white border border-gray-200 rounded-xl p-3 text-xs text-gray-900 space-y-1">
                   <div className="flex items-start gap-2">
@@ -819,7 +876,7 @@ export function IntroductoryRewardPopup({ open, onOpenChange }: IntroductoryRewa
               </div>
             )}
 
-            {currentStep === 2 && (
+            {showCreateForm && currentStep === 2 && (
               <div className="mt-0 space-y-4">
                 <div className="bg-blue-50 border border-blue-100 rounded-md p-3 text-xs text-blue-800">
                   <div className="flex items-start gap-2">
@@ -896,54 +953,59 @@ export function IntroductoryRewardPopup({ open, onOpenChange }: IntroductoryRewa
             )}
           </div>
 
-          {/* Bottom Action Bar */}
-          <div className="border-t border-gray-200 p-4 md:p-6 bg-gray-50 flex-shrink-0">
-            <div className="flex justify-between items-center w-full">
-              {currentStep === 1 ? (
-                <>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setShowCreateForm(false)}
-                    size="sm"
-                    className="text-xs h-8"
-                  >
-                    Back to List
-                  </Button>
-                  <Button 
-                    onClick={() => handleStepChange(2)}
-                    className="bg-[#007AFF] hover:bg-[#0071E3] text-white text-xs h-8"
-                    size="sm"
-                  >
-                    Continue
-                    <ArrowRight className="ml-1 h-3 w-3" />
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => handleStepChange(1)}
-                    size="sm"
-                    className="text-xs h-8"
-                  >
-                    Back
-                  </Button>
-                  <Button 
-                    onClick={handleSubmit}
-                    disabled={isSubmitting}
-                    className="bg-[#007AFF] hover:bg-[#0071E3] text-white text-xs h-8"
-                    size="sm"
-                  >
-                    {isSubmitting ? (
-                      <>Creating Reward...</>
-                    ) : (
-                      <>Create Introductory Reward</>
-                    )}
-                  </Button>
-                </>
-              )}
+          {/* Bottom Action Bar - Only show when creating */}
+          {showCreateForm && (
+            <div className="border-t border-gray-200 p-4 md:p-6 bg-gray-50 flex-shrink-0">
+              <div className="flex justify-between items-center w-full">
+                {currentStep === 1 ? (
+                  <>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setShowCreateForm(false);
+                        setShowExistingRewards(existingRewards.length > 0);
+                      }}
+                      size="sm"
+                      className="text-xs h-8"
+                    >
+                      {existingRewards.length > 0 ? "Back to Rewards" : "Cancel"}
+                    </Button>
+                    <Button 
+                      onClick={() => handleStepChange(2)}
+                      className="bg-[#007AFF] hover:bg-[#0071E3] text-white text-xs h-8"
+                      size="sm"
+                    >
+                      Continue
+                      <ArrowRight className="ml-1 h-3 w-3" />
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => handleStepChange(1)}
+                      size="sm"
+                      className="text-xs h-8"
+                    >
+                      Back
+                    </Button>
+                    <Button 
+                      onClick={handleSubmit}
+                      disabled={isSubmitting}
+                      className="bg-[#007AFF] hover:bg-[#0071E3] text-white text-xs h-8"
+                      size="sm"
+                    >
+                      {isSubmitting ? (
+                        <>Creating Reward...</>
+                      ) : (
+                        <>Create Introductory Reward</>
+                      )}
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     );
@@ -965,6 +1027,7 @@ export function IntroductoryRewardPopup({ open, onOpenChange }: IntroductoryRewa
           })
           setCurrentStep(1)
           setShowCreateForm(false)
+          setShowExistingRewards(false)
           setRewardType("voucher")
         }
         onOpenChange(open)
@@ -978,27 +1041,12 @@ export function IntroductoryRewardPopup({ open, onOpenChange }: IntroductoryRewa
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
           
-          {!showCreateForm ? (
-            <div className="flex flex-col h-full">
-              <div className="flex-shrink-0 px-6 py-3 border-b">
-                <h2 className="text-xl font-semibold text-gray-900 mb-1">
-                  <span className="text-blue-500">Manage</span> Introductory Rewards
-                </h2>
-                <p className="text-sm text-gray-600">
-                  Manage your introductory rewards ({existingRewards.length}/{MAX_INTRODUCTORY_REWARDS})
-                </p>
+          {isLoading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-2">
+                <div className="animate-spin h-6 w-6 border-3 border-blue-200 rounded-full border-t-blue-600"></div>
+                <p className="text-xs text-gray-500">Loading...</p>
               </div>
-
-              {isLoading ? (
-                <div className="flex-1 flex items-center justify-center">
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="animate-spin h-6 w-6 border-3 border-blue-200 rounded-full border-t-blue-600"></div>
-                    <p className="text-xs text-gray-500">Loading...</p>
-                  </div>
-                </div>
-              ) : (
-                renderExistingRewards()
-              )}
             </div>
           ) : (
             renderCreateForm()

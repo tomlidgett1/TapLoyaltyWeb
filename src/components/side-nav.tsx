@@ -1758,60 +1758,116 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="px-6 py-4 border-b border-gray-200">
+            <div className="px-4 py-3 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">
                 <span style={{ color: '#007AFF' }}>Add</span> POS Integration
               </h3>
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="text-sm text-gray-600 mt-0.5">
                 Connect your point of sale system to sync customers and transactions
               </p>
             </div>
             
             {/* Body */}
-            <div className="p-6">
-              <div className="space-y-3">
+            <div className="p-4">
+              <div className="grid grid-cols-2 gap-3">
+                {/* Square Card */}
                 <button
                   onClick={connectSquare}
-                  className="w-full p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-blue-300 transition-colors group"
+                  className="relative group bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-md p-3 text-center transition-all duration-200 hover:shadow-sm"
                 >
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 bg-white border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <div className="space-y-2">
+                    <div className="w-12 h-12 bg-gray-50 rounded-md mx-auto flex items-center justify-center group-hover:bg-blue-100 transition-colors">
                       <img src="/squarepro.png" alt="Square" className="w-8 h-8 object-contain" />
                     </div>
-                    <div className="flex-1 text-left">
-                      <h4 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">Square</h4>
-                      <p className="text-sm text-gray-600 mt-1">Connect your Square POS to sync customers, orders, and payments</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <span className="text-xs text-green-600 font-medium">Available</span>
-                      </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 text-sm">Square</h4>
+                      <p className="text-xs text-gray-600 mt-0.5">POS & Payments</p>
                     </div>
                   </div>
+                  <div className="absolute top-2 right-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  </div>
                 </button>
-                
+
+                {/* Lightspeed R Card */}
                 <button
                   onClick={connectLightspeed}
-                  className="w-full p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-blue-300 transition-colors group"
+                  className="relative group bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-md p-3 text-center transition-all duration-200 hover:shadow-sm"
                 >
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 bg-white border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <div className="space-y-2">
+                    <div className="w-12 h-12 bg-gray-50 rounded-md mx-auto flex items-center justify-center group-hover:bg-blue-100 transition-colors">
                       <img src="/lslogo.png" alt="Lightspeed" className="w-8 h-8 object-contain" />
                     </div>
-                    <div className="flex-1 text-left">
-                      <h4 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">Lightspeed Retail</h4>
-                      <p className="text-sm text-gray-600 mt-1">Connect your Lightspeed Retail POS for customer and inventory sync</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <span className="text-xs text-green-600 font-medium">Available</span>
-                      </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 text-sm">Lightspeed R</h4>
+                      <p className="text-xs text-gray-600 mt-0.5">Retail POS</p>
                     </div>
                   </div>
+                  <div className="absolute top-2 right-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  </div>
                 </button>
+
+                {/* Coming Soon Cards */}
+                <div className="relative bg-gray-50 border border-gray-200 rounded-md p-3 text-center opacity-60">
+                  <div className="space-y-2">
+                    <div className="w-12 h-12 bg-gray-100 rounded-md mx-auto flex items-center justify-center">
+                      <img src="/lslogo.png" alt="Lightspeed K" className="w-6 h-6 object-contain opacity-50" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-500 text-sm">Lightspeed K</h4>
+                      <p className="text-xs text-gray-500 mt-0.5">Coming Soon</p>
+                    </div>
+                  </div>
+                  <div className="absolute top-2 right-2">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                  </div>
+                </div>
+
+                <div className="relative bg-gray-50 border border-gray-200 rounded-md p-3 text-center opacity-60">
+                  <div className="space-y-2">
+                    <div className="w-12 h-12 bg-gray-100 rounded-md mx-auto flex items-center justify-center">
+                      <div className="w-6 h-6 bg-gray-300 rounded-sm flex items-center justify-center">
+                        <span className="text-xs text-gray-500 font-bold">O</span>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-500 text-sm">Ordermate</h4>
+                      <p className="text-xs text-gray-500 mt-0.5">Coming Soon</p>
+                    </div>
+                  </div>
+                  <div className="absolute top-2 right-2">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                  </div>
+                </div>
+
+                <div className="relative bg-gray-50 border border-gray-200 rounded-md p-3 text-center opacity-60">
+                  <div className="space-y-2">
+                    <div className="w-12 h-12 bg-gray-100 rounded-md mx-auto flex items-center justify-center">
+                      <div className="w-6 h-6 bg-gray-300 rounded-sm flex items-center justify-center">
+                        <span className="text-xs text-gray-500 font-bold">Z</span>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-500 text-sm">Zeller</h4>
+                      <p className="text-xs text-gray-500 mt-0.5">Coming Soon</p>
+                    </div>
+                  </div>
+                  <div className="absolute top-2 right-2">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <p className="text-xs text-gray-500 text-center">
+                  More integrations coming soon
+                </p>
               </div>
             </div>
             
             {/* Footer */}
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+            <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
               <div className="flex justify-end">
                 <button
                   onClick={() => setAddPosDialogOpen(false)}

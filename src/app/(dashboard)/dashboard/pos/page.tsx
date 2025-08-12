@@ -12,7 +12,14 @@ import { PageTransition } from "@/components/page-transition"
 import { PageHeader } from "@/components/page-header"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuLabel, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
@@ -114,6 +121,16 @@ export default function POSPage() {
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null)
   const [saleDetails, setSaleDetails] = useState<any>(null)
   const [loadingSaleDetails, setLoadingSaleDetails] = useState(false)
+  
+  // Account Details State
+  const [accountDetailsOpen, setAccountDetailsOpen] = useState(false)
+  const [accountDetails, setAccountDetails] = useState<any>(null)
+  const [loadingAccountDetails, setLoadingAccountDetails] = useState(false)
+  
+  // Business Dropdown State
+  const [businessDropdownOpen, setBusinessDropdownOpen] = useState(false)
+  const [businessInfo, setBusinessInfo] = useState<any>(null)
+  const [loadingBusinessInfo, setLoadingBusinessInfo] = useState(false)
   
   // Refs for measuring tab widths
   const customersTabRef = useRef<HTMLButtonElement>(null)
@@ -271,8 +288,27 @@ export default function POSPage() {
     if (user?.uid) {
       fetchCustomers()
       fetchSales()
+      fetchBusinessInfo()
     }
   }, [user?.uid])
+
+  // Handle escape key for modals
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (accountDetailsOpen) {
+          handleAccountDetailsClose(false)
+        } else if (squareSettingsOpen) {
+          handleSquareSettingsClose(false)
+        } else if (customerDetailsOpen) {
+          handleCustomerDetailsClose(false)
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [accountDetailsOpen, squareSettingsOpen, customerDetailsOpen])
 
   // Measure tab dimensions for animation
   useEffect(() => {
@@ -346,6 +382,16 @@ export default function POSPage() {
     fetchCustomerDetails(customer.id)
   }
 
+  // Handle customer details dialog close
+  const handleCustomerDetailsClose = (open: boolean) => {
+    setCustomerDetailsOpen(open)
+    if (!open) {
+      // Clean up state when dialog closes
+      setSelectedCustomer(null)
+      setCustomerDetails(null)
+    }
+  }
+
   // Fetch sale details from Square API
   const fetchSaleDetails = async (orderId: string) => {
     if (!user?.uid) return
@@ -377,6 +423,85 @@ export default function POSPage() {
     setSelectedSale(sale)
     setSaleDetailsOpen(true)
     fetchSaleDetails(sale.orderId)
+  }
+
+  // Fetch business info from Square API
+  const fetchBusinessInfo = async () => {
+    if (!user?.uid) return
+    
+    setLoadingBusinessInfo(true)
+    try {
+      const response = await fetch(`/api/square/merchants?merchantId=${user.uid}`)
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      const business = data.merchant?.[0] || null
+      setBusinessInfo(business)
+      return business
+    } catch (error) {
+      console.error('Error fetching business info:', error)
+      return null
+    } finally {
+      setLoadingBusinessInfo(false)
+    }
+  }
+
+  // Fetch account details from Square API
+  const fetchAccountDetails = async () => {
+    if (!user?.uid) return
+    
+    setLoadingAccountDetails(true)
+    try {
+      const response = await fetch(`/api/square/merchants?merchantId=${user.uid}`)
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      setAccountDetails(data.merchant?.[0] || null)
+    } catch (error) {
+      console.error('Error fetching account details:', error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch account details. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingAccountDetails(false)
+    }
+  }
+
+  // Open account details dialog
+  const openAccountDetails = () => {
+    setAccountDetailsOpen(true)
+    fetchAccountDetails()
+  }
+
+  // Handle account details dialog close
+  const handleAccountDetailsClose = (open: boolean) => {
+    if (!open) {
+      // Ensure dropdown is closed first
+      setBusinessDropdownOpen(false)
+      
+      // Clean up state when dialog closes
+      setAccountDetails(null)
+      setLoadingAccountDetails(false)
+    }
+    
+    setAccountDetailsOpen(open)
+  }
+
+  // Handle Square settings dialog close
+  const handleSquareSettingsClose = (open: boolean) => {
+    setSquareSettingsOpen(open)
+    if (!open) {
+      // Reset settings state when dialog closes
+      setSettingsActiveTab('sync')
+    }
   }
 
   // Save settings
@@ -551,16 +676,62 @@ export default function POSPage() {
               )}
             </Button>
             
-            {/* Settings Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSquareSettingsOpen(true)}
-              className="gap-2"
-            >
-              <Settings className="h-4 w-4" />
-              Settings
-            </Button>
+            {/* Business Dropdown */}
+            <DropdownMenu open={businessDropdownOpen} onOpenChange={setBusinessDropdownOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                >
+                  <Building className="h-4 w-4" />
+                  {loadingBusinessInfo ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : businessInfo?.business_name ? (
+                    businessInfo.business_name
+                  ) : (
+                    "Loading..."
+                  )}
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="flex items-center gap-2">
+                  <img src="/squarepro.png" alt="Square" className="h-4 w-4" />
+                  Square Account
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={(e) => {
+                  e.stopPropagation()
+                  setBusinessDropdownOpen(false)
+                  setTimeout(() => openAccountDetails(), 100)
+                }}>
+                  <Building className="h-4 w-4 mr-2" />
+                  Account Details
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={(e) => {
+                  e.stopPropagation()
+                  setBusinessDropdownOpen(false)
+                  setTimeout(() => setSquareSettingsOpen(true), 100)
+                }}>
+                  <Settings className="h-4 w-4 mr-2" />
+                  Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (businessInfo?.id) {
+                      window.open(`https://app.squareup.com/dashboard/account`, '_blank')
+                    }
+                  }}
+                  disabled={!businessInfo?.id}
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open in Square
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -805,8 +976,8 @@ export default function POSPage() {
         </div>
 
         {/* Square Settings Dialog */}
-        <Dialog open={squareSettingsOpen} onOpenChange={setSquareSettingsOpen}>
-          <DialogContent className="sm:max-w-[600px] h-[500px] flex flex-col">
+        <Dialog open={squareSettingsOpen} onOpenChange={handleSquareSettingsClose}>
+          <DialogContent className="max-w-2xl h-[500px] flex flex-col">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-3">
                 <img src="/squarepro.png" alt="Square" className="h-6 w-6" />
@@ -971,7 +1142,7 @@ export default function POSPage() {
         </Dialog>
 
         {/* Customer Details Dialog */}
-        <Dialog open={customerDetailsOpen} onOpenChange={setCustomerDetailsOpen}>
+        <Dialog open={customerDetailsOpen} onOpenChange={handleCustomerDetailsClose}>
           <DialogContent className="sm:max-w-[600px] h-[500px] flex flex-col">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-3">
@@ -1125,7 +1296,164 @@ export default function POSPage() {
               </Button>
               <Button
                 variant="outline"
-                onClick={() => setCustomerDetailsOpen(false)}
+                onClick={() => handleCustomerDetailsClose(false)}
+              >
+                Close
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Account Details Dialog */}
+        <Dialog open={accountDetailsOpen} onOpenChange={handleAccountDetailsClose}>
+          <DialogContent className="max-w-2xl h-[500px] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3">
+                <div className="relative h-8 w-8 rounded-md bg-[#007AFF]/10 flex items-center justify-center">
+                  <Building className="h-5 w-5 text-[#007AFF]" />
+                  <img src="/squarepro.png" alt="Square" className="absolute -bottom-1 -right-1 h-4 w-4 bg-white rounded-sm shadow-sm" />
+                </div>
+                <div>
+                  <div className="text-lg font-semibold">Account Details</div>
+                  <div className="text-sm text-gray-500">Connected Square Account</div>
+                </div>
+              </DialogTitle>
+            </DialogHeader>
+            
+            <div className="flex-1 space-y-6 overflow-y-auto">
+              {loadingAccountDetails ? (
+                <div className="flex items-center justify-center py-12 px-6">
+                  <div className="w-6 h-6 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
+                  <span className="ml-2 text-sm text-gray-600">Loading account details...</span>
+                </div>
+              ) : accountDetails ? (
+                <div className="space-y-6 px-6">
+                  {/* Account Summary */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 bg-white rounded-md border border-gray-200">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 bg-gray-100 rounded-full flex items-center justify-center">
+                          <Building className="h-4 w-4 text-gray-600" />
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-800">
+                            {accountDetails.business_name}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            ID: {accountDetails.id}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-medium text-gray-800 capitalize">
+                          {accountDetails.status?.toLowerCase()}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {accountDetails.country}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Account Information */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-medium text-gray-700">Account Information</h3>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between p-3 bg-white rounded-md border border-gray-200">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-700">Business Name</span>
+                        </div>
+                        <span className="text-sm text-gray-900">{accountDetails.business_name}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-white rounded-md border border-gray-200">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-700">Account ID</span>
+                        </div>
+                        <span className="text-sm text-gray-900">{accountDetails.id}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-white rounded-md border border-gray-200">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-700">Country</span>
+                        </div>
+                        <span className="text-sm text-gray-900">{accountDetails.country}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-white rounded-md border border-gray-200">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-700">Currency</span>
+                        </div>
+                        <span className="text-sm text-gray-900">{accountDetails.currency}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-white rounded-md border border-gray-200">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-700">Language</span>
+                        </div>
+                        <span className="text-sm text-gray-900">{accountDetails.language_code}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-white rounded-md border border-gray-200">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-700">Status</span>
+                        </div>
+                        <span className="text-sm text-gray-900 capitalize">{accountDetails.status?.toLowerCase()}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Location Information */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-medium text-gray-700">Location Information</h3>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between p-3 bg-white rounded-md border border-gray-200">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-gray-500" />
+                          <span className="text-sm text-gray-700">Main Location ID</span>
+                        </div>
+                        <span className="text-sm text-gray-900">{accountDetails.main_location_id}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Account Timeline */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-medium text-gray-700">Account Timeline</h3>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between p-3 bg-white rounded-md border border-gray-200">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-gray-500" />
+                          <span className="text-sm text-gray-700">Created</span>
+                        </div>
+                        <span className="text-sm text-gray-900">
+                          {formatDate(accountDetails.created_at)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 px-6">
+                  <p className="text-sm text-gray-500">No account details available</p>
+                </div>
+              )}
+            </div>
+            
+            {/* Footer */}
+            <div className="flex justify-between items-center gap-2 pt-4 border-t border-gray-200">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (accountDetails?.id) {
+                    window.open(`https://app.squareup.com/dashboard/account`, '_blank')
+                  }
+                }}
+                disabled={!accountDetails?.id}
+                className="gap-2"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Open in Square
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleAccountDetailsClose(false)}
               >
                 Close
               </Button>
@@ -1135,7 +1463,7 @@ export default function POSPage() {
 
         {/* Sale Details Panel - Slides in from right */}
         <div 
-          className={`fixed top-0 right-0 h-full w-96 bg-white border-l border-gray-200 shadow-xl transform transition-transform duration-300 ease-in-out z-50 ${
+          className={`fixed top-0 right-0 h-full w-96 bg-white border-l border-gray-200 shadow-xl transform transition-transform duration-300 ease-in-out z-40 ${
             saleDetailsOpen ? 'translate-x-0' : 'translate-x-full'
           }`}
         >

@@ -50,7 +50,8 @@ import {
   AlertTriangle,
   ExternalLink,
   X,
-  Check
+  Check,
+  Package
 } from "lucide-react"
 
 interface Customer {
@@ -89,18 +90,67 @@ interface Sale {
   }>
 }
 
+interface CatalogItem {
+  id: string
+  name: string
+  description: string
+  descriptionPlaintext: string
+  descriptionHtml: string
+  productType: string
+  isTaxable: boolean
+  isArchived: boolean
+  isAlcoholic: boolean
+  skipModifierScreen: boolean
+  presentAtAllLocations: boolean
+  presentAtLocationIds: string[]
+  categories: Array<{
+    id: string
+    ordinal: number
+  }>
+  itemOptions: Array<{
+    itemOptionId: string
+  }>
+  reportingCategory: {
+    id: string
+    ordinal: number
+  } | null
+  variations: Array<{
+    id: string
+    name: string
+    sku: string
+    ordinal: number
+    pricingType: string
+    priceMoney: {
+      amount: number
+      currency: string
+    } | null
+    sellable: boolean
+    stockable: boolean
+    locationOverrides: any[]
+    itemOptionValues: any[]
+  }>
+  taxIds: string[]
+  createdAt: string
+  updatedAt: string
+  version: number
+  isDeleted: boolean
+}
+
 export default function POSPage() {
   const { user } = useAuth()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [sales, setSales] = useState<Sale[]>([])
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
   const [loadingCustomers, setLoadingCustomers] = useState(false)
   const [loadingSales, setLoadingSales] = useState(false)
+  const [loadingCatalog, setLoadingCatalog] = useState(false)
   const [customersError, setCustomersError] = useState<string | null>(null)
   const [salesError, setSalesError] = useState<string | null>(null)
+  const [catalogError, setCatalogError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
-  const [sortField, setSortField] = useState<'name' | 'email' | 'created_at' | 'totalAmount' | 'createdAt' | 'customerName'>('created_at')
+  const [sortField, setSortField] = useState<'name' | 'email' | 'created_at' | 'totalAmount' | 'createdAt' | 'customerName' | 'itemName' | 'price' | 'productType'>('created_at')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
-  const [activeTab, setActiveTab] = useState<'customers' | 'sales'>('customers')
+  const [activeTab, setActiveTab] = useState<'customers' | 'sales' | 'catalog'>('customers')
   
   // Square Settings Dialog State
   const [squareSettingsOpen, setSquareSettingsOpen] = useState(false)
@@ -122,6 +172,10 @@ export default function POSPage() {
   const [saleDetails, setSaleDetails] = useState<any>(null)
   const [loadingSaleDetails, setLoadingSaleDetails] = useState(false)
   
+  // Catalog Item Details Dialog State
+  const [catalogItemDetailsOpen, setCatalogItemDetailsOpen] = useState(false)
+  const [selectedCatalogItem, setSelectedCatalogItem] = useState<CatalogItem | null>(null)
+  
   // Account Details State
   const [accountDetailsOpen, setAccountDetailsOpen] = useState(false)
   const [accountDetails, setAccountDetails] = useState<any>(null)
@@ -135,7 +189,8 @@ export default function POSPage() {
   // Refs for measuring tab widths
   const customersTabRef = useRef<HTMLButtonElement>(null)
   const salesTabRef = useRef<HTMLButtonElement>(null)
-  const [tabDimensions, setTabDimensions] = useState({ customers: 0, sales: 0 })
+  const catalogTabRef = useRef<HTMLButtonElement>(null)
+  const [tabDimensions, setTabDimensions] = useState({ customers: 0, sales: 0, catalog: 0 })
   
   // Refs for settings tab widths
   const connectionTabRef = useRef<HTMLButtonElement>(null)
@@ -208,6 +263,39 @@ export default function POSPage() {
     }
   }
 
+  // Fetch catalog from Square API
+  const fetchCatalog = async () => {
+    if (!user?.uid) return
+    
+    setLoadingCatalog(true)
+    setCatalogError(null)
+    
+    try {
+      const response = await fetch(`/api/square/catalog?merchantId=${user.uid}`)
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch catalog')
+      }
+      
+      if (data.success && data.data?.items) {
+        setCatalogItems(data.data.items)
+      } else {
+        setCatalogItems([])
+      }
+    } catch (error) {
+      console.error('Error fetching catalog:', error)
+      setCatalogError(error instanceof Error ? error.message : 'An unknown error occurred')
+      toast({
+        title: "Error",
+        description: "Failed to fetch catalog from Square",
+        variant: "destructive"
+      })
+    } finally {
+      setLoadingCatalog(false)
+    }
+  }
+
   // Filter and sort customers
   const filteredCustomers = customers.filter(customer => {
     const searchLower = searchTerm.toLowerCase()
@@ -260,6 +348,36 @@ export default function POSPage() {
     return sortDirection === 'desc' ? comparison : -comparison
   })
 
+  // Filter and sort catalog items
+  const filteredCatalogItems = catalogItems.filter(item => {
+    const searchLower = searchTerm.toLowerCase()
+    return (
+      item.name.toLowerCase().includes(searchLower) ||
+      item.description.toLowerCase().includes(searchLower) ||
+      item.productType.toLowerCase().includes(searchLower) ||
+      item.variations.some(v => v.sku.toLowerCase().includes(searchLower))
+    )
+  }).sort((a, b) => {
+    let comparison = 0
+    switch (sortField) {
+      case 'itemName':
+        comparison = a.name.localeCompare(b.name)
+        break
+      case 'price':
+        const aPrice = a.variations[0]?.priceMoney?.amount || 0
+        const bPrice = b.variations[0]?.priceMoney?.amount || 0
+        comparison = bPrice - aPrice
+        break
+      case 'productType':
+        comparison = a.productType.localeCompare(b.productType)
+        break
+      case 'created_at':
+        comparison = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        break
+    }
+    return sortDirection === 'desc' ? comparison : -comparison
+  })
+
   const handleSort = (field: typeof sortField) => {
     if (field === sortField) {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')
@@ -288,6 +406,7 @@ export default function POSPage() {
     if (user?.uid) {
       fetchCustomers()
       fetchSales()
+      fetchCatalog()
       fetchBusinessInfo()
     }
   }, [user?.uid])
@@ -302,21 +421,24 @@ export default function POSPage() {
           handleSquareSettingsClose(false)
         } else if (customerDetailsOpen) {
           handleCustomerDetailsClose(false)
+        } else if (catalogItemDetailsOpen) {
+          handleCatalogItemDetailsClose(false)
         }
       }
     }
 
     document.addEventListener('keydown', handleEscape)
     return () => document.removeEventListener('keydown', handleEscape)
-  }, [accountDetailsOpen, squareSettingsOpen, customerDetailsOpen])
+  }, [accountDetailsOpen, squareSettingsOpen, customerDetailsOpen, catalogItemDetailsOpen])
 
   // Measure tab dimensions for animation
   useEffect(() => {
     const measureTabs = () => {
-      if (customersTabRef.current && salesTabRef.current) {
+      if (customersTabRef.current && salesTabRef.current && catalogTabRef.current) {
         const customersWidth = customersTabRef.current.offsetWidth
         const salesWidth = salesTabRef.current.offsetWidth
-        setTabDimensions({ customers: customersWidth, sales: salesWidth })
+        const catalogWidth = catalogTabRef.current.offsetWidth
+        setTabDimensions({ customers: customersWidth, sales: salesWidth, catalog: catalogWidth })
       }
     }
     
@@ -330,7 +452,7 @@ export default function POSPage() {
       clearTimeout(timer)
       window.removeEventListener('resize', measureTabs)
     }
-  }, [customers.length, sales.length, activeTab])
+  }, [customers.length, sales.length, catalogItems.length, activeTab])
 
   // Measure settings tab dimensions
   useEffect(() => {
@@ -423,6 +545,20 @@ export default function POSPage() {
     setSelectedSale(sale)
     setSaleDetailsOpen(true)
     fetchSaleDetails(sale.orderId)
+  }
+
+  // Open catalog item details dialog
+  const openCatalogItemDetails = (item: CatalogItem) => {
+    setSelectedCatalogItem(item)
+    setCatalogItemDetailsOpen(true)
+  }
+
+  // Handle catalog item details dialog close
+  const handleCatalogItemDetailsClose = (open: boolean) => {
+    setCatalogItemDetailsOpen(open)
+    if (!open) {
+      setSelectedCatalogItem(null)
+    }
   }
 
   // Fetch business info from Square API
@@ -592,66 +728,90 @@ export default function POSPage() {
     <PageTransition>
       <div className="p-2 sm:p-4 md:p-6 py-3 w-full overflow-x-hidden">
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <div className="relative flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
-              {/* Animated white background */}
-              <motion.div
-                className="absolute inset-y-0.5 bg-white rounded-md shadow-sm"
-                initial={false}
-                animate={{
-                  x: activeTab === 'customers' ? 0 : tabDimensions.customers,
-                  width: activeTab === 'customers' ? tabDimensions.customers : tabDimensions.sales
-                }}
-                transition={{
-                  type: "spring",
-                  stiffness: 400,
-                  damping: 30
-                }}
-                style={{
-                  display: tabDimensions.customers > 0 && tabDimensions.sales > 0 ? 'block' : 'none'
-                }}
-              />
-              
-              {/* Tab buttons */}
-              <button
-                ref={customersTabRef}
-                onClick={() => setActiveTab('customers')}
-                className={cn(
-                  "relative z-10 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                  activeTab === 'customers' 
-                    ? "text-gray-800" 
-                    : "text-gray-600 hover:text-gray-700"
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Customers
-                </div>
-              </button>
-              
-              <button
-                ref={salesTabRef}
-                onClick={() => setActiveTab('sales')}
-                className={cn(
-                  "relative z-10 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                  activeTab === 'sales' 
-                    ? "text-gray-800" 
-                    : "text-gray-600 hover:text-gray-700"
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <ShoppingCart className="h-4 w-4" />
-                  Sales
-                </div>
-              </button>
-            </div>
+                      <div className="flex items-center gap-4">
+              <div className="relative flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+                {/* Animated white background */}
+                <motion.div
+                  className="absolute inset-y-0.5 bg-white rounded-md shadow-sm"
+                  initial={false}
+                  animate={{
+                    x: activeTab === 'customers' ? 0 : 
+                        activeTab === 'sales' ? tabDimensions.customers : 
+                        tabDimensions.customers + tabDimensions.sales,
+                    width: activeTab === 'customers' ? tabDimensions.customers : 
+                           activeTab === 'sales' ? tabDimensions.sales : 
+                           tabDimensions.catalog
+                  }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 400,
+                    damping: 30
+                  }}
+                  style={{
+                    display: tabDimensions.customers > 0 && tabDimensions.sales > 0 && tabDimensions.catalog > 0 ? 'block' : 'none'
+                  }}
+                />
+                
+                {/* Tab buttons */}
+                <button
+                  ref={customersTabRef}
+                  onClick={() => setActiveTab('customers')}
+                  className={cn(
+                    "relative z-10 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                    activeTab === 'customers' 
+                      ? "text-gray-800" 
+                      : "text-gray-600 hover:text-gray-700"
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Customers
+                  </div>
+                </button>
+                
+                <button
+                  ref={salesTabRef}
+                  onClick={() => setActiveTab('sales')}
+                  className={cn(
+                    "relative z-10 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                    activeTab === 'sales' 
+                      ? "text-gray-800" 
+                      : "text-gray-600 hover:text-gray-700"
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <ShoppingCart className="h-4 w-4" />
+                    Sales
+                  </div>
+                </button>
+
+                <button
+                  ref={catalogTabRef}
+                  onClick={() => setActiveTab('catalog')}
+                  className={cn(
+                    "relative z-10 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                    activeTab === 'catalog' 
+                      ? "text-gray-800" 
+                      : "text-gray-600 hover:text-gray-700"
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <Package className="h-4 w-4" />
+                    Catalog
+                  </div>
+                </button>
+              </div>
 
             {/* Search Bar */}
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input 
                 type="search" 
-                placeholder={activeTab === 'customers' ? "Search customers..." : "Search sales..."}
+                placeholder={
+                  activeTab === 'customers' ? "Search customers..." : 
+                  activeTab === 'sales' ? "Search sales..." : 
+                  "Search catalog..."
+                }
                 className="pl-9 h-9 w-[250px] rounded-md"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -664,12 +824,24 @@ export default function POSPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={fetchCustomers}
-              disabled={loadingCustomers}
+              onClick={
+                activeTab === 'customers' ? fetchCustomers :
+                activeTab === 'sales' ? fetchSales :
+                fetchCatalog
+              }
+              disabled={
+                activeTab === 'customers' ? loadingCustomers :
+                activeTab === 'sales' ? loadingSales :
+                loadingCatalog
+              }
               className="h-8 w-8 p-0"
-              title="Refresh customers"
+              title={`Refresh ${activeTab}`}
             >
-              {loadingCustomers ? (
+              {(
+                activeTab === 'customers' ? loadingCustomers :
+                activeTab === 'sales' ? loadingSales :
+                loadingCatalog
+              ) ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <RefreshCw className="h-4 w-4" />
@@ -963,6 +1135,157 @@ export default function POSPage() {
                                   <span className="text-sm">{sale.source}</span>
                                 </div>
                               )}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {activeTab === 'catalog' && (
+            <div className="space-y-4">
+              <Card className="rounded-md overflow-hidden">
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50/80">
+                        <TableHead>
+                          <SortButton field="itemName">Item</SortButton>
+                        </TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>
+                          <SortButton field="price">Price</SortButton>
+                        </TableHead>
+                        <TableHead>
+                          <SortButton field="productType">Type</SortButton>
+                        </TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>
+                          <SortButton field="created_at">Created</SortButton>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {loadingCatalog ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="h-24 text-center">
+                            <div className="flex justify-center">
+                              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent"></div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : catalogError ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="h-24 text-center">
+                            <div className="text-red-600">Error: {catalogError}</div>
+                          </TableCell>
+                        </TableRow>
+                      ) : filteredCatalogItems.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="h-24 text-center">
+                            <div className="flex flex-col items-center justify-center">
+                              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                                <Package className="h-6 w-6 text-muted-foreground" />
+                              </div>
+                              <h3 className="mt-4 text-lg font-medium">
+                                No catalog items found
+                              </h3>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {searchTerm ? "Try adjusting your search query" : "No catalog items available"}
+                              </p>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredCatalogItems.map((item) => (
+                          <TableRow 
+                            key={item.id} 
+                            className="hover:bg-muted/50 cursor-pointer"
+                            onClick={() => openCatalogItemDetails(item)}
+                          >
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                <div className="relative h-10 w-10 rounded-md bg-[#007AFF]/10 flex items-center justify-center flex-shrink-0">
+                                  <Package className="h-5 w-5 text-[#007AFF]" />
+                                  <img src="/squarepro.png" alt="Square" className="absolute -bottom-1 -right-1 h-4 w-4 bg-white rounded-sm shadow-sm" />
+                                </div>
+                                <div>
+                                  <div className="font-medium">{item.name}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    ID: {item.id.slice(-8)}
+                                  </div>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="max-w-xs">
+                                <p className="text-sm text-gray-900 truncate">
+                                  {item.descriptionPlaintext || item.description || 'No description'}
+                                </p>
+                                {item.variations.length > 1 && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {item.variations.length} variations
+                                  </p>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                {item.variations.map((variation, index) => (
+                                  <div key={variation.id} className="flex items-center gap-1">
+                                    {variation.priceMoney ? (
+                                      <>
+                                        <DollarSign className="h-3 w-3 text-green-600" />
+                                        <span className="text-sm font-medium">
+                                          {formatCurrency(variation.priceMoney.amount / 100, variation.priceMoney.currency)}
+                                        </span>
+                                        {item.variations.length > 1 && (
+                                          <span className="text-xs text-muted-foreground">
+                                            ({variation.name})
+                                          </span>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <span className="text-sm text-muted-foreground">No price</span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                <div className="h-1.5 w-1.5 bg-purple-500 rounded-full flex-shrink-0"></div>
+                                {item.productType.toLowerCase().replace('_', ' ')}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1">
+                                {item.isArchived && (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                    <div className="h-1.5 w-1.5 bg-gray-500 rounded-full flex-shrink-0"></div>
+                                    Archived
+                                  </span>
+                                )}
+                                {item.isDeleted && (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                    <div className="h-1.5 w-1.5 bg-red-500 rounded-full flex-shrink-0"></div>
+                                    Deleted
+                                  </span>
+                                )}
+                                {!item.isArchived && !item.isDeleted && (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                    <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                                    Active
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {formatDate(item.createdAt)}
                             </TableCell>
                           </TableRow>
                         ))
@@ -1687,6 +2010,193 @@ export default function POSPage() {
             </div>
           </div>
         </div>
+
+        {/* Catalog Item Details Dialog */}
+        <Dialog open={catalogItemDetailsOpen} onOpenChange={handleCatalogItemDetailsClose}>
+          <DialogContent className="sm:max-w-[600px] h-[500px] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3">
+                <div className="relative h-8 w-8 rounded-md bg-[#007AFF]/10 flex items-center justify-center">
+                  <Package className="h-5 w-5 text-[#007AFF]" />
+                  <img src="/squarepro.png" alt="Square" className="absolute -bottom-1 -right-1 h-4 w-4 bg-white rounded-sm shadow-sm" />
+                </div>
+                Item Details
+              </DialogTitle>
+            </DialogHeader>
+            
+            <div className="flex-1 space-y-6 overflow-y-auto">
+              {selectedCatalogItem ? (
+                <div className="space-y-6">
+                  {/* Basic Information */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 bg-white rounded-md border border-gray-200">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 bg-gray-100 rounded-full flex items-center justify-center">
+                          <Package className="h-4 w-4 text-gray-600" />
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-800">
+                            {selectedCatalogItem.name}
+                          </div>
+                          <div className="text-sm text-gray-600">ID: {selectedCatalogItem.id}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Description */}
+                  {selectedCatalogItem.description && (
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-medium text-gray-700">Description</h3>
+                      <div className="p-3 bg-white rounded-md border border-gray-200">
+                        <p className="text-sm text-gray-900">{selectedCatalogItem.description}</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Variations */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-medium text-gray-700">Variations</h3>
+                    <div className="space-y-2">
+                      {selectedCatalogItem.variations.map((variation) => (
+                        <div key={variation.id} className="flex items-center justify-between p-3 bg-white rounded-md border border-gray-200">
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 bg-gray-100 rounded-full flex items-center justify-center">
+                              <span className="text-xs font-medium text-gray-600">{variation.ordinal}</span>
+                            </div>
+                            <div>
+                              <div className="font-medium text-gray-800">{variation.name}</div>
+                              {variation.sku && (
+                                <div className="text-sm text-gray-600">SKU: {variation.sku}</div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            {variation.priceMoney ? (
+                              <div className="font-medium text-gray-800">
+                                {formatCurrency(variation.priceMoney.amount / 100, variation.priceMoney.currency)}
+                              </div>
+                            ) : (
+                              <div className="text-sm text-gray-500">No price</div>
+                            )}
+                            <div className="text-xs text-gray-500 capitalize">
+                              {variation.pricingType.toLowerCase().replace('_', ' ')}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {/* Item Properties */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-medium text-gray-700">Properties</h3>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between p-3 bg-white rounded-md border border-gray-200">
+                        <span className="text-sm text-gray-700">Product Type</span>
+                        <span className="text-sm text-gray-900 capitalize">
+                          {selectedCatalogItem.productType.toLowerCase().replace('_', ' ')}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-white rounded-md border border-gray-200">
+                        <span className="text-sm text-gray-700">Taxable</span>
+                        <span className="text-sm text-gray-900">
+                          {selectedCatalogItem.isTaxable ? 'Yes' : 'No'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-white rounded-md border border-gray-200">
+                        <span className="text-sm text-gray-700">Alcoholic</span>
+                        <span className="text-sm text-gray-900">
+                          {selectedCatalogItem.isAlcoholic ? 'Yes' : 'No'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-white rounded-md border border-gray-200">
+                        <span className="text-sm text-gray-700">Skip Modifier Screen</span>
+                        <span className="text-sm text-gray-900">
+                          {selectedCatalogItem.skipModifierScreen ? 'Yes' : 'No'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Location Information */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-medium text-gray-700">Location Availability</h3>
+                    <div className="p-3 bg-white rounded-md border border-gray-200">
+                      {selectedCatalogItem.presentAtAllLocations ? (
+                        <span className="text-sm text-gray-900">Available at all locations</span>
+                      ) : (
+                        <div>
+                          <span className="text-sm text-gray-900">Available at specific locations:</span>
+                          <div className="mt-2 space-y-1">
+                            {selectedCatalogItem.presentAtLocationIds.map((locationId) => (
+                              <div key={locationId} className="text-sm text-gray-600">
+                                {locationId}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Timeline */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-medium text-gray-700">Timeline</h3>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between p-3 bg-white rounded-md border border-gray-200">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-gray-500" />
+                          <span className="text-sm text-gray-700">Created</span>
+                        </div>
+                        <span className="text-sm text-gray-900">
+                          {formatDate(selectedCatalogItem.createdAt)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-white rounded-md border border-gray-200">
+                        <div className="flex items-center gap-2">
+                          <RefreshCw className="h-4 w-4 text-gray-500" />
+                          <span className="text-sm text-gray-700">Last Updated</span>
+                        </div>
+                        <span className="text-sm text-gray-900">
+                          {formatDate(selectedCatalogItem.updatedAt)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <p className="text-sm text-gray-500">No item details available</p>
+                </div>
+              )}
+            </div>
+            
+            {/* Footer */}
+            <div className="flex justify-between items-center gap-2 pt-4 border-t border-gray-200">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (selectedCatalogItem?.id) {
+                    window.open(`https://app.squareup.com/dashboard/catalog/items/${selectedCatalogItem.id}`, '_blank')
+                  }
+                }}
+                disabled={!selectedCatalogItem?.id}
+                className="gap-2"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Open in Square
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleCatalogItemDetailsClose(false)}
+              >
+                Close
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </PageTransition>
     )
   }

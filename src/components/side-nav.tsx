@@ -764,29 +764,53 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
     }));
   }, [setupProgress.items]);
 
-  // Check Square integration status
+  // Real-time listener for Square integration status
   useEffect(() => {
-    const checkSquareIntegration = async () => {
-      if (!user?.uid) {
-        setSquareConnected(false);
-        return;
-      }
+    if (!user?.uid) {
+      setSquareConnected(false);
+      return;
+    }
 
-      try {
-        const squareDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'square'));
-        const squareComposioDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'square_composio'));
-        
-        const isConnected = (squareDoc.exists() && squareDoc.data()?.connected === true) || 
-                           (squareComposioDoc.exists() && squareComposioDoc.data()?.connected === true);
-        
-        setSquareConnected(isConnected);
-      } catch (error) {
+    // Listen to both Square integration documents in real-time
+    const squareRef = doc(db, 'merchants', user.uid, 'integrations', 'square');
+    const squareComposioRef = doc(db, 'merchants', user.uid, 'integrations', 'square_composio');
+    
+    const unsubscribeSquare = onSnapshot(squareRef, (doc) => {
+      const squareConnected = doc.exists() && doc.data()?.connected === true;
+      
+      // Check the other document as well
+      getDoc(squareComposioRef).then((composioDoc) => {
+        const composioConnected = composioDoc.exists() && composioDoc.data()?.connected === true;
+        setSquareConnected(squareConnected || composioConnected);
+      }).catch((error) => {
+        console.error('Error checking Square Composio integration:', error);
+        setSquareConnected(squareConnected);
+      });
+    }, (error) => {
+      console.error('Error listening to Square integration:', error);
+      setSquareConnected(false);
+    });
+
+    const unsubscribeComposio = onSnapshot(squareComposioRef, (doc) => {
+      const composioConnected = doc.exists() && doc.data()?.connected === true;
+      
+      // Check the other document as well
+      getDoc(squareRef).then((squareDoc) => {
+        const squareConnected = squareDoc.exists() && squareDoc.data()?.connected === true;
+        setSquareConnected(squareConnected || composioConnected);
+      }).catch((error) => {
         console.error('Error checking Square integration:', error);
-        setSquareConnected(false);
-      }
-    };
+        setSquareConnected(composioConnected);
+      });
+    }, (error) => {
+      console.error('Error listening to Square Composio integration:', error);
+      // Don't set to false here as the other listener might still be active
+    });
 
-    checkSquareIntegration();
+    return () => {
+      unsubscribeSquare();
+      unsubscribeComposio();
+    };
   }, [user?.uid]);
 
   // Check for missing logo and show notification
@@ -1106,22 +1130,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
         <div className="border-t border-gray-200"></div>
       </div>
       
-      {/* Intro test button */}
-      <div className="px-3 mb-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setIntroGuideOpen(true)}
-          className={cn(
-            "w-full h-7 rounded-md text-sm font-medium flex items-center gap-2",
-            "hover:bg-gray-200"
-          )}
-          title="Intro"
-        >
-          <Sparkles className="h-4 w-4 text-gray-600" />
-          {!isCollapsed && <span className="text-gray-800">Intro</span>}
-        </Button>
-      </div>
+
 
       <nav 
         className={cn(

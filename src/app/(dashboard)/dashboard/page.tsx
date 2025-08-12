@@ -1020,6 +1020,11 @@ export default function DashboardPage() {
     setRewardDetailSheetOpen(true)
   }
 
+  // Handle opening create recurring reward dialog
+  const handleCreateProgram = () => {
+    setCreateRecurringRewardOpen(true)
+  }
+
   // Handle sharing via email
   const handleEmailShare = () => {
     if (!selectedActivity) return
@@ -1608,34 +1613,84 @@ export default function DashboardPage() {
           getDocs(rewardsQuery)
         ])
         
-        // Process activity data with minimal customer lookups
+        // Get unique customer IDs from both transactions and redemptions
+        const customerIds = new Set([
+          ...transactionsSnapshot.docs.map(doc => {
+            const data = doc.data()
+            return data.customerId
+          }).filter(Boolean),
+          ...redemptionsSnapshot.docs.map(doc => {
+            const data = doc.data()
+            return data.customerId
+          }).filter(Boolean)
+        ])
+        
+        // Fetch customer data for each unique customer ID from top-level customers collection
+        const customerData: Record<string, { name: string, profilePicture?: string }> = {}
+        await Promise.all(
+          Array.from(customerIds).map(async (customerId) => {
+            if (customerId) {
+              try {
+                const customerDoc = await getDoc(doc(db, 'customers', customerId))
+                if (customerDoc.exists()) {
+                  const data = customerDoc.data()
+                  customerData[customerId] = {
+                    name: data.fullName || data.firstName || 'Unknown Customer',
+                    profilePictureUrl: data.profilePictureUrl || null
+                  }
+                }
+              } catch (error) {
+                console.error(`Error fetching customer ${customerId}:`, error)
+              }
+            }
+          })
+        )
+        
+        // Process activity data with proper customer lookups
         const activityData: any[] = []
         
-        // Add recent transactions (simplified)
+        // Add recent transactions with customer data
         transactionsSnapshot.docs.forEach(doc => {
           const data = doc.data()
+          const customerId = data.customerId
+          const customer = customerData[customerId] || { name: 'Unknown Customer', profilePictureUrl: null }
+          
           activityData.push({
             id: doc.id,
             type: "transaction",
             displayName: data.type || "purchase", 
-            customer: { id: data.customerId || '', name: "Customer" }, // Simplified for speed
+            customer: { 
+              id: customerId || '', 
+              name: customer.name,
+              profilePictureUrl: customer.profilePictureUrl
+            },
             timestamp: data.createdAt?.toDate() || new Date(),
             amount: data.amount || 0,
             status: data.status || "completed"
           })
         })
         
-        // Add recent redemptions (simplified)
+        // Add recent redemptions with customer data
         redemptionsSnapshot.docs.forEach(doc => {
           const data = doc.data()
+          const customerId = data.customerId
+          const customer = customerData[customerId] || { name: 'Unknown Customer', profilePictureUrl: null }
+          
           activityData.push({
             id: doc.id,
             type: "redemption",
             displayName: data.rewardName || "Reward",
-            customer: { id: data.customerId || '', name: "Customer" }, // Simplified for speed
+            customer: { 
+              id: customerId || '', 
+              name: customer.name,
+              profilePictureUrl: customer.profilePictureUrl
+            },
             timestamp: data.redemptionDate?.toDate() || new Date(),
             points: data.pointsUsed || 0,
-            status: data.status || "completed"
+            tapCashUsed: data.TapCashUsed || 0,
+            status: data.status || "completed",
+            rewardName: data.rewardName,
+            rewardId: data.rewardId
           })
         })
         
@@ -1993,8 +2048,8 @@ export default function DashboardPage() {
           }
           
           // Count transaction programs
-          if (merchantData.transactionRewards && Array.isArray(merchantData.transactionRewards)) {
-            const activeTransactionPrograms = merchantData.transactionRewards.filter((program: any) => program.active === true)
+          if (merchantData.transactionPrograms && Array.isArray(merchantData.transactionPrograms)) {
+            const activeTransactionPrograms = merchantData.transactionPrograms.filter((program: any) => program.isActive === true)
             activeProgramsBreakdown.transaction = activeTransactionPrograms.length
             activePrograms += activeTransactionPrograms.length
           }
@@ -2938,13 +2993,13 @@ export default function DashboardPage() {
           
           // Check voucher programs
           if (data.voucherPrograms && Array.isArray(data.voucherPrograms)) {
-            voucher = data.voucherPrograms.some((program: any) => program.active === true)
+            voucher = data.voucherPrograms.some((program: any) => program.isActive === true)
             if (voucher) hasActivePrograms = true
           }
           
           // Check transaction rewards
-          if (data.transactionRewards && Array.isArray(data.transactionRewards)) {
-            transaction = data.transactionRewards.some((program: any) => program.active === true)
+          if (data.transactionPrograms && Array.isArray(data.transactionPrograms)) {
+            transaction = data.transactionPrograms.some((program: any) => program.isActive === true)
             if (transaction) hasActivePrograms = true
           }
           
@@ -2983,8 +3038,8 @@ export default function DashboardPage() {
           const data = merchantDoc.data()
           
           const activeCoffeePrograms = data.coffeePrograms?.filter((program: any) => program.active === true) || []
-          const activeVoucherPrograms = data.voucherPrograms?.filter((program: any) => program.active === true) || []
-          const activeTransactionPrograms = data.transactionRewards?.filter((program: any) => program.active === true) || []
+          const activeVoucherPrograms = data.voucherPrograms?.filter((program: any) => program.isActive === true) || []
+          const activeTransactionPrograms = data.transactionPrograms?.filter((program: any) => program.isActive === true) || []
           const activeCashbackProgram = (data.isCashback === true && data.cashbackProgram?.isActive === true) ? data.cashbackProgram : null
           
           setLivePrograms({
@@ -3138,13 +3193,39 @@ export default function DashboardPage() {
             }
           }
           
+          // Tap Cash balance calculation (for all customers) - do this first
+          let tapCashBalance = 0
+          try {
+            // Get customer document from merchants/merchantId/customers/customerId
+            const customerDoc = await getDoc(doc(db, 'merchants', user.uid, 'customers', customer.id))
+            if (customerDoc.exists()) {
+              const customerData = customerDoc.data()
+              const totalCashbackEarned = customerData.totalCashbackEarned || 0
+              const currentCashback = customerData.cashback || 0
+              
+              // Tap Cash used = total earned - current balance
+              const tapCashUsed = totalCashbackEarned - currentCashback
+              
+              console.log(`Customer ${customer.id}: totalCashbackEarned=${totalCashbackEarned}, currentCashback=${currentCashback}, tapCashUsed=${tapCashUsed}`)
+              
+              tapCashBalance = Math.max(0, tapCashUsed) // Ensure it's not negative
+            } else {
+              tapCashBalance = 0
+              console.log(`Customer ${customer.id}: Document not found`)
+            }
+          } catch (error) {
+            console.error('Error fetching Tap Cash balance for customer:', customer.id, error)
+            tapCashBalance = 0
+          }
+          
           // Cashback earnings
           if (merchantData.isCashback === true && merchantData.cashbackProgram?.isActive === true) {
             const customerCashback = (customer as any).cashback
             if (customerCashback && customerCashback > 0) {
               cashbackCustomers.push({
                 ...customer,
-                totalCashback: customerCashback || 0
+                totalCashback: customerCashback || 0,
+                tapCashBalance: tapCashBalance
               })
             }
           }
@@ -4727,6 +4808,8 @@ export default function DashboardPage() {
               </div>
             </div>
             
+        
+          
 
           </div>
         </div>
@@ -4739,194 +4822,27 @@ export default function DashboardPage() {
           )}>
           {metricsType === "loyalty" && (
             <>
-              {/* Setup Section for Loyalty */}
-              <div className="mb-8">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-medium">Essential Setup</h2>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {/* Recurring Program */}
-                  <div className={`group relative bg-gray-50 border rounded-xl p-4 transition-all hover:shadow-sm ${
-                    recurringPrograms.hasAny 
-                      ? 'border-blue-200 hover:border-blue-300' 
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}>
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                                                    <Repeat className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
-                        <h4 className="text-sm font-medium text-gray-900">Recurring Program</h4>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setInfoPopupOpen('recurringProgram')}
-                          className="opacity-40 hover:opacity-70 transition-opacity"
-                        >
-                          <Info className="h-3 w-3 text-gray-600" strokeWidth={2.75} />
-                        </button>
-                        <div className={`h-2 w-2 rounded-full ${
-                          recurringPrograms.hasAny 
-                            ? 'bg-blue-500' 
-                            : 'bg-gray-300 opacity-60'
-                        }`}></div>
-                    </div>
-                    </div>
-                    <p className="text-xs text-gray-500 mb-4 line-clamp-2">
-                      {recurringPrograms.hasAny ? (
-                        <>
-                          Active: {[
-                            recurringPrograms.coffee && 'Coffee',
-                            recurringPrograms.voucher && 'Voucher',
-                            recurringPrograms.transaction && 'Transaction',
-                            recurringPrograms.cashback && 'Cashback'
-                          ].filter(Boolean).join(', ')} programs
-                        </>
-                      ) : (
-                        'Create recurring loyalty programs that reward customer visits, purchases or specific actions'
-                      )}
-                    </p>
-                    <Button 
-                      size="sm" 
-                      className={`w-full rounded-md text-xs h-8 font-medium transition-all ${
-                        recurringPrograms.hasAny 
-                          ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100' 
-                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400'
-                      }`}
-                      onClick={() => setProgramTypeSelectorOpen(true)}
-                    >
-                      {recurringPrograms.hasAny ? (
-                        <div className="flex items-center gap-2">
-                          <CheckIcon className="h-4 w-4" strokeWidth={2.75} />
-                          Configured
-                        </div>
-                      ) : (
-                        'Setup Now'
-                      )}
-                    </Button>
-                  </div>
-                  {/* Individual Reward */}
-                  <div className="group relative bg-gray-50 border border-gray-200 rounded-xl p-4 transition-all hover:border-gray-300 hover:shadow-sm">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                                                    <Gift className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
-                        <h4 className="text-sm font-medium text-gray-900">Individual Reward</h4>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setInfoPopupOpen('individualReward')}
-                          className="opacity-40 hover:opacity-70 transition-opacity"
-                        >
-                          <Info className="h-3 w-3 text-gray-600" strokeWidth={2.75} />
-                        </button>
-                        <div className="h-2 w-2 bg-gray-300 rounded-full opacity-60"></div>
-                      </div>
-                    </div>
-                    <p className="text-xs text-gray-500 mb-4 line-clamp-2">Create custom rewards with percentage discounts, fixed amounts or free items</p>
-                    <Button 
-                      size="sm" 
-                      className="w-full rounded-md text-xs h-8 font-medium bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all"
-                      onClick={() => setCreateRewardPopupOpen(true)}
-                    >
-                      Setup Now
-                    </Button>
-                  </div>
-                
-                  {/* Banner */}
-                  <div className="group relative bg-gray-50 border border-gray-200 rounded-xl p-4 transition-all hover:border-gray-300 hover:shadow-sm">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                                                    <Megaphone className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
-                        <h4 className="text-sm font-medium text-gray-900">Banner</h4>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setInfoPopupOpen('banner')}
-                          className="opacity-40 hover:opacity-70 transition-opacity"
-                        >
-                          <Info className="h-3 w-3 text-gray-600" strokeWidth={2.75} />
-                        </button>
-                        <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
-                    </div>
-                    </div>
-                    <p className="text-xs text-gray-500 mb-4 line-clamp-2">Create eye-catching promotional banners to highlight offers, rewards and featured products</p>
-                    <Button 
-                      size="sm" 
-                      className="w-full rounded-md text-xs h-8 font-medium bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all"
-                      onClick={() => setCreateBannerDialogOpen(true)}
-                    >
-                      Configure
-                    </Button>
-                  </div>
-                
-                  {/* Intro Reward */}
-                  <div className={`group relative bg-gray-50 border rounded-xl p-4 transition-all hover:shadow-sm ${
-                    hasIntroductoryReward 
-                      ? 'border-blue-200 hover:border-blue-300' 
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}>
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                                                    <Star className="h-4 w-4 text-gray-500" strokeWidth={2.75} />
-                        <h4 className="text-sm font-medium text-gray-900">Intro Reward</h4>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setInfoPopupOpen('introReward')}
-                          className="opacity-40 hover:opacity-70 transition-opacity"
-                        >
-                          <Info className="h-3 w-3 text-gray-600" strokeWidth={2.75} />
-                        </button>
-                        <div className={`h-2 w-2 rounded-full ${
-                          hasIntroductoryReward 
-                            ? 'bg-blue-500' 
-                            : 'bg-gray-300 opacity-60'
-                        }`}></div>
-                    </div>
-                    </div>
-                    <p className="text-xs text-gray-500 mb-4 line-clamp-2">Welcome new customers with special rewards like vouchers, free items or bonus points</p>
-                    <Button 
-                      size="sm" 
-                      className={`w-full rounded-md text-xs h-8 font-medium transition-all ${
-                        hasIntroductoryReward 
-                          ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100' 
-                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400'
-                      }`}
-                      onClick={() => setIntroductoryRewardPopupOpen(true)}
-                    >
-                      {hasIntroductoryReward ? (
-                        <div className="flex items-center gap-2">
-                          <CheckIcon className="h-4 w-4" strokeWidth={2.75} />
-                          Configured
-                        </div>
-                      ) : (
-                        'Setup Now'
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
               {/* Metrics Overview Section */}
               <div className="mb-8">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-medium">Metrics Overview</h2>
                   
-                  {/* Date Filter Slide-out */}
-                  <div 
-                    className="flex items-center gap-2"
-                    onMouseEnter={() => setIsTimeframePanelOpen(true)}
-                    onMouseLeave={() => setIsTimeframePanelOpen(false)}
-                  >
+                  {/* Date Filter - Always Visible */}
+                  <div className="flex items-center gap-2">
                     <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <Calendar className="h-4 w-4" strokeWidth={2.75} />
+                    </Button>
+
+                    <Button
+                      onClick={() => setAddMetricsPopupOpen(true)}
+                      className="bg-white text-gray-800 border border-gray-200 hover:bg-gray-50 rounded-md"
+                      size="sm"
+                    >
+                      <PlusCircle className="h-4 w-4 mr-1.5" />
+                      Add metrics
                     </Button>
                     
-                    {/* Slide-out Options - Horizontal inline */}
-                    <div className={cn(
-                      "flex items-center gap-2 transition-all duration-300 ease-out",
-                      isTimeframePanelOpen 
-                        ? "opacity-100 translate-x-0 max-w-[400px]" 
-                        : "opacity-0 translate-x-8 max-w-0 overflow-hidden"
-                    )}>
+                    {/* Date Filter Options - Always Visible */}
+                    <div className="flex items-center gap-2">
                       <button
                         className={cn(
                           "px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap",
@@ -4979,17 +4895,7 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {enabledMetrics.map(metricId => renderMetricBox(metricId))}
                   
-                  {/* Add Metrics Button */}
-                  <button
-                    onClick={() => setAddMetricsPopupOpen(true)}
-                    className="group relative bg-gray-50 border-2 border-blue-300 rounded-xl p-3 transition-all hover:border-blue-400 hover:shadow-sm w-full text-center flex flex-col items-center justify-center"
-                  >
-                    <PlusCircle className="h-4 w-4 text-gray-500 mb-2" strokeWidth={2.75} />
-                    <h4 className="text-sm font-medium text-gray-900 mb-1">Add Metrics</h4>
-                    <p className="text-xs text-gray-500">
-                      Click to add more metrics
-                    </p>
-                  </button>
+                
                 </div>
               </div>
 
@@ -4999,10 +4905,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Activity and Analytics Section for Loyalty */}
-          <div className={cn(
-            "grid grid-cols-1 gap-6 overflow-hidden transition-all duration-500 ease-in-out",
-            isAdvancedActivity ? "md:grid-cols-[2fr_1fr]" : "md:grid-cols-[1.2fr_0.9fr]"
-          )}>
+          <div className="grid grid-cols-1 md:grid-cols-[1.2fr_0.9fr] gap-6">
             {/* Recent Activity */}
                 <div className={cn(
                   "bg-white rounded-xl border border-gray-200 overflow-hidden transition-opacity duration-300",
@@ -5011,26 +4914,13 @@ export default function DashboardPage() {
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
                       <h3 className="text-base font-medium text-gray-900">Recent Activity</h3>
-                      <div className="flex items-center gap-3 ml-[50px]">
-                        <button
-                          onClick={() => setIsAdvancedActivity(!isAdvancedActivity)}
-                          className={cn(
-                            "px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-300 ease-in-out",
-                            isAdvancedActivity
-                              ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                          )}
-                        >
-                          {isAdvancedActivity ? 'Simple' : 'Advanced'}
-                        </button>
                         <Link href="/store/activity" className="group inline-flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-blue-600 transition-colors duration-200">
                       View all
                       <ChevronRight className="h-3 w-3 transition-transform duration-200 group-hover:translate-x-0.5" strokeWidth={2.75} />
                     </Link>
                 </div>
               </div>
-              </div>
-                  <div className="max-h-80 overflow-y-auto scrollbar-subtle">
+                  <div className="overflow-y-auto scrollbar-subtle">
                 {activityLoading ? (
                   <div className="flex items-center justify-center py-8">
                         <div className="h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></div>
@@ -5045,7 +4935,6 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                       <table className="w-full">
-                        {isAdvancedActivity && (
                           <thead className="bg-gray-50/80">
                             <tr className="border-b border-gray-100">
                               <th className="px-4 py-3 text-left">
@@ -5062,22 +4951,22 @@ export default function DashboardPage() {
                               </th>
                             </tr>
                           </thead>
-                        )}
                         <tbody className="divide-y divide-gray-100">
-                    {recentActivity.slice(0, isAdvancedActivity ? 10 : 7).map((activity, index) => (
+                    {recentActivity.slice(0, 7).map((activity, index) => (
                             <tr key={activity.id} className="hover:bg-gray-100/50 transition-colors cursor-pointer" onClick={() => handleActivityClick(activity)}>
                               <td className="px-4 py-2.5">
                                 <div className="flex items-center gap-3">
                                   <div className="h-8 w-8 flex-shrink-0">
-                                    {activity.customer.profilePicture ? (
+                                    {activity.customer.profilePictureUrl ? (
                                       <img 
-                                        src={activity.customer.profilePicture} 
+                                        src={activity.customer.profilePictureUrl} 
                                         alt={activity.customer.name}
                                         className="h-8 w-8 rounded-full object-cover border border-gray-200"
                                       />
                                     ) : (
                                       <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 ${
-                                        activity.type === "transaction" ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'
+                                        activity.type === "transaction" ? 'bg-blue-100 text-blue-600' : 
+                                        activity.tapCashUsed > 0 ? 'bg-green-100 text-green-600' : 'bg-purple-100 text-purple-600'
                                       }`}>
                                         {activity.customer.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                                       </div>
@@ -5102,7 +4991,6 @@ export default function DashboardPage() {
                                       TapCash
                                     </span>
                                   ) : (
-                                    <>
                                       <div className="flex items-center gap-2">
                                         <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
                                           <div className="h-1.5 w-1.5 bg-purple-500 rounded-full flex-shrink-0"></div>
@@ -5112,11 +5000,9 @@ export default function DashboardPage() {
                                           <Globe className="h-3 w-3 text-blue-500 flex-shrink-0" strokeWidth={2.75} />
                                         )}
                                       </div>
-                                    </>
                                   )}
                                 </div>
                               </td>
-                              {isAdvancedActivity && (
                                 <td className="px-4 py-2.5">
                                   <div className="min-w-0">
                                     {activity.type === "redemption" && activity.rewardName ? (
@@ -5131,13 +5017,12 @@ export default function DashboardPage() {
                                     )}
                                   </div>
                                 </td>
-                              )}
                               <td className="px-4 py-2.5 text-right">
                                 <span className="text-sm font-medium text-gray-800">
                             {activity.type === "transaction" 
                               ? `$${activity.amount.toFixed(2)}` 
                               : activity.tapCashUsed > 0
-                                ? `$${activity.tapCashUsed.toFixed(2)}`
+                                ? `-$${activity.tapCashUsed.toFixed(2)}`
                               : `${activity.points} pts`}
                                 </span>
                               </td>
@@ -5178,6 +5063,16 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                       <table className="w-full">
+                        <thead className="bg-gray-50/80">
+                          <tr className="border-b border-gray-100">
+                            <th className="px-4 py-3 text-left">
+                              <span className="text-xs font-medium text-gray-600">Reward</span>
+                            </th>
+                            <th className="px-4 py-3 text-right">
+                              <span className="text-xs font-medium text-gray-600">Redemptions</span>
+                            </th>
+                          </tr>
+                        </thead>
                         <tbody className="divide-y divide-gray-100">
                     {popularRewards.slice(0, 5).map((reward, index) => (
                             <tr 
@@ -5185,17 +5080,70 @@ export default function DashboardPage() {
                               className="hover:bg-gray-100/50 transition-colors cursor-pointer"
                               onClick={() => handleRewardClick(reward.id)}
                             >
-                              <td className="px-4 py-3">
-                                  <div className="min-w-0">
-                                  <p className="text-sm font-medium text-gray-800 truncate">{reward.name}</p>
+                              <td className="px-4 py-2.5">
+                                <div className="bg-white border border-gray-200 rounded-xl shadow-lg px-3 py-2 w-72 hover:shadow-md transition-shadow">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1 min-w-0">
+                                      <h3 className="text-sm font-medium text-gray-900 truncate">
+                                        {reward.rewardName || reward.name}
+                                      </h3>
+                                      <p className="text-xs text-gray-500 mt-0.5">
+                                        {reward.description || 'No description'}
+                                      </p>
+                                      {reward.isIntroductoryReward && (
+                                        <div className="flex items-center gap-1.5 mt-1">
+                                          <div className="w-2.5 h-2.5 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                            <span className="text-[6px] text-white font-bold">!</span>
                         </div>
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                <span className="text-xs font-medium text-gray-600">
-                                  {reward.pointsCost} pts
+                                          <span className="text-[10px] text-gray-600 whitespace-nowrap">
+                                            You have 1 x welcome gift across all merchants
                                 </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div 
+                                      className={cn(
+                                        "flex items-center justify-center rounded-md px-2 py-1 ml-3",
+                                        reward.isIntroductoryReward
+                                          ? "bg-blue-500 text-white"
+                                          : (reward.programtype === 'voucher' || reward.programtype === 'voucherprogramnew')
+                                            ? "bg-orange-400 text-white"
+                                            : (reward.pointsCost === 0) 
+                                              ? "bg-green-500 text-white" 
+                                              : "bg-blue-500 text-white"
+                                      )}
+                                    >
+                                      {reward.isIntroductoryReward ? (
+                                        <>
+                                          <Sparkles className="w-3 h-3 mr-1" />
+                                          <span className="text-xs font-medium">
+                                            Welcome Gift
+                                          </span>
+                                        </>
+                                      ) : (reward.programtype === 'voucher' || reward.programtype === 'voucherprogramnew') ? (
+                                        <>
+                                          <CreditCard className="w-3 h-3 mr-1" />
+                                          <span className="text-xs font-medium">
+                                            ${reward.voucherAmount || '0'} voucher
+                                          </span>
+                                        </>
+                                      ) : (reward.pointsCost === 0) ? (
+                                        <span className="text-xs font-medium">
+                                          Free
+                                        </span>
+                                      ) : (
+                                        <>
+                                          <span className="text-xs font-medium">
+                                            {reward.pointsCost}
+                                          </span>
+                                          <Star className="w-3 h-3 ml-1 fill-white" />
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
                               </td>
-                              <td className="px-4 py-3 text-right">
+                              <td className="px-4 py-2.5 text-right">
                                 <span className="text-sm font-medium text-gray-800">{reward.views || 0}</span>
                               </td>
                             </tr>
@@ -5211,447 +5159,81 @@ export default function DashboardPage() {
               </div>
             </div>
 
-                {/* Agent Inbox */}
-                <div className={cn(
-                  "bg-white rounded-xl border border-gray-200 overflow-hidden transition-opacity duration-300",
-                  !agentTasksLoading && agentTasks.length === 0 && "opacity-50"
-                )}>
-                  <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-base font-medium text-gray-900">Agent Inbox</h3>
-                      <Link href="/email" className="group inline-flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-blue-600 transition-colors duration-200">
-                        View all
-                        <ChevronRight className="h-3 w-3 transition-transform duration-200 group-hover:translate-x-0.5" strokeWidth={2.75} />
-                      </Link>
-                    </div>
-                  </div>
-                  <div className="px-4 py-3 border-b border-gray-100">
-                    <div className="flex space-x-1">
-                      <Button
-                        variant={agentTaskStatusFilter === "pending" ? "default" : "outline"}
-                        size="sm"
-                        className="text-xs"
-                        onClick={() => fetchAgentTasks("pending")}
-                      >
-                        Pending
-                      </Button>
-                      <Button
-                        variant={agentTaskStatusFilter === "completed" ? "default" : "outline"}
-                        size="sm"
-                        className="text-xs"
-                        onClick={() => fetchAgentTasks("completed")}
-                      >
-                        Completed
-                      </Button>
-                      <Button
-                        variant={agentTaskStatusFilter === "rejected" ? "default" : "outline"}
-                        size="sm"
-                        className="text-xs"
-                        onClick={() => fetchAgentTasks("rejected")}
-                      >
-                        Rejected
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="max-h-[350px] overflow-y-auto scrollbar-subtle">
-                    {agentTasksLoading ? (
-                      <div className="flex items-center justify-center py-8">
-                        <div className="h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></div>
-                      </div>
-                    ) : agentTasks.length === 0 ? (
-                      <div className="py-8 text-center">
-                        <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
-                          <Inbox className="h-6 w-6 text-gray-400" strokeWidth={2.75} />
-                        </div>
-                        <p className="text-sm font-medium text-gray-700">No tasks</p>
-                        <p className="text-xs text-gray-500 mt-1">There are no {agentTaskStatusFilter} tasks in your agent inbox</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2 p-3">
-                        {agentTasks.map((task) => (
-                          <div
-                            key={task.id}
-                            className={cn(
-                              "p-3 border border-gray-200 rounded-md cursor-pointer transition-colors",
-                              selectedAgentTask?.id === task.id ? "bg-blue-50 border-blue-200" : "bg-white hover:bg-gray-50"
-                            )}
-                            onClick={() => handleAgentTaskSelect(task)}
-                          >
-                            <div className="flex justify-between items-start mb-1">
-                              <div className="flex items-center">
-                                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
-                                  <div className={`h-1.5 w-1.5 ${
-                                    task.type === 'customerservice' ? 'bg-blue-500' : 
-                                    task.type === 'agent' ? 'bg-purple-500' : 
-                                    'bg-gray-500'
-                                  } rounded-full flex-shrink-0`}></div>
-                                  {task.type === 'customerservice' ? 'Customer Service' : 
-                                   task.type === 'agent' ? 'Agent Task' : 
-                                   'Task'}
-                                </span>
-                              </div>
-                              <span className="text-xs text-gray-500">
-                                {task.timestamp || task.createdAt ? 
-                                  formatDistanceToNow((task.timestamp?.__time__ ? new Date(task.timestamp.__time__) : 
-                                                     task.timestamp?.toDate ? task.timestamp.toDate() : 
-                                                     task.createdAt?.__time__ ? new Date(task.createdAt.__time__) : 
-                                                     task.createdAt?.toDate ? task.createdAt.toDate() : 
-                                                     new Date()), { addSuffix: true }) : 
-                                  'Unknown time'}
-                              </span>
-                            </div>
-                            <h4 className="font-medium text-sm text-gray-900 mb-1 truncate">
-                              {task.emailTitle || task.shortSummary || 'Untitled Task'}
-                            </h4>
-                            <p className="text-xs text-gray-600 line-clamp-2">
-                              {task.conversationSummary || task.shortSummary || 'No description available'}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
 
-              {/* Live Programs and Live Rewards Section */}
-              <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Live Programs */}
-                {recurringPrograms.hasAny && (
-                  <div className={cn(
-                    "bg-white rounded-xl border border-gray-200 overflow-hidden transition-opacity duration-300",
-                    !programCustomers.loading && (
-                      (liveProgramsTab === 'coffee' && programCustomers.coffee.length === 0) ||
-                      (liveProgramsTab === 'voucher' && programCustomers.voucher.length === 0) ||
-                      (liveProgramsTab === 'transaction' && programCustomers.transaction.length === 0) ||
-                      (liveProgramsTab === 'cashback' && programCustomers.cashback.length === 0)
-                    ) && "opacity-50"
-                  )}>
-                    <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-base font-medium text-gray-900">Live Programs</h3>
-                        {/* Program Type Tabs */}
-                        <div className="flex items-center gap-4">
-                          {recurringPrograms.coffee && (
+                    </div>
+
+                            {/* Program Type Tabs - Above Live Programs */}
+              <div className="mt-8 flex items-center gap-3">
+                <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+                  <button
+                            className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                      liveProgramsTab === 'cashback'
+                        ? "text-gray-800 bg-white shadow-sm"
+                        : "text-gray-600 hover:bg-gray-200/70"
+                    )}
+                    onClick={() => handleLiveProgramsTabChange('cashback')}
+                  >
+                    <DollarSign size={15} />
+                    Tap Cash
+                  </button>
                             <button
                               className={cn(
-                                "flex items-center gap-1 text-xs font-medium transition-colors",
+                      "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                                 liveProgramsTab === 'coffee'
-                                  ? "text-blue-600"
-                                  : "text-gray-600 hover:text-gray-800"
+                        ? "text-gray-800 bg-white shadow-sm"
+                        : "text-gray-600 hover:bg-gray-200/70"
                               )}
                               onClick={() => handleLiveProgramsTabChange('coffee')}
                             >
-                              <Coffee className="h-3 w-3" strokeWidth={2.75} />
+                    <Coffee size={15} />
                               Coffee
                             </button>
-                          )}
-                          {recurringPrograms.voucher && (
                             <button
                               className={cn(
-                                "flex items-center gap-1 text-xs font-medium transition-colors",
+                      "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                                 liveProgramsTab === 'voucher'
-                                  ? "text-blue-600"
-                                  : "text-gray-600 hover:text-gray-800"
+                        ? "text-gray-800 bg-white shadow-sm"
+                        : "text-gray-600 hover:bg-gray-200/70"
                               )}
                               onClick={() => handleLiveProgramsTabChange('voucher')}
                             >
-                              <Ticket className="h-3 w-3" strokeWidth={2.75} />
+                    <Ticket size={15} />
                               Voucher
                             </button>
-                          )}
-                          {recurringPrograms.transaction && (
                             <button
                               className={cn(
-                                "flex items-center gap-1 text-xs font-medium transition-colors",
+                      "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                                 liveProgramsTab === 'transaction'
-                                  ? "text-blue-600"
-                                  : "text-gray-600 hover:text-gray-800"
+                        ? "text-gray-800 bg-white shadow-sm"
+                        : "text-gray-600 hover:bg-gray-200/70"
                               )}
                               onClick={() => handleLiveProgramsTabChange('transaction')}
                             >
-                              <Receipt className="h-3 w-3" strokeWidth={2.75} />
+                    <Receipt size={15} />
                               Transaction
                             </button>
-                          )}
-                          {recurringPrograms.cashback && (
-                            <button
-                              className={cn(
-                                "flex items-center gap-1 text-xs font-medium transition-colors",
-                                liveProgramsTab === 'cashback'
-                                  ? "text-blue-600"
-                                  : "text-gray-600 hover:text-gray-800"
-                              )}
-                              onClick={() => handleLiveProgramsTabChange('cashback')}
-                            >
-                              <DollarSign className="h-3 w-3" strokeWidth={2.75} />
-                              <span className="text-blue-500 font-bold">Tap</span> Cash
-                            </button>
-                          )}
                         </div>
-                      </div>
-                    </div>
-                                         {/* Program Metrics */}
-                     <div className={`px-6 py-3 border-b border-gray-100 tab-content-transition ${
-                       isProgramsTransitioning ? 'tab-content-fade-out' : 'tab-content-fade-in'
-                     }`}>
-                       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                         {liveProgramsTab === 'coffee' && (
-                           <>
-                             <div className="text-center">
-                               <div className="text-sm font-medium text-gray-700">{programCustomers.coffee.length}</div>
-                               <div className="text-xs text-gray-400">Active Participants</div>
+                
+                <Button
+                  onClick={() => setProgramTypeSelectorOpen(true)}
+                  size="sm"
+                  className="rounded-md"
+                >
+                  <PlusCircle className="h-4 w-4 mr-1.5" />
+                  Create Program
+                </Button>
                              </div>
-                             <div className="text-center">
-                               <TooltipProvider>
-                                 <TooltipComponent>
-                                   <TooltipTrigger asChild>
-                                     <div className="cursor-help">
-                                       <div className="text-sm font-medium text-gray-700">
-                                         {programCustomers.coffee.length > 0 
-                                           ? Math.round(programCustomers.coffee.reduce((sum, c) => sum + c.progress, 0) / programCustomers.coffee.length)
-                                           : 0}
-                                       </div>
-                                       <div className="text-xs text-gray-400">Avg Stamps</div>
-                                     </div>
-                                   </TooltipTrigger>
-                                   <TooltipContent>
-                                     <p className="text-xs">Average number of coffee stamps earned per customer</p>
-                                   </TooltipContent>
-                                 </TooltipComponent>
-                               </TooltipProvider>
-                             </div>
-                             <div className="text-center">
-                               <TooltipProvider>
-                                 <TooltipComponent>
-                                   <TooltipTrigger asChild>
-                                     <div className="cursor-help">
-                                       <div className="text-sm font-medium text-gray-700">
-                                         {programCustomers.coffee.length > 0 
-                                           ? Math.round(programCustomers.coffee.filter(c => c.progressPercentage >= 100).length / programCustomers.coffee.length * 100)
-                                           : 0}%
-                                       </div>
-                                       <div className="text-xs text-gray-400">Completion Rate</div>
-                                     </div>
-                                   </TooltipTrigger>
-                                   <TooltipContent>
-                                     <p className="text-xs">Percentage of customers who completed their coffee card</p>
-                                   </TooltipContent>
-                                 </TooltipComponent>
-                               </TooltipProvider>
-                             </div>
-                             <div className="text-center">
-                               <TooltipProvider>
-                                 <TooltipComponent>
-                                   <TooltipTrigger asChild>
-                                     <div className="cursor-help">
-                                       <div className="text-sm font-medium text-gray-700">
-                                         {programCustomers.coffee.reduce((sum, c) => sum + c.progress, 0)}
-                                       </div>
-                                       <div className="text-xs text-gray-400">Total Stamps</div>
-                                     </div>
-                                   </TooltipTrigger>
-                                   <TooltipContent>
-                                     <p className="text-xs">Total coffee stamps earned across all customers</p>
-                                   </TooltipContent>
-                                 </TooltipComponent>
-                               </TooltipProvider>
-                             </div>
-                           </>
-                         )}
-                         
-                         {liveProgramsTab === 'voucher' && (
-                           <>
-                             <div className="text-center">
-                               <div className="text-sm font-medium text-gray-700">{programCustomers.voucher.length}</div>
-                               <div className="text-xs text-gray-400">Active Participants</div>
-                             </div>
-                             <div className="text-center">
-                               <TooltipProvider>
-                                 <TooltipComponent>
-                                   <TooltipTrigger asChild>
-                                     <div className="cursor-help">
-                                       <div className="text-sm font-medium text-gray-700">
-                                         ${programCustomers.voucher.length > 0 
-                                           ? (programCustomers.voucher.reduce((sum, c) => sum + c.progress, 0) / programCustomers.voucher.length).toFixed(2)
-                                           : '0.00'}
-                                       </div>
-                                       <div className="text-xs text-gray-400">Avg Spend</div>
-                                     </div>
-                                   </TooltipTrigger>
-                                   <TooltipContent>
-                                     <p className="text-xs">Average spending per customer toward voucher goals</p>
-                                   </TooltipContent>
-                                 </TooltipComponent>
-                               </TooltipProvider>
-                             </div>
-                             <div className="text-center">
-                               <TooltipProvider>
-                                 <TooltipComponent>
-                                   <TooltipTrigger asChild>
-                                     <div className="cursor-help">
-                                       <div className="text-sm font-medium text-gray-700">
-                                         {programCustomers.voucher.length > 0 
-                                           ? Math.round(programCustomers.voucher.filter(c => c.progressPercentage >= 100).length / programCustomers.voucher.length * 100)
-                                           : 0}%
-                                       </div>
-                                       <div className="text-xs text-gray-400">Completion Rate</div>
-                                     </div>
-                                   </TooltipTrigger>
-                                   <TooltipContent>
-                                     <p className="text-xs">Percentage of customers who earned their voucher</p>
-                                   </TooltipContent>
-                                 </TooltipComponent>
-                               </TooltipProvider>
-                             </div>
-                             <div className="text-center">
-                               <TooltipProvider>
-                                 <TooltipComponent>
-                                   <TooltipTrigger asChild>
-                                     <div className="cursor-help">
-                                       <div className="text-sm font-medium text-gray-700">
-                                         ${programCustomers.voucher.reduce((sum, c) => sum + c.progress, 0).toFixed(2)}
-                                       </div>
-                                       <div className="text-xs text-gray-400">Total Spend</div>
-                                     </div>
-                                   </TooltipTrigger>
-                                   <TooltipContent>
-                                     <p className="text-xs">Total spending across all voucher program participants</p>
-                                   </TooltipContent>
-                                 </TooltipComponent>
-                               </TooltipProvider>
-                             </div>
-                           </>
-                         )}
-                         
-                         {liveProgramsTab === 'transaction' && (
-                           <>
-                             <div className="text-center">
-                               <div className="text-sm font-medium text-gray-700">{programCustomers.transaction.length}</div>
-                               <div className="text-xs text-gray-400">Active Participants</div>
-                             </div>
-                             <div className="text-center">
-                               <TooltipProvider>
-                                 <TooltipComponent>
-                                   <TooltipTrigger asChild>
-                                     <div className="cursor-help">
-                                       <div className="text-sm font-medium text-gray-700">
-                                         {programCustomers.transaction.length > 0 
-                                           ? Math.round(programCustomers.transaction.reduce((sum, c) => sum + c.progress, 0) / programCustomers.transaction.length)
-                                           : 0}
-                                       </div>
-                                       <div className="text-xs text-gray-400">Avg Transactions</div>
-                                     </div>
-                                   </TooltipTrigger>
-                                   <TooltipContent>
-                                     <p className="text-xs">Average number of transactions per customer toward goals</p>
-                                   </TooltipContent>
-                                 </TooltipComponent>
-                               </TooltipProvider>
-                             </div>
-                             <div className="text-center">
-                               <TooltipProvider>
-                                 <TooltipComponent>
-                                   <TooltipTrigger asChild>
-                                     <div className="cursor-help">
-                                       <div className="text-sm font-medium text-gray-700">
-                                         {programCustomers.transaction.length > 0 
-                                           ? Math.round(programCustomers.transaction.filter(c => c.progressPercentage >= 100).length / programCustomers.transaction.length * 100)
-                                           : 0}%
-                                       </div>
-                                       <div className="text-xs text-gray-400">Completion Rate</div>
-                                     </div>
-                                   </TooltipTrigger>
-                                   <TooltipContent>
-                                     <p className="text-xs">Percentage of customers who completed their transaction goals</p>
-                                   </TooltipContent>
-                                 </TooltipComponent>
-                               </TooltipProvider>
-                             </div>
-                             <div className="text-center">
-                               <TooltipProvider>
-                                 <TooltipComponent>
-                                   <TooltipTrigger asChild>
-                                     <div className="cursor-help">
-                                       <div className="text-sm font-medium text-gray-700">
-                                         {programCustomers.transaction.reduce((sum, c) => sum + c.progress, 0)}
-                                       </div>
-                                       <div className="text-xs text-gray-400">Total Transactions</div>
-                                     </div>
-                                   </TooltipTrigger>
-                                   <TooltipContent>
-                                     <p className="text-xs">Total transactions across all program participants</p>
-                                   </TooltipContent>
-                                 </TooltipComponent>
-                               </TooltipProvider>
-                             </div>
-                           </>
-                         )}
-                         
-                         {liveProgramsTab === 'cashback' && (
-                           <>
-                             <div className="text-center">
-                               <div className="text-sm font-medium text-gray-700">{programCustomers.cashback.length}</div>
-                               <div className="text-xs text-gray-400">Total Participants</div>
-                             </div>
-                             <div className="text-center">
-                               <TooltipProvider>
-                                 <TooltipComponent>
-                                   <TooltipTrigger asChild>
-                                     <div className="cursor-help">
-                                       <div className="text-sm font-medium text-gray-700">
-                                         ${programCustomers.cashback.length > 0 
-                                           ? (programCustomers.cashback.reduce((sum, c) => sum + c.totalCashback, 0) / programCustomers.cashback.length).toFixed(2)
-                                           : '0.00'}
-                                       </div>
-                                       <div className="text-xs text-gray-400">Avg Cashback</div>
-                                     </div>
-                                   </TooltipTrigger>
-                                   <TooltipContent>
-                                     <p className="text-xs">Average cashback earned per customer</p>
-                                   </TooltipContent>
-                                 </TooltipComponent>
-                               </TooltipProvider>
-                             </div>
-                             <div className="text-center">
-                               <TooltipProvider>
-                                 <TooltipComponent>
-                                   <TooltipTrigger asChild>
-                                     <div className="cursor-help">
-                                       <div className="text-sm font-medium text-gray-700">
-                                         ${programCustomers.cashback.reduce((sum, c) => sum + c.totalCashback, 0).toFixed(2)}
-                                       </div>
-                                       <div className="text-xs text-gray-400">Total Earned</div>
-                                     </div>
-                                   </TooltipTrigger>
-                                   <TooltipContent>
-                                     <p className="text-xs">Total cashback earned across all customers</p>
-                                   </TooltipContent>
-                                 </TooltipComponent>
-                               </TooltipProvider>
-                             </div>
-                             <div className="text-center">
-                               <TooltipProvider>
-                                 <TooltipComponent>
-                                   <TooltipTrigger asChild>
-                                     <div className="cursor-help">
-                                       <div className="text-sm font-medium text-gray-700">
-                                         ${programCustomers.cashback.length > 0 
-                                           ? Math.max(...programCustomers.cashback.map(c => c.totalCashback)).toFixed(2)
-                                           : '0.00'}
-                                       </div>
-                                       <div className="text-xs text-gray-400">Top Earner</div>
-                                     </div>
-                                   </TooltipTrigger>
-                                   <TooltipContent>
-                                     <p className="text-xs">Highest cashback amount earned by a single customer</p>
-                                   </TooltipContent>
-                                 </TooltipComponent>
-                               </TooltipProvider>
-                             </div>
-                           </>
-                         )}
-                       </div>
+
+                            {/* Live Programs and Live Rewards Section */}
+              <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Live Programs */}
+                <div className="lg:col-span-2">
+                  <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6">
+                    {/* Programs Table */}
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden transition-opacity duration-300">
+                  <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h3 className="text-base font-medium text-gray-900">Live Programs</h3>
                      </div>
                      
                      <div className={`max-h-80 overflow-y-auto scrollbar-subtle tab-content-transition ${
@@ -5663,19 +5245,26 @@ export default function DashboardPage() {
                          </div>
                        ) : (
                          <table className="w-full">
-                           <thead className="bg-gray-50/50">
+                           <thead className="bg-gray-50/80">
                              <tr className="border-b border-gray-100">
-                               <th className="px-3 py-2 text-left">
+                               <th className="px-4 py-3 text-left">
                                  <span className="text-xs font-medium text-gray-600">
                                    Customer & Progress
                                  </span>
                                </th>
-                               <th className="px-3 py-2 text-center">
+                               <th className="px-4 py-3 text-center">
                                  <span className="text-xs font-medium text-gray-600">
                                    Last Activity
                                  </span>
                                </th>
-                               <th className="px-3 py-2 text-right">
+                               {liveProgramsTab === 'cashback' && (
+                                 <th className="px-4 py-3 text-center">
+                                   <span className="text-xs font-medium text-gray-600">
+                                     Tap Cash Used
+                                   </span>
+                                 </th>
+                               )}
+                               <th className="px-4 py-3 text-right">
                                  <span className="text-xs font-medium text-gray-600">
                                    {liveProgramsTab === 'coffee' ? 'Stamps' :
                                     liveProgramsTab === 'voucher' ? 'Spent ($)' :
@@ -5688,23 +5277,23 @@ export default function DashboardPage() {
                            <tbody className="divide-y divide-gray-100">
                              {liveProgramsTab === 'coffee' && programCustomers.coffee.slice(0, 7).map((customer, index) => (
                                <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
-                                 <td className="px-3 py-2">
-                                   <div className="flex items-center gap-2">
-                                     <div className="h-6 w-6 flex-shrink-0">
+                                 <td className="px-4 py-2.5">
+                                   <div className="flex items-center gap-3">
+                                     <div className="h-8 w-8 flex-shrink-0">
                                        {customer.profilePicture ? (
                                          <img 
                                            src={customer.profilePicture} 
                                            alt={customer.fullName}
-                                           className="h-6 w-6 rounded-full object-cover border border-gray-200"
+                                           className="h-8 w-8 rounded-full object-cover border border-gray-200"
                                          />
                                        ) : (
-                                         <div className="h-6 w-6 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
+                                         <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
                                            {customer.fullName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                                          </div>
                                        )}
                                      </div>
                                      <div className="min-w-0 flex-1">
-                                       <p className="text-xs font-medium text-gray-800 truncate">{customer.fullName}</p>
+                                       <p className="text-sm font-medium text-gray-800 truncate">{customer.fullName}</p>
                                        <div className="flex items-center gap-1.5 mt-0.5">
                                          <div className="w-24 bg-gray-200 rounded-full h-1.5">
                                            <div 
@@ -5715,7 +5304,7 @@ export default function DashboardPage() {
                                          <TooltipProvider>
                                            <TooltipComponent>
                                              <TooltipTrigger asChild>
-                                               <span className="text-xs text-gray-500 whitespace-nowrap cursor-help">
+                                               <span className="text-xs text-gray-600 whitespace-nowrap cursor-help">
                                                  {customer.progress}/{customer.target}
                                                </span>
                                              </TooltipTrigger>
@@ -5728,11 +5317,11 @@ export default function DashboardPage() {
                                      </div>
                                    </div>
                                  </td>
-                                 <td className="px-3 py-2 text-center">
+                                 <td className="px-4 py-2.5 text-center">
                                    <TooltipProvider>
                                      <TooltipComponent>
                                        <TooltipTrigger asChild>
-                                         <span className="text-xs text-gray-600 cursor-help">
+                                         <span className="text-sm text-gray-600 cursor-help">
                                            {customer.lastTransactionDate ? format(customer.lastTransactionDate, 'MMM d') : 'No recent activity'}
                                          </span>
                                        </TooltipTrigger>
@@ -5747,31 +5336,31 @@ export default function DashboardPage() {
                                      </TooltipComponent>
                                    </TooltipProvider>
                                  </td>
-                                 <td className="px-3 py-2 text-right">
-                                   <span className="text-xs font-medium text-gray-800">{customer.progress}</span>
+                                 <td className="px-4 py-2.5 text-right">
+                                   <span className="text-sm font-medium text-gray-800">{customer.progress}</span>
                                  </td>
                                </tr>
                              ))}
                              
                              {liveProgramsTab === 'voucher' && programCustomers.voucher.slice(0, 7).map((customer, index) => (
                                <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
-                                 <td className="px-3 py-2">
-                                   <div className="flex items-center gap-2">
-                                     <div className="h-6 w-6 flex-shrink-0">
+                                 <td className="px-4 py-2.5">
+                                   <div className="flex items-center gap-3">
+                                     <div className="h-8 w-8 flex-shrink-0">
                                        {customer.profilePicture ? (
                                          <img 
                                            src={customer.profilePicture} 
                                            alt={customer.fullName}
-                                           className="h-6 w-6 rounded-full object-cover border border-gray-200"
+                                           className="h-8 w-8 rounded-full object-cover border border-gray-200"
                                          />
                                        ) : (
-                                         <div className="h-6 w-6 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
+                                         <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
                                            {customer.fullName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                                          </div>
                                        )}
                                      </div>
                                      <div className="min-w-0 flex-1">
-                                       <p className="text-xs font-medium text-gray-800 truncate">{customer.fullName}</p>
+                                       <p className="text-sm font-medium text-gray-800 truncate">{customer.fullName}</p>
                                        <div className="flex items-center gap-1.5 mt-0.5">
                                          <div className="w-24 bg-gray-200 rounded-full h-1.5">
                                            <div 
@@ -5782,7 +5371,7 @@ export default function DashboardPage() {
                                          <TooltipProvider>
                                            <TooltipComponent>
                                              <TooltipTrigger asChild>
-                                               <span className="text-xs text-gray-500 whitespace-nowrap cursor-help">
+                                               <span className="text-xs text-gray-600 whitespace-nowrap cursor-help">
                                                  ${customer.progress.toFixed(2)}/${customer.target}
                                                </span>
                                              </TooltipTrigger>
@@ -5795,36 +5384,89 @@ export default function DashboardPage() {
                                      </div>
                                    </div>
                                  </td>
-                                 <td className="px-3 py-2 text-center">
+                                 <td className="px-4 py-2.5 text-center">
                                    <span className="text-xs text-gray-600">
                                      {customer.lastTransactionDate ? format(customer.lastTransactionDate, 'MMM d') : 'No recent activity'}
                                    </span>
                                  </td>
-                                 <td className="px-3 py-2 text-right">
-                                   <span className="text-xs font-medium text-gray-800">${customer.progress.toFixed(2)}</span>
+                                 <td className="px-4 py-2.5 text-right">
+                                   <span className="text-sm font-medium text-gray-800">${customer.progress.toFixed(2)}</span>
+                                 </td>
+                               </tr>
+                             ))}
+                             
+                             {liveProgramsTab === 'voucher' && programCustomers.voucher.slice(0, 7).map((customer, index) => (
+                               <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
+                                 <td className="px-4 py-2.5">
+                                   <div className="flex items-center gap-3">
+                                     <div className="h-8 w-8 flex-shrink-0">
+                                       {customer.profilePicture ? (
+                                         <img 
+                                           src={customer.profilePicture} 
+                                           alt={customer.fullName}
+                                           className="h-8 w-8 rounded-full object-cover border border-gray-200"
+                                         />
+                                       ) : (
+                                         <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
+                                           {customer.fullName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                                         </div>
+                                       )}
+                                     </div>
+                                     <div className="min-w-0 flex-1">
+                                       <p className="text-sm font-medium text-gray-800 truncate">{customer.fullName}</p>
+                                       <div className="flex items-center gap-1.5 mt-0.5">
+                                         <div className="w-24 bg-gray-200 rounded-full h-1.5">
+                                           <div 
+                                             className="bg-orange-500 h-1.5 rounded-full transition-all duration-300" 
+                                             style={{ width: `${Math.min(customer.progressPercentage, 100)}%` }}
+                                           ></div>
+                                         </div>
+                                         <TooltipProvider>
+                                           <TooltipComponent>
+                                             <TooltipTrigger asChild>
+                                               <span className="text-xs text-gray-600 whitespace-nowrap cursor-help">
+                                                 ${customer.progress.toFixed(2)}/${customer.target}
+                                               </span>
+                                             </TooltipTrigger>
+                                             <TooltipContent>
+                                               <p className="text-xs">${customer.progress.toFixed(2)} spent out of ${customer.target} needed for voucher</p>
+                                             </TooltipContent>
+                                           </TooltipComponent>
+                                         </TooltipProvider>
+                                       </div>
+                                     </div>
+                                   </div>
+                                 </td>
+                                 <td className="px-4 py-2.5 text-center">
+                                   <span className="text-sm text-gray-600">
+                                     {customer.lastTransactionDate ? format(customer.lastTransactionDate, 'MMM d') : 'No recent activity'}
+                                   </span>
+                                 </td>
+                                 <td className="px-4 py-2.5 text-right">
+                                   <span className="text-sm font-medium text-gray-800">${customer.progress.toFixed(2)}</span>
                                  </td>
                                </tr>
                              ))}
                              
                              {liveProgramsTab === 'transaction' && programCustomers.transaction.slice(0, 7).map((customer, index) => (
                                <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
-                                 <td className="px-3 py-2">
-                                   <div className="flex items-center gap-2">
-                                     <div className="h-6 w-6 flex-shrink-0">
+                                 <td className="px-4 py-2.5">
+                                   <div className="flex items-center gap-3">
+                                     <div className="h-8 w-8 flex-shrink-0">
                                        {customer.profilePicture ? (
                                          <img 
                                            src={customer.profilePicture} 
                                            alt={customer.fullName}
-                                           className="h-6 w-6 rounded-full object-cover border border-gray-200"
+                                           className="h-8 w-8 rounded-full object-cover border border-gray-200"
                                          />
                                        ) : (
-                                         <div className="h-6 w-6 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
+                                         <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
                                            {customer.fullName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                                          </div>
                                        )}
                                      </div>
                                      <div className="min-w-0 flex-1">
-                                       <p className="text-xs font-medium text-gray-800 truncate">{customer.fullName}</p>
+                                       <p className="text-sm font-medium text-gray-800 truncate">{customer.fullName}</p>
                                        <div className="flex items-center gap-1.5 mt-0.5">
                                          <div className="w-24 bg-gray-200 rounded-full h-1.5">
                                            <div 
@@ -5835,7 +5477,7 @@ export default function DashboardPage() {
                                          <TooltipProvider>
                                            <TooltipComponent>
                                              <TooltipTrigger asChild>
-                                               <span className="text-xs text-gray-500 whitespace-nowrap cursor-help">
+                                               <span className="text-xs text-gray-600 whitespace-nowrap cursor-help">
                                                  {customer.progress}/{customer.target}
                                                </span>
                                              </TooltipTrigger>
@@ -5848,57 +5490,85 @@ export default function DashboardPage() {
                                      </div>
                                    </div>
                                  </td>
-                                 <td className="px-3 py-2 text-center">
-                                   <span className="text-xs text-gray-600">
+                                 <td className="px-4 py-2.5 text-center">
+                                   <span className="text-sm text-gray-600">
                                      {customer.lastTransactionDate ? format(customer.lastTransactionDate, 'MMM d') : 'No recent activity'}
                                    </span>
                                  </td>
-                                 <td className="px-3 py-2 text-right">
-                                   <span className="text-xs font-medium text-gray-800">{customer.progress}</span>
+                                 <td className="px-4 py-2.5 text-right">
+                                   <span className="text-sm font-medium text-gray-800">{customer.progress}</span>
                                  </td>
                                </tr>
                              ))}
                              
                              {liveProgramsTab === 'cashback' && programCustomers.cashback.slice(0, 7).map((customer, index) => (
                                <tr key={customer.id} className="hover:bg-gray-100/50 transition-colors">
-                                 <td className="px-3 py-2">
-                                   <div className="flex items-center gap-2">
-                                     <div className="h-6 w-6 flex-shrink-0">
+                                 <td className="px-4 py-2.5">
+                                   <div className="flex items-center gap-3">
+                                     <div className="h-8 w-8 flex-shrink-0">
                                        {customer.profilePicture ? (
                                          <img 
                                            src={customer.profilePicture} 
                                            alt={customer.fullName}
-                                           className="h-6 w-6 rounded-full object-cover border border-gray-200"
+                                           className="h-8 w-8 rounded-full object-cover border border-gray-200"
                                          />
                                        ) : (
-                                         <div className="h-6 w-6 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
+                                         <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium border border-gray-200 bg-blue-100 text-blue-600">
                                            {customer.fullName?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                                          </div>
                                        )}
                                      </div>
                                      <div className="min-w-0 flex-1">
-                                       <p className="text-xs font-medium text-gray-800 truncate">{customer.fullName}</p>
-                                       <p className="text-xs text-gray-500">Total cashback earned</p>
+                                       <p className="text-sm font-medium text-gray-800 truncate">{customer.fullName}</p>
+                                       <p className="text-xs text-gray-600">Total cashback earned</p>
                                      </div>
                                    </div>
                                  </td>
-                                 <td className="px-3 py-2 text-center">
-                                   <span className="text-xs text-gray-600">
+                                 <td className="px-4 py-2.5 text-center">
+                                   <span className="text-sm text-gray-600">
                                      {customer.lastTransactionDate ? format(customer.lastTransactionDate, 'MMM d') : 'No recent activity'}
                                    </span>
                                  </td>
-                                 <td className="px-3 py-2 text-right">
-                                   <span className="text-xs font-medium text-gray-800">${customer.totalCashback.toFixed(2)}</span>
+                                 <td className="px-4 py-2.5 text-center">
+                                   <span className="text-sm font-medium text-gray-800">
+                                     ${customer.tapCashBalance?.toFixed(2) || '0.00'}
+                                   </span>
+                                   <div className="text-xs text-gray-400">Debug: {JSON.stringify(customer.tapCashBalance)}</div>
+                                 </td>
+                                 <td className="px-4 py-2.5 text-right">
+                                   <span className="text-sm font-medium text-gray-800">${customer.totalCashback.toFixed(2)}</span>
                                  </td>
                                </tr>
                              ))}
                              
-                             {((liveProgramsTab === 'coffee' && programCustomers.coffee.length === 0) ||
-                               (liveProgramsTab === 'voucher' && programCustomers.voucher.length === 0) ||
-                               (liveProgramsTab === 'transaction' && programCustomers.transaction.length === 0) ||
-                               (liveProgramsTab === 'cashback' && programCustomers.cashback.length === 0)) && (
+                             {((liveProgramsTab === 'coffee' && !recurringPrograms.coffee) ||
+                               (liveProgramsTab === 'voucher' && !recurringPrograms.voucher) ||
+                               (liveProgramsTab === 'transaction' && !recurringPrograms.transaction) ||
+                               (liveProgramsTab === 'cashback' && !recurringPrograms.cashback)) && (
                                <tr>
-                                 <td colSpan={3} className="px-3 py-6 text-center">
+                                 <td colSpan={liveProgramsTab === 'cashback' ? 4 : 3} className="px-3 py-6 text-center">
+                                   <div className="bg-gray-100 rounded-full h-10 w-10 flex items-center justify-center mx-auto mb-2">
+                                     <PlusCircle className="h-5 w-5 text-gray-400" strokeWidth={2.75} />
+                                   </div>
+                                   <p className="text-xs font-medium text-gray-700">No program created yet</p>
+                                   <p className="text-xs text-gray-500 mt-0.5 mb-3">Create a {liveProgramsTab === 'coffee' ? 'coffee' : liveProgramsTab === 'voucher' ? 'voucher' : liveProgramsTab === 'transaction' ? 'transaction' : 'cashback'} program to get started</p>
+                                   <Button
+                                     onClick={handleCreateProgram}
+                                     size="sm"
+                                     className="rounded-md"
+                                   >
+                                     Create Program
+                                   </Button>
+                                 </td>
+                               </tr>
+                             )}
+                             
+                             {((liveProgramsTab === 'coffee' && recurringPrograms.coffee && programCustomers.coffee.length === 0) ||
+                               (liveProgramsTab === 'voucher' && recurringPrograms.voucher && programCustomers.voucher.length === 0) ||
+                               (liveProgramsTab === 'transaction' && recurringPrograms.transaction && programCustomers.transaction.length === 0) ||
+                               (liveProgramsTab === 'cashback' && recurringPrograms.cashback && programCustomers.cashback.length === 0)) && (
+                               <tr>
+                                 <td colSpan={liveProgramsTab === 'cashback' ? 4 : 3} className="px-3 py-6 text-center">
                                    <div className="bg-gray-100 rounded-full h-10 w-10 flex items-center justify-center mx-auto mb-2">
                                      <Users className="h-5 w-5 text-gray-400" strokeWidth={2.75} />
                                    </div>
@@ -5912,204 +5582,263 @@ export default function DashboardPage() {
                        )}
                     </div>
                   </div>
-                )}
-                
-                {/* Live Rewards */}
-                <div className={cn(
-                  "bg-white rounded-xl border border-gray-200 overflow-hidden transition-opacity duration-300",
-                  !liveRewardsLoading && (() => {
-                    const filteredRewards = liveRewards.filter(reward => {
-                      const matchesTab = reward.type === liveRewardsTab
-                      const matchesFilter = rewardsTypeFilter === 'all' || reward.costType === rewardsTypeFilter
-                      return matchesTab && matchesFilter
-                    })
-                    return filteredRewards.length === 0
-                  })() && "opacity-50"
-                )}>
-                  <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-base font-medium text-gray-900">Live Rewards</h3>
-                      {/* Reward Type Tabs */}
-                      <div className="flex items-center gap-4">
-                        <button
-                          className={cn(
-                            "flex items-center gap-1 text-xs font-medium transition-colors",
-                            liveRewardsTab === 'individual'
-                              ? "text-blue-600"
-                              : "text-gray-600 hover:text-gray-800"
-                          )}
-                                                     onClick={() => handleLiveRewardsTabChange('individual')}
-                        >
-                          <Gift className="h-3 w-3" strokeWidth={2.75} />
-                          Individual
-                        </button>
-                        <button
-                          className={cn(
-                            "flex items-center gap-1 text-xs font-medium transition-colors",
-                            liveRewardsTab === 'customer-specific'
-                              ? "text-blue-600"
-                              : "text-gray-600 hover:text-gray-800"
-                          )}
-                                                     onClick={() => handleLiveRewardsTabChange('customer-specific')}
-                        >
-                          <Users className="h-3 w-3" strokeWidth={2.75} />
-                          Customer Specific
-                        </button>
-                      </div>
-                    </div>
-                  </div>
                   
-                  {/* Filter Options */}
-                  <div className="px-6 py-3 border-b border-gray-100 bg-gray-50/50">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-600">Filter:</span>
-                      <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
-                        <button
-                          className={cn(
-                            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
-                            rewardsTypeFilter === 'all'
-                              ? "text-gray-800 bg-white shadow-sm"
-                              : "text-gray-600 hover:bg-gray-200/70"
-                          )}
-                                                     onClick={() => handleRewardsTypeFilterChange('all')}
-                        >
-                          All
-                        </button>
-                        <button
-                          className={cn(
-                            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
-                            rewardsTypeFilter === 'free'
-                              ? "text-gray-800 bg-white shadow-sm"
-                              : "text-gray-600 hover:bg-gray-200/70"
-                          )}
-                                                     onClick={() => handleRewardsTypeFilterChange('free')}
-                        >
-                          <Gift className="h-3 w-3" strokeWidth={2.75} />
-                          Free
-                        </button>
-                        <button
-                          className={cn(
-                            "flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
-                            rewardsTypeFilter === 'points'
-                              ? "text-gray-800 bg-white shadow-sm"
-                              : "text-gray-600 hover:bg-gray-200/70"
-                          )}
-                                                     onClick={() => handleRewardsTypeFilterChange('points')}
-                        >
-                          <Star className="h-3 w-3" strokeWidth={2.75} />
-                          Points Required
-                        </button>
+                  {/* Program Metrics */}
+                  <div className="space-y-4 w-full lg:w-64">
+                    {liveProgramsTab === 'coffee' && (
+                      <>
+                        <div className="bg-white rounded-xl border border-gray-200 p-4">
+                          <div className="text-2xl font-semibold text-gray-900">{programCustomers.coffee.length}</div>
+                          <div className="text-sm text-gray-600 mt-1">Active Participants</div>
                       </div>
+                        <div className="bg-white rounded-xl border border-gray-200 p-4">
+                          <TooltipProvider>
+                            <TooltipComponent>
+                              <TooltipTrigger asChild>
+                                <div className="cursor-help">
+                                  <div className="text-2xl font-semibold text-gray-900">
+                                    {programCustomers.coffee.length > 0 
+                                      ? Math.round(programCustomers.coffee.reduce((sum, c) => sum + c.progress, 0) / programCustomers.coffee.length)
+                                      : 0}
                     </div>
+                                  <div className="text-sm text-gray-600 mt-1">Avg Stamps</div>
                   </div>
-                  
-                  <div className="max-h-80 overflow-y-auto scrollbar-subtle">
-                    {liveRewardsLoading ? (
-                      <div className="flex items-center justify-center py-8">
-                        <div className="h-5 w-5 rounded-full border-2 border-blue-200 border-t-blue-600 animate-spin"></div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">Average number of coffee stamps earned per customer</p>
+                              </TooltipContent>
+                            </TooltipComponent>
+                          </TooltipProvider>
+                        </div>
+                        <div className="bg-white rounded-xl border border-gray-200 p-4">
+                          <TooltipProvider>
+                            <TooltipComponent>
+                              <TooltipTrigger asChild>
+                                <div className="cursor-help">
+                                  <div className="text-2xl font-semibold text-gray-900">
+                                    {programCustomers.coffee.length > 0 
+                                      ? Math.round(programCustomers.coffee.filter(c => c.progressPercentage >= 100).length / programCustomers.coffee.length * 100)
+                                      : 0}%
+                                  </div>
+                                  <div className="text-sm text-gray-600 mt-1">Completion Rate</div>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">Percentage of customers who completed their coffee card</p>
+                              </TooltipContent>
+                            </TooltipComponent>
+                          </TooltipProvider>
+                        </div>
+                        <div className="bg-white rounded-xl border border-gray-200 p-4">
+                          <TooltipProvider>
+                            <TooltipComponent>
+                              <TooltipTrigger asChild>
+                                <div className="cursor-help">
+                                  <div className="text-2xl font-semibold text-gray-900">
+                                    {programCustomers.coffee.reduce((sum, c) => sum + c.progress, 0)}
+                                  </div>
+                                  <div className="text-sm text-gray-600 mt-1">Total Stamps</div>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">Total coffee stamps earned across all customers</p>
+                              </TooltipContent>
+                            </TooltipComponent>
+                          </TooltipProvider>
+                        </div>
+                      </>
+                    )}
+                    
+                    {liveProgramsTab === 'voucher' && (
+                      <>
+                        <div className="bg-white rounded-xl border border-gray-200 p-4">
+                          <div className="text-2xl font-semibold text-gray-900">{programCustomers.voucher.length}</div>
+                          <div className="text-sm text-gray-600 mt-1">Active Participants</div>
                       </div>
-                    ) : (() => {
-                      const filteredRewards = liveRewards.filter(reward => {
-                        const matchesTab = reward.type === liveRewardsTab
-                        const matchesFilter = rewardsTypeFilter === 'all' || reward.costType === rewardsTypeFilter
-                        return matchesTab && matchesFilter
-                      })
-                      
-                      return filteredRewards.length === 0 ? (
-                        <div className="py-8 text-center">
-                          <div className="bg-gray-100 rounded-full h-12 w-12 flex items-center justify-center mx-auto mb-3">
-                            <Gift className="h-6 w-6 text-gray-400" strokeWidth={2.75} />
+                        <div className="bg-white rounded-xl border border-gray-200 p-4">
+                          <TooltipProvider>
+                            <TooltipComponent>
+                              <TooltipTrigger asChild>
+                                <div className="cursor-help">
+                                  <div className="text-2xl font-semibold text-gray-900">
+                                    ${programCustomers.voucher.length > 0 
+                                      ? (programCustomers.voucher.reduce((sum, c) => sum + c.progress, 0) / programCustomers.voucher.length).toFixed(2)
+                                      : '0.00'}
+                    </div>
+                                  <div className="text-sm text-gray-600 mt-1">Avg Spend</div>
+                  </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">Average spending per customer toward voucher goals</p>
+                              </TooltipContent>
+                            </TooltipComponent>
+                          </TooltipProvider>
+                        </div>
+                        <div className="bg-white rounded-xl border border-gray-200 p-4">
+                          <TooltipProvider>
+                            <TooltipComponent>
+                              <TooltipTrigger asChild>
+                                <div className="cursor-help">
+                                  <div className="text-2xl font-semibold text-gray-900">
+                                    ${programCustomers.voucher.reduce((sum, c) => sum + c.progress, 0).toFixed(2)}
+                                  </div>
+                                  <div className="text-sm text-gray-600 mt-1">Total Spent</div>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">Total amount spent across all voucher participants</p>
+                              </TooltipContent>
+                            </TooltipComponent>
+                          </TooltipProvider>
+                        </div>
+                        <div className="bg-white rounded-xl border border-gray-200 p-4">
+                          <TooltipProvider>
+                            <TooltipComponent>
+                              <TooltipTrigger asChild>
+                                <div className="cursor-help">
+                                  <div className="text-2xl font-semibold text-gray-900">
+                                    {programCustomers.voucher.filter(c => c.progressPercentage >= 100).length}
+                                  </div>
+                                  <div className="text-sm text-gray-600 mt-1">Earned Vouchers</div>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">Number of customers who earned their voucher</p>
+                              </TooltipContent>
+                            </TooltipComponent>
+                          </TooltipProvider>
+                        </div>
+                      </>
+                    )}
+                    
+                    {liveProgramsTab === 'transaction' && (
+                      <>
+                        <div className="bg-white rounded-xl border border-gray-200 p-4">
+                          <div className="text-2xl font-semibold text-gray-900">{programCustomers.transaction.length}</div>
+                          <div className="text-sm text-gray-600 mt-1">Active Participants</div>
+                      </div>
+                        <div className="bg-white rounded-xl border border-gray-200 p-4">
+                          <TooltipProvider>
+                            <TooltipComponent>
+                              <TooltipTrigger asChild>
+                                <div className="cursor-help">
+                                  <div className="text-2xl font-semibold text-gray-900">
+                                    {programCustomers.transaction.length > 0 
+                                      ? Math.round(programCustomers.transaction.reduce((sum, c) => sum + c.progress, 0) / programCustomers.transaction.length)
+                                      : 0}
+                                  </div>
+                                  <div className="text-sm text-gray-600 mt-1">Avg Transactions</div>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">Average number of transactions per participant</p>
+                              </TooltipContent>
+                            </TooltipComponent>
+                          </TooltipProvider>
+                        </div>
+                        <div className="bg-white rounded-xl border border-gray-200 p-4">
+                          <TooltipProvider>
+                            <TooltipComponent>
+                              <TooltipTrigger asChild>
+                                <div className="cursor-help">
+                                  <div className="text-2xl font-semibold text-gray-900">
+                                    {programCustomers.transaction.length > 0 
+                                      ? Math.round(programCustomers.transaction.filter(c => c.progressPercentage >= 100).length / programCustomers.transaction.length * 100)
+                                      : 0}%
+                                  </div>
+                                  <div className="text-sm text-gray-600 mt-1">Completion Rate</div>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">Percentage of customers who completed their transaction goals</p>
+                              </TooltipContent>
+                            </TooltipComponent>
+                          </TooltipProvider>
+                        </div>
+                        <div className="bg-white rounded-xl border border-gray-200 p-4">
+                          <TooltipProvider>
+                            <TooltipComponent>
+                              <TooltipTrigger asChild>
+                                <div className="cursor-help">
+                                  <div className="text-2xl font-semibold text-gray-900">
+                                    {programCustomers.transaction.reduce((sum, c) => sum + c.progress, 0)}
+                                  </div>
+                                  <div className="text-sm text-gray-600 mt-1">Total Transactions</div>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">Total transactions across all program participants</p>
+                              </TooltipContent>
+                            </TooltipComponent>
+                          </TooltipProvider>
+                        </div>
+                      </>
+                    )}
+                    
+                    {liveProgramsTab === 'cashback' && (
+                      <>
+                        <div className="bg-white rounded-xl border border-gray-200 p-4">
+                          <div className="text-2xl font-semibold text-gray-900">{programCustomers.cashback.length}</div>
+                          <div className="text-sm text-gray-600 mt-1">Total Participants</div>
                           </div>
-                          <p className="text-sm font-medium text-gray-700">No rewards found</p>
-                          <p className="text-xs text-gray-500 mt-1">Rewards will appear here once created</p>
+                        <div className="bg-white rounded-xl border border-gray-200 p-4">
+                          <TooltipProvider>
+                            <TooltipComponent>
+                              <TooltipTrigger asChild>
+                                <div className="cursor-help">
+                                  <div className="text-2xl font-semibold text-gray-900">
+                                    ${programCustomers.cashback.length > 0 
+                                      ? (programCustomers.cashback.reduce((sum, c) => sum + c.totalCashback, 0) / programCustomers.cashback.length).toFixed(2)
+                                      : '0.00'}
                         </div>
-                      ) : (
-                        <div className="max-h-96 overflow-y-auto overflow-x-auto">
-                          <table className="w-full">
-                            <thead className="bg-gray-50/80 sticky top-0 z-10">
-                              <tr className="border-b border-gray-100">
-                                <th className="px-4 py-3 text-left w-2/5">
-                                  <span className="text-xs font-medium text-gray-600">Reward</span>
-                                </th>
-                                <th className="px-4 py-3 text-center w-1/5">
-                                  <span className="text-xs font-medium text-gray-600">Type</span>
-                                </th>
-                                <th className="px-4 py-3 text-center w-1/5">
-                                  <span className="text-xs font-medium text-gray-600">Redemptions</span>
-                                </th>
-                                <th className="px-4 py-3 text-right w-1/5">
-                                  <span className="text-xs font-medium text-gray-600">Created</span>
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                              {filteredRewards.map((reward) => (
-                                <tr 
-                                  key={reward.id} 
-                                  className="hover:bg-gray-100/50 transition-colors cursor-pointer"
-                                  onClick={() => handleRewardClick(reward.id)}
-                                >
-                                  <td className="px-4 py-2.5">
-                                    <div className="min-w-0">
-                                      <p className="text-sm font-medium text-gray-800 truncate">{reward.rewardName || reward.title || reward.name}</p>
-                                      <p className="text-xs text-gray-600 truncate">{reward.description}</p>
+                                  <div className="text-sm text-gray-600 mt-1">Avg Cashback</div>
                                     </div>
-                                  </td>
-                                  <td className="px-4 py-2.5 text-center">
-                                    {reward.costType === 'free' ? (
-                                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
-                                        <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
-                                        Free
-                                      </span>
-                                    ) : (
-                                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200">
-                                        <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
-                                        {reward.pointsRequired} pts
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-2.5 text-center">
-                                    <span className="text-sm font-medium text-gray-800">{reward.redemptionCount}</span>
-                                  </td>
-                                  <td className="px-4 py-2.5 text-right">
-                                    <span className="text-xs text-gray-600">
-                                      {(() => {
-                                        if (!reward.createdAt) return 'Unknown'
-                                        try {
-                                          // Handle Firestore Timestamp
-                                          if (reward.createdAt.toDate && typeof reward.createdAt.toDate === 'function') {
-                                            return format(reward.createdAt.toDate(), 'MMM d, yyyy')
-                                          }
-                                          // Handle JavaScript Date
-                                          if (reward.createdAt instanceof Date) {
-                                            return format(reward.createdAt, 'MMM d, yyyy')
-                                          }
-                                          // Handle string dates
-                                          if (typeof reward.createdAt === 'string') {
-                                            return format(new Date(reward.createdAt), 'MMM d, yyyy')
-                                          }
-                                          // Handle seconds/milliseconds timestamps
-                                          if (typeof reward.createdAt === 'number') {
-                                            const date = reward.createdAt > 1000000000000 
-                                              ? new Date(reward.createdAt) // milliseconds
-                                              : new Date(reward.createdAt * 1000) // seconds
-                                            return format(date, 'MMM d, yyyy')
-                                          }
-                                          return 'Unknown'
-                                        } catch (error) {
-                                          console.error('Error formatting reward date:', error, reward.createdAt)
-                                          return 'Unknown'
-                                        }
-                                      })()}
-                                    </span>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">Average cashback earned per customer</p>
+                              </TooltipContent>
+                            </TooltipComponent>
+                          </TooltipProvider>
                         </div>
-                      )
-                    })()}
+                        <div className="bg-white rounded-xl border border-gray-200 p-4">
+                          <TooltipProvider>
+                            <TooltipComponent>
+                              <TooltipTrigger asChild>
+                                <div className="cursor-help">
+                                  <div className="text-2xl font-semibold text-gray-900">
+                                    ${programCustomers.cashback.reduce((sum, c) => sum + c.totalCashback, 0).toFixed(2)}
+                                  </div>
+                                  <div className="text-sm text-gray-600 mt-1">Total Earned</div>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">Total cashback earned across all customers</p>
+                              </TooltipContent>
+                            </TooltipComponent>
+                          </TooltipProvider>
+                        </div>
+                        <div className="bg-white rounded-xl border border-gray-200 p-4">
+                          <TooltipProvider>
+                            <TooltipComponent>
+                              <TooltipTrigger asChild>
+                                <div className="cursor-help">
+                                  <div className="text-2xl font-semibold text-gray-900">
+                                    ${programCustomers.cashback.length > 0 
+                                      ? Math.max(...programCustomers.cashback.map(c => c.totalCashback)).toFixed(2)
+                                      : '0.00'}
+                                  </div>
+                                  <div className="text-sm text-gray-600 mt-1">Top Earner</div>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">Highest cashback amount earned by a single customer</p>
+                              </TooltipContent>
+                            </TooltipComponent>
+                          </TooltipProvider>
+                        </div>
+                      </>
+                    )}
+                        </div>
                   </div>
                 </div>
               </div>
@@ -6322,7 +6051,7 @@ export default function DashboardPage() {
                                   )}
                                 </td>
                                 <td className="px-4 py-3 text-center">
-                                  <span className="text-xs text-gray-600">
+                                  <span className="text-sm text-gray-600">
                                     {customer.lastTransactionDate 
                                       ? formatTimeAgo(customer.lastTransactionDate.toDate ? customer.lastTransactionDate.toDate() : new Date(customer.lastTransactionDate))
                                       : 'Never'
@@ -6330,7 +6059,7 @@ export default function DashboardPage() {
                                   </span>
                                 </td>
                                 <td className="px-4 py-3 text-center">
-                                  <span className="text-xs text-gray-600">
+                                  <span className="text-sm text-gray-600">
                                     {customer.firstTransactionDate 
                                       ? format(customer.firstTransactionDate.toDate ? customer.firstTransactionDate.toDate() : new Date(customer.firstTransactionDate), 'MMM d, yyyy')
                                       : 'N/A'
@@ -6374,7 +6103,7 @@ export default function DashboardPage() {
                 )}>
                   <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-base font-medium text-gray-900">Customer Engagement Analysis</h3>
+                      <h3 className="text-base font-medium text-gray-900">Customer Engagement</h3>
                       <div className="flex items-center gap-2">
                         <TooltipProvider>
                           <TooltipComponent>
@@ -6553,7 +6282,7 @@ export default function DashboardPage() {
                                   )}
                                 </td>
                                 <td className="px-4 py-3 text-center">
-                                  <span className="text-xs text-gray-600">
+                                  <span className="text-sm text-gray-600">
                                     {customer.lastTransactionDate 
                                       ? formatTimeAgo(customer.lastTransactionDate)
                                       : 'Never'
@@ -6561,7 +6290,7 @@ export default function DashboardPage() {
                                   </span>
                                 </td>
                                 <td className="px-4 py-3 text-center">
-                                  <span className="text-xs text-gray-600">
+                                  <span className="text-sm text-gray-600">
                                     {customer.lastStoreView 
                                       ? formatTimeAgo(customer.lastStoreView)
                                       : 'Never'
@@ -6569,7 +6298,7 @@ export default function DashboardPage() {
                                   </span>
                                 </td>
                                 <td className="px-4 py-3 text-center">
-                                  <span className="text-xs font-medium text-gray-800">
+                                  <span className="text-sm font-medium text-gray-800">
                                     {customer.lifetimeTransactionCount}
                                   </span>
                                 </td>
@@ -6584,7 +6313,7 @@ export default function DashboardPage() {
                                     <DropdownMenuTrigger asChild>
                                       <Button
                                         size="sm"
-                                        className="h-7 px-3 text-xs font-medium bg-[#007AFF] hover:bg-[#0051D5] text-white rounded-md flex items-center gap-1"
+                                        className="px-3 text-xs font-medium bg-[#007AFF] hover:bg-[#0051D5] text-white rounded-md flex items-center gap-1"
                                       >
                                         Create Reward
                                         <ChevronDown className="h-3 w-3" strokeWidth={2.75} />
@@ -7978,63 +7707,3 @@ export default function DashboardPage() {
   );
 }
 
-// Sample data
-const recentSignups = [
-  {
-    id: "cust1",
-    name: "Emma Wilson",
-    email: "emma.wilson@example.com",
-    signupDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2)
-  },
-  {
-    id: "cust2",
-    name: "James Miller",
-    email: "james.miller@example.com",
-    signupDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5)
-  },
-  {
-    id: "cust3",
-    name: "Olivia Davis",
-    email: "olivia.davis@example.com",
-    signupDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7)
-  },
-  {
-    id: "cust4",
-    name: "Noah Garcia",
-    email: "noah.garcia@example.com",
-    signupDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 10)
-  }
-]
-
-const rewardPerformance = [
-  {
-    id: "rew1",
-    name: "Free Coffee",
-    redemptionCount: 342,
-    pointsCost: 100,
-    type: "item",
-    conversionRate: 78,
-    trend: "up",
-    changePercentage: 12
-  },
-  {
-    id: "rew2",
-    name: "10% Off Next Purchase",
-    redemptionCount: 215,
-    pointsCost: 200,
-    type: "discount",
-    conversionRate: 65,
-    trend: "down",
-    changePercentage: 3
-  },
-  {
-    id: "rew3",
-    name: "Buy 10 Get 1 Free",
-    redemptionCount: 187,
-    pointsCost: 0,
-    type: "program",
-    conversionRate: 92,
-    trend: "up",
-    changePercentage: 8
-  }
-] 

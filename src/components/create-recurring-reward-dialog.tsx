@@ -478,254 +478,253 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
       onOpenChange={onOpenChange}
     >
       <DialogPortal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-        <DialogPrimitive.Content className="fixed left-[50%] top-[50%] z-50 w-full max-w-6xl h-[90vh] translate-x-[-50%] translate-y-[-50%] border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg overflow-hidden">
-          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground z-10">
-            <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </DialogPrimitive.Close>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Content className="fixed left-[50%] top-[50%] z-50 w-full max-w-2xl h-[85vh] translate-x-[-50%] translate-y-[-50%] bg-white rounded-lg shadow-xl border border-gray-200 flex flex-col overflow-hidden data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]">
           
-          <div className="flex h-full">
-            {/* Left Content Section */}
-            <div className="flex flex-col flex-1 min-w-0">
-                        <div className="flex-shrink-0 px-6 py-5 border-b">
-              <div className="mb-4">
-                <h2 className="text-lg font-semibold text-gray-900 mb-2">
-                  <span className="text-[#007AFF]">Create</span> Recurring Reward
+          {/* Dialog Header */}
+          <div className="flex-shrink-0 px-6 py-5 border-b border-gray-200 bg-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Create Recurring Reward
                 </h2>
-                <p className="text-sm text-gray-600">
-                  Set up automatic rewards to engage customers with your loyalty program
+                <p className="text-sm text-gray-600 mt-1">
+                  Set up automatic rewards to engage customers
                 </p>
               </div>
-              
-              {/* Main Tab Container */}
-              <div className="flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
-                <button
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                    activeTab === "coffee"
-                      ? "text-gray-800 bg-white shadow-sm"
-                      : "text-gray-600 hover:bg-gray-200/70"
-                  )}
-                  onClick={() => setActiveTab("coffee")}
-                >
-                  Coffee Program
-                </button>
-                <button
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                    activeTab === "discount"
-                      ? "text-gray-800 bg-white shadow-sm"
-                      : "text-gray-600 hover:bg-gray-200/70"
-                  )}
-                  onClick={() => setActiveTab("discount")}
-                >
-                  Recurring Voucher
-                </button>
-                <button
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                    activeTab === "transaction"
-                      ? "text-gray-800 bg-white shadow-sm"
-                      : "text-gray-600 hover:bg-gray-200/70"
-                  )}
-                  onClick={() => setActiveTab("transaction")}
-                >
-                  Transaction Reward
-                </button>
-                <button
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                    activeTab === "cashback"
-                      ? "text-gray-800 bg-white shadow-sm"
-                      : "text-gray-600 hover:bg-gray-200/70"
-                  )}
-                  onClick={() => setActiveTab("cashback")}
-                >
-                  Tap Cash
-                </button>
-              </div>
+              <DialogPrimitive.Close className="rounded-md p-2 text-gray-400 hover:text-gray-500 hover:bg-gray-100 transition-colors">
+                <X className="h-5 w-5" />
+                <span className="sr-only">Close</span>
+              </DialogPrimitive.Close>
             </div>
-              
-              <div className="flex-1 h-full min-h-0">
-              {activeTab === "coffee" && (
-                <div className="mt-0 h-full flex flex-col">
-                  {!showCoffeeForm ? (
-                    <div className="flex-1 overflow-y-auto p-6 pb-0 min-h-0">
-                      <div className="border border-gray-200 rounded-md p-6 bg-gray-50">
-                        <div className="flex items-center gap-3 mb-3">
-                          <Coffee className="h-5 w-5 text-[#007AFF]" />
-                          <h3 className="text-md font-semibold">Coffee Loyalty Program</h3>
-                        </div>
-                        <p className="text-sm text-gray-600 mb-4">
-                          Create a digital stamp card where customers buy X drinks and get 1 free
-                        </p>
-                        {!hasCoffeeProgram ? (
-                          <Button
-                            onClick={() => setShowCoffeeForm(true)}
-                            variant="outline"
-                            className="rounded-md"
-                          >
-                            Set Up Program
-                          </Button>
-                        ) : (
-                          <div className="space-y-4">
-                            <div className="bg-white border border-gray-200 rounded-md p-4">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Coffee className="h-4 w-4 text-[#007AFF]" />
-                                <p className="text-sm text-gray-900 font-medium">✓ Coffee Program is Active</p>
-                              </div>
-                              
-                              <div className="space-y-2 text-sm">
-                                <div className="flex justify-between">
-                                  <span className="text-gray-600">PIN Code:</span>
-                                  <span className="text-gray-900 font-medium">{coffeeFormData.pin}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-gray-600">Frequency:</span>
-                                  <span className="text-gray-900 font-medium">Buy {parseInt(coffeeFormData.frequency) - 1}, get 1 free</span>
-                                </div>
-                                {coffeeFormData.minimumSpend !== '0' && (
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600">Minimum Spend:</span>
-                                    <span className="text-gray-900 font-medium">${coffeeFormData.minimumSpend}</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            
-                            <Button
-                              onClick={() => setShowCoffeeForm(true)}
-                              variant="outline"
-                              size="sm"
-                              className="rounded-md"
-                            >
-                              <Edit size={14} className="mr-1" />
-                              Edit Settings
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex-1 overflow-y-auto p-6 pt-0 min-h-0">
-                      <div className="mb-6">
-                        <h2 className="text-lg font-semibold">Configure Coffee Program</h2>
-                        <p className="text-sm text-gray-600">Set up your digital stamp card program</p>
-                      </div>
-                    
-                      <div className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">PIN Code <span className="text-red-500">*</span></Label>
-                            <Input
-                              type="text"
-                              maxLength={4}
-                              value={coffeeFormData.pin}
-                              onChange={(e) => setCoffeeFormData({ ...coffeeFormData, pin: e.target.value })}
-                              placeholder="e.g., 1234"
-                              className="h-10 rounded-md"
-                            />
-                            <p className="text-xs text-gray-500">
-                              Staff will enter this PIN when redeeming free coffees
-                            </p>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">Frequency <span className="text-red-500">*</span></Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={coffeeFormData.frequency}
-                              onChange={(e) => setCoffeeFormData({ ...coffeeFormData, frequency: e.target.value })}
-                              placeholder="e.g., 10"
-                              className="h-10 rounded-md"
-                            />
-                            <p className="text-xs text-gray-500">
-                              Total coffees in reward cycle (e.g., "10" means buy 9, get 10th free)
-                            </p>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">Minimum Spend ($)</Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={coffeeFormData.minimumSpend}
-                              onChange={(e) => setCoffeeFormData({ ...coffeeFormData, minimumSpend: e.target.value })}
-                              placeholder="e.g., 5"
-                              className="h-10 rounded-md"
-                            />
-                            <p className="text-xs text-gray-500">
-                              Minimum transaction amount to qualify (0 for no minimum)
-                            </p>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">Time Between Purchases (minutes)</Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={coffeeFormData.minimumTimeBetween}
-                              onChange={(e) => setCoffeeFormData({ ...coffeeFormData, minimumTimeBetween: e.target.value })}
-                              placeholder="e.g., 30"
-                              className="h-10 rounded-md"
-                            />
-                            <p className="text-xs text-gray-500">
-                              Minimum time between purchases to earn stamps (0 for no limit)
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-                
-              {activeTab === "discount" && (
-                <div className="mt-0 h-full flex flex-col">
-                  {!showVoucherForm ? (
-                  <div className="flex-1 overflow-y-auto p-6 min-h-0">
-                    <div className="border border-gray-200 rounded-md p-6 bg-gray-50 mb-6">
+            
+            {/* Tab Container */}
+            <div className="mt-4 flex items-center bg-gray-100 p-0.5 rounded-md w-fit">
+              <button
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  activeTab === "coffee"
+                    ? "text-gray-800 bg-white shadow-sm"
+                    : "text-gray-600 hover:bg-gray-200/70"
+                )}
+                onClick={() => setActiveTab("coffee")}
+              >
+                <Coffee size={15} />
+                Coffee
+              </button>
+              <button
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  activeTab === "discount"
+                    ? "text-gray-800 bg-white shadow-sm"
+                    : "text-gray-600 hover:bg-gray-200/70"
+                )}
+                onClick={() => setActiveTab("discount")}
+              >
+                <Percent size={15} />
+                Voucher
+              </button>
+              <button
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  activeTab === "transaction"
+                    ? "text-gray-800 bg-white shadow-sm"
+                    : "text-gray-600 hover:bg-gray-200/70"
+                )}
+                onClick={() => setActiveTab("transaction")}
+              >
+                <ShoppingBag size={15} />
+                Transaction
+              </button>
+              <button
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  activeTab === "cashback"
+                    ? "text-gray-800 bg-white shadow-sm"
+                    : "text-gray-600 hover:bg-gray-200/70"
+                )}
+                onClick={() => setActiveTab("cashback")}
+              >
+                <Award size={15} />
+                Tap Cash
+              </button>
+            </div>
+          </div>
+          
+          {/* Dialog Body */}
+          <div className="flex-1 overflow-y-auto bg-white min-h-0">
+            {activeTab === "coffee" && (
+              <div className="p-6">
+                {!showCoffeeForm ? (
+                  <div className="space-y-6">
+                    {/* Program Overview Card */}
+                    <div className="bg-gray-50 border border-gray-200 rounded-md p-5">
                       <div className="flex items-center gap-3 mb-3">
-                        <Percent className="h-5 w-5 text-purple-600" />
-                        <h3 className="text-md font-semibold">Recurring Voucher Program</h3>
+                        <div className="p-2 bg-blue-100 rounded-md">
+                          <Coffee className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-base font-semibold text-gray-900">Coffee Loyalty Program</h3>
+                          <p className="text-sm text-gray-600">Digital stamp card - buy X drinks, get 1 free</p>
+                        </div>
                       </div>
-                      <p className="text-sm text-gray-600 mb-4">
-                        Automatically reward customers with vouchers when they reach spending thresholds
-                      </p>
-                      {!hasVoucherProgram ? (
+                      
+                      {!hasCoffeeProgram ? (
                         <Button
-                          onClick={() => setShowVoucherForm(true)}
-                          variant="outline"
-                          className="rounded-md"
+                          onClick={() => setShowCoffeeForm(true)}
+                          className="mt-4 rounded-md bg-blue-600 hover:bg-blue-700 text-white"
                         >
                           Set Up Program
                         </Button>
                       ) : (
-                        <div className="space-y-4">
+                        <div className="mt-4 space-y-3">
                           <div className="bg-white border border-gray-200 rounded-md p-4">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Percent className="h-4 w-4 text-purple-600" />
-                              <p className="text-sm text-gray-900 font-medium">✓ Voucher Program is Active</p>
+                            <div className="flex items-center gap-2 mb-3">
+                              <CheckCircle className="h-4 w-4 text-green-600" />
+                              <span className="text-sm font-medium text-gray-900">Program Active</span>
                             </div>
                             
-                            <div className="space-y-2 text-sm">
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">Reward Name:</span>
-                                <span className="text-gray-900 font-medium">{voucherFormData.rewardName}</span>
-                              </div>
-                              <div className="flex justify-between">
+                            <div className="space-y-2">
+                              <div className="flex justify-between text-sm">
                                 <span className="text-gray-600">PIN Code:</span>
-                                <span className="text-gray-900 font-medium">{voucherFormData.pin}</span>
+                                <span className="font-medium text-gray-900">{coffeeFormData.pin}</span>
                               </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">Spend Required:</span>
-                                <span className="text-gray-900 font-medium">${voucherFormData.spendRequired}</span>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Frequency:</span>
+                                <span className="font-medium text-gray-900">Buy {parseInt(coffeeFormData.frequency) - 1}, get 1 free</span>
                               </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">Discount Amount:</span>
-                                <span className="text-gray-900 font-medium">${voucherFormData.discountAmount}</span>
+                              {coffeeFormData.minimumSpend !== '0' && (
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-gray-600">Min. Spend:</span>
+                                  <span className="font-medium text-gray-900">${coffeeFormData.minimumSpend}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <Button
+                            onClick={() => setShowCoffeeForm(true)}
+                            variant="outline"
+                            size="sm"
+                            className="rounded-md"
+                          >
+                            <Edit className="h-4 w-4 mr-1.5" />
+                            Edit Settings
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-base font-semibold text-gray-900 mb-1">Configure Coffee Program</h3>
+                      <p className="text-sm text-gray-600">Set up your digital stamp card</p>
+                    </div>
+                    {/* Form Fields */}
+                    <div className="space-y-4">
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">
+                          PIN Code <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          type="text"
+                          maxLength={4}
+                          value={coffeeFormData.pin}
+                          onChange={(e) => setCoffeeFormData({ ...coffeeFormData, pin: e.target.value })}
+                          placeholder="1234"
+                          className="mt-1.5 rounded-md"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Staff PIN for redemptions</p>
+                      </div>
+
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">
+                          Frequency <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={coffeeFormData.frequency}
+                          onChange={(e) => setCoffeeFormData({ ...coffeeFormData, frequency: e.target.value })}
+                          placeholder="10"
+                          className="mt-1.5 rounded-md"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Total stamps (e.g., 10 = buy 9, get 1 free)</p>
+                      </div>
+
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">Minimum Spend ($)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={coffeeFormData.minimumSpend}
+                          onChange={(e) => setCoffeeFormData({ ...coffeeFormData, minimumSpend: e.target.value })}
+                          placeholder="0"
+                          className="mt-1.5 rounded-md"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Minimum purchase to earn stamp</p>
+                      </div>
+
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">Time Between (minutes)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={coffeeFormData.minimumTimeBetween}
+                          onChange={(e) => setCoffeeFormData({ ...coffeeFormData, minimumTimeBetween: e.target.value })}
+                          placeholder="0"
+                          className="mt-1.5 rounded-md"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Cooldown between stamps</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {activeTab === "discount" && (
+              <div className="p-6">
+                {!showVoucherForm ? (
+                  <div className="space-y-6">
+                    <div className="bg-gray-50 border border-gray-200 rounded-md p-5">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="p-2 bg-purple-100 rounded-md">
+                          <Percent className="h-5 w-5 text-purple-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-base font-semibold text-gray-900">Recurring Voucher Program</h3>
+                          <p className="text-sm text-gray-600">Auto-reward at spending milestones</p>
+                        </div>
+                      </div>
+                      
+                      {!hasVoucherProgram ? (
+                        <Button
+                          onClick={() => setShowVoucherForm(true)}
+                          className="mt-4 rounded-md bg-purple-600 hover:bg-purple-700 text-white"
+                        >
+                          Set Up Program
+                        </Button>
+                      ) : (
+                        <div className="mt-4 space-y-3">
+                          <div className="bg-white border border-gray-200 rounded-md p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <CheckCircle className="h-4 w-4 text-green-600" />
+                              <span className="text-sm font-medium text-gray-900">Program Active</span>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Reward:</span>
+                                <span className="font-medium text-gray-900">{voucherFormData.rewardName}</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Threshold:</span>
+                                <span className="font-medium text-gray-900">${voucherFormData.spendRequired}</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Voucher:</span>
+                                <span className="font-medium text-gray-900">${voucherFormData.discountAmount} off</span>
                               </div>
                             </div>
                           </div>
@@ -736,149 +735,146 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                             size="sm"
                             className="rounded-md"
                           >
-                            <Edit size={14} className="mr-1" />
+                            <Edit className="h-4 w-4 mr-1.5" />
                             Edit Settings
                           </Button>
                         </div>
                       )}
                     </div>
                   </div>
-                  ) : (
-                    <div className="flex-1 overflow-y-auto p-6 pt-0 min-h-0">
-                      <div className="mb-6">
-                        <h2 className="text-lg font-semibold">Configure Recurring Voucher</h2>
-                        <p className="text-sm text-gray-600">Set up automatic voucher rewards for spending milestones</p>
-                      </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-base font-semibold text-gray-900 mb-1">Configure Voucher Program</h3>
+                      <p className="text-sm text-gray-600">Set up spending milestone rewards</p>
+                    </div>
                     
-                      <div className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">Reward Name <span className="text-red-500">*</span></Label>
-                            <Input
-                              type="text"
-                              value={voucherFormData.rewardName}
-                              onChange={(e) => setVoucherFormData({ ...voucherFormData, rewardName: e.target.value })}
-                              placeholder="e.g., Loyalty Discount"
-                              className="h-10 rounded-md"
-                            />
-                          </div>
+                    <div className="space-y-4">
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">
+                          Reward Name <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          type="text"
+                          value={voucherFormData.rewardName}
+                          onChange={(e) => setVoucherFormData({ ...voucherFormData, rewardName: e.target.value })}
+                          placeholder="Loyalty Discount"
+                          className="mt-1.5 rounded-md"
+                        />
+                      </div>
 
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">PIN Code <span className="text-red-500">*</span></Label>
-                            <Input
-                              type="text"
-                              maxLength={4}
-                              value={voucherFormData.pin}
-                              onChange={(e) => setVoucherFormData({ ...voucherFormData, pin: e.target.value })}
-                              placeholder="e.g., 1234"
-                              className="h-10 rounded-md"
-                            />
-                            <p className="text-xs text-gray-500">
-                              Staff will enter this PIN when applying the voucher
-                            </p>
-                          </div>
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">
+                          PIN Code <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          type="text"
+                          maxLength={4}
+                          value={voucherFormData.pin}
+                          onChange={(e) => setVoucherFormData({ ...voucherFormData, pin: e.target.value })}
+                          placeholder="1234"
+                          className="mt-1.5 rounded-md"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Staff PIN for applying voucher</p>
+                      </div>
 
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">Spend Required ($) <span className="text-red-500">*</span></Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={voucherFormData.spendRequired}
-                              onChange={(e) => setVoucherFormData({ ...voucherFormData, spendRequired: e.target.value })}
-                              placeholder="e.g., 100"
-                              className="h-10 rounded-md"
-                            />
-                            <p className="text-xs text-gray-500">
-                              Total amount customer needs to spend to earn voucher
-                            </p>
-                          </div>
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">
+                          Spend Required ($) <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={voucherFormData.spendRequired}
+                          onChange={(e) => setVoucherFormData({ ...voucherFormData, spendRequired: e.target.value })}
+                          placeholder="100"
+                          className="mt-1.5 rounded-md"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Spending threshold to earn voucher</p>
+                      </div>
 
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">Discount Amount ($) <span className="text-red-500">*</span></Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={voucherFormData.discountAmount}
-                              onChange={(e) => setVoucherFormData({ ...voucherFormData, discountAmount: e.target.value })}
-                              placeholder="e.g., 10"
-                              className="h-10 rounded-md"
-                            />
-                            <p className="text-xs text-gray-500">
-                              Dollar amount off the customer receives
-                            </p>
-                          </div>
-                        </div>
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">
+                          Discount Amount ($) <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={voucherFormData.discountAmount}
+                          onChange={(e) => setVoucherFormData({ ...voucherFormData, discountAmount: e.target.value })}
+                          placeholder="10"
+                          className="mt-1.5 rounded-md"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Voucher value</p>
+                      </div>
 
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium">Description</Label>
-                          <Textarea
-                            value={voucherFormData.description}
-                            onChange={(e) => setVoucherFormData({ ...voucherFormData, description: e.target.value })}
-                            placeholder="Describe how this reward works..."
-                            className="rounded-md"
-                            rows={3}
-                          />
-                        </div>
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">Description</Label>
+                        <Textarea
+                          value={voucherFormData.description}
+                          onChange={(e) => setVoucherFormData({ ...voucherFormData, description: e.target.value })}
+                          placeholder="Optional description..."
+                          className="mt-1.5 rounded-md"
+                          rows={2}
+                        />
+                      </div>
 
-                        <div className="bg-purple-50 border border-purple-200 rounded-md p-4">
-                          <h4 className="font-medium text-sm mb-2 text-purple-800">Program Preview</h4>
-                          <p className="text-sm text-purple-700">
-                            Customers will receive a ${voucherFormData.discountAmount} voucher after spending ${voucherFormData.spendRequired} in total purchases.
-                          </p>
-                        </div>
+                      <div className="bg-purple-50 border border-purple-200 rounded-md p-3">
+                        <p className="text-sm text-purple-700">
+                          <strong>Preview:</strong> Spend ${voucherFormData.spendRequired} → Get ${voucherFormData.discountAmount} off
+                        </p>
                       </div>
                     </div>
+                  </div>
                   )}
                 </div>
               )}
                 
-              {activeTab === "transaction" && (
-                <div className="mt-0 h-full flex flex-col">
-                  {!showTransactionForm ? (
-                  <div className="flex-1 overflow-y-auto p-6 pb-0 min-h-0">
-                    <div className="border border-gray-200 rounded-md p-6 bg-gray-50">
+            {activeTab === "transaction" && (
+              <div className="p-6">
+                {!showTransactionForm ? (
+                  <div className="space-y-6">
+                    <div className="bg-gray-50 border border-gray-200 rounded-md p-5">
                       <div className="flex items-center gap-3 mb-3">
-                        <ShoppingBag className="h-5 w-5 text-[#007AFF]" />
-                        <h3 className="text-md font-semibold">Transaction Reward Program</h3>
+                        <div className="p-2 bg-blue-100 rounded-md">
+                          <ShoppingBag className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-base font-semibold text-gray-900">Transaction Reward Program</h3>
+                          <p className="text-sm text-gray-600">Reward frequent customers</p>
+                        </div>
                       </div>
-                      <p className="text-sm text-gray-600 mb-4">
-                        Reward customers based on the number of transactions they make
-                      </p>
+                      
                       {!hasTransactionProgram ? (
                         <Button
                           onClick={() => setShowTransactionForm(true)}
-                          variant="outline"
-                          className="rounded-md"
+                          className="mt-4 rounded-md bg-blue-600 hover:bg-blue-700 text-white"
                         >
                           Set Up Program
                         </Button>
                       ) : (
-                        <div className="space-y-4">
+                        <div className="mt-4 space-y-3">
                           <div className="bg-white border border-gray-200 rounded-md p-4">
-                            <div className="flex items-center gap-2 mb-2">
-                              <ShoppingBag className="h-4 w-4 text-[#007AFF]" />
-                              <p className="text-sm text-gray-900 font-medium">✓ Transaction Program is Active</p>
+                            <div className="flex items-center gap-2 mb-3">
+                              <CheckCircle className="h-4 w-4 text-green-600" />
+                              <span className="text-sm font-medium text-gray-900">Program Active</span>
                             </div>
                             
-                            <div className="space-y-2 text-sm">
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">Reward Name:</span>
-                                <span className="text-gray-900 font-medium">{transactionFormData.rewardName}</span>
+                            <div className="space-y-2">
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Reward:</span>
+                                <span className="font-medium text-gray-900">{transactionFormData.rewardName}</span>
                               </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">PIN Code:</span>
-                                <span className="text-gray-900 font-medium">{transactionFormData.pin}</span>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Threshold:</span>
+                                <span className="font-medium text-gray-900">{transactionFormData.transactionThreshold} visits</span>
                               </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">Transaction Threshold:</span>
-                                <span className="text-gray-900 font-medium">{transactionFormData.transactionThreshold} transactions</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">Reward Type:</span>
-                                <span className="text-gray-900 font-medium">
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Reward:</span>
+                                <span className="font-medium text-gray-900">
                                   {transactionFormData.rewardType === 'dollar_voucher' 
                                     ? `$${transactionFormData.voucherAmount} voucher`
-                                    : `Free ${transactionFormData.freeItemName}`
+                                    : transactionFormData.freeItemName
                                   }
                                 </span>
                               </div>
@@ -891,336 +887,285 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                             size="sm"
                             className="rounded-md"
                           >
-                            <Edit size={14} className="mr-1" />
+                            <Edit className="h-4 w-4 mr-1.5" />
                             Edit Settings
                           </Button>
                         </div>
                       )}
                     </div>
                   </div>
-                  ) : (
-                    <div className="flex-1 overflow-y-auto p-6 pt-0 min-h-0">
-                      <div className="mb-6">
-                        <h2 className="text-lg font-semibold">Configure Transaction Reward</h2>
-                        <p className="text-sm text-gray-600">Reward customers for reaching transaction milestones</p>
-                      </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-base font-semibold text-gray-900 mb-1">Configure Transaction Reward</h3>
+                      <p className="text-sm text-gray-600">Set up visit-based rewards</p>
+                    </div>
                     
-                      <div className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">Reward Name <span className="text-red-500">*</span></Label>
-                            <Input
-                              type="text"
-                              value={transactionFormData.rewardName}
-                              onChange={(e) => setTransactionFormData({ ...transactionFormData, rewardName: e.target.value })}
-                              placeholder="e.g., Frequent Shopper Reward"
-                              className="h-10 rounded-md"
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">PIN Code <span className="text-red-500">*</span></Label>
-                            <Input
-                              type="text"
-                              maxLength={4}
-                              value={transactionFormData.pin}
-                              onChange={(e) => setTransactionFormData({ ...transactionFormData, pin: e.target.value })}
-                              placeholder="e.g., 1234"
-                              className="h-10 rounded-md"
-                            />
-                            <p className="text-xs text-gray-500">
-                              Staff will enter this PIN when redeeming the reward
-                            </p>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">Transaction Threshold <span className="text-red-500">*</span></Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={transactionFormData.transactionThreshold}
-                              onChange={(e) => setTransactionFormData({ ...transactionFormData, transactionThreshold: e.target.value })}
-                              placeholder="e.g., 5"
-                              className="h-10 rounded-md"
-                            />
-                            <p className="text-xs text-gray-500">
-                              Number of transactions required to earn reward
-                            </p>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">Reward Type <span className="text-red-500">*</span></Label>
-                            <RadioGroup 
-                              value={transactionFormData.rewardType} 
-                              onValueChange={(value: 'dollar_voucher' | 'free_item') => setTransactionFormData({ ...transactionFormData, rewardType: value })}
-                              className="flex gap-4"
-                            >
-                              <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="dollar_voucher" id="dollar_voucher" />
-                                <Label htmlFor="dollar_voucher" className="text-sm">Dollar Voucher</Label>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="free_item" id="free_item" />
-                                <Label htmlFor="free_item" className="text-sm">Free Item</Label>
-                              </div>
-                            </RadioGroup>
-                          </div>
-
-                          {transactionFormData.rewardType === 'dollar_voucher' && (
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">Voucher Amount ($) <span className="text-red-500">*</span></Label>
-                              <Input
-                                type="number"
-                                min="1"
-                                value={transactionFormData.voucherAmount}
-                                onChange={(e) => setTransactionFormData({ ...transactionFormData, voucherAmount: e.target.value })}
-                                placeholder="e.g., 10"
-                                className="h-10 rounded-md"
-                              />
-                            </div>
-                          )}
-
-                          {transactionFormData.rewardType === 'free_item' && (
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">Free Item Name <span className="text-red-500">*</span></Label>
-                              <Input
-                                type="text"
-                                value={transactionFormData.freeItemName}
-                                onChange={(e) => setTransactionFormData({ ...transactionFormData, freeItemName: e.target.value })}
-                                placeholder="e.g., Free Coffee"
-                                className="h-10 rounded-md"
-                              />
-                            </div>
-                          )}
-
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">Number of Iterations</Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={transactionFormData.iterations}
-                              onChange={(e) => setTransactionFormData({ ...transactionFormData, iterations: e.target.value })}
-                              placeholder="e.g., 15"
-                              className="h-10 rounded-md"
-                            />
-                            <p className="text-xs text-gray-500">
-                              How many times customer can earn this reward (0 for unlimited)
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium">Description</Label>
-                          <Textarea
-                            value={transactionFormData.description}
-                            onChange={(e) => setTransactionFormData({ ...transactionFormData, description: e.target.value })}
-                            placeholder="Describe how this reward works..."
-                            className="rounded-md"
-                            rows={3}
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium">Additional Conditions</Label>
-                          <Textarea
-                            value={transactionFormData.conditions}
-                            onChange={(e) => setTransactionFormData({ ...transactionFormData, conditions: e.target.value })}
-                            placeholder="Any special terms or conditions..."
-                            className="rounded-md"
-                            rows={2}
-                          />
-                        </div>
-
-                        <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-                          <h4 className="font-medium text-sm mb-2 text-blue-800">Program Preview</h4>
-                          <p className="text-sm text-blue-700">
-                            Customers will receive {transactionFormData.rewardType === 'dollar_voucher' 
-                              ? `a $${transactionFormData.voucherAmount} voucher` 
-                              : `a free ${transactionFormData.freeItemName || 'item'}`} 
-                            after completing {transactionFormData.transactionThreshold} transactions.
-                            {transactionFormData.iterations !== '15' && transactionFormData.iterations !== '0' && 
-                              ` This reward can be earned ${transactionFormData.iterations} times.`}
-                          </p>
-                        </div>
+                    <div className="space-y-4">
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">
+                          Reward Name <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          type="text"
+                          value={transactionFormData.rewardName}
+                          onChange={(e) => setTransactionFormData({ ...transactionFormData, rewardName: e.target.value })}
+                          placeholder="Frequent Shopper Reward"
+                          className="mt-1.5 rounded-md"
+                        />
                       </div>
+
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">
+                          PIN Code <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          type="text"
+                          maxLength={4}
+                          value={transactionFormData.pin}
+                          onChange={(e) => setTransactionFormData({ ...transactionFormData, pin: e.target.value })}
+                          placeholder="1234"
+                          className="mt-1.5 rounded-md"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Staff PIN for redemptions</p>
+                      </div>
+
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">
+                          Visit Threshold <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={transactionFormData.transactionThreshold}
+                          onChange={(e) => setTransactionFormData({ ...transactionFormData, transactionThreshold: e.target.value })}
+                          placeholder="5"
+                          className="mt-1.5 rounded-md"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Number of visits to earn reward</p>
+                      </div>
+
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">
+                          Reward Type <span className="text-red-500">*</span>
+                        </Label>
+                        <RadioGroup 
+                          value={transactionFormData.rewardType} 
+                          onValueChange={(value: 'dollar_voucher' | 'free_item') => setTransactionFormData({ ...transactionFormData, rewardType: value })}
+                          className="flex gap-4 mt-1.5"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="dollar_voucher" id="dollar_voucher" />
+                            <Label htmlFor="dollar_voucher" className="text-sm font-normal">Dollar Voucher</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="free_item" id="free_item" />
+                            <Label htmlFor="free_item" className="text-sm font-normal">Free Item</Label>
+                          </div>
+                        </RadioGroup>
+                      </div>
+
+                      {transactionFormData.rewardType === 'dollar_voucher' && (
+                        <div>
+                          <Label className="text-sm font-medium text-gray-700">
+                            Voucher Amount ($) <span className="text-red-500">*</span>
+                          </Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={transactionFormData.voucherAmount}
+                            onChange={(e) => setTransactionFormData({ ...transactionFormData, voucherAmount: e.target.value })}
+                            placeholder="10"
+                            className="mt-1.5 rounded-md"
+                          />
+                        </div>
+                      )}
+
+                      {transactionFormData.rewardType === 'free_item' && (
+                        <div>
+                          <Label className="text-sm font-medium text-gray-700">
+                            Free Item Name <span className="text-red-500">*</span>
+                          </Label>
+                          <Input
+                            type="text"
+                            value={transactionFormData.freeItemName}
+                            onChange={(e) => setTransactionFormData({ ...transactionFormData, freeItemName: e.target.value })}
+                            placeholder="Free Coffee"
+                            className="mt-1.5 rounded-md"
+                          />
+                        </div>
+                      )}
+
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">Iterations</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={transactionFormData.iterations}
+                          onChange={(e) => setTransactionFormData({ ...transactionFormData, iterations: e.target.value })}
+                          placeholder="0"
+                          className="mt-1.5 rounded-md"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">How many times can be earned (0 = unlimited)</p>
+                      </div>
+
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">Description</Label>
+                        <Textarea
+                          value={transactionFormData.description}
+                          onChange={(e) => setTransactionFormData({ ...transactionFormData, description: e.target.value })}
+                          placeholder="Optional description..."
+                          className="mt-1.5 rounded-md"
+                          rows={2}
+                        />
+                      </div>
+
+                      <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                        <p className="text-sm text-blue-700">
+                          <strong>Preview:</strong> Visit {transactionFormData.transactionThreshold} times → Get
+                          {transactionFormData.rewardType === 'dollar_voucher' 
+                            ? ` $${transactionFormData.voucherAmount} off` 
+                            : ` ${transactionFormData.freeItemName || 'free item'}`}
+                        </p>
+                      </div>
+                    </div>
                     </div>
                   )}
                 </div>
               )}
 
               {activeTab === "cashback" && (
-                <div className="mt-0 h-full flex flex-col">
-                  {!showCashbackForm ? (
-                    <div className="flex-1 overflow-y-auto p-6 min-h-0">
-                      <div className="border border-gray-200 rounded-md p-6 bg-gray-50 mb-6">
-                        <div className="flex items-center gap-3 mb-3">
+              <div className="p-6">
+                {!showCashbackForm ? (
+                  <div className="space-y-6">
+                    <div className="bg-gray-50 border border-gray-200 rounded-md p-5">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="p-2 bg-green-100 rounded-md">
                           <Award className="h-5 w-5 text-green-600" />
-                          <h3 className="text-md font-semibold">Tap Cash Cashback Program</h3>
                         </div>
-                        <p className="text-sm text-gray-600 mb-4">
-                          Give customers a % back in store credit that they can use to reduce their bill
-                        </p>
-                        {!hasCashbackProgram ? (
-                          <Button
-                            onClick={() => setShowCashbackForm(true)}
-                            variant="outline"
-                            className="rounded-md"
-                          >
-                            Set Up Program
-                          </Button>
-                        ) : (
-                          <div className="space-y-4">
-                            <div className="bg-white border border-gray-200 rounded-md p-4">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Award className="h-4 w-4 text-green-600" />
-                                <p className="text-sm text-gray-900 font-medium">✓ Tap Cash is Active</p>
+                        <div>
+                          <h3 className="text-base font-semibold text-gray-900">Tap Cash Program</h3>
+                          <p className="text-sm text-gray-600">% back in store credit on all purchases</p>
+                        </div>
+                      </div>
+                      
+                      {!hasCashbackProgram ? (
+                        <Button
+                          onClick={() => setShowCashbackForm(true)}
+                          className="mt-4 rounded-md bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          Set Up Program
+                        </Button>
+                      ) : (
+                                                  <div className="mt-4 space-y-3">
+                          <div className="bg-white border border-gray-200 rounded-md p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <CheckCircle className="h-4 w-4 text-green-600" />
+                              <span className="text-sm font-medium text-gray-900">Program Active</span>
                             </div>
-                              
-                              <div className="space-y-2 text-sm">
-                                <div className="flex justify-between">
-                                  <span className="text-gray-600">Program Name:</span>
-                                  <span className="text-gray-900 font-medium">{cashbackFormData.programName}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-gray-600">Cashback Rate:</span>
-                                  <span className="text-gray-900 font-medium">{cashbackFormData.cashbackRate}%</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-gray-600">Status:</span>
-                                  <span className="text-gray-900 font-medium">
-                                    {cashbackFormData.isActive ? 'Active' : 'Inactive'}
-                                  </span>
-                                </div>
-                                {cashbackFormData.description && (
-                                  <div className="pt-1">
-                                    <span className="text-gray-600">Description:</span>
-                                    <p className="text-gray-900 mt-1">{cashbackFormData.description}</p>
-                                  </div>
-                                )}
+                            
+                            <div className="space-y-2">
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Rate:</span>
+                                <span className="font-medium text-gray-900">{cashbackFormData.cashbackRate}% back</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Example:</span>
+                                <span className="font-medium text-gray-900">$100 → ${(parseFloat(cashbackFormData.cashbackRate || '0')).toFixed(2)} credit</span>
                               </div>
                             </div>
-                            
-                            <div className="bg-white border border-gray-200 rounded-md p-3">
-                              <h4 className="text-sm font-medium text-gray-900 mb-2">How It Works</h4>
-                              <p className="text-xs text-gray-600">
-                                Customers automatically earn {cashbackFormData.cashbackRate}% cashback on every purchase. 
-                                For example, a $100 purchase earns ${(parseFloat(cashbackFormData.cashbackRate || '0') * 100 / 100).toFixed(2)} in Tap Cash credit.
-                              </p>
-                            </div>
-                            
-                            <div className="flex gap-2">
-                              <Button
-                                onClick={() => setShowCashbackForm(true)}
-                                variant="outline"
-                                size="sm"
-                                className="rounded-md"
-                              >
-                                                                 <Edit size={14} className="mr-1" />
-                                Edit Settings
-                              </Button>
-                              <Button
-                                onClick={removeCashbackProgram}
-                                variant="destructive"
-                                size="sm"
-                                className="rounded-md"
-                                disabled={loading}
-                              >
-                                Remove Program
-                              </Button>
-                            </div>
                           </div>
-                        )}
-                      </div>
+                          
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={() => setShowCashbackForm(true)}
+                              variant="outline"
+                              size="sm"
+                              className="rounded-md"
+                            >
+                              <Edit className="h-4 w-4 mr-1.5" />
+                              Edit Settings
+                            </Button>
+                            <Button
+                              onClick={removeCashbackProgram}
+                              variant="destructive"
+                              size="sm"
+                              className="rounded-md"
+                              disabled={loading}
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="flex-1 overflow-y-auto p-6 pt-0 min-h-0">
-                      <div className="mb-6">
-                        <h2 className="text-lg font-semibold">Configure Tap Cash</h2>
-                        <p className="text-sm text-gray-600">Set up cashback rewards for every purchase</p>
-                      </div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-base font-semibold text-gray-900 mb-1">Configure Tap Cash</h3>
+                      <p className="text-sm text-gray-600">Set up cashback rewards</p>
+                    </div>
                     
-                      <div className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">Program Name <span className="text-red-500">*</span></Label>
-                            <Input
-                              type="text"
-                              value={cashbackFormData.programName}
-                              onChange={(e) => setCashbackFormData({ ...cashbackFormData, programName: e.target.value })}
-                              placeholder="e.g., Tap Cash"
-                              className="h-10 rounded-md"
-                            />
-                          </div>
+                    <div className="space-y-4">
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">
+                          Cashback Rate (%) <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          min="0.1"
+                          max="100"
+                          value={cashbackFormData.cashbackRate}
+                          onChange={(e) => setCashbackFormData({ ...cashbackFormData, cashbackRate: e.target.value })}
+                          placeholder="2.0"
+                          className="mt-1.5 rounded-md"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Percentage returned as store credit</p>
+                      </div>
 
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">Cashback Rate (%) <span className="text-red-500">*</span></Label>
-                            <Input
-                              type="number"
-                              step="0.1"
-                              min="0.1"
-                              max="100"
-                              value={cashbackFormData.cashbackRate}
-                              onChange={(e) => setCashbackFormData({ ...cashbackFormData, cashbackRate: e.target.value })}
-                              placeholder="e.g., 2"
-                              className="h-10 rounded-md"
-                            />
-                            <p className="text-xs text-gray-500">
-                              Percentage of purchase amount returned as store credit
-                            </p>
-                          </div>
-                        </div>
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">Program Name</Label>
+                        <Input
+                          type="text"
+                          value={cashbackFormData.programName}
+                          onChange={(e) => setCashbackFormData({ ...cashbackFormData, programName: e.target.value })}
+                          placeholder="Tap Cash"
+                          className="mt-1.5 rounded-md"
+                        />
+                      </div>
 
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium">Description</Label>
-                          <Textarea
-                            value={cashbackFormData.description}
-                            onChange={(e) => setCashbackFormData({ ...cashbackFormData, description: e.target.value })}
-                            placeholder="Describe how the cashback program works..."
-                            className="rounded-md"
-                            rows={3}
-                          />
-                        </div>
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">Description</Label>
+                        <Textarea
+                          value={cashbackFormData.description}
+                          onChange={(e) => setCashbackFormData({ ...cashbackFormData, description: e.target.value })}
+                          placeholder="Optional description..."
+                          className="mt-1.5 rounded-md"
+                          rows={2}
+                        />
+                      </div>
 
-                        <div className="border border-gray-200 rounded-md p-4 bg-gray-50">
-                          <h4 className="font-medium text-sm mb-2 text-gray-800">Program Preview</h4>
-                          <p className="text-sm text-gray-600">
-                            Customers will earn <span className="font-semibold text-[#007AFF]">{cashbackFormData.cashbackRate}%</span> cashback on every purchase. 
-                            For example, a $100 purchase would earn <span className="font-semibold text-green-600">${(parseFloat(cashbackFormData.cashbackRate || '0') * 100 / 100).toFixed(2)}</span> in Tap Cash credit.
-                          </p>
-                        </div>
-
-                        <div className="border border-gray-200 rounded-md p-4">
-                          <h4 className="font-medium text-sm mb-3 text-gray-800">How Tap Cash Works</h4>
-                          <div className="space-y-2">
-                            <div className="flex items-start gap-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-[#007AFF] mt-1.5 flex-shrink-0"></div>
-                              <p className="text-sm text-gray-600">Customers automatically earn cashback on every purchase</p>
-                            </div>
-                            <div className="flex items-start gap-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-[#007AFF] mt-1.5 flex-shrink-0"></div>
-                              <p className="text-sm text-gray-600">Cashback is credited to their store wallet instantly</p>
-                            </div>
-                            <div className="flex items-start gap-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-[#007AFF] mt-1.5 flex-shrink-0"></div>
-                              <p className="text-sm text-gray-600">They can use Tap Cash to reduce their bill on future purchases</p>
-                            </div>
-                            <div className="flex items-start gap-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-[#007AFF] mt-1.5 flex-shrink-0"></div>
-                              <p className="text-sm text-gray-600">No minimum spend or restrictions - works on all purchases</p>
-                            </div>
-                          </div>
-                        </div>
+                      <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                        <p className="text-sm text-green-700">
+                          <strong>Preview:</strong> {cashbackFormData.cashbackRate}% back on all purchases
+                        </p>
+                        <p className="text-xs text-green-600 mt-1">
+                          $100 purchase = ${(parseFloat(cashbackFormData.cashbackRate || '0')).toFixed(2)} credit
+                        </p>
                       </div>
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
               </div>
+            )}
+          </div>
 
-            {/* Fixed Footer */}
-            {(showCoffeeForm || showVoucherForm || showTransactionForm || showCashbackForm) && (
-              <div className="flex-shrink-0 sticky bottom-0 z-10 bg-white border-t px-6 py-4 shadow-lg">
-                <div className="flex justify-end gap-3">
+          {/* Dialog Footer */}
+          {(showCoffeeForm || showVoucherForm || showTransactionForm || showCashbackForm) && (
+            <div className="flex-shrink-0 px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <div className="flex justify-end gap-3">
                   <Button 
                     variant="outline" 
                     onClick={() => {
@@ -1257,25 +1202,9 @@ export function CreateRecurringRewardDialog({ open, onOpenChange }: CreateRecurr
                       'Save Program'
                     )}
                   </Button>
-                </div>
-              </div>
-            )}
-            </div>
-            
-            {/* Right Image Section */}
-            <div className="hidden lg:flex w-[350px] bg-white items-center justify-center p-2 border-l border-gray-200">
-              <div className="text-center">
-                <img 
-                  src="/phone4.png" 
-                  alt="Tap Loyalty App" 
-                  className="h-auto w-full max-w-[330px] object-contain mx-auto"
-                />
-                <p className="text-sm text-gray-600 mt-2 px-2">
-                 Preview
-                </p>
               </div>
             </div>
-                              </div>
+          )}
         </DialogPrimitive.Content>
       </DialogPortal>
     </Dialog>

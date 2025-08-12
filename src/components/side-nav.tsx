@@ -39,7 +39,9 @@ import {
   Upload,
   Bell,
   Settings as SettingsIcon,
-  Repeat
+  Repeat,
+  Plus,
+  Monitor
 } from "lucide-react"
 import { RiRobot3Line } from "react-icons/ri"
 
@@ -269,6 +271,8 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   const [supportLoading, setSupportLoading] = useState(false)
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false)
   const [introGuideOpen, setIntroGuideOpen] = useState(false)
+  const [addPosDialogOpen, setAddPosDialogOpen] = useState(false)
+  const [squareConnected, setSquareConnected] = useState(false)
   
   // Merchant status and plan state
   const [merchantStatus, setMerchantStatus] = useState<'active' | 'inactive'>('active')
@@ -309,7 +313,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
     createRecurringOpen || createBannerOpen || broadcastDialogOpen || createRuleOpen || 
     introRewardOpen || networkRewardOpen || networkRewardPopupOpen || sendBroadcastPopupOpen || 
     createPointsRulePopupOpen || introductoryRewardPopupOpen || programTypeSelectorOpen || 
-    createManualProgramOpen || settingsDialogOpen
+    createManualProgramOpen || settingsDialogOpen || addPosDialogOpen
 
   // Sync with parent's collapsed prop (external change)
   useEffect(() => {
@@ -326,10 +330,10 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
         createBannerOpen || broadcastDialogOpen || createRuleOpen || introRewardOpen || 
         networkRewardOpen || networkRewardPopupOpen || sendBroadcastPopupOpen || 
         createPointsRulePopupOpen || introductoryRewardPopupOpen || programTypeSelectorOpen || 
-        createManualProgramOpen || settingsDialogOpen) {
+        createManualProgramOpen || settingsDialogOpen || addPosDialogOpen) {
 
     }
-  }, [createSheetOpen, createRewardSheetOpen, createRewardPopupOpen, createRecurringOpen, createBannerOpen, broadcastDialogOpen, createRuleOpen, introRewardOpen, networkRewardOpen, networkRewardPopupOpen, sendBroadcastPopupOpen, createPointsRulePopupOpen, introductoryRewardPopupOpen, programTypeSelectorOpen, createManualProgramOpen, settingsDialogOpen])
+  }, [createSheetOpen, createRewardSheetOpen, createRewardPopupOpen, createRecurringOpen, createBannerOpen, broadcastDialogOpen, createRuleOpen, introRewardOpen, networkRewardOpen, networkRewardPopupOpen, sendBroadcastPopupOpen, createPointsRulePopupOpen, introductoryRewardPopupOpen, programTypeSelectorOpen, createManualProgramOpen, settingsDialogOpen, addPosDialogOpen])
 
   // Notify parent component when collapse state changes (only for internal changes)
   useEffect(() => {
@@ -760,6 +764,31 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
     }));
   }, [setupProgress.items]);
 
+  // Check Square integration status
+  useEffect(() => {
+    const checkSquareIntegration = async () => {
+      if (!user?.uid) {
+        setSquareConnected(false);
+        return;
+      }
+
+      try {
+        const squareDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'square'));
+        const squareComposioDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'square_composio'));
+        
+        const isConnected = (squareDoc.exists() && squareDoc.data()?.connected === true) || 
+                           (squareComposioDoc.exists() && squareComposioDoc.data()?.connected === true);
+        
+        setSquareConnected(isConnected);
+      } catch (error) {
+        console.error('Error checking Square integration:', error);
+        setSquareConnected(false);
+      }
+    };
+
+    checkSquareIntegration();
+  }, [user?.uid]);
+
   // Check for missing logo and show notification
   useEffect(() => {
     if (!user?.uid || !merchantData) {
@@ -882,6 +911,110 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
       });
     } finally {
       setSupportLoading(false);
+    }
+  }
+
+  // POS Integration functions
+  const connectSquare = async () => {
+    if (!user?.uid) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to connect integrations",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      // Square OAuth parameters
+      const clientId = "sq0idp-4LAqjdrwhjauSthYdTRFtA" // Production application ID
+      
+      // Store the state in localStorage to verify when the user returns
+      const state = Math.random().toString(36).substring(2, 15)
+      localStorage.setItem('square_state', state)
+      
+      // Store the merchant ID in localStorage to associate with the integration
+      localStorage.setItem('merchant_id', user.uid)
+      
+      // Prepare scopes for Square OAuth
+      const scopes = [
+        'MERCHANT_PROFILE_READ',
+        'CUSTOMERS_READ',
+        'CUSTOMERS_WRITE',
+        'ORDERS_READ',
+        'ORDERS_WRITE',
+        'PAYMENTS_READ',
+        'PAYMENTS_WRITE',
+        'ITEMS_READ',
+        'ITEMS_WRITE',
+        'INVENTORY_READ'
+      ].join(' ')
+      
+      // Build the authorization URL for production
+      const authUrl = `https://connect.squareup.com/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&scope=${encodeURIComponent(scopes)}&state=${encodeURIComponent(state)}&response_type=code`
+      
+      console.log("Redirecting to Square authorization URL:", authUrl)
+      
+      // Close the dialog first
+      setAddPosDialogOpen(false)
+      
+      // Redirect to Square authorization page
+      window.location.href = authUrl
+    } catch (error) {
+      console.error("Error connecting to Square:", error)
+      toast({
+        title: "Connection Failed",
+        description: "Failed to connect to Square. Please try again.",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const connectLightspeed = async () => {
+    if (!user?.uid) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to connect integrations",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      // Store the merchant ID in localStorage
+      localStorage.setItem("lightspeed_new_merchant_id", user.uid);
+      
+      // Generate a random state parameter for security
+      const state = Math.random().toString(36).substring(2, 15);
+      localStorage.setItem("lightspeed_new_state", state);
+      
+      // Generate code verifier and challenge for PKCE
+      const codeVerifier = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      localStorage.setItem("lightspeed_new_code_verifier", codeVerifier);
+      
+      // Define the scopes needed for the integration
+      const scope = "employee:all+employee:register_read";
+      
+      // Lightspeed New API credentials
+      const clientId = process.env.NEXT_PUBLIC_LIGHTSPEED_NEW_CLIENT_ID || "0be25ce25b4988b26b5759aecca02248cfe561d7594edd46e7d6807c141ee72e";
+      
+      // Construct the authorization URL
+      const authUrl = `https://cloud.lightspeedapp.com/auth/oauth/authorize?response_type=code&client_id=${clientId}&scope=${encodeURIComponent(scope)}&state=${state}&code_challenge=${codeVerifier}&code_challenge_method=S256`;
+      
+      console.log("Redirecting to Lightspeed authorization URL:", authUrl);
+      
+      // Close the dialog first
+      setAddPosDialogOpen(false)
+      
+      // Redirect to the authorization URL
+      window.location.href = authUrl;
+    } catch (error) {
+      console.error("Error connecting to Lightspeed:", error);
+      toast({
+        title: "Error",
+        description: "Failed to connect to Lightspeed",
+        variant: "destructive"
+      });
     }
   }
 
@@ -1147,6 +1280,69 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
             )
           })}
         </ul>
+        
+        {/* Horizontal separator */}
+        <div className="px-3 py-2">
+          <div className="border-t border-gray-200"></div>
+        </div>
+        
+        {/* Add POS Button or Square Connection */}
+        {!squareConnected ? (
+          <div className="px-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setAddPosDialogOpen(true)}
+              className={cn(
+                "group flex items-center gap-3 rounded-md py-1 text-sm font-[450] transition-all duration-200 ease-in-out whitespace-nowrap relative h-8 w-full",
+                "text-gray-800 hover:bg-[#007AFF]/5"
+              )}
+              title="Add POS Integration"
+            >
+              <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+                <Plus className="h-4 w-4 text-gray-500 group-hover:text-[#007AFF]" strokeWidth={2.75} />
+              </div>
+              <div className="h-full flex items-center overflow-hidden flex-1">
+                <span className={cn(
+                  "transition-all duration-300 ease-in-out whitespace-nowrap",
+                  isCollapsed ? "w-0 opacity-0 delay-0" : "w-auto opacity-100 delay-75",
+                  "text-gray-800 group-hover:text-[#007AFF]"
+                )}>
+                  Add POS
+                </span>
+              </div>
+            </Button>
+          </div>
+                 ) : (
+           <div className="px-0">
+             <Button
+               variant="ghost"
+               size="sm"
+               onClick={() => router.push('/dashboard/pos')}
+               className={cn(
+                 "group flex items-center gap-3 rounded-md py-1 text-sm font-[450] transition-all duration-200 ease-in-out whitespace-nowrap relative h-8 w-full",
+                 "text-gray-800 hover:bg-[#007AFF]/5"
+               )}
+               title="Square Integration"
+             >
+               <div className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+                 <img src="/squarepro.png" alt="Square" className="h-4 w-4 object-contain" />
+               </div>
+               <div className="h-full flex items-center overflow-hidden flex-1">
+                 <span className={cn(
+                   "transition-all duration-300 ease-in-out whitespace-nowrap",
+                   isCollapsed ? "w-0 opacity-0 delay-0" : "w-auto opacity-100 delay-75",
+                   "text-gray-800 group-hover:text-[#007AFF]"
+                 )}>
+                   Square
+                 </span>
+                 {!isCollapsed && (
+                   <div className="w-2 h-2 bg-green-500 rounded-full border border-white ml-2 flex-shrink-0"></div>
+                 )}
+               </div>
+             </Button>
+           </div>
+         )}
         
         {/* Reopen button when collapsed - positioned after Documents */}
         {isCollapsed && (
@@ -1549,6 +1745,85 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
 
       {/* Intro Guide Popup */}
       <IntroGuidePopup open={introGuideOpen} onOpenChange={setIntroGuideOpen} />
+
+      {/* Add POS Dialog */}
+      {addPosDialogOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] animate-in fade-in duration-200" 
+          style={{ backdropFilter: 'blur(2px)' }}
+          onClick={() => setAddPosDialogOpen(false)}
+        >
+          <div 
+            className="bg-white rounded-lg max-w-md mx-4 shadow-lg border border-gray-200 overflow-hidden animate-in slide-in-from-bottom-4 zoom-in-95 duration-300 ease-out"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">
+                <span style={{ color: '#007AFF' }}>Add</span> POS Integration
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Connect your point of sale system to sync customers and transactions
+              </p>
+            </div>
+            
+            {/* Body */}
+            <div className="p-6">
+              <div className="space-y-3">
+                <button
+                  onClick={connectSquare}
+                  className="w-full p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-blue-300 transition-colors group"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 bg-white border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <img src="/squarepro.png" alt="Square" className="w-8 h-8 object-contain" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <h4 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">Square</h4>
+                      <p className="text-sm text-gray-600 mt-1">Connect your Square POS to sync customers, orders, and payments</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span className="text-xs text-green-600 font-medium">Available</span>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+                
+                <button
+                  onClick={connectLightspeed}
+                  className="w-full p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-blue-300 transition-colors group"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 bg-white border border-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <img src="/lslogo.png" alt="Lightspeed" className="w-8 h-8 object-contain" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <h4 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">Lightspeed Retail</h4>
+                      <p className="text-sm text-gray-600 mt-1">Connect your Lightspeed Retail POS for customer and inventory sync</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span className="text-xs text-green-600 font-medium">Available</span>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setAddPosDialogOpen(false)}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -4,6 +4,8 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, setDoc, updateDoc, DocumentData, deleteDoc, serverTimestamp } from "firebase/firestore"
@@ -14,7 +16,11 @@ import Link from "next/link"
 import { PageTransition } from "@/components/page-transition"
 import { PageHeader } from "@/components/page-header"
 import { generateCodeVerifier, generateCodeChallenge } from "@/lib/pkce"
-import { CheckCircle, Globe, BarChart2, MessageSquare, Mail, Phone, Calculator, Calendar, FileText, Table, Loader2 } from "lucide-react"
+import { CheckCircle, Globe, BarChart2, MessageSquare, Mail, Phone, Calculator, Calendar, FileText, Table, Loader2, Settings, ExternalLink, RefreshCw, TestTube } from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Separator } from "@/components/ui/separator"
+import { cn } from "@/lib/utils"
 
 // Import icons for different POS systems
 import { LightspeedIcon } from "@/components/icons/lightspeed-icon"
@@ -74,6 +80,24 @@ export default function IntegrationsPage() {
   const [debugError, setDebugError] = useState<string | null>(null)
   const [customIntegrationId, setCustomIntegrationId] = useState<string>('48ab3736-146c-4fdf-bd30-dda79973bd1d')
   
+  // Square Settings Dialog State
+  const [squareSettingsOpen, setSquareSettingsOpen] = useState(false)
+  const [squareData, setSquareData] = useState<any>(null)
+  const [squareComposioData, setSquareComposioData] = useState<any>(null)
+  const [loadingSquareData, setLoadingSquareData] = useState(false)
+  const [testResults, setTestResults] = useState<any>(null)
+  const [testing, setTesting] = useState(false)
+  
+  // Customer creation form state
+  const [customerForm, setCustomerForm] = useState({
+    email_address: "test@example.com",
+    family_name: "Test",
+    given_name: "Customer",
+    phone_number: "",
+    company_name: "",
+    note: ""
+  })
+  
   // Function to check environment configuration
   const checkEnvironmentConfig = async () => {
     try {
@@ -88,6 +112,156 @@ export default function IntegrationsPage() {
     } finally {
       setCheckingConfig(false)
     }
+  }
+
+  // Load Square integration data for settings dialog
+  const loadSquareData = async () => {
+    if (!user?.uid) return
+    
+    setLoadingSquareData(true)
+    try {
+      // Load Square integration data
+      const squareDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'square'))
+      if (squareDoc.exists()) {
+        const data = squareDoc.data()
+        // Mask sensitive data for display
+        setSquareData({
+          ...data,
+          accessToken: data.accessToken ? `${data.accessToken.substring(0, 10)}...` : null,
+          refreshToken: data.refreshToken ? `${data.refreshToken.substring(0, 10)}...` : null,
+        })
+      } else {
+        setSquareData(null)
+      }
+
+      // Load Square Composio integration data
+      const squareComposioDoc = await getDoc(doc(db, 'merchants', user.uid, 'integrations', 'square_composio'))
+      if (squareComposioDoc.exists()) {
+        setSquareComposioData(squareComposioDoc.data())
+      } else {
+        setSquareComposioData(null)
+      }
+    } catch (error) {
+      console.error('Error loading Square data:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load Square integration data",
+        variant: "destructive"
+      })
+    } finally {
+      setLoadingSquareData(false)
+    }
+  }
+
+  // Test Square API endpoints
+  const testSquareEndpoint = async (endpoint: string) => {
+    if (!user?.uid) return
+    
+    setTesting(true)
+    setTestResults(null)
+    
+    try {
+      let url = ''
+      let method = 'GET'
+      let body = null
+      
+      switch (endpoint) {
+        case 'customers':
+          url = `/api/square/customers?merchantId=${user.uid}`
+          method = 'GET'
+          break
+        case 'create_customer':
+          url = `/api/square/customers?merchantId=${user.uid}`
+          method = 'POST'
+          // Build customer data from form, filtering out empty fields
+          const customerData: any = {
+            email_address: customerForm.email_address,
+            family_name: customerForm.family_name,
+            given_name: customerForm.given_name,
+            tax_ids: {}
+          }
+          
+          // Add optional fields if they have values
+          if (customerForm.phone_number) {
+            customerData.phone_number = customerForm.phone_number
+          }
+          if (customerForm.company_name) {
+            customerData.company_name = customerForm.company_name
+          }
+          if (customerForm.note) {
+            customerData.note = customerForm.note
+          }
+          
+          body = JSON.stringify(customerData)
+          break
+        case 'inventory':
+          url = '/api/square/inventory'
+          method = 'POST'
+          body = JSON.stringify({
+            merchantId: user.uid,
+            locationId: 'test_location'
+          })
+          break
+        case 'locations':
+          url = `/api/square/locations?merchantId=${user.uid}`
+          method = 'GET'
+          break
+        case 'oauth_test':
+          url = '/api/oauth/square'
+          method = 'POST'
+          body = JSON.stringify({
+            code: 'test_code',
+            merchantId: user.uid,
+            state: 'test_state'
+          })
+          break
+        default:
+          throw new Error('Unknown endpoint')
+      }
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        ...(body && { body })
+      })
+      
+      const result = await response.json()
+      setTestResults({
+        endpoint,
+        status: response.status,
+        success: response.ok,
+        data: result
+      })
+      
+      toast({
+        title: response.ok ? "Test Successful" : "Test Failed",
+        description: `${endpoint} endpoint test ${response.ok ? 'completed' : 'failed'}`,
+        variant: response.ok ? "default" : "destructive"
+      })
+    } catch (error) {
+      setTestResults({
+        endpoint,
+        status: 500,
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      })
+      
+      toast({
+        title: "Test Error",
+        description: `Error testing ${endpoint} endpoint`,
+        variant: "destructive"
+      })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  // Open Square settings dialog
+  const openSquareSettings = async () => {
+    setSquareSettingsOpen(true)
+    await loadSquareData()
   }
   
   // Extract error details from URL on component mount
@@ -1803,15 +1977,26 @@ export default function IntegrationsPage() {
                     <div className="text-xs text-muted-foreground">
                       <span className="text-green-600 font-medium">Connected</span>
                     </div>
-                    <Button 
-                      variant="outline"
-                      size="sm"
-                      className="rounded-md h-7 px-2 sm:px-3 text-xs"
-                      onClick={disconnectSquareComposio}
-                      disabled={connecting === "square_composio"}
-                    >
-                      {connecting === "square_composio" ? "..." : "Disconnect"}
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button 
+                        variant="outline"
+                        size="sm"
+                        className="rounded-md h-7 px-2 sm:px-3 text-xs"
+                        onClick={openSquareSettings}
+                      >
+                        <Settings className="h-3 w-3 mr-1" />
+                        Settings
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        size="sm"
+                        className="rounded-md h-7 px-2 sm:px-3 text-xs"
+                        onClick={disconnectSquareComposio}
+                        disabled={connecting === "square_composio"}
+                      >
+                        {connecting === "square_composio" ? "..." : "Disconnect"}
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -2014,15 +2199,26 @@ export default function IntegrationsPage() {
                     <div className="text-xs text-muted-foreground">
                       <span className="text-green-600 font-medium">Connected</span>
                     </div>
-                    <Button 
-                      variant="outline"
-                      size="sm"
-                      className="rounded-md h-7 px-3 text-xs"
-                      onClick={disconnectSquare}
-                      disabled={connecting === "square"}
-                    >
-                      {connecting === "square" ? "..." : "Disconnect"}
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button 
+                        variant="outline"
+                        size="sm"
+                        className="rounded-md h-7 px-3 text-xs"
+                        onClick={openSquareSettings}
+                      >
+                        <Settings className="h-3 w-3 mr-1" />
+                        Settings
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        size="sm"
+                        className="rounded-md h-7 px-3 text-xs"
+                        onClick={disconnectSquare}
+                        disabled={connecting === "square"}
+                      >
+                        {connecting === "square" ? "..." : "Disconnect"}
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -2116,14 +2312,25 @@ export default function IntegrationsPage() {
                 <CardContent className="pt-0 px-3 sm:px-4 pb-3">
                   <div className="flex justify-between items-center">
                     <div className="text-xs text-muted-foreground">Connect your Square account with Composio</div>
-                    <Button 
-                      size="sm"
-                      className="rounded-md h-7 px-2 sm:px-3 text-xs"
-                      onClick={connectSquareComposio}
-                      disabled={connecting === "square_composio"}
-                    >
-                      {connecting === "square_composio" ? "..." : "Connect"}
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button 
+                        variant="outline"
+                        size="sm"
+                        className="rounded-md h-7 px-2 sm:px-3 text-xs"
+                        onClick={openSquareSettings}
+                      >
+                        <Settings className="h-3 w-3 mr-1" />
+                        Settings
+                      </Button>
+                      <Button 
+                        size="sm"
+                        className="rounded-md h-7 px-2 sm:px-3 text-xs"
+                        onClick={connectSquareComposio}
+                        disabled={connecting === "square_composio"}
+                      >
+                        {connecting === "square_composio" ? "..." : "Connect"}
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -2305,15 +2512,26 @@ export default function IntegrationsPage() {
                     <div className="text-xs text-muted-foreground">
                       <span className="text-gray-500">Not connected</span>
                     </div>
-                    <Button 
-                      variant="default"
-                      size="sm"
-                      className="rounded-md h-7 px-3 text-xs"
-                      onClick={connectSquare}
-                      disabled={connecting === "square"}
-                    >
-                      {connecting === "square" ? "..." : "Connect"}
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button 
+                        variant="outline"
+                        size="sm"
+                        className="rounded-md h-7 px-3 text-xs"
+                        onClick={openSquareSettings}
+                      >
+                        <Settings className="h-3 w-3 mr-1" />
+                        Settings
+                      </Button>
+                      <Button 
+                        variant="default"
+                        size="sm"
+                        className="rounded-md h-7 px-3 text-xs"
+                        onClick={connectSquare}
+                        disabled={connecting === "square"}
+                      >
+                        {connecting === "square" ? "..." : "Connect"}
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -2541,6 +2759,391 @@ export default function IntegrationsPage() {
           </Card>
         </div>
       </div>
+
+      {/* Square Integration Settings Dialog */}
+      <Dialog open={squareSettingsOpen} onOpenChange={setSquareSettingsOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <img src="/squarepro.png" alt="Square" className="w-6 h-6" />
+              Square Integration Settings
+            </DialogTitle>
+            <DialogDescription>
+              View connection status, Firestore data, and test API endpoints
+            </DialogDescription>
+          </DialogHeader>
+
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="firestore">Firestore Data</TabsTrigger>
+              <TabsTrigger value="testing">API Testing</TabsTrigger>
+              <TabsTrigger value="logs">Logs</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="overview" className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Square Integration Status */}
+                <Card className="rounded-md">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <img src="/squarepro.png" alt="Square" className="w-5 h-5" />
+                      Square Integration
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Status:</span>
+                      <Badge variant={integrations.square.connected ? "default" : "secondary"}>
+                        {integrations.square.connected ? "Connected" : "Not Connected"}
+                      </Badge>
+                    </div>
+                    {integrations.square.connected && squareData && (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">Merchant ID:</span>
+                          <span className="text-sm text-muted-foreground">{squareData.merchantId}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">Connected At:</span>
+                          <span className="text-sm text-muted-foreground">
+                            {squareData.connectedAt?.toDate?.()?.toLocaleString() || 'Unknown'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">Expires At:</span>
+                          <span className="text-sm text-muted-foreground">
+                            {squareData.expiresAt?.toDate?.()?.toLocaleString() || 'Unknown'}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Square Composio Integration Status */}
+                <Card className="rounded-md">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <img src="/squarepro.png" alt="Square Composio" className="w-5 h-5" />
+                      Square Composio
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Status:</span>
+                      <Badge variant={integrations.square_composio.connected ? "default" : "secondary"}>
+                        {integrations.square_composio.connected ? "Connected" : "Not Connected"}
+                      </Badge>
+                    </div>
+                    {integrations.square_composio.connected && squareComposioData && (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">Connection ID:</span>
+                          <span className="text-sm text-muted-foreground">{squareComposioData.connectionId}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">Status:</span>
+                          <span className="text-sm text-muted-foreground">{squareComposioData.connectionStatus}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">Provider:</span>
+                          <span className="text-sm text-muted-foreground">{squareComposioData.provider}</span>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="flex gap-2">
+                <Button 
+                  onClick={loadSquareData}
+                  disabled={loadingSquareData}
+                  variant="outline"
+                  size="sm"
+                >
+                  {loadingSquareData ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Refresh Data
+                    </>
+                  )}
+                </Button>
+                <Button 
+                  onClick={() => window.open('/test-square', '_blank')}
+                  variant="outline"
+                  size="sm"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open Test Page
+                </Button>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="firestore" className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Square Firestore Data */}
+                <Card className="rounded-md">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">Square Integration Data</CardTitle>
+                    <CardDescription>Path: merchants/{user?.uid}/integrations/square</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingSquareData ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                      </div>
+                    ) : squareData ? (
+                      <div className="space-y-2">
+                        {Object.entries(squareData).map(([key, value]) => (
+                          <div key={key} className="flex justify-between items-start py-1 border-b border-gray-100 last:border-b-0">
+                            <span className="text-sm font-medium text-gray-700">{key}:</span>
+                            <span className="text-sm text-gray-600 text-right max-w-xs break-all">
+                              {typeof value === 'object' && value !== null
+                                ? JSON.stringify(value, null, 2)
+                                : String(value)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 text-gray-500">
+                        No Square integration data found
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Square Composio Firestore Data */}
+                <Card className="rounded-md">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">Square Composio Data</CardTitle>
+                    <CardDescription>Path: merchants/{user?.uid}/integrations/square_composio</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingSquareData ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                      </div>
+                    ) : squareComposioData ? (
+                      <div className="space-y-2">
+                        {Object.entries(squareComposioData).map(([key, value]) => (
+                          <div key={key} className="flex justify-between items-start py-1 border-b border-gray-100 last:border-b-0">
+                            <span className="text-sm font-medium text-gray-700">{key}:</span>
+                            <span className="text-sm text-gray-600 text-right max-w-xs break-all">
+                              {typeof value === 'object' && value !== null
+                                ? JSON.stringify(value, null, 2)
+                                : String(value)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 text-gray-500">
+                        No Square Composio data found
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="testing" className="space-y-4">
+              <Card className="rounded-md">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <TestTube className="h-5 w-5" />
+                    API Endpoint Testing
+                  </CardTitle>
+                  <CardDescription>Test various Square API endpoints</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                    <Button
+                      onClick={() => testSquareEndpoint('customers')}
+                      disabled={testing}
+                      variant="outline"
+                      size="sm"
+                    >
+                      {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Get Customers'}
+                    </Button>
+                    <Button
+                      onClick={() => testSquareEndpoint('create_customer')}
+                      disabled={testing}
+                      variant="outline"
+                      size="sm"
+                    >
+                      {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create Customer'}
+                    </Button>
+                    <Button
+                      onClick={() => testSquareEndpoint('inventory')}
+                      disabled={testing}
+                      variant="outline"
+                      size="sm"
+                    >
+                      {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Inventory'}
+                    </Button>
+                    <Button
+                      onClick={() => testSquareEndpoint('locations')}
+                      disabled={testing}
+                      variant="outline"
+                      size="sm"
+                    >
+                      {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Locations'}
+                    </Button>
+                    <Button
+                      onClick={() => testSquareEndpoint('oauth_test')}
+                      disabled={testing}
+                      variant="outline"
+                      size="sm"
+                    >
+                      {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'OAuth Test'}
+                    </Button>
+                  </div>
+
+                  {/* Customer Creation Form */}
+                  <div className="mt-6 p-4 bg-gray-50 rounded-md">
+                    <h4 className="font-medium mb-4">Customer Creation Form</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email Address *</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={customerForm.email_address}
+                          onChange={(e) => setCustomerForm(prev => ({ ...prev, email_address: e.target.value }))}
+                          placeholder="customer@example.com"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="given_name">Given Name *</Label>
+                        <Input
+                          id="given_name"
+                          value={customerForm.given_name}
+                          onChange={(e) => setCustomerForm(prev => ({ ...prev, given_name: e.target.value }))}
+                          placeholder="John"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="family_name">Family Name *</Label>
+                        <Input
+                          id="family_name"
+                          value={customerForm.family_name}
+                          onChange={(e) => setCustomerForm(prev => ({ ...prev, family_name: e.target.value }))}
+                          placeholder="Doe"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="phone_number">Phone Number</Label>
+                        <Input
+                          id="phone_number"
+                          value={customerForm.phone_number}
+                          onChange={(e) => setCustomerForm(prev => ({ ...prev, phone_number: e.target.value }))}
+                          placeholder="+1234567890"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="company_name">Company Name</Label>
+                        <Input
+                          id="company_name"
+                          value={customerForm.company_name}
+                          onChange={(e) => setCustomerForm(prev => ({ ...prev, company_name: e.target.value }))}
+                          placeholder="Acme Corp"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="note">Note</Label>
+                        <Input
+                          id="note"
+                          value={customerForm.note}
+                          onChange={(e) => setCustomerForm(prev => ({ ...prev, note: e.target.value }))}
+                          placeholder="Customer note"
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-4 text-xs text-gray-500">
+                      * Required fields. Click "Create Customer" to test with the above data.
+                    </div>
+                  </div>
+
+                  {testResults && (
+                    <div className="mt-4 p-4 bg-gray-50 rounded-md">
+                      <h4 className="font-medium mb-2">Test Results: {testResults.endpoint}</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span>Status:</span>
+                          <Badge variant={testResults.success ? "default" : "destructive"}>
+                            {testResults.status}
+                          </Badge>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Success:</span>
+                          <span className={cn(testResults.success ? "text-green-600" : "text-red-600")}>
+                            {testResults.success ? "Yes" : "No"}
+                          </span>
+                        </div>
+                        {testResults.error && (
+                          <div>
+                            <span className="font-medium">Error:</span>
+                            <div className="text-red-600 mt-1">{testResults.error}</div>
+                          </div>
+                        )}
+                        {testResults.data && (
+                          <div>
+                            <span className="font-medium">Response:</span>
+                            <pre className="mt-1 text-xs bg-white p-2 rounded border overflow-auto max-h-32">
+                              {JSON.stringify(testResults.data, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="logs" className="space-y-4">
+              <Card className="rounded-md">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg">Integration Logs</CardTitle>
+                  <CardDescription>Recent activity and error logs</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 text-sm">
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                      <div className="font-medium text-blue-800">Integration Status Check</div>
+                      <div className="text-blue-600 mt-1">
+                        Square: {integrations.square.connected ? "Connected" : "Not Connected"} | 
+                        Square Composio: {integrations.square_composio.connected ? "Connected" : "Not Connected"}
+                      </div>
+                    </div>
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
+                      <div className="font-medium text-gray-800">Firestore Paths</div>
+                      <div className="text-gray-600 mt-1">
+                        <div>Square: merchants/{user?.uid}/integrations/square</div>
+                        <div>Square Composio: merchants/{user?.uid}/integrations/square_composio</div>
+                      </div>
+                    </div>
+                    {errorDetails && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                        <div className="font-medium text-red-800">Error Details</div>
+                        <div className="text-red-600 mt-1">{errorDetails}</div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
     </PageTransition>
   )
 } 

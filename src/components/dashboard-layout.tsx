@@ -865,6 +865,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       return 'Get Started'
     }
     
+    if (lastSegment === 'pos') {
+      return 'Square'
+    }
+    
     // Convert path to title case (e.g., "agents" -> "Agents")
     return lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1)
   }
@@ -2126,7 +2130,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               {!pathname?.includes('/email') && (
                 <div className="h-16 px-6 border-b border-gray-200 flex items-center justify-between bg-white">
                   <div className="flex items-center gap-4">
-                    <h1 className="text-lg font-medium text-gray-900">{getPageTitle()}</h1>
+                    {pathname?.includes('/pos') ? (
+                      <div className="flex items-center gap-3">
+                        <img src="/squarepro.png" alt="Square" className="h-6 w-6" />
+                        <h1 className="text-lg font-medium text-gray-900">{getPageTitle()}</h1>
+                      </div>
+                    ) : (
+                      <h1 className="text-lg font-medium text-gray-900">{getPageTitle()}</h1>
+                    )}
                     {/* Progress Bar for getstarted page */}
                     {pathname?.includes('/getstarted') && (
                       <div className="flex items-center gap-3 ml-6">

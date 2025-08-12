@@ -3,7 +3,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc } from 'firebase/firestore'
 
 // Square API version
-const API_VERSION = '2025-04-16'
+const API_VERSION = '2025-07-16'
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,14 +39,7 @@ export async function GET(request: NextRequest) {
     
     const accessToken = integrationData.accessToken
     
-    // Get date range from query params or use default (last 30 days)
-    const startDate = searchParams.get('startDate') || 
-      new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-    
-    const endDate = searchParams.get('endDate') || 
-      new Date().toISOString().split('T')[0]
-    
-    // Call Square API to get orders
+    // Call Square API to get orders using the new orders/search endpoint
     const ordersResponse = await fetch('https://connect.squareup.com/v2/orders/search', {
       method: 'POST',
       headers: {
@@ -55,24 +48,11 @@ export async function GET(request: NextRequest) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        location_ids: ['me'], // 'me' represents all locations the merchant has access to
-        query: {
-          filter: {
-            date_time_filter: {
-              created_at: {
-                start_at: `${startDate}T00:00:00Z`,
-                end_at: `${endDate}T23:59:59Z`
-              }
-            },
-            state_filter: {
-              states: ['COMPLETED']
-            }
-          },
-          sort: {
-            sort_field: 'CREATED_AT',
-            sort_order: 'DESC'
-          }
-        }
+        return_entries: true,
+        location_ids: [
+          "LMY8EHCZ3EACN"
+        ],
+        limit: 100
       })
     })
     
@@ -87,30 +67,26 @@ export async function GET(request: NextRequest) {
       }, { status: 500 })
     }
     
-    // Process the orders to extract relevant sales data
-    const sales = ordersData.orders?.map(order => {
-      // Calculate total amount
-      const totalMoney = order.total_money || {}
-      const amount = totalMoney.amount ? totalMoney.amount / 100 : 0 // Convert cents to dollars
-      const currency = totalMoney.currency || 'USD'
-      
+    // Process the order entries to extract relevant sales data
+    const sales = ordersData.order_entries?.map((entry: any) => {
       return {
-        id: order.id,
-        orderId: order.id,
-        locationId: order.location_id,
-        createdAt: order.created_at,
-        updatedAt: order.updated_at,
-        state: order.state,
-        totalAmount: amount,
-        currency: currency,
-        customerName: order.customer?.display_name || 'Unknown Customer',
-        customerId: order.customer_id || null,
-        source: order.source?.name || 'Square POS',
-        lineItems: order.line_items?.map(item => ({
+        id: entry.order_id,
+        orderId: entry.order_id,
+        locationId: entry.location_id,
+        createdAt: entry.created_at,
+        updatedAt: entry.updated_at,
+        closedAt: entry.closed_at,
+        state: 'COMPLETED', // Orders in order_entries are typically completed
+        totalAmount: 0, // Will need to fetch order details for total amount
+        currency: 'USD',
+        customerName: 'Unknown Customer', // Will need to fetch order details for customer info
+        customerId: null,
+        source: 'Square POS',
+        lineItems: entry.line_items?.map((item: any) => ({
           name: item.name,
           quantity: item.quantity,
-          unitPrice: item.base_price_money ? item.base_price_money.amount / 100 : 0,
-          totalPrice: item.total_money ? item.total_money.amount / 100 : 0
+          unitPrice: 0, // Will need to fetch order details for pricing
+          totalPrice: 0
         })) || []
       }
     }) || []
@@ -119,10 +95,8 @@ export async function GET(request: NextRequest) {
       success: true, 
       sales,
       count: sales.length,
-      timeframe: {
-        startDate,
-        endDate
-      }
+      cursor: ordersData.cursor,
+      hasMore: !!ordersData.cursor
     })
     
   } catch (error) {

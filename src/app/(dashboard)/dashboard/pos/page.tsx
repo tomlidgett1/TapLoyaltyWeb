@@ -856,7 +856,7 @@ export default function POSPage() {
                   size="sm"
                   className="gap-2"
                 >
-                  <Building className="h-4 w-4" />
+                  <img src="/squarepro.png" alt="Square" className="h-4 w-4" />
                   {loadingBusinessInfo ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : businessInfo?.business_name ? (

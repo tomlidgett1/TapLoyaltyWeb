@@ -4832,15 +4832,13 @@ export default function DashboardPage() {
                     <Button variant="ghost" size="icon" className="h-8 w-8">
                     </Button>
 
-                    <Button
+                    <button
                       onClick={() => setAddMetricsPopupOpen(true)}
-                      className="bg-white text-gray-800 border border-gray-200 hover:bg-gray-50 rounded-md"
-                      size="sm"
+                      className="flex items-center px-3 py-1.5 text-sm font-medium bg-white text-gray-800 border border-gray-200 hover:bg-gray-50 rounded-md"
                     >
                       <PlusCircle className="h-4 w-4 mr-1.5" />
-                      Add metrics
-                    </Button>
-                    
+                      Add Metrics
+                    </button>
                     {/* Date Filter Options - Always Visible */}
                     <div className="flex items-center gap-2">
                       <button

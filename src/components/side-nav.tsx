@@ -1307,9 +1307,10 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
               variant="ghost"
               size="sm"
               onClick={() => setAddPosDialogOpen(true)}
-              className={cn(
-                "group flex items-center gap-3 rounded-md py-1 text-sm font-[450] transition-all duration-200 ease-in-out whitespace-nowrap relative h-8 w-full",
-                "text-gray-800 hover:bg-[#007AFF]/5"
+                                           className={cn(
+                "group flex items-center gap-3 rounded-md px-3 py-1 text-sm font-[450] transition-all duration-200 ease-in-out whitespace-nowrap relative h-8 w-full",
+                "text-gray-800 hover:bg-[#007AFF]/5",
+                isCollapsed ? "pl-6" : ""
               )}
               title="Add POS Integration"
             >
@@ -1334,8 +1335,9 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                size="sm"
                onClick={() => router.push('/dashboard/pos')}
                className={cn(
-                 "group flex items-center gap-3 rounded-md py-1 text-sm font-[450] transition-all duration-200 ease-in-out whitespace-nowrap relative h-8 w-full",
-                 "text-gray-800 hover:bg-[#007AFF]/5"
+                 "group flex items-center gap-3 rounded-md px-3 py-1 text-sm font-[450] transition-all duration-200 ease-in-out whitespace-nowrap relative h-8 w-full",
+                 "text-gray-800 hover:bg-[#007AFF]/5",
+                 isCollapsed ? "pl-6" : ""
                )}
                title="Square Integration"
              >

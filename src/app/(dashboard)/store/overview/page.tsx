@@ -1181,7 +1181,8 @@ const ProgramsTabContent = () => {
           if (merchantData.cashbackProgram) {
             const newActiveStatus = !merchantData.cashbackProgram.isActive
             await updateDoc(merchantRef, {
-              'cashbackProgram.isActive': newActiveStatus
+              'cashbackProgram.isActive': newActiveStatus,
+              'isCashback': newActiveStatus  // Also update the isCashback field
             })
             
             // Update local state

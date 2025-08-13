@@ -41,6 +41,7 @@ import { CreatePointsRulePopup } from "@/components/create-points-rule-popup"
 import { WelcomePopup } from "@/components/welcome-popup"
 import { CreateManualProgramDialog } from "@/components/create-manual-program-dialog"
 import { SettingsDialog } from "@/components/settings-dialog"
+import { QuickSetupPopup } from "@/components/quick-setup-popup"
 
 // Import Create Agent Modal Component
 import {
@@ -125,6 +126,7 @@ export default function GetStartedPage() {
   // Removed network reward popup state
   const [showSettingsDialog, setShowSettingsDialog] = useState(false)
   const [settingsActiveSection, setSettingsActiveSection] = useState("Memberships")
+  const [showQuickSetup, setShowQuickSetup] = useState(false)
   
   // Program type selector states
   const [programTypeSelectorOpen, setProgramTypeSelectorOpen] = useState(false)
@@ -642,7 +644,7 @@ export default function GetStartedPage() {
           <div className="text-center mb-8">
             {/* Tap Logo */}
             <div className="flex justify-center mb-6">
-              <img src="/taplogo.png" alt="Tap" className="w-12 h-12 object-contain rounded-[4px]" />
+              <img src="/taplogo.png" alt="Tap" className="w-12 h-12 object-contain rounded-[9px]" />
             </div>
             
             {/* Welcome Message */}
@@ -650,6 +652,14 @@ export default function GetStartedPage() {
             <p className="text-base text-gray-600 max-w-2xl mx-auto mb-2">
               Complete these steps to set up your loyalty program.
             </p>
+            
+            {/* Quick Setup Button */}
+            <Button
+              onClick={() => setShowQuickSetup(true)}
+              className="mt-4 bg-[#007aff] hover:bg-[#339fff] text-white"
+            >
+              Quick Setup
+            </Button>
            
           </div>
 
@@ -1027,6 +1037,11 @@ export default function GetStartedPage() {
       <CreateRecurringRewardDialog 
         open={createRecurringOpen} 
         onOpenChange={setCreateRecurringOpen} 
+      />
+
+      <QuickSetupPopup 
+        open={showQuickSetup} 
+        onOpenChange={setShowQuickSetup} 
       />
 
       {/* Create Agent Modal */}

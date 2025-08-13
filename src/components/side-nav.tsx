@@ -41,7 +41,8 @@ import {
   Settings as SettingsIcon,
   Repeat,
   Plus,
-  Monitor
+  Monitor,
+  Bot
 } from "lucide-react"
 import { RiRobot3Line } from "react-icons/ri"
 
@@ -54,6 +55,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useEffect, useState, useRef } from "react"
 import { useAuth } from "@/contexts/auth-context"
+import { useNotifications } from "@/contexts/notifications-context"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, DocumentData } from "firebase/firestore"
 import { signOut, Auth, getAuth } from "firebase/auth"
@@ -229,6 +231,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   const pathname = usePathname() || ""
   const router = useRouter()
   const { user } = useAuth()
+  const { notifications, unreadCount, notificationsLoading, markAsRead, markAllAsRead } = useNotifications()
   const [merchantName, setMerchantName] = useState("My Business")
   const [merchantEmail, setMerchantEmail] = useState("")
   const [initials, setInitials] = useState("MB")
@@ -279,7 +282,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   const [merchantPlan, setMerchantPlan] = useState<'light' | 'advanced' | 'pro'>('light')
 
   // Notification state
-  const [notifications, setNotifications] = useState<{
+  const [sideNavNotifications, setSideNavNotifications] = useState<{
     id: string;
     type: 'logo-missing' | 'info' | 'warning';
     title: string;
@@ -816,7 +819,8 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
   // Check for missing logo and show notification
   useEffect(() => {
     if (!user?.uid || !merchantData) {
-      setNotifications([]);
+              setSideNavNotifications([]);
+        // Clear any existing notifications to prevent duplicates
       return;
     }
 
@@ -825,37 +829,38 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
                    merchantData.logoUrl.trim() !== '' &&
                    !logoError;
 
-    if (!hasLogo) {
-      const logoNotification = {
-        id: 'logo-missing',
-        type: 'logo-missing' as const,
-        title: 'Upload Logo',
-        message: 'Add your business logo to complete your profile',
-        dismissible: true
-      };
-      setNotifications(prev => {
-        // Check if notification already exists
-        const exists = prev.some(n => n.id === 'logo-missing');
-        if (!exists) {
-          // Play a happy chime notification sound
-          if (audioRef.current) {
-            audioRef.current.src = '/sounds/notification-chime.mp3'; // Default happy chime sound
-            audioRef.current.volume = 0.4; // Moderate volume for the chime
-            audioRef.current.currentTime = 0;
-            audioRef.current.play().catch(e => console.log('Audio play failed:', e));
-          }
-          return [...prev, logoNotification];
-        }
-        return prev;
-      });
-    } else {
-      // Remove logo notification if logo is now present
-      setNotifications(prev => prev.filter(n => n.id !== 'logo-missing'));
-    }
+    // Disabled logo notifications since we now use the main notification system
+    // if (!hasLogo) {
+    //   const logoNotification = {
+    //     id: 'logo-missing',
+    //     type: 'logo-missing' as const,
+    //     title: 'Upload Logo',
+    //     message: 'Add your business logo to complete your profile',
+    //     dismissible: true
+    //   };
+    //   setSideNavNotifications(prev => {
+    //     // Check if notification already exists
+    //     const exists = prev.some(n => n.id === 'logo-missing');
+    //     if (!exists) {
+    //       // Play a happy chime notification sound
+    //       if (audioRef.current) {
+    //         audioRef.current.src = '/sounds/notification-chime.mp3'; // Default happy chime sound
+    //         audioRef.current.volume = 0.4; // Moderate volume for the chime
+    //         audioRef.current.currentTime = 0;
+    //         audioRef.current.play().catch(e => console.log('Audio play failed:', e));
+    //       }
+    //       return [...prev, logoNotification];
+    //     }
+    //     return prev;
+    //   });
+    // } else {
+    //   // Remove logo notification if logo is now present
+    //   setSideNavNotifications(prev => prev.filter(n => n.id !== 'logo-missing'));
+    // }
   }, [user?.uid, merchantData?.logoUrl, logoError, merchantData]);
 
   const dismissNotification = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    setSideNavNotifications(prev => prev.filter(n => n.id !== id));
   };
 
   const handleLogout = async () => {
@@ -1423,86 +1428,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
         </div>
       )}
       
-      {/* Notification Stacker */}
-      {!isCollapsed && notifications.length > 0 && (
-        <div className="px-3 pb-2">
-          <AnimatePresence>
-            {notifications.map((notification, index) => (
-              <motion.div
-                key={notification.id}
-                initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, x: 100, scale: 0.9 }}
-                transition={{
-                  enter: {
-                    duration: 0.4,
-                    ease: [0.04, 0.62, 0.23, 0.98],
-                    delay: index * 0.1
-                  },
-                  exit: {
-                    duration: 0.3,
-                    ease: [0.4, 0, 1, 1]
-                  }
-                }}
-                className="mb-2"
-              >
-                                 <div 
-                   className="block w-full px-2.5 pt-2.5 pb-1.5 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg transition-colors group cursor-pointer"
-                   onClick={() => setSettingsDialogOpen(true)}
-                 >
-                   <div className="space-y-1">
-                     <div className="flex items-center justify-between">
-                       <div className="flex items-center gap-2">
-                         <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
-                           <Camera className="h-3 w-3 text-white" />
-                         </div>
-                         <p className="text-xs font-medium text-gray-900">Upload Logo</p>
-                       </div>
-                       <div className="flex items-center gap-2">
-                         <ChevronRight className="h-3 w-3 text-gray-500 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
-                       </div>
-                     </div>
-                     <div className="pl-7">
-                       <p className="text-[10px] text-gray-600 font-medium">Required</p>
-                     </div>
-                   </div>
-                 </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
-      )}
-      
-      {/* Collapsed state notification indicator */}
-      {isCollapsed && notifications.length > 0 && (
-        <div className="px-3 pb-2">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="w-full flex justify-center"
-          >
-            <motion.div
-              animate={{ 
-                scale: [1, 1.1, 1],
-                backgroundColor: ["#3B82F6", "#2563EB", "#3B82F6"]
-              }}
-              transition={{ 
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeInOut"
-              }}
-              className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-blue-600 transition-colors"
-              onClick={() => setIsCollapsed(false)}
-              title={`${notifications.length} notification${notifications.length > 1 ? 's' : ''}`}
-            >
-              <Bell className="h-4 w-4 text-white" />
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                {notifications.length}
-              </span>
-            </motion.div>
-          </motion.div>
-        </div>
-      )}
+
       
       {/* Hidden audio element for notification sound */}
       <audio
@@ -1513,6 +1439,131 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
         <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGUgBz2O0/DIeCUFLIHO8tiJNwgZaLvt" type="audio/wav" />
       </audio>
       
+      {/* Notifications Button */}
+      <div className="px-3 py-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button 
+              variant="ghost" 
+              className="w-full justify-between gap-2 h-auto p-2 data-[state=open]:bg-gray-100 hover:bg-[#007AFF]/5 focus:outline-none focus-visible:outline-none focus-visible:ring-0 transition-colors duration-200"
+            >
+              <div className="flex items-center gap-2">
+                <Bell className="h-4 w-4" />
+                {!isCollapsed && <span className="text-sm">Notifications</span>}
+              </div>
+              {unreadCount > 0 && (
+                <span className="h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center flex-shrink-0">
+                  {unreadCount}
+                </span>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            className="w-96 rounded-2xl ml-4"
+            side="top"
+            align="end"
+            sideOffset={4}
+          >
+            <div className="p-3 border-b">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium text-sm">Notifications</h4>
+                {unreadCount > 0 && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-xs h-6 px-2"
+                    onClick={markAllAsRead}
+                  >
+                    Mark all read
+                  </Button>
+                )}
+              </div>
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              {notificationsLoading ? (
+                <div className="p-4 text-center text-gray-500 text-sm">
+                  Loading notifications...
+                </div>
+              ) : notifications.length > 0 ? (
+                notifications.map((notification) => (
+                  <div 
+                    key={notification.id}
+                    className={`p-2.5 border-b last:border-b-0 hover:bg-gray-50 cursor-pointer transition-colors ${
+                      !notification.read ? 'bg-blue-50' : ''
+                    }`}
+                    onClick={() => markAsRead(notification.id)}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      {/* Customer Avatar or Notification Icon */}
+                      <div className="flex-shrink-0">
+                        {notification.type === "AGENT_ACTION" ? (
+                          <img 
+                            src="/taplogo.png" 
+                            alt="Tap Agent"
+                            className="h-7 w-7 rounded-md object-cover border border-gray-200"
+                          />
+                        ) : notification.customerProfilePictureUrl ? (
+                          <img 
+                            src={notification.customerProfilePictureUrl} 
+                            alt={notification.customerFullName || 'Customer'}
+                            className="h-7 w-7 rounded-md object-cover border border-gray-200"
+                          />
+                        ) : notification.customerFullName ? (
+                          <div className="h-7 w-7 rounded-md flex items-center justify-center text-xs font-medium border border-gray-200 bg-gray-100 text-gray-600">
+                            {notification.customerFullName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                          </div>
+                        ) : (
+                          <div className="h-7 w-7 rounded-md flex items-center justify-center border border-gray-200 bg-gray-100">
+                            <Bell className="h-4 w-4 text-gray-500" />
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Notification Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2 mb-0.5">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            {notification.customerFullName && (
+                              <p className="text-xs font-medium text-gray-900 truncate">
+                                {notification.customerFullName}
+                              </p>
+                            )}
+                            {notification.type === "AGENT_ACTION" && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-blue-500 to-orange-500 text-white flex-shrink-0">
+                                <Bot className="h-2.5 w-2.5" />
+                                Agent
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <p className="text-xs text-gray-500 whitespace-nowrap">
+                              {new Date(notification.timestamp).toLocaleTimeString('en-AU', { 
+                                hour: '2-digit', 
+                                minute: '2-digit' 
+                              })}
+                            </p>
+                            {!notification.read && (
+                              <div className="h-1.5 w-1.5 bg-blue-500 rounded-full"></div>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis">
+                          {notification.message}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-4 text-center text-gray-500 text-sm">
+                  No notifications yet
+                </div>
+              )}
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
       {/* Account section at the bottom - using NavUser component */}
       <div className="mt-auto border-t border-gray-200 p-3">
         {loading || merchantName === "My Business" ? (

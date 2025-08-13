@@ -28,7 +28,7 @@ import { CreateRewardSheet } from "@/components/create-reward-sheet"
 import { CreatePointsRuleSheet } from "@/components/create-points-rule-sheet"
 import { DemoIPhone } from "@/components/demo-iphone"
 import { useAuth } from "@/contexts/auth-context"
-import { useNotifications } from "@/contexts/notifications-context"
+
 import { db } from "@/lib/firebase"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import NextImage from "next/image"
@@ -215,7 +215,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     }
   }, []);
   const pathname = usePathname()
-  const { notifications, unreadCount, notificationsLoading, markAsRead, markAllAsRead } = useNotifications()
+
 
   const router = useRouter()
   
@@ -825,28 +825,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     return formatDistanceToNow(date, { addSuffix: true })
   }
 
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case "SUCCESS":
-      case "REWARD_REDEEMED":
-      case "POINTS_AWARDED":
-        return <Check className="h-4 w-4 text-green-500" />
-      case "WARNING":
-        return <Bell className="h-4 w-4 text-amber-500" />
-      case "ERROR":
-        return <X className="h-4 w-4 text-red-500" />
-      case "MEMBERSHIP_TIER_UPGRADE":
-        return <Award className="h-4 w-4 text-purple-500" />
-      case "AGENT_ACTION":
-        return (
-          <div className="h-4 w-4 flex items-center justify-center">
-            <Bot className="h-4 w-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-orange-500" />
-          </div>
-        )
-      default:
-        return <Bell className="h-4 w-4 text-blue-500" />
-    }
-  }
+
   
   // Function to get the current page title based on pathname
   const getPageTitle = () => {
@@ -2166,15 +2145,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       </Button>
                     )}
                     
-                    {/* Setup Button */}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-sm font-medium text-gray-900 hover:text-gray-900 hover:bg-gray-100 focus:ring-0 focus:ring-offset-0"
-                      onClick={() => router.push('/getstarted')}
-                        >
-                          Setup
-                        </Button>
+
                     
                     {/* Preview Button */}
                     <Button
@@ -2193,114 +2164,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
 
 
-                    {/* Notifications */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="relative">
-                          <Bell className="h-4 w-4" />
-                          {unreadCount > 0 && (
-                            <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                              {unreadCount}
-                            </span>
-                          )}
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-96 rounded-md">
-                        <div className="p-3 border-b">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-medium text-sm">Notifications</h4>
-                            {unreadCount > 0 && (
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="text-xs h-6 px-2"
-                                onClick={markAllAsRead}
-                              >
-                                Mark all read
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                        <div className="max-h-80 overflow-y-auto">
-                          {notificationsLoading ? (
-                            <div className="p-4 text-center text-gray-500 text-sm">
-                              Loading notifications...
-                            </div>
-                          ) : notifications.length > 0 ? (
-                            notifications.map((notification) => (
-                              <div 
-                                key={notification.id}
-                                className={`p-2.5 border-b last:border-b-0 hover:bg-gray-50 cursor-pointer transition-colors ${
-                                  !notification.read ? 'bg-blue-50' : ''
-                                }`}
-                                onClick={() => markAsRead(notification.id)}
-                              >
-                                <div className="flex items-start gap-2.5">
-                                  {/* Customer Avatar or Notification Icon */}
-                                  <div className="flex-shrink-0">
-                                    {notification.type === "AGENT_ACTION" ? (
-                                      <img 
-                                        src="/taplogo.png" 
-                                        alt="Tap Agent"
-                                        className="h-7 w-7 rounded-md object-cover border border-gray-200"
-                                      />
-                                    ) : notification.customerProfilePictureUrl ? (
-                                      <img 
-                                        src={notification.customerProfilePictureUrl} 
-                                        alt={notification.customerFullName || 'Customer'}
-                                        className="h-7 w-7 rounded-md object-cover border border-gray-200"
-                                      />
-                                    ) : notification.customerFullName ? (
-                                      <div className="h-7 w-7 rounded-md flex items-center justify-center text-xs font-medium border border-gray-200 bg-gray-100 text-gray-600">
-                                        {notification.customerFullName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
-                                      </div>
-                                    ) : (
-                                      <div className="h-7 w-7 rounded-md flex items-center justify-center border border-gray-200 bg-gray-100">
-                                        {getNotificationIcon(notification.type)}
-                                      </div>
-                                    )}
-                                  </div>
-                                  
-                                  {/* Notification Content */}
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-start justify-between gap-2 mb-0.5">
-                                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                        {notification.customerFullName && (
-                                          <p className="text-xs font-medium text-gray-900 truncate">
-                                            {notification.customerFullName}
-                                          </p>
-                                        )}
-                                        {notification.type === "AGENT_ACTION" && (
-                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-blue-500 to-orange-500 text-white flex-shrink-0">
-                                            <Bot className="h-2.5 w-2.5" />
-                                            Agent
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                                        <p className="text-xs text-gray-500 whitespace-nowrap">
-                                          {formatTimeAgo(notification.timestamp)}
-                                        </p>
-                                        {!notification.read && (
-                                          <div className="h-1.5 w-1.5 bg-blue-500 rounded-full"></div>
-                                        )}
-                                      </div>
-                                    </div>
-                                    <p className="text-xs text-gray-700 whitespace-nowrap overflow-hidden text-ellipsis">
-                                      {notification.message}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            ))
-                          ) : (
-                            <div className="p-4 text-center text-gray-500 text-sm">
-                              No notifications yet
-                            </div>
-                          )}
-                        </div>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+
 
                     {/* Chat Panel Button */}
                     <Button

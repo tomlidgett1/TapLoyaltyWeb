@@ -139,10 +139,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           console.log('New login count after increment:', newLoginCount)
           
-          // Set welcome flag unless loginCount > 1 and only on actual login events
-          if (!(newLoginCount > 1) && isActualLogin) {
+          // Set welcome flag for loginCount < 2 and only on actual login events
+          if (newLoginCount < 2 && isActualLogin) {
             setShouldShowWelcome(true)
-            console.log('Setting welcome flag (loginCount not > 1):', newLoginCount)
+            console.log('Setting welcome flag (loginCount < 2):', newLoginCount)
           }
           
           // If login count is less than 5, redirect to getstarted page

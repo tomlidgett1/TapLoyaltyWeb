@@ -88,6 +88,7 @@ import {
 } from "@/components/ui/dialog"
 import { CreateRewardDialog } from "@/components/create-reward-dialog"
 import { RewardDetailSheet } from "@/components/reward-detail-sheet"
+import { IntroGuidePopup } from "@/components/intro-guide-popup"
 import { 
   Sheet,
   SheetContent,
@@ -258,12 +259,13 @@ const GradientText = ({ children }: { children: React.ReactNode }) => {
 export default function DashboardPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user } = useAuth()
+  const { user, shouldShowWelcome, clearWelcomeFlag } = useAuth()
   const [timeframe, setTimeframe] = useState<TimeframeType>("today")
   const [isTimeframePanelOpen, setIsTimeframePanelOpen] = useState(false)
   const [isAdvancedActivity, setIsAdvancedActivity] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
   const [pageVisible, setPageVisible] = useState(false)
+  const [showIntroGuide, setShowIntroGuide] = useState(false)
   
   // Agent inbox states
   const [agentTasks, setAgentTasks] = useState<any[]>([])
@@ -519,6 +521,18 @@ export default function DashboardPage() {
       fetchAgentTasks()
     }
   }, [user?.uid])
+
+  // Show intro guide popup for new users (loginCount < 2)
+  useEffect(() => {
+    if (shouldShowWelcome) {
+      const timer = setTimeout(() => {
+        setShowIntroGuide(true)
+        clearWelcomeFlag() // Clear the flag so it doesn't show again
+      }, 1000) // Delay for smooth experience
+
+      return () => clearTimeout(timer)
+    }
+  }, [shouldShowWelcome, clearWelcomeFlag])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -7699,6 +7713,12 @@ export default function DashboardPage() {
       <DemoIPhone 
         open={demoIPhoneOpen} 
         onOpenChange={setDemoIPhoneOpen} 
+      />
+
+      {/* Intro Guide Popup */}
+      <IntroGuidePopup 
+        open={showIntroGuide} 
+        onOpenChange={setShowIntroGuide} 
       />
 
     </>

@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { X, ChevronDown, Check, Star, Sparkles, ImageIcon, Info, Plus, Coffee, Ticket, Banknote, Gift, DollarSign } from "lucide-react"
+import { X, ChevronDown, Check, Star, Sparkles, ImageIcon, Info, Plus, Coffee, Ticket, Banknote, Gift, DollarSign, Trash } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { doc, setDoc, addDoc, collection, serverTimestamp, getDoc } from "firebase/firestore"
+import { doc, setDoc, addDoc, collection, serverTimestamp, getDoc, query, where, getDocs } from "firebase/firestore"
 import { toast } from "@/components/ui/use-toast"
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"
 import { v4 as uuidv4 } from "uuid"
@@ -36,13 +36,14 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
   // Reward configurations
   const [rewardConfigs, setRewardConfigs] = useState<any[]>([])
   const [expandedConfig, setExpandedConfig] = useState<string | null>(null)
+  const [finalizedRewards, setFinalizedRewards] = useState<Set<string>>(new Set())
   
   // Logo state
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [existingLogoUrl, setExistingLogoUrl] = useState<string | null>(null)
   
-  const totalSteps = 5
+  const totalSteps = 6
   const [selectedRewards, setSelectedRewards] = useState<string[]>([])
   
   // Tap Cash state
@@ -59,6 +60,43 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
     hasVoucherProgram: false,
     hasCashbackProgram: false
   })
+
+  // Introductory rewards state
+  const [introRewardType, setIntroRewardType] = useState<"voucher" | "freeItem">("voucher")
+  const [introRewardData, setIntroRewardData] = useState({
+    rewardName: "",
+    description: "",
+    itemName: "",
+    pin: ""
+  })
+  const [existingIntroRewards, setExistingIntroRewards] = useState<any[]>([])
+
+  // Fetch existing introductory rewards
+  useEffect(() => {
+    const fetchIntroRewards = async () => {
+      if (!user?.uid) return
+
+      try {
+        const rewardsRef = collection(db, 'merchants', user.uid, 'rewards')
+        const q = query(rewardsRef, where("isIntroductoryReward", "==", true))
+        const querySnapshot = await getDocs(q)
+        
+        const rewards: any[] = []
+        querySnapshot.forEach((doc) => {
+          rewards.push({
+            id: doc.id,
+            ...doc.data()
+          })
+        })
+        
+        setExistingIntroRewards(rewards)
+      } catch (error) {
+        console.error('Error fetching introductory rewards:', error)
+      }
+    }
+
+    fetchIntroRewards()
+  }, [user?.uid])
 
   const handleNext = () => {
     if (currentStep < totalSteps) {
@@ -138,6 +176,340 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
     }
   }
 
+  const validateAndSaveReward = (config: any) => {
+    if (config.type === 'coffee') {
+      if (!config.pin || !/^\d{4}$/.test(config.pin)) {
+        toast({
+          title: "Invalid Coffee Card",
+          description: "Coffee card requires a 4-digit PIN",
+          variant: "destructive"
+        })
+        return false
+      }
+      if (!config.frequency || config.frequency < 1) {
+        toast({
+          title: "Invalid Coffee Card",
+          description: "Please select total stamps required",
+          variant: "destructive"
+        })
+        return false
+      }
+      return true
+    } else if (config.type === 'voucher') {
+      if (!config.pin || !/^\d{4}$/.test(config.pin)) {
+        toast({
+          title: "Invalid Voucher Program",
+          description: "Voucher program requires a 4-digit PIN",
+          variant: "destructive"
+        })
+        return false
+      }
+      if (!config.rewardName || config.rewardName.trim() === '') {
+        toast({
+          title: "Invalid Voucher Program",
+          description: "Please enter a reward name",
+          variant: "destructive"
+        })
+        return false
+      }
+      if (!config.spendRequired || config.spendRequired <= 0) {
+        toast({
+          title: "Invalid Voucher Program",
+          description: "Please enter a spending threshold",
+          variant: "destructive"
+        })
+        return false
+      }
+      if (!config.discountAmount || config.discountAmount <= 0) {
+        toast({
+          title: "Invalid Voucher Program",
+          description: "Please enter a voucher amount",
+          variant: "destructive"
+        })
+        return false
+      }
+      return true
+    } else if (config.type === 'basic') {
+      if (!config.pin || !/^\d{4}$/.test(config.pin)) {
+        toast({
+          title: "Invalid Basic Reward",
+          description: "Basic reward requires a 4-digit PIN",
+          variant: "destructive"
+        })
+        return false
+      }
+      if (!config.name || config.name.trim() === '') {
+        toast({
+          title: "Invalid Basic Reward",
+          description: "Please enter a reward name",
+          variant: "destructive"
+        })
+        return false
+      }
+      if (config.pointsRequired === undefined || config.pointsRequired === null || Number.isNaN(Number(config.pointsRequired))) {
+        toast({
+          title: "Invalid Basic Reward",
+          description: "Please enter points required",
+          variant: "destructive"
+        })
+        return false
+      }
+      if (config.rewardType === 'fixedDiscount' && !config.discountValue) {
+        toast({
+          title: "Invalid Basic Reward",
+          description: "Please enter a discount amount",
+          variant: "destructive"
+        })
+        return false
+      }
+      return true
+    }
+    return false
+  }
+
+  const handleSaveReward = (configId: string) => {
+    const config = rewardConfigs.find(c => c.id === configId)
+    if (!config) return
+
+    if (validateAndSaveReward(config)) {
+      setFinalizedRewards(prev => new Set([...prev, configId]))
+      setExpandedConfig(null) // Collapse the card
+      toast({
+        title: "Reward Saved",
+        description: "Your reward configuration has been saved successfully",
+        variant: "default"
+      })
+    }
+  }
+
+  const handleDeleteIntroReward = async (reward: any) => {
+    if (!user) return;
+    
+    try {
+      setIsLoading(true);
+      
+      // Get current merchant data
+      const merchantRef = doc(db, 'merchants', user.uid);
+      const merchantDoc = await getDoc(merchantRef);
+      const merchantData = merchantDoc.data();
+      
+      // Update the introductory rewards array
+      const currentIntroRewardIds = merchantData?.introductoryRewardIds || [];
+      const updatedIntroRewardIds = currentIntroRewardIds.filter((id: string) => id !== reward.id);
+      
+      // Update merchant document
+      await setDoc(
+        merchantRef,
+        { 
+          hasIntroductoryReward: updatedIntroRewardIds.length > 0,
+          introductoryRewardIds: updatedIntroRewardIds,
+          introductoryRewardCount: updatedIntroRewardIds.length
+        },
+        { merge: true }
+      );
+      
+      // Update the reward to no longer be an introductory reward
+      const rewardRef = doc(db, 'merchants', user.uid, 'rewards', reward.id);
+      await setDoc(
+        rewardRef,
+        { 
+          isIntroductoryReward: false,
+          status: reward.isActive ? 'active' : 'inactive'
+        },
+        { merge: true }
+      );
+      
+      // Also update in the top-level rewards collection
+      const globalRewardRef = doc(db, 'rewards', reward.id);
+      await setDoc(
+        globalRewardRef,
+        { 
+          isIntroductoryReward: false,
+          status: reward.isActive ? 'active' : 'inactive'
+        },
+        { merge: true }
+      );
+      
+      toast({
+        title: "Introductory Reward Removed",
+        description: "Your introductory reward has been removed successfully.",
+      });
+      
+      // Update the existing rewards list
+      setExistingIntroRewards(prev => prev.filter(r => r.id !== reward.id));
+      
+    } catch (error) {
+      console.error("Error deleting introductory reward:", error);
+      toast({
+        title: "Error",
+        description: "Failed to remove the introductory reward. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateIntroReward = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication Error",
+        description: "You must be logged in to create rewards.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    // Validate form data
+    if (!introRewardData.rewardName.trim()) {
+      toast({
+        title: "Missing information",
+        description: "Please enter a reward name",
+        variant: "destructive"
+      })
+      return
+    }
+    if (!introRewardData.description.trim()) {
+      toast({
+        title: "Missing information",
+        description: "Please enter a reward description",
+        variant: "destructive"
+      })
+      return
+    }
+    if (introRewardType === "freeItem" && !introRewardData.itemName.trim()) {
+      toast({
+        title: "Missing information",
+        description: "Please enter the free item name",
+        variant: "destructive"
+      })
+      return
+    }
+    if (!introRewardData.pin.trim() || introRewardData.pin.length !== 4 || !/^\d+$/.test(introRewardData.pin)) {
+      toast({
+        title: "Invalid PIN",
+        description: "Please enter a 4-digit PIN code",
+        variant: "destructive"
+      })
+      return
+    }
+
+    try {
+      setIsLoading(true)
+
+      // Check if merchant already has the maximum number of introductory rewards
+      if (existingIntroRewards.length >= 3) {
+        toast({
+          title: "Maximum Introductory Rewards Reached",
+          description: "You can only have up to 3 introductory rewards. Please remove one to create a new one.",
+          variant: "destructive"
+        })
+        setIsLoading(false)
+        return
+      }
+
+      const timestamp = new Date()
+      
+      // Create the reward data
+      const rewardData = {
+        rewardName: introRewardData.rewardName,
+        description: introRewardData.description,
+        type: introRewardType,
+        isIntroductoryReward: true,
+        fundedByTapLoyalty: true,
+        maxValue: 5.00,
+        itemName: introRewardType === "freeItem" ? introRewardData.itemName : "",
+        voucherAmount: introRewardType === "voucher" ? 5.00 : 0,
+        itemValue: introRewardType === "freeItem" ? 5.00 : 0,
+        pin: introRewardData.pin,
+        isActive: true,
+        status: "active",
+        createdAt: timestamp.toISOString(),
+        updatedAt: timestamp.toISOString(),
+        merchantId: user.uid,
+        rewardVisibility: "global",
+        pointsCost: 0, // Free for first-time customers
+        redemptionCount: 0,
+        uniqueCustomersCount: 0,
+        limitations: [
+          {
+            type: "customerLimit",
+            value: 1
+          }
+        ]
+      }
+
+      // Create in merchant's rewards subcollection
+      const merchantRewardsRef = collection(db, 'merchants', user.uid, 'rewards')
+      const newRewardRef = await addDoc(merchantRewardsRef, rewardData)
+      
+      // Add the ID to the reward data
+      const rewardWithId = {
+        ...rewardData,
+        id: newRewardRef.id
+      }
+      
+      // Update the merchant's reward with the ID
+      await setDoc(
+        doc(db, 'merchants', user.uid, 'rewards', newRewardRef.id),
+        { ...rewardWithId }
+      )
+
+      // Also save to top-level rewards collection
+      await setDoc(
+        doc(db, 'rewards', newRewardRef.id),
+        rewardWithId
+      )
+      
+      // Update merchant document with introductory rewards info
+      const merchantRef = doc(db, 'merchants', user.uid);
+      const merchantDoc = await getDoc(merchantRef);
+      const merchantData = merchantDoc.data();
+      
+      // Update the introductory rewards array
+      const currentIntroRewardIds = merchantData?.introductoryRewardIds || [];
+      const updatedIntroRewardIds = [...currentIntroRewardIds, newRewardRef.id];
+      
+      await setDoc(
+        merchantRef,
+        { 
+          hasIntroductoryReward: true,
+          introductoryRewardIds: updatedIntroRewardIds,
+          introductoryRewardCount: updatedIntroRewardIds.length
+        },
+        { merge: true }
+      )
+      
+      toast({
+        title: "Introductory Reward Created",
+        description: "Your introductory reward has been successfully created and is now available to new customers.",
+      })
+      
+      // Reset form
+      setIntroRewardData({
+        rewardName: "",
+        description: "",
+        itemName: "",
+        pin: ""
+      })
+      setIntroRewardType("voucher")
+      
+      // Refresh the existing rewards list
+      const updatedRewards = [...existingIntroRewards, rewardWithId];
+      setExistingIntroRewards(updatedRewards);
+      
+    } catch (error) {
+      console.error("Error creating introductory reward:", error)
+      toast({
+        title: "Error",
+        description: "Failed to create introductory reward. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleComplete = async () => {
     if (!user?.uid) return
 
@@ -163,18 +535,7 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
 
       await setDoc(doc(db, 'merchants', user.uid), merchantData, { merge: true })
 
-      // Create points rule (always $1 = 3 points)
-      const pointsRuleData = {
-        name: 'Standard Points Rule',
-        description: '$1 spent = 3 points earned',
-        ruleType: 'transaction',
-        pointsPerDollar: 3,
-        active: true,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      }
 
-      await addDoc(collection(db, `merchants/${user.uid}/pointsRules`), pointsRuleData)
 
       // Create rewards based on configurations
       const programArrays: any = {
@@ -558,7 +919,7 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
         <div className="px-8 py-4 border-b border-gray-200">
           <div className="max-w-4xl mx-auto flex items-center justify-between">
             <div>
-              <p className="text-xs text-gray-500 mb-1">Step {currentStep} of 5</p>
+                              <p className="text-xs text-gray-500 mb-1">Step {currentStep} of {totalSteps}</p>
               <h1 className="text-lg font-semibold text-gray-900">Quick Setup</h1>
             </div>
             <button
@@ -577,8 +938,7 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
             {currentStep === 1 && (
               <div className="space-y-8">
                 <div className="text-center mb-8">
-                  <h1 className="text-3xl font-bold text-gray-900 mb-3">Build repeat business and reward your customers</h1>
-                  <p className="text-lg text-blue-600 font-medium mb-8">Free for 30 days. Cancel anytime.</p>
+                  <h1 className="text-3xl font-bold text-gray-900 mb-12">Boost customer loyalty and increase your revenue</h1>
                   
                   {/* Key Benefits */}
                   <div className="grid grid-cols-3 gap-8 max-w-3xl mx-auto mb-8">
@@ -592,7 +952,7 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
                         </svg>
                       </div>
                       <h3 className="font-semibold text-gray-900 mb-2">Repeat visits, more sales</h3>
-                      <p className="text-sm text-gray-600">Sellers who use Square Loyalty see a 40% increase in customer visit frequency.</p>
+                      <p className="text-sm text-gray-600">Loyalty programs typically increase customer visit frequency by up to 40%.</p>
                     </div>
                     
                     <div className="text-center">
@@ -615,7 +975,7 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
                         </svg>
                       </div>
                       <h3 className="font-semibold text-gray-900 mb-2">No extra devices or hassle</h3>
-                      <p className="text-sm text-gray-600">Enrol and reward customers directly from your Square Point of Sale and Square Online.</p>
+                      <p className="text-sm text-gray-600">Enrol and reward customers directly from your loyalty system.</p>
                     </div>
                   </div>
                 </div>
@@ -634,28 +994,34 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
                   {/* Points Information */}
                   <div className="p-6 bg-white border border-gray-200 rounded-md">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-md flex items-center justify-center">
-                        <Star className="h-6 w-6 text-blue-600" />
-                      </div>
+                     
                       <div>
                         <h3 className="font-medium text-gray-900">Points Program</h3>
                         <p className="text-sm text-gray-600">$1 spent = 3 points</p>
                       </div>
                     </div>
                     <p className="text-sm text-gray-500">
-                      Your customers will earn points on every purchase. They can redeem these points for rewards you create.
+                      With bank-linked loyalty, your customers will earn points effortlessly on every purchase without needing QR codes. They can redeem these points for rewards you create.
                     </p>
                   </div>
 
                   {/* Logo Upload Section */}
-                  <div className="mt-8 p-6 bg-gray-50 rounded-md">
-                    <h3 className="font-medium text-gray-900 mb-2">
-                      {existingLogoUrl ? 'Your Logo' : 'Upload Your Logo (Optional)'}
-                    </h3>
+                  <div className="mt-8 p-6 bg-white border border-gray-200 rounded-md">
+                    <div className="flex items-center gap-2 mb-3">
+                      <h3 className="font-medium text-gray-900">
+                        {existingLogoUrl ? 'Your Logo' : 'Upload Your Logo'}
+                      </h3>
+                      {!existingLogoUrl && !logoPreview && (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                          <div className="h-1.5 w-1.5 bg-orange-500 rounded-full flex-shrink-0"></div>
+                          Required for activation
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-gray-600 mb-4">
                       {existingLogoUrl 
                         ? 'Your current logo is shown below. You can upload a new one to replace it.'
-                        : 'Add your business logo to personalise your loyalty program'}
+                        : 'Add your business logo to personalise your loyalty program and improve brand recognition. A logo helps customers identify your business in the app.'}
                     </p>
                     
                     <div className="flex items-center gap-4">
@@ -721,11 +1087,111 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
                 </div>
 
                 <div className="space-y-4 max-w-3xl mx-auto">
+                  {/* Add reward dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedRewards(selectedRewards.length > 0 ? [] : ['show'])
+                      }}
+                      className="w-full py-3 border-2 border-dashed border-gray-300 rounded-md text-gray-600 hover:border-gray-400 hover:text-gray-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Reward Type
+                    </button>
+
+                    {selectedRewards.length > 0 && (
+                      <div 
+                        className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-md shadow-lg z-10"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="p-2">
+                          <button
+                            onClick={() => {
+                              addRewardConfig('coffee')
+                              setSelectedRewards([])
+                            }}
+                            disabled={rewardConfigs.some(config => config.type === 'coffee') || existingPrograms.hasCoffeeProgram}
+                            className={cn(
+                              "w-full text-left p-3 rounded-md transition-colors",
+                              rewardConfigs.some(config => config.type === 'coffee') || existingPrograms.hasCoffeeProgram
+                                ? "opacity-50 cursor-not-allowed bg-gray-50"
+                                : "hover:bg-gray-50"
+                            )}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Coffee className="h-5 w-5 text-gray-600" />
+                              <div className="flex-1">
+                                <div className="font-medium">Coffee Card</div>
+                                <div className="text-sm text-gray-500">
+                                  {rewardConfigs.some(config => config.type === 'coffee')
+                                    ? "Already added"
+                                    : existingPrograms.hasCoffeeProgram
+                                    ? "Already exists in your account"
+                                    : "Stamp-based rewards"}
+                                </div>
+                              </div>
+                              {existingPrograms.hasCoffeeProgram && (
+                                <Check className="h-4 w-4 text-green-600" />
+                              )}
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => {
+                              addRewardConfig('voucher')
+                              setSelectedRewards([])
+                            }}
+                            disabled={rewardConfigs.some(config => config.type === 'voucher') || existingPrograms.hasVoucherProgram}
+                            className={cn(
+                              "w-full text-left p-3 rounded-md transition-colors",
+                              rewardConfigs.some(config => config.type === 'voucher') || existingPrograms.hasVoucherProgram
+                                ? "opacity-50 cursor-not-allowed bg-gray-50"
+                                : "hover:bg-gray-50"
+                            )}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Ticket className="h-5 w-5 text-gray-600" />
+                              <div className="flex-1">
+                                <div className="font-medium">Voucher Program</div>
+                                <div className="text-sm text-gray-500">
+                                  {rewardConfigs.some(config => config.type === 'voucher')
+                                    ? "Already added"
+                                    : existingPrograms.hasVoucherProgram
+                                    ? "Already exists in your account"
+                                    : "Threshold-based vouchers"}
+                                </div>
+                              </div>
+                              {existingPrograms.hasVoucherProgram && (
+                                <Check className="h-4 w-4 text-green-600" />
+                              )}
+                            </div>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              addRewardConfig('basic')
+                              setSelectedRewards([])
+                            }}
+                            className="w-full text-left p-3 hover:bg-gray-50 rounded-md transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <Gift className="h-5 w-5 text-gray-600" />
+                              <div>
+                                <div className="font-medium">Basic Reward</div>
+                                <div className="text-sm text-gray-500">Points-based discount</div>
+                              </div>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Existing reward configurations */}
                   {rewardConfigs.map((config) => (
-                    <div key={config.id} className="bg-white border border-gray-200 rounded-md">
+                    <div key={config.id} className="bg-gray-50 border border-gray-200 rounded-md">
                       <div 
-                        className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
+                        className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors"
                         onClick={() => setExpandedConfig(expandedConfig === config.id ? null : config.id)}
                       >
                         <div className="flex items-center gap-3">
@@ -746,12 +1212,17 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
+                          {finalizedRewards.has(config.id) && (
+                            <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+                              <Check className="h-4 w-4 text-green-600" />
+                            </div>
+                          )}
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
                               deleteRewardConfig(config.id)
                             }}
-                            className="p-1 hover:bg-gray-100 rounded-md transition-colors"
+                            className="p-1 hover:bg-gray-200 rounded-md transition-colors"
                           >
                             <X className="h-4 w-4 text-gray-500" />
                           </button>
@@ -774,7 +1245,7 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
                             }}
                             className="overflow-hidden"
                           >
-                            <div className="p-4 border-t border-gray-100 bg-gray-50">
+                            <div className="p-4 border-t border-gray-100 bg-white">
                               {config.type === 'coffee' && (
                                 <div className="space-y-4">
                                   <div>
@@ -830,6 +1301,22 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
                                       className="mt-1"
                                     />
                                     <p className="text-xs text-gray-500 mt-1">Cooldown between stamps (0 for no limit)</p>
+                                  </div>
+                                  <div className="pt-4 border-t border-gray-100">
+                                    <Button
+                                      onClick={() => handleSaveReward(config.id)}
+                                      disabled={finalizedRewards.has(config.id)}
+                                      className="w-auto px-6"
+                                    >
+                                      {finalizedRewards.has(config.id) ? (
+                                        <>
+                                          <Check className="h-4 w-4 mr-2" />
+                                          Saved
+                                        </>
+                                      ) : (
+                                        'Save Coffee Card'
+                                      )}
+                                    </Button>
                                   </div>
                                 </div>
                               )}
@@ -892,6 +1379,22 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
                                       placeholder="Optional description"
                                       className="mt-1"
                                     />
+                                  </div>
+                                  <div className="pt-4 border-t border-gray-100">
+                                    <Button
+                                      onClick={() => handleSaveReward(config.id)}
+                                      disabled={finalizedRewards.has(config.id)}
+                                      className="w-auto px-6"
+                                    >
+                                      {finalizedRewards.has(config.id) ? (
+                                        <>
+                                          <Check className="h-4 w-4 mr-2" />
+                                          Saved
+                                        </>
+                                      ) : (
+                                        'Save Voucher Program'
+                                      )}
+                                    </Button>
                                   </div>
                                 </div>
                               )}
@@ -1038,6 +1541,22 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
                                       className="mt-1"
                                     />
                                   </div>
+                                  <div className="pt-4 border-t border-gray-100">
+                                    <Button
+                                      onClick={() => handleSaveReward(config.id)}
+                                      disabled={finalizedRewards.has(config.id)}
+                                      className="w-auto px-6"
+                                    >
+                                      {finalizedRewards.has(config.id) ? (
+                                        <>
+                                          <Check className="h-4 w-4 mr-2" />
+                                          Saved
+                                        </>
+                                      ) : (
+                                        'Save Basic Reward'
+                                      )}
+                                    </Button>
+                                  </div>
                                 </div>
                               )}
                             </div>
@@ -1046,117 +1565,251 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
                       </AnimatePresence>
                     </div>
                   ))}
-
-                  {/* Add reward dropdown */}
-                  <div className="relative">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setSelectedRewards(selectedRewards.length > 0 ? [] : ['show'])
-                      }}
-                      className="w-full py-3 border-2 border-dashed border-gray-300 rounded-md text-gray-600 hover:border-gray-400 hover:text-gray-700 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add Reward Type
-                    </button>
-
-                    {selectedRewards.length > 0 && (
-                      <div 
-                        className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-md shadow-lg z-10"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="p-2">
-                          <button
-                            onClick={() => {
-                              addRewardConfig('coffee')
-                              setSelectedRewards([])
-                            }}
-                            disabled={rewardConfigs.some(config => config.type === 'coffee') || existingPrograms.hasCoffeeProgram}
-                            className={cn(
-                              "w-full text-left p-3 rounded-md transition-colors",
-                              rewardConfigs.some(config => config.type === 'coffee') || existingPrograms.hasCoffeeProgram
-                                ? "opacity-50 cursor-not-allowed bg-gray-50"
-                                : "hover:bg-gray-50"
-                            )}
-                          >
+                </div>
+              </div>
+            )}
+            {/* Step 4: Introductory Rewards */}
+            {currentStep === 4 && (
+              <div className="space-y-8">
+                <div className="text-center mb-8">
+                  <div className="flex items-center justify-center mb-2">
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      Create <span className="font-bold text-[#007aff]">Tap</span> Funded Introductory Rewards
+                    </h2>
+                  </div>
+                  <div className="flex justify-center mt-1 mb-2">
+                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                      <div className="h-1.5 w-1.5 bg-blue-500 rounded-full flex-shrink-0"></div>
+                      Tap Funded
+                    </span>
+                  </div>
+                  <p className="text-gray-600">
+                    Create special rewards funded by Tap Loyalty to attract new customers
+                  </p>
+                </div>
+                <div className="max-w-2xl mx-auto space-y-6">
+                  {/* Info Box */}
+                  <div className="bg-white border border-blue-200 rounded-md p-4">
+                    <div className="flex items-start gap-3">
+                      <Info className="h-5 w-5 text-blue-600 mt-0.5" />
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-900 mb-1">About Introductory Rewards ({existingIntroRewards.length}/3)</h4>
+                        <p className="text-sm text-gray-600 mb-2">
+                          You can create up to 3 special introductory rewards:
+                        </p>
+                        <ul className="text-sm text-gray-600 space-y-1 pl-4 list-disc">
+                          <li>Fully funded by Tap Loyalty (up to $5 value each)</li>
+                          <li>Each new customer can redeem only one introductory reward across the entire platform</li>
+                          <li>Make yours appealing to attract new customers to your business!</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Existing Introductory Rewards */}
+                  {existingIntroRewards.length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="text-lg font-medium text-gray-900">Your Introductory Rewards</h3>
+                      {existingIntroRewards.map((reward) => (
+                        <div key={reward.id} className="bg-white border border-gray-200 rounded-md p-4">
+                          <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <Coffee className="h-5 w-5 text-gray-600" />
-                              <div className="flex-1">
-                                <div className="font-medium">Coffee Card</div>
-                                <div className="text-sm text-gray-500">
-                                  {rewardConfigs.some(config => config.type === 'coffee')
-                                    ? "Already added"
-                                    : existingPrograms.hasCoffeeProgram
-                                    ? "Already exists in your account"
-                                    : "Stamp-based rewards"}
-                                </div>
-                              </div>
-                              {existingPrograms.hasCoffeeProgram && (
-                                <Check className="h-4 w-4 text-green-600" />
-                              )}
-                            </div>
-                          </button>
-                          <button
-                            onClick={() => {
-                              addRewardConfig('voucher')
-                              setSelectedRewards([])
-                            }}
-                            disabled={rewardConfigs.some(config => config.type === 'voucher') || existingPrograms.hasVoucherProgram}
-                            className={cn(
-                              "w-full text-left p-3 rounded-md transition-colors",
-                              rewardConfigs.some(config => config.type === 'voucher') || existingPrograms.hasVoucherProgram
-                                ? "opacity-50 cursor-not-allowed bg-gray-50"
-                                : "hover:bg-gray-50"
-                            )}
-                          >
-                            <div className="flex items-center gap-3">
-                              <Ticket className="h-5 w-5 text-gray-600" />
-                              <div className="flex-1">
-                                <div className="font-medium">Voucher Program</div>
-                                <div className="text-sm text-gray-500">
-                                  {rewardConfigs.some(config => config.type === 'voucher')
-                                    ? "Already added"
-                                    : existingPrograms.hasVoucherProgram
-                                    ? "Already exists in your account"
-                                    : "Threshold-based vouchers"}
-                                </div>
-                              </div>
-                              {existingPrograms.hasVoucherProgram && (
-                                <Check className="h-4 w-4 text-green-600" />
-                              )}
-                            </div>
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              addRewardConfig('basic')
-                              setSelectedRewards([])
-                            }}
-                            className="w-full text-left p-3 hover:bg-gray-50 rounded-md transition-colors"
-                          >
-                            <div className="flex items-center gap-3">
-                              <Gift className="h-5 w-5 text-gray-600" />
+                              <img 
+                                src="/taplogo.png" 
+                                alt="Tap Logo" 
+                                className="w-8 h-8 rounded-sm object-contain" 
+                              />
                               <div>
-                                <div className="font-medium">Basic Reward</div>
-                                <div className="text-sm text-gray-500">Points-based discount</div>
+                                <h4 className="font-medium text-gray-900">{reward.rewardName}</h4>
+                                <p className="text-sm text-gray-500">
+                                  {reward.type === "voucher" 
+                                    ? `$${reward.voucherAmount?.toFixed(2)} voucher` 
+                                    : `Free ${reward.itemName}`}
+                                </p>
                               </div>
                             </div>
-                          </button>
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                                <Check className="h-3.5 w-3.5 text-green-500" />
+                                Active
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteIntroReward(reward)}
+                                disabled={isLoading}
+                                className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Create New Introductory Reward */}
+                  {existingIntroRewards.length < 3 && (
+                    <div className="bg-white border border-gray-200 rounded-md p-6">
+                      <h3 className="text-lg font-medium text-gray-900 mb-4">Create New Introductory Reward</h3>
+                      
+                      <div className="space-y-4">
+                        {/* Reward Type Selection */}
+                        <div>
+                          <Label className="text-sm">Reward Type</Label>
+                          <div className="grid grid-cols-2 gap-3 mt-1.5">
+                            <div
+                              className={cn(
+                                "border rounded-md p-3 cursor-pointer transition-all",
+                                introRewardType === "voucher" 
+                                  ? "border-blue-500 bg-blue-50" 
+                                  : "border-gray-200 hover:border-gray-300"
+                              )}
+                              onClick={() => setIntroRewardType("voucher")}
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className={cn(
+                                  "h-6 w-6 rounded-full flex items-center justify-center",
+                                  introRewardType === "voucher" ? "bg-blue-500 text-white" : "bg-gray-100"
+                                )}>
+                                  <DollarSign className="h-3 w-3" />
+                                </div>
+                                <div>
+                                  <p className="font-medium text-sm">Gift Voucher</p>
+                                  <p className="text-xs text-gray-500">$5 credit toward purchase</p>
+                                </div>
+                              </div>
+                            </div>
+                            <div
+                              className={cn(
+                                "border rounded-md p-3 cursor-pointer transition-all",
+                                introRewardType === "freeItem" 
+                                  ? "border-blue-500 bg-blue-50" 
+                                  : "border-gray-200 hover:border-gray-300"
+                              )}
+                              onClick={() => setIntroRewardType("freeItem")}
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className={cn(
+                                  "h-6 w-6 rounded-full flex items-center justify-center",
+                                  introRewardType === "freeItem" ? "bg-blue-500 text-white" : "bg-gray-100"
+                                )}>
+                                  <Gift className="h-3 w-3" />
+                                </div>
+                                <div>
+                                  <p className="font-medium text-sm">Free Item</p>
+                                  <p className="text-xs text-gray-500">Item up to $5 value</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Reward Name */}
+                        <div>
+                          <Label className="text-sm">Reward Name</Label>
+                          <Input
+                            placeholder={introRewardType === "voucher" ? "e.g., Welcome $5 Voucher" : "e.g., Free Coffee for New Customers"}
+                            value={introRewardData.rewardName}
+                            onChange={(e) => setIntroRewardData({...introRewardData, rewardName: e.target.value})}
+                            className="mt-1"
+                          />
+                        </div>
+
+                        {/* Description */}
+                        <div>
+                          <Label className="text-sm">Description</Label>
+                          <Textarea
+                            placeholder={introRewardType === "voucher" 
+                              ? "e.g., Enjoy $5 off your first purchase as a welcome gift from us!" 
+                              : "e.g., Welcome to our store! Enjoy a free coffee on your first visit."}
+                            value={introRewardData.description}
+                            onChange={(e) => setIntroRewardData({...introRewardData, description: e.target.value})}
+                            className="mt-1"
+                          />
+                        </div>
+
+                        {/* Free Item Name */}
+                        {introRewardType === "freeItem" && (
+                          <div>
+                            <Label className="text-sm">Free Item Name</Label>
+                            <Input
+                              placeholder="e.g., Regular Coffee, Pastry, etc."
+                              value={introRewardData.itemName}
+                              onChange={(e) => setIntroRewardData({...introRewardData, itemName: e.target.value})}
+                              className="mt-1"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Item must be valued at $5 or less</p>
+                          </div>
+                        )}
+
+                        {/* PIN Code */}
+                        <div>
+                          <Label className="text-sm">Redemption PIN</Label>
+                          <Input
+                            type="text"
+                            maxLength={4}
+                            placeholder="4-digit PIN"
+                            value={introRewardData.pin}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, '');
+                              setIntroRewardData({...introRewardData, pin: value});
+                            }}
+                            className="mt-1"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Enter a 4-digit PIN that will be required when redeeming this reward
+                          </p>
+                        </div>
+
+                        {/* Create Button */}
+                        <div className="pt-4">
+                          <Button
+                            onClick={handleCreateIntroReward}
+                            disabled={isLoading}
+                            className="w-auto px-6 bg-[#007AFF] hover:bg-[#0071E3] text-white"
+                          >
+                            {isLoading ? "Creating..." : "Create Introductory Reward"}
+                          </Button>
                         </div>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
+
+                  {existingIntroRewards.length >= 3 && (
+                    <div className="bg-white border border-gray-200 rounded-md p-4">
+                      <div className="flex items-start gap-3">
+                        <Info className="h-5 w-5 text-gray-500 mt-0.5" />
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-900 mb-1">Maximum Introductory Rewards Reached</h4>
+                          <p className="text-sm text-gray-600">
+                            You have reached the maximum of 3 introductory rewards. To create a new one, please remove an existing reward first.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {/* Step 4: Tap Cash Setup */}
-            {currentStep === 4 && (
+            {/* Step 5: Tap Cash Setup */}
+            {currentStep === 5 && (
               <div className="space-y-8">
                 <div className="text-center mb-8">
-                  <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                    {existingPrograms.hasCashbackProgram ? 'Tap Cash Program' : 'Set Up Tap Cash'}
-                  </h2>
+                  <div className="flex items-center justify-center mb-2">
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      {existingPrograms.hasCashbackProgram ? <><span className="font-bold text-[#007aff]">Tap</span> Cash Program</> : <>Set Up <span className="font-bold text-[#007aff]">Tap</span> Cash</>}
+                    </h2>
+                  </div>
+                  {!existingPrograms.hasCashbackProgram && (
+                    <div className="flex justify-center mt-1 mb-2">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-white text-gray-700 border border-gray-200 w-fit">
+                        <div className="h-1.5 w-1.5 bg-green-500 rounded-full flex-shrink-0"></div>
+                        Recommended
+                      </span>
+                    </div>
+                  )}
                   <p className="text-gray-600">
                     {existingPrograms.hasCashbackProgram 
                       ? 'Review your existing cash back program'
@@ -1186,12 +1839,10 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-3">
-                          <div className="w-10 h-10 bg-green-100 rounded-md flex items-center justify-center">
-                            <DollarSign className="h-6 w-6 text-green-600" />
-                          </div>
+                          
                           <div>
                             <h3 className="font-medium text-gray-900">
-                              {existingPrograms.hasCashbackProgram ? 'Tap Cash Status' : 'Enable Tap Cash'}
+                              {existingPrograms.hasCashbackProgram ? <><span className="font-bold text-[#007aff]">Tap</span> Cash Status</> : <>Enable <span className="font-bold text-[#007aff]">Tap</span> Cash</>}
                               {existingPrograms.hasCashbackProgram && enableTapCash && (
                                 <span className="ml-2 text-xs font-normal text-green-600">
                                   ✓ Currently active
@@ -1267,10 +1918,12 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
                               This description will be shown to customers
                             </p>
                           </div>
-
-                          <div className="bg-green-50 border border-green-200 rounded-md p-4">
-                            <h4 className="text-sm font-medium text-green-900 mb-2">How Tap Cash Works</h4>
-                            <ul className="text-sm text-green-700 space-y-1">
+                          <div className="bg-white border border-gray-200 rounded-md p-4">
+                            <div className="flex items-start gap-2">
+                              <Info className="h-4 w-4 text-gray-500 mt-0.5 flex-shrink-0" />
+                              <h4 className="text-sm font-medium text-gray-900 mb-2">How Tap Cash Works</h4>
+                            </div>
+                            <ul className="text-sm text-gray-600 space-y-1">
                               <li>• Customers automatically earn {tapCashRate}% cash back on purchases</li>
                               <li>• Cash back appears instantly in their digital wallet</li>
                               <li>• They can tap to apply cash back at checkout</li>
@@ -1284,15 +1937,17 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
 
                   {/* Info Box */}
                   {!enableTapCash && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                    <div className="bg-white border border-gray-200 rounded-xl p-4">
                       <div className="flex items-start gap-3">
-                        <Info className="h-5 w-5 text-blue-600 mt-0.5" />
+                        <Info className="h-5 w-5 text-gray-600 mt-0.5" />
                         <div>
-                          <h4 className="text-sm font-medium text-blue-900 mb-1">Why offer Tap Cash?</h4>
-                          <p className="text-sm text-blue-700">
-                            Tap Cash provides instant gratification for customers. Unlike points that need to accumulate, 
-                            customers see immediate value from every purchase, encouraging repeat visits and higher spending.
-                          </p>
+                          <h4 className="text-sm font-medium text-gray-900 mb-1">Why offer Tap Cash?</h4>
+                          <ul className="text-sm text-gray-700 space-y-1">
+                            <li>• Provides instant gratification for customers</li>
+                            <li>• Customers see immediate value from every purchase</li>
+                            <li>• Encourages repeat visits and higher spending</li>
+                            <li>• No need to wait for points to accumulate</li>
+                          </ul>
                         </div>
                       </div>
                     </div>
@@ -1301,8 +1956,8 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
               </div>
             )}
 
-            {/* Step 5: Preview */}
-            {currentStep === 5 && (
+            {/* Step 6: Preview */}
+            {currentStep === 6 && (
               <div className="space-y-8">
                 <div className="text-center mb-8">
                   <h2 className="text-xl font-semibold text-gray-900 mb-2">Preview Your Loyalty Program</h2>
@@ -1351,7 +2006,7 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
             
             <Button
               onClick={handleNext}
-              disabled={isLoading || (currentStep === 3 && rewardConfigs.length === 0)}
+                              disabled={isLoading || (currentStep === 3 && rewardConfigs.length === 0)}
             >
               {isLoading ? (
                 <>

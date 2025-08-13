@@ -38,7 +38,7 @@ import { CreateRewardPopup } from "@/components/create-reward-popup"
 import { CreateRecurringRewardDialog } from "@/components/create-recurring-reward-dialog"
 import { CreateBannerDialog } from "@/components/create-banner-dialog"
 import { CreatePointsRulePopup } from "@/components/create-points-rule-popup"
-import { WelcomePopup } from "@/components/welcome-popup"
+import { IntroGuidePopup } from "@/components/intro-guide-popup"
 import { CreateManualProgramDialog } from "@/components/create-manual-program-dialog"
 import { SettingsDialog } from "@/components/settings-dialog"
 import { QuickSetupPopup } from "@/components/quick-setup-popup"
@@ -104,11 +104,11 @@ interface AgentSchedule {
 }
 
 export default function GetStartedPage() {
-  const { user, shouldShowWelcome, clearWelcomeFlag } = useAuth()
+  const { user } = useAuth()
   const [openItems, setOpenItems] = useState<string[]>([])
   const [accountType, setAccountType] = useState<'standard' | 'network'>('standard')
   const [pageLoaded, setPageLoaded] = useState(false)
-  const [showWelcomePopup, setShowWelcomePopup] = useState(false)
+  const [showIntroGuide, setShowIntroGuide] = useState(false)
   
   // Logo upload states
   const [merchantLogoUrl, setMerchantLogoUrl] = useState<string | null>(null)
@@ -465,17 +465,47 @@ export default function GetStartedPage() {
     return () => clearTimeout(timer)
   }, [])
 
-  // Show welcome popup once page is loaded and flag is set
+  // Show intro guide popup for users with loginCount < 2
   useEffect(() => {
-    if (pageLoaded && shouldShowWelcome) {
-      const timer = setTimeout(() => {
-        setShowWelcomePopup(true)
-        clearWelcomeFlag() // Clear the flag so it doesn't show again
-      }, 500) // Additional delay for smooth experience
+    const checkLoginCountAndShowPopup = async () => {
+      console.log('Checking login count - pageLoaded:', pageLoaded, 'user?.uid:', user?.uid)
+      if (!pageLoaded || !user?.uid) return
 
-      return () => clearTimeout(timer)
+      try {
+        const merchantDocRef = doc(db, 'merchants', user.uid)
+        const merchantDoc = await getDoc(merchantDocRef)
+        
+        if (merchantDoc.exists()) {
+          const data = merchantDoc.data()
+          const loginCount = data?.loginCount || 0
+          
+          console.log('Current login count:', loginCount)
+          
+          // Show intro guide popup for users with loginCount < 2
+          if (loginCount < 2) {
+            console.log('Showing intro guide popup (loginCount < 2):', loginCount)
+            setTimeout(() => {
+              setShowIntroGuide(true)
+              console.log('Intro guide popup should now be visible')
+            }, 500) // Delay for smooth experience
+          } else {
+            console.log('Not showing popup - loginCount >= 2:', loginCount)
+          }
+        } else {
+          // New user (no document exists), show popup
+          console.log('New user - showing intro guide popup')
+          setTimeout(() => {
+            setShowIntroGuide(true)
+            console.log('Intro guide popup should now be visible for new user')
+          }, 500)
+        }
+      } catch (error) {
+        console.error('Error checking login count:', error)
+      }
     }
-  }, [pageLoaded, shouldShowWelcome, clearWelcomeFlag])
+
+    checkLoginCountAndShowPopup()
+  }, [pageLoaded, user?.uid])
 
   // Logo upload functions from setup-popup.tsx
   const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -943,9 +973,9 @@ export default function GetStartedPage() {
       
       {/* NetworkRewardPopup removed */}
       
-      <WelcomePopup 
-        open={showWelcomePopup} 
-        onOpenChange={setShowWelcomePopup} 
+      <IntroGuidePopup 
+        open={showIntroGuide} 
+        onOpenChange={setShowIntroGuide} 
       />
       
       <SettingsDialog 

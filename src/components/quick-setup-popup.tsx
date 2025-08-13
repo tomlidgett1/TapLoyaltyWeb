@@ -1820,12 +1820,12 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
                 <div className="max-w-2xl mx-auto space-y-6">
                   {/* Show message if Tap Cash already exists */}
                   {existingPrograms.hasCashbackProgram && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-md p-4">
+                    <div className="bg-white border border-blue-200 rounded-md p-4">
                       <div className="flex items-start gap-3">
-                        <Info className="h-5 w-5 text-amber-600 mt-0.5" />
+                        <Info className="h-5 w-5 text-blue-600 mt-0.5" />
                         <div>
-                          <h4 className="text-sm font-medium text-amber-900 mb-1">Tap Cash Already Exists</h4>
-                          <p className="text-sm text-amber-700">
+                          <h4 className="text-sm font-medium text-gray-900 mb-1"><span className="font-bold text-[#007aff]">Tap</span> Cash Already Exists</h4>
+                          <p className="text-sm text-gray-600">
                             Your Tap Cash program is already set up and cannot be modified through Quick Setup. 
                             To make changes, please visit your Tap Cash settings in the main dashboard.
                           </p>
@@ -1833,7 +1833,6 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
                       </div>
                     </div>
                   )}
-                  
                   {/* Enable Tap Cash Toggle */}
                   <div className="bg-white border border-gray-200 rounded-md p-6">
                     <div className="flex items-start justify-between">

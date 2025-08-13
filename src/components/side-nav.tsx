@@ -1420,7 +1420,7 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
             className="block w-full"
             title={`Setup Progress: ${setupProgress.completed}/${setupProgress.total} completed`}
           >
-            <div className="w-8 h-8 bg-blue-500 hover:bg-blue-600 rounded-full flex items-center justify-center relative transition-colors">
+            <div className="w-8 h-8 bg-blue-500 hover:bg-blue-600 rounded-full flex items-center justify-center relative transition-colors ml-2">
               <CheckCircle className="h-4 w-4 text-white" />
               <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
                 {setupProgress.total - setupProgress.completed}
@@ -1450,10 +1450,17 @@ export function SideNav({ className = "", onCollapseChange, collapsed }: { class
               className="w-full justify-between gap-2 h-auto p-2 data-[state=open]:bg-gray-100 hover:bg-[#007AFF]/5 focus:outline-none focus-visible:outline-none focus-visible:ring-0 transition-colors duration-200"
             >
               <div className="flex items-center gap-2">
-                <Bell className="h-4 w-4" />
+                <div className={cn("relative", isCollapsed ? "ml-1.5" : "")}>
+                  <Bell className="h-4 w-4" />
+                  {isCollapsed && unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-2 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                      {unreadCount}
+                    </span>
+                  )}
+                </div>
                 {!isCollapsed && <span className="text-sm">Notifications</span>}
               </div>
-              {unreadCount > 0 && (
+              {!isCollapsed && unreadCount > 0 && (
                 <span className="h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center flex-shrink-0">
                   {unreadCount}
                 </span>

@@ -55,7 +55,7 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
     subtitle: string | React.ReactNode
     description?: string
     features?: { icon: any; text: string }[]
-    visual?: "welcome" | "rewards" | "programs" | "messages" | "intro-rewards" | "banners" | "tapcash" | "customprograms" | "pointsrules" | "membershiptiers" | "appdownload"
+    visual?: "welcome" | "rewards" | "programs" | "messages" | "intro-rewards" | "banners" | "tapcash" | "customprograms" | "pointsrules" | "membershiptiers" | "appdownload" | "posintegration"
     key: string
   }[] = [
     // Introduction & Overview
@@ -121,6 +121,19 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
         { icon: Shield, text: "Simpler than food delivery apps" }
       ],
       key: "nohardware"
+    },
+    {
+      title: "Syncs with Your POS",
+      subtitle: "Your CRM grows automatically",
+      description: "Tap integrates seamlessly with your existing point-of-sale system, so your customer database grows richer every day without any extra work.",
+      features: [
+        { icon: LinkIcon, text: "Automatic POS integration" },
+        { icon: Users, text: "Customer database grows daily" },
+        { icon: TrendingUp, text: "Rich customer insights" },
+        { icon: Zap, text: "Zero manual data entry" }
+      ],
+      visual: "posintegration",
+      key: "posintegration"
     },
     {
       title: "Join Our Growing Network",
@@ -696,6 +709,44 @@ export function IntroGuidePopup({ open, onOpenChange }: IntroGuidePopupProps) {
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
             <span className="text-xs font-medium text-gray-700">Android coming soon</span>
           </div>
+        </div>
+      )
+    }
+    
+    if (type === "posintegration") {
+      return (
+        <div className="relative w-full mt-8">
+          <div className="flex items-center justify-center space-x-6">
+            {/* POS Logos */}
+            <div className="flex items-center space-x-4">
+              <img
+                src="/square.png"
+                alt="Square POS"
+                className="h-12 w-12 object-contain"
+              />
+              <img
+                src="/ls.png"
+                alt="Lightspeed POS"
+                className="h-12 w-12 object-contain"
+              />
+            </div>
+            
+            {/* Sync Arrow */}
+            <div className="flex flex-col items-center space-y-2">
+              <LinkIcon className="h-6 w-6 text-gray-400" />
+              <div className="text-xs text-gray-500 font-medium">Syncs</div>
+            </div>
+            
+            {/* Tap Logo */}
+            <img
+              src="/taplogo.png"
+              alt="Tap Loyalty"
+              className="h-12 w-12 object-contain rounded-sm"
+            />
+          </div>
+          
+          {/* Integration Benefits */}
+        
         </div>
       )
     }

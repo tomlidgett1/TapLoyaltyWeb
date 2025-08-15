@@ -919,9 +919,19 @@ export function QuickSetupPopup({ open, onOpenChange }: QuickSetupPopupProps) {
         <div className="px-8 py-4 border-b border-gray-200">
           <div className="max-w-4xl mx-auto flex items-center justify-between">
             <div>
-                              <p className="text-xs text-gray-500 mb-1">Step {currentStep} of {totalSteps}</p>
+              <p className="text-xs text-gray-500 mb-1">Step {currentStep} of {totalSteps}</p>
               <h1 className="text-lg font-semibold text-gray-900">Quick Setup</h1>
             </div>
+            
+            {/* Tap Logo in Center */}
+            <div className="absolute left-1/2 transform -translate-x-1/2">
+              <img 
+                src="/taplogo.png" 
+                alt="Tap Logo" 
+                className="h-8 w-auto object-contain rounded-sm" 
+              />
+            </div>
+            
             <button
               onClick={() => onOpenChange(false)}
               className="p-2 hover:bg-gray-100 rounded-md transition-colors"

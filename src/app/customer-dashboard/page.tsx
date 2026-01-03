@@ -143,7 +143,10 @@ export default function CustomerDashboardPage() {
                         <p className="text-[15px] text-white font-medium">{reward.reward}</p>
                         <p className="text-[13px] text-white/40">{reward.merchant}</p>
                       </div>
-                      <button className="px-4 py-2 bg-[#007AFF] hover:bg-[#0066DD] text-white text-[13px] font-semibold rounded-lg transition-colors">
+                      <button 
+                        onClick={() => router.push(`/redeem?reward=${encodeURIComponent(reward.reward)}&merchant=${encodeURIComponent(reward.merchant)}`)}
+                        className="px-4 py-2 bg-[#007AFF] hover:bg-[#0066DD] text-white text-[13px] font-semibold rounded-lg transition-colors"
+                      >
                         {reward.pointsCost} pts
                       </button>
                     </div>

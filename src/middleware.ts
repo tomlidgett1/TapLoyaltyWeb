@@ -7,6 +7,7 @@ const PUBLIC_ROUTES = [
   '/signup', 
   '/bank-connect',
   '/customer-dashboard',
+  '/redeem',
   '/_next', 
   '/api/auth',
   '/api/ai-status', // Allow checking AI status without auth

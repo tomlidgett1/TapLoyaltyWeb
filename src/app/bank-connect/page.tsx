@@ -16,7 +16,6 @@ export default function BankConnectPage() {
   const [email, setEmail] = useState("")
   const [mobile, setMobile] = useState("")
   const [loading, setLoading] = useState(false)
-  const [loadingText, setLoadingText] = useState("Creating account...")
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
@@ -74,7 +73,6 @@ export default function BankConnectPage() {
 
     try {
       setLoading(true)
-      setLoadingText("Creating account...")
       setError(null)
 
       const sessionId = `guest_${Date.now()}_${Math.random().toString(36).substring(7)}`
@@ -95,7 +93,6 @@ export default function BankConnectPage() {
       console.log('Guest merchant document created successfully')
 
       // Step 2: Small delay to ensure Firestore propagation
-      setLoadingText("Connecting to bank...")
       await new Promise(resolve => setTimeout(resolve, 1500))
 
       // Step 3: Now call the Basiq connect API
@@ -176,73 +173,38 @@ export default function BankConnectPage() {
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 pb-10">
         {/* Hero */}
         <div className="text-center max-w-md mb-8">
-          <AnimatePresence mode="wait">
-            {!showForm ? (
-              <motion.div
-                key="hero"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.3 }}
-              >
-                <h1 className="text-[44px] sm:text-[56px] font-semibold text-white tracking-tight leading-[1.05] mb-4">
-                  Loyalty, on{" "}
-                  <span className="bg-gradient-to-r from-[#007AFF] via-[#00A8FF] to-[#5AC8FA] bg-clip-text text-transparent">
-                    autopilot.
-                  </span>
-                </h1>
-                <p className="text-[17px] text-white/50 leading-relaxed">
-                  Connect once. Earn rewards automatically.
-                </p>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="form-title"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                <h1 className="text-[28px] font-semibold text-white tracking-tight">
-                  Let&apos;s get started
-                </h1>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {!showForm ? (
+            <div>
+              <h1 className="text-[44px] sm:text-[56px] font-semibold text-white tracking-tight leading-[1.05] mb-4">
+                Loyalty, on{" "}
+                <span className="bg-gradient-to-r from-[#007AFF] via-[#00A8FF] to-[#5AC8FA] bg-clip-text text-transparent">
+                  autopilot.
+                </span>
+              </h1>
+              <p className="text-[17px] text-white/50 leading-relaxed">
+                Connect once. Earn rewards automatically.
+              </p>
+            </div>
+          ) : (
+            <h1 className="text-[28px] font-semibold text-white tracking-tight">
+              Let&apos;s get started
+            </h1>
+          )}
         </div>
 
         {/* Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full max-w-[360px]"
-        >
-          <div className="bg-white/[0.08] backdrop-blur-2xl border border-white/[0.1] rounded-2xl p-6 transform-gpu">
-            <AnimatePresence mode="wait">
-              {!showForm ? (
-                <motion.button
-                  key="button"
-                  initial={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.2 }}
-                  onClick={() => setShowForm(true)}
-                  className="group w-full h-[52px] bg-white text-black text-[15px] font-semibold rounded-xl transition-all duration-200 hover:bg-white/90 flex items-center justify-center gap-2 will-change-transform"
-                >
-                  Get Started
-                  <ArrowRightIcon className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-                </motion.button>
-              ) : (
-                <motion.div
-                  key="form"
-                  initial={{ opacity: 0, y: 20, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -10, scale: 0.98 }}
-                  transition={{ 
-                    duration: 0.4,
-                    ease: [0.04, 0.62, 0.23, 0.98]
-                  }}
-                  className="space-y-4 will-change-transform"
-                >
+        <div className="w-full max-w-[360px]">
+          <div className="bg-white/[0.08] backdrop-blur-2xl border border-white/[0.1] rounded-2xl p-6">
+            {!showForm ? (
+              <button
+                onClick={() => setShowForm(true)}
+                className="group w-full h-[52px] bg-white text-black text-[15px] font-semibold rounded-xl transition-all duration-200 hover:bg-white/90 active:scale-[0.98] flex items-center justify-center gap-2"
+              >
+                Get Started
+                <ArrowRightIcon className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+              </button>
+            ) : (
+              <div className="space-y-4">
                   {/* First Name & Last Name */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -336,7 +298,7 @@ export default function BankConnectPage() {
                     {loading ? (
                       <>
                         <ArrowPathIcon className="h-5 w-5 animate-spin" />
-                        <span>{loadingText}</span>
+                        <span>Connecting...</span>
                       </>
                     ) : success ? (
                       "Redirecting..."
@@ -362,11 +324,10 @@ export default function BankConnectPage() {
                   >
                     Back
                   </button>
-                </motion.div>
+                </div>
               )}
-            </AnimatePresence>
           </div>
-        </motion.div>
+        </div>
       </div>
 
       {/* Footer */}

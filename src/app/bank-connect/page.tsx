@@ -346,7 +346,7 @@ export default function BankConnectPage() {
       </div>
       
       {/* Header */}
-      <header className="relative z-10 w-full px-6 py-5 flex items-center justify-between">
+      <header className="relative z-10 w-full px-4 py-5 flex items-center justify-between">
         <div className="text-[15px] font-semibold flex items-center">
           <span className="bg-gradient-to-r from-[#007AFF] to-[#5AC8FA] bg-clip-text text-transparent">Tap</span>
           <span className="text-white/80 ml-1">Loyalty</span>
@@ -362,7 +362,7 @@ export default function BankConnectPage() {
       </header>
       
       {/* Content */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6">
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-4">
         <AnimatePresence mode="wait">
           {step === "home" && (
             <motion.div

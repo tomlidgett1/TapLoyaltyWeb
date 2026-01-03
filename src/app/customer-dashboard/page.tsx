@@ -543,7 +543,7 @@ export default function CustomerDashboardPage() {
       </div>
 
       {/* Header */}
-      <header className="relative z-10 w-full px-6 py-5 flex items-center justify-between">
+      <header className="relative z-10 w-full px-4 py-5 flex items-center justify-between">
         <div className="text-[15px] font-semibold flex items-center">
           <span className="bg-gradient-to-r from-[#007AFF] to-[#5AC8FA] bg-clip-text text-transparent">Tap</span>
           <span className="text-white/80 ml-1">Loyalty</span>
@@ -557,7 +557,7 @@ export default function CustomerDashboardPage() {
       </header>
 
       {/* Tabs */}
-      <div className="relative z-10 px-6 pb-2">
+      <div className="relative z-10 px-4 pb-2">
         <div className="flex items-center gap-1 p-1 bg-white/[0.06] rounded-xl w-fit mx-auto">
           {tabs.map((tab) => {
             const Icon = tab.icon
@@ -581,7 +581,7 @@ export default function CustomerDashboardPage() {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 flex-1 px-6 py-6 max-w-lg mx-auto w-full">
+      <div className="relative z-10 flex-1 px-4 py-6 max-w-lg mx-auto w-full">
         <AnimatePresence mode="wait">
           {activeTab === "rewards" && (
             <motion.div

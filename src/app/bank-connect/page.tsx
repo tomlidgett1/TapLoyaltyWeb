@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
 import { ArrowRightIcon } from "@heroicons/react/24/solid"
 import { ArrowPathIcon } from "@heroicons/react/24/outline"
@@ -331,16 +332,25 @@ export default function BankConnectPage() {
       </div>
 
       {/* Footer */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.8, delay: 0.3 }}
-        className="relative z-10 py-6 text-center"
-      >
-        <p className="text-[12px] text-white/30">
+      <div className="relative z-10 py-8 flex flex-col items-center gap-5">
+        <a 
+          href="https://apps.apple.com" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="opacity-60 hover:opacity-100 transition-opacity"
+        >
+          <Image
+            src="/appstore.svg"
+            alt="Download on the App Store"
+            width={120}
+            height={40}
+            className="h-[36px] w-auto"
+          />
+        </a>
+        <p className="text-[11px] text-white/30">
           Secured with bank-level encryption
         </p>
-      </motion.div>
+      </div>
     </div>
   )
 }

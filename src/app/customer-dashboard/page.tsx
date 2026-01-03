@@ -1,16 +1,27 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { GiftIcon, DocumentTextIcon, Cog6ToothIcon } from "@heroicons/react/24/solid"
+import { db } from "@/lib/firebase"
+import { doc, getDoc } from "firebase/firestore"
 
 type Tab = "rewards" | "transactions" | "settings"
+
+interface UserData {
+  firstName: string
+  lastName: string
+  email: string
+  merchantName?: string
+}
 
 export default function CustomerDashboardPage() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<Tab>("rewards")
+  const [userData, setUserData] = useState<UserData | null>(null)
+  const [loading, setLoading] = useState(true)
   
   // SMS notification preferences
   const [notifications, setNotifications] = useState({
@@ -19,10 +30,42 @@ export default function CustomerDashboardPage() {
     newPoints: true,
   })
 
-  // Mock data
+  // Fetch user data on mount
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        // Get session ID from localStorage
+        const sessionId = localStorage.getItem('basiq_session_id')
+        const userEmail = localStorage.getItem('basiq_user_email')
+        
+        if (sessionId) {
+          // Fetch merchant document
+          const merchantDoc = await getDoc(doc(db, 'merchants', sessionId))
+          
+          if (merchantDoc.exists()) {
+            const data = merchantDoc.data()
+            setUserData({
+              firstName: data.firstName || '',
+              lastName: data.lastName || '',
+              email: data.email || userEmail || '',
+              merchantName: data.merchantName || ''
+            })
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchUserData()
+  }, [])
+
+  // Mock data for rewards
   const rewards = {
-    points: 2450,
-    available: 3,
+    points: 0,
+    available: 0,
   }
 
   const availableRewards = [
@@ -31,14 +74,7 @@ export default function CustomerDashboardPage() {
     { id: 3, merchant: "The Grounds", reward: "$10 Off", pointsCost: 1000 },
   ]
 
-  const transactions = [
-    { id: 1, merchant: "Blue Bottle Coffee", date: "Today", points: 45 },
-    { id: 2, merchant: "Guzman y Gomez", date: "Yesterday", points: 120 },
-    { id: 3, merchant: "Press* Food & Wine", date: "Dec 12", points: 85 },
-    { id: 4, merchant: "The Grounds", date: "Dec 10", points: 65 },
-    { id: 5, merchant: "Paramount Coffee", date: "Dec 8", points: 55 },
-    { id: 6, merchant: "Messina", date: "Dec 5", points: 90 },
-  ]
+  const transactions: { id: number; merchant: string; date: string; points: number }[] = []
 
   const toggleNotification = (key: keyof typeof notifications) => {
     setNotifications(prev => ({
@@ -47,11 +83,19 @@ export default function CustomerDashboardPage() {
     }))
   }
 
+  const handleSignOut = () => {
+    localStorage.removeItem('basiq_session_id')
+    localStorage.removeItem('basiq_user_email')
+    router.push('/bank-connect')
+  }
+
   const tabs = [
     { id: "rewards" as Tab, label: "Rewards", icon: GiftIcon },
     { id: "transactions" as Tab, label: "Activity", icon: DocumentTextIcon },
     { id: "settings" as Tab, label: "Settings", icon: Cog6ToothIcon },
   ]
+
+  const displayName = userData?.firstName || 'there'
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col overflow-x-hidden">
@@ -62,16 +106,24 @@ export default function CustomerDashboardPage() {
 
       {/* Header */}
       <header className="relative z-10 w-full px-6 py-5 flex items-center justify-between">
-        <span className="text-[15px] font-medium text-white/90">
-          Tap Loyalty
-        </span>
+        <div className="text-[15px] font-semibold flex items-center">
+          <span className="bg-gradient-to-r from-[#007AFF] to-[#5AC8FA] bg-clip-text text-transparent">Tap</span>
+          <span className="text-white/80 ml-1">Loyalty</span>
+        </div>
         <button 
-          onClick={() => router.push('/bank-connect')}
+          onClick={handleSignOut}
           className="text-[15px] font-medium text-white/50 hover:text-white/70 transition-colors"
         >
           Sign out
         </button>
       </header>
+
+      {/* Welcome Message */}
+      <div className="relative z-10 px-6 pt-2 pb-4 text-center">
+        <h1 className="text-[24px] font-semibold text-white">
+          Hey, {displayName}
+        </h1>
+      </div>
 
       {/* Tabs */}
       <div className="relative z-10 px-6 pb-2">
@@ -126,7 +178,10 @@ export default function CustomerDashboardPage() {
                 </div>
                 
                 <p className="text-[15px] text-white/50">
-                  {rewards.available} rewards available to redeem
+                  {rewards.available > 0 
+                    ? `${rewards.available} rewards available to redeem`
+                    : "Connect your bank to start earning"
+                  }
                 </p>
               </div>
 
@@ -193,19 +248,26 @@ export default function CustomerDashboardPage() {
                   <h2 className="text-[17px] font-semibold text-white">Transactions</h2>
                 </div>
                 
-                <div className="divide-y divide-white/[0.06]">
-                  {transactions.map((tx) => (
-                    <div key={tx.id} className="px-6 py-4 flex items-center justify-between">
-                      <div>
-                        <p className="text-[15px] text-white font-medium">{tx.merchant}</p>
-                        <p className="text-[13px] text-white/40">{tx.date}</p>
+                {transactions.length > 0 ? (
+                  <div className="divide-y divide-white/[0.06]">
+                    {transactions.map((tx) => (
+                      <div key={tx.id} className="px-6 py-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-[15px] text-white font-medium">{tx.merchant}</p>
+                          <p className="text-[13px] text-white/40">{tx.date}</p>
+                        </div>
+                        <span className="text-[15px] text-[#30D158] font-medium">
+                          +{tx.points}
+                        </span>
                       </div>
-                      <span className="text-[15px] text-[#30D158] font-medium">
-                        +{tx.points}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-6 py-8 text-center">
+                    <p className="text-[15px] text-white/50">No transactions yet</p>
+                    <p className="text-[13px] text-white/30 mt-1">Your activity will appear here</p>
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -219,6 +281,23 @@ export default function CustomerDashboardPage() {
               transition={{ duration: 0.2 }}
               className="space-y-6"
             >
+              {/* Account Info */}
+              {userData && (
+                <div className="bg-white/[0.08] backdrop-blur-2xl border border-white/[0.1] rounded-2xl p-6">
+                  <h2 className="text-[17px] font-semibold text-white mb-4">Account</h2>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-[13px] text-white/40">Name</p>
+                      <p className="text-[15px] text-white">{userData.firstName} {userData.lastName}</p>
+                    </div>
+                    <div>
+                      <p className="text-[13px] text-white/40">Email</p>
+                      <p className="text-[15px] text-white">{userData.email}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* SMS Notifications */}
               <div className="bg-white/[0.08] backdrop-blur-2xl border border-white/[0.1] rounded-2xl overflow-hidden">
                 <div className="flex items-center gap-3 p-6 pb-4">

@@ -159,9 +159,10 @@ export default function BankConnectPage() {
       
       {/* Header */}
       <header className="relative z-10 w-full px-6 py-5 flex items-center justify-between">
-        <span className="text-[15px] font-medium text-white/90">
-          Tap Loyalty
-        </span>
+        <div className="text-[15px] font-semibold flex items-center">
+          <span className="bg-gradient-to-r from-[#007AFF] to-[#5AC8FA] bg-clip-text text-transparent">Tap</span>
+          <span className="text-white/80 ml-1">Loyalty</span>
+        </div>
         <button 
           onClick={() => router.push('/customer-dashboard')}
           className="text-[15px] font-medium text-white/70 hover:text-white transition-colors"
@@ -171,7 +172,7 @@ export default function BankConnectPage() {
       </header>
       
       {/* Content */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 pb-10">
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6">
         {/* Hero */}
         <div className="text-center max-w-md mb-8">
           {!showForm ? (
@@ -331,8 +332,8 @@ export default function BankConnectPage() {
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="relative z-10 py-8 flex flex-col items-center gap-5">
+      {/* Footer - Always at bottom */}
+      <div className="relative z-10 mt-auto py-6 pb-8 flex flex-col items-center gap-4">
         <a 
           href="https://apps.apple.com" 
           target="_blank" 

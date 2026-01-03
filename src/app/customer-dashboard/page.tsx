@@ -372,8 +372,61 @@ export default function CustomerDashboardPage() {
       return
     }
 
-    // Open blank window immediately (within user gesture) to avoid popup blocker
+    // Create a loading page HTML
+    const loadingHTML = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Connecting to your bank...</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+              min-height: 100vh;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              background: #0a0a0a;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            }
+            .spinner {
+              width: 40px;
+              height: 40px;
+              border: 3px solid rgba(255,255,255,0.1);
+              border-top-color: #007AFF;
+              border-radius: 50%;
+              animation: spin 1s linear infinite;
+            }
+            @keyframes spin {
+              to { transform: rotate(360deg); }
+            }
+            .text {
+              margin-top: 20px;
+              color: rgba(255,255,255,0.7);
+              font-size: 15px;
+            }
+            .subtext {
+              margin-top: 8px;
+              color: rgba(255,255,255,0.4);
+              font-size: 13px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="spinner"></div>
+          <p class="text">Connecting to your bank...</p>
+          <p class="subtext">Please wait</p>
+        </body>
+      </html>
+    `
+
+    // Open window with loading page immediately (within user gesture)
     const newWindow = window.open('about:blank', '_blank')
+    
+    if (newWindow) {
+      newWindow.document.write(loadingHTML)
+      newWindow.document.close()
+    }
 
     try {
       setBankActionLoading(action)
@@ -394,11 +447,15 @@ export default function CustomerDashboardPage() {
         }
       } else {
         console.error('Failed to get client token')
-        newWindow?.close()
+        if (newWindow) {
+          newWindow.document.body.innerHTML = '<p style="color: #ff6b6b; font-family: sans-serif;">Failed to connect. Please close this window and try again.</p>'
+        }
       }
     } catch (error) {
       console.error('Error opening Basiq consent:', error)
-      newWindow?.close()
+      if (newWindow) {
+        newWindow.document.body.innerHTML = '<p style="color: #ff6b6b; font-family: sans-serif; text-align: center; padding: 20px;">Something went wrong.<br><br><a href="javascript:window.close()" style="color: #007AFF;">Close this window</a></p>'
+      }
     } finally {
       setBankActionLoading(null)
     }

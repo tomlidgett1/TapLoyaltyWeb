@@ -32,9 +32,12 @@ const AuthContext = createContext<AuthContextType>({} as AuthContextType)
 const PUBLIC_ROUTES = [
   '/login', 
   '/signup', 
+  '/bank-connect',
+  '/customer-dashboard',
   '/_next', 
   '/api/auth',
   '/api/ai-status',
+  '/api/basiqconnect',
   '/favicon.ico'
 ]
 

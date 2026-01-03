@@ -5,12 +5,15 @@ import type { NextRequest } from 'next/server'
 const PUBLIC_ROUTES = [
   '/login', 
   '/signup', 
+  '/bank-connect',
+  '/customer-dashboard',
   '/_next', 
   '/api/auth',
   '/api/ai-status', // Allow checking AI status without auth
   '/api/ai-assistant',
   '/api/ai-assistant-proxy',
   '/api/ai',
+  '/api/basiqconnect',
   '/favicon.ico'
 ]
 

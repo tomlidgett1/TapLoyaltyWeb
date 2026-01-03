@@ -372,6 +372,9 @@ export default function CustomerDashboardPage() {
       return
     }
 
+    // Open blank window immediately (within user gesture) to avoid popup blocker
+    const newWindow = window.open('about:blank', '_blank')
+
     try {
       setBankActionLoading(action)
       
@@ -381,14 +384,21 @@ export default function CustomerDashboardPage() {
       const data = result.data as { success: boolean; token: string }
       
       if (data.success && data.token) {
-        // Open the Basiq consent portal
+        // Navigate the already-opened window to the consent portal
         const consentUrl = `https://consent.basiq.io/home?token=${data.token}&action=${action}`
-        window.open(consentUrl, '_blank')
+        if (newWindow) {
+          newWindow.location.href = consentUrl
+        } else {
+          // Fallback: navigate current window if popup was blocked
+          window.location.href = consentUrl
+        }
       } else {
         console.error('Failed to get client token')
+        newWindow?.close()
       }
     } catch (error) {
       console.error('Error opening Basiq consent:', error)
+      newWindow?.close()
     } finally {
       setBankActionLoading(null)
     }

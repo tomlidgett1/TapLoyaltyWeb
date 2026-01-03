@@ -600,47 +600,49 @@ export default function CustomerDashboardPage() {
               )}
 
               {/* Available Rewards */}
-              <div className="bg-white/[0.08] backdrop-blur-2xl border border-white/[0.1] rounded-2xl overflow-hidden">
-                <div className="p-6 pb-4">
-                  <h2 className="text-[17px] font-semibold text-white">Available Rewards</h2>
-                </div>
+              <div>
+                <h2 className="text-[17px] font-semibold text-white mb-4">Available Rewards</h2>
                 
                 {rewardsLoading ? (
-                  <div className="px-6 py-8 text-center">
+                  <div className="py-8 text-center">
                     <p className="text-[15px] text-white/50">Loading rewards...</p>
                   </div>
                 ) : availableRewards.length > 0 ? (
-                  <>
-                    <div className="divide-y divide-white/[0.06]">
-                      {(showAllRewards ? availableRewards : availableRewards.slice(0, 6)).map((reward) => (
-                        <div key={reward.id} className="px-6 py-4 flex items-center justify-between">
-                          <div>
-                            <p className="text-[15px] text-white font-medium">{reward.rewardName}</p>
-                            {reward.merchantName && (
-                              <p className="text-[13px] text-white/40">{reward.merchantName}</p>
-                            )}
-                          </div>
-                        <button 
-                          onClick={() => router.push(`/redeem?reward=${encodeURIComponent(reward.rewardName)}&merchant=${encodeURIComponent(reward.merchantName || '')}&rewardId=${reward.id}&merchantId=${reward.merchantId || ''}`)}
-                          className="min-w-[80px] px-4 py-2 bg-[#007AFF] hover:bg-[#0066DD] text-white text-[13px] font-semibold rounded-lg transition-colors text-center"
-                        >
-                          {reward.pointsCost ? `${reward.pointsCost} pts` : 'Redeem'}
-                          </button>
+                  <div className="space-y-2">
+                    {(showAllRewards ? availableRewards : availableRewards.slice(0, 6)).map((reward) => (
+                      <button 
+                        key={reward.id}
+                        onClick={() => router.push(`/redeem?reward=${encodeURIComponent(reward.rewardName)}&merchant=${encodeURIComponent(reward.merchantName || '')}&rewardId=${reward.id}&merchantId=${reward.merchantId || ''}`)}
+                        className="w-full py-4 px-4 flex items-center justify-between bg-white/[0.06] hover:bg-white/[0.1] active:bg-white/[0.12] rounded-xl transition-colors"
+                      >
+                        <div className="text-left">
+                          <p className="text-[15px] text-white font-medium">{reward.rewardName}</p>
+                          {reward.merchantName && (
+                            <p className="text-[13px] text-white/40">{reward.merchantName}</p>
+                          )}
                         </div>
-                      ))}
-                    </div>
+                        <div className="flex items-center gap-2">
+                          {reward.pointsCost && (
+                            <span className="text-[13px] text-[#007AFF] font-medium">{reward.pointsCost} pts</span>
+                          )}
+                          <svg className="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                          </svg>
+                        </div>
+                      </button>
+                    ))}
                     {availableRewards.length > 6 && !showAllRewards && (
                       <button
                         onClick={() => setShowAllRewards(true)}
-                        className="w-full py-4 flex items-center justify-center gap-2 text-[14px] text-white/50 hover:text-white/70 transition-colors border-t border-white/[0.06]"
+                        className="w-full py-3 flex items-center justify-center gap-2 text-[14px] text-white/50 hover:text-white/70 transition-colors"
                       >
-                        <span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-[16px]">+</span>
+                        <span className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-sm">+</span>
                         Show {availableRewards.length - 6} more
                       </button>
                     )}
-                  </>
+                  </div>
                 ) : (
-                  <div className="px-6 py-8 text-center">
+                  <div className="py-8 text-center">
                     <p className="text-[15px] text-white/50">No rewards available</p>
                     <p className="text-[13px] text-white/30 mt-1">Keep earning to unlock rewards</p>
                   </div>

@@ -5,8 +5,9 @@ import { motion, AnimatePresence } from "framer-motion"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { GiftIcon, DocumentTextIcon, Cog6ToothIcon } from "@heroicons/react/24/solid"
-import { db } from "@/lib/firebase"
-import { doc, getDoc } from "firebase/firestore"
+import { db, auth } from "@/lib/firebase"
+import { doc, getDoc, collection, query, where, getDocs, Timestamp } from "firebase/firestore"
+import { onAuthStateChanged } from "firebase/auth"
 
 type Tab = "rewards" | "transactions" | "settings"
 
@@ -17,11 +18,35 @@ interface UserData {
   merchantName?: string
 }
 
+interface AvailableReward {
+  id: string
+  rewardName: string
+  merchantName?: string
+  merchantId?: string
+  pointsCost?: number
+}
+
+interface ActivityItem {
+  id: string
+  type: 'transaction' | 'redemption'
+  date: Date
+  merchantName: string
+  amount?: number
+  pointsEarned?: number
+  rewardName?: string
+}
+
 export default function CustomerDashboardPage() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<Tab>("rewards")
   const [userData, setUserData] = useState<UserData | null>(null)
+  const [availableRewards, setAvailableRewards] = useState<AvailableReward[]>([])
+  const [rewardsLoading, setRewardsLoading] = useState(true)
   const [loading, setLoading] = useState(true)
+  const [customerId, setCustomerId] = useState<string | null>(null)
+  const [showAllRewards, setShowAllRewards] = useState(false)
+  const [activityItems, setActivityItems] = useState<ActivityItem[]>([])
+  const [activityLoading, setActivityLoading] = useState(true)
   
   // SMS notification preferences
   const [notifications, setNotifications] = useState({
@@ -30,51 +55,221 @@ export default function CustomerDashboardPage() {
     newPoints: true,
   })
 
-  // Fetch user data on mount
+  // Listen for auth state and fetch user data
   useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        // Get session ID from localStorage
-        const sessionId = localStorage.getItem('basiq_session_id')
-        const userEmail = localStorage.getItem('basiq_user_email')
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setCustomerId(user.uid)
         
-        if (sessionId) {
-          // Fetch merchant document
-          const merchantDoc = await getDoc(doc(db, 'merchants', sessionId))
+        // Fetch user data from merchants collection
+        try {
+          const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
           
           if (merchantDoc.exists()) {
             const data = merchantDoc.data()
             setUserData({
               firstName: data.firstName || '',
               lastName: data.lastName || '',
-              email: data.email || userEmail || '',
+              email: data.email || user.email || '',
               merchantName: data.merchantName || ''
             })
+          } else {
+            // Use auth data if no merchant doc
+            const displayName = user.displayName || ''
+            const nameParts = displayName.split(' ')
+            setUserData({
+              firstName: nameParts[0] || '',
+              lastName: nameParts.slice(1).join(' ') || '',
+              email: user.email || '',
+            })
+          }
+        } catch (error) {
+          console.error('Error fetching user data:', error)
+        }
+      } else {
+        // Check localStorage fallback
+        const sessionId = localStorage.getItem('basiq_session_id')
+        const userEmail = localStorage.getItem('basiq_user_email')
+        
+        if (sessionId) {
+          setCustomerId(sessionId)
+          try {
+            const merchantDoc = await getDoc(doc(db, 'merchants', sessionId))
+            if (merchantDoc.exists()) {
+              const data = merchantDoc.data()
+              setUserData({
+                firstName: data.firstName || '',
+                lastName: data.lastName || '',
+                email: data.email || userEmail || '',
+                merchantName: data.merchantName || ''
+              })
+            }
+          } catch (error) {
+            console.error('Error fetching user data:', error)
           }
         }
+      }
+      setLoading(false)
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  // Fetch available rewards when customerId is set
+  useEffect(() => {
+    const fetchRewards = async () => {
+      if (!customerId) {
+        setRewardsLoading(false)
+        return
+      }
+
+      try {
+        setRewardsLoading(true)
+        
+        // Query customers/{customerId}/rewards where redeemable = true and visible = true
+        const customerRewardsRef = collection(db, 'customers', customerId, 'rewards')
+        const rewardsQuery = query(
+          customerRewardsRef,
+          where('redeemable', '==', true),
+          where('visible', '==', true)
+        )
+        
+        const customerRewardsSnapshot = await getDocs(rewardsQuery)
+        
+        const rewardPromises = customerRewardsSnapshot.docs.map(async (customerRewardDoc) => {
+          const rewardId = customerRewardDoc.id
+          
+          // Look up the reward details from rewards/{rewardId}
+          const rewardDoc = await getDoc(doc(db, 'rewards', rewardId))
+          
+          if (rewardDoc.exists()) {
+            const rewardData = rewardDoc.data()
+            const merchantId = rewardData.merchantId
+            
+            // Look up merchant name from merchants/{merchantId}
+            let merchantName = ''
+            if (merchantId) {
+              const merchantDoc = await getDoc(doc(db, 'merchants', merchantId))
+              if (merchantDoc.exists()) {
+                merchantName = merchantDoc.data().merchantName || ''
+              }
+            }
+            
+            return {
+              id: rewardId,
+              rewardName: rewardData.rewardName || 'Reward',
+              merchantName: merchantName,
+              merchantId: merchantId || '',
+              pointsCost: rewardData.pointsCost || undefined,
+            }
+          }
+          return null
+        })
+        
+        const rewards = await Promise.all(rewardPromises)
+        setAvailableRewards(rewards.filter((r): r is AvailableReward => r !== null))
       } catch (error) {
-        console.error('Error fetching user data:', error)
+        console.error('Error fetching rewards:', error)
       } finally {
-        setLoading(false)
+        setRewardsLoading(false)
       }
     }
 
-    fetchUserData()
-  }, [])
+    fetchRewards()
+  }, [customerId])
 
-  // Mock data for rewards
-  const rewards = {
-    points: 0,
-    available: 0,
+  // Fetch activity (transactions and redemptions) when customerId is set
+  useEffect(() => {
+    const fetchActivity = async () => {
+      if (!customerId) {
+        setActivityLoading(false)
+        return
+      }
+
+      try {
+        setActivityLoading(true)
+        const activities: ActivityItem[] = []
+
+        // Fetch transactions from customers/{customerId}/transactions
+        const transactionsRef = collection(db, 'customers', customerId, 'transactions')
+        const transactionsSnapshot = await getDocs(transactionsRef)
+        
+        transactionsSnapshot.docs.forEach((transactionDoc) => {
+          const data = transactionDoc.data()
+          const createdAt = data.createdAt as Timestamp
+          
+          activities.push({
+            id: transactionDoc.id,
+            type: 'transaction',
+            date: createdAt?.toDate() || new Date(),
+            merchantName: data.merchantName || 'Unknown',
+            amount: data.amount || 0,
+            pointsEarned: data.pointsEarned || 0,
+          })
+        })
+
+        // Fetch redemptions from customers/{customerId}/redemptions
+        const redemptionsRef = collection(db, 'customers', customerId, 'redemptions')
+        const redemptionsSnapshot = await getDocs(redemptionsRef)
+        
+        const redemptionPromises = redemptionsSnapshot.docs.map(async (redemptionDoc) => {
+          const data = redemptionDoc.data()
+          const redemptionDate = data.redemptionDate as Timestamp
+          const merchantId = data.merchantId
+          
+          // Look up merchant name
+          let merchantName = data.merchantName || ''
+          if (merchantId && !merchantName) {
+            const merchantDoc = await getDoc(doc(db, 'merchants', merchantId))
+            if (merchantDoc.exists()) {
+              merchantName = merchantDoc.data().merchantName || ''
+            }
+          }
+          
+          return {
+            id: redemptionDoc.id,
+            type: 'redemption' as const,
+            date: redemptionDate?.toDate() || new Date(),
+            merchantName: merchantName || 'Unknown',
+            rewardName: data.rewardName || 'Reward',
+          }
+        })
+        
+        const redemptions = await Promise.all(redemptionPromises)
+        activities.push(...redemptions)
+
+        // Sort by date descending (newest first)
+        activities.sort((a, b) => b.date.getTime() - a.date.getTime())
+        
+        setActivityItems(activities)
+      } catch (error) {
+        console.error('Error fetching activity:', error)
+      } finally {
+        setActivityLoading(false)
+      }
+    }
+
+    fetchActivity()
+  }, [customerId])
+
+  const formatDate = (date: Date) => {
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+    
+    if (diffDays === 0) return 'Today'
+    if (diffDays === 1) return 'Yesterday'
+    if (diffDays < 7) return `${diffDays} days ago`
+    
+    return date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
   }
 
-  const availableRewards = [
-    { id: 1, merchant: "Blue Bottle Coffee", reward: "Free Coffee", pointsCost: 500 },
-    { id: 2, merchant: "Guzman y Gomez", reward: "Free Burrito", pointsCost: 800 },
-    { id: 3, merchant: "The Grounds", reward: "$10 Off", pointsCost: 1000 },
-  ]
-
-  const transactions: { id: number; merchant: string; date: string; points: number }[] = []
+  const formatAmount = (amount: number) => {
+    return new Intl.NumberFormat('en-AU', {
+      style: 'currency',
+      currency: 'AUD',
+    }).format(amount)
+  }
 
   const toggleNotification = (key: keyof typeof notifications) => {
     setNotifications(prev => ({
@@ -86,6 +281,7 @@ export default function CustomerDashboardPage() {
   const handleSignOut = () => {
     localStorage.removeItem('basiq_session_id')
     localStorage.removeItem('basiq_user_email')
+    auth.signOut()
     router.push('/bank-connect')
   }
 
@@ -94,8 +290,6 @@ export default function CustomerDashboardPage() {
     { id: "transactions" as Tab, label: "Activity", icon: DocumentTextIcon },
     { id: "settings" as Tab, label: "Settings", icon: Cog6ToothIcon },
   ]
-
-  const displayName = userData?.firstName || 'there'
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col overflow-x-hidden">
@@ -117,13 +311,6 @@ export default function CustomerDashboardPage() {
           Sign out
         </button>
       </header>
-
-      {/* Welcome Message */}
-      <div className="relative z-10 px-6 pt-2 pb-4 text-center">
-        <h1 className="text-[24px] font-semibold text-white">
-          Hey, {displayName}
-        </h1>
-      </div>
 
       {/* Tabs */}
       <div className="relative z-10 px-6 pb-2">
@@ -172,15 +359,15 @@ export default function CustomerDashboardPage() {
                 
                 <div className="flex items-baseline gap-2 mb-2">
                   <span className="text-[48px] font-semibold text-white tracking-tight">
-                    {rewards.points.toLocaleString()}
+                    {availableRewards.length}
                   </span>
-                  <span className="text-[17px] text-white/50">points</span>
+                  <span className="text-[17px] text-white/50">available</span>
                 </div>
                 
                 <p className="text-[15px] text-white/50">
-                  {rewards.available > 0 
-                    ? `${rewards.available} rewards available to redeem`
-                    : "Connect your bank to start earning"
+                  {availableRewards.length > 0 
+                    ? "Tap a reward to redeem"
+                    : "No rewards available yet"
                   }
                 </p>
               </div>
@@ -191,22 +378,46 @@ export default function CustomerDashboardPage() {
                   <h2 className="text-[17px] font-semibold text-white">Available Rewards</h2>
                 </div>
                 
-                <div className="divide-y divide-white/[0.06]">
-                  {availableRewards.map((reward) => (
-                    <div key={reward.id} className="px-6 py-4 flex items-center justify-between">
-                      <div>
-                        <p className="text-[15px] text-white font-medium">{reward.reward}</p>
-                        <p className="text-[13px] text-white/40">{reward.merchant}</p>
-                      </div>
-                      <button 
-                        onClick={() => router.push(`/redeem?reward=${encodeURIComponent(reward.reward)}&merchant=${encodeURIComponent(reward.merchant)}`)}
-                        className="px-4 py-2 bg-[#007AFF] hover:bg-[#0066DD] text-white text-[13px] font-semibold rounded-lg transition-colors"
-                      >
-                        {reward.pointsCost} pts
-                      </button>
+                {rewardsLoading ? (
+                  <div className="px-6 py-8 text-center">
+                    <p className="text-[15px] text-white/50">Loading rewards...</p>
+                  </div>
+                ) : availableRewards.length > 0 ? (
+                  <>
+                    <div className="divide-y divide-white/[0.06]">
+                      {(showAllRewards ? availableRewards : availableRewards.slice(0, 6)).map((reward) => (
+                        <div key={reward.id} className="px-6 py-4 flex items-center justify-between">
+                          <div>
+                            <p className="text-[15px] text-white font-medium">{reward.rewardName}</p>
+                            {reward.merchantName && (
+                              <p className="text-[13px] text-white/40">{reward.merchantName}</p>
+                            )}
+                          </div>
+                          <button 
+                            onClick={() => router.push(`/redeem?reward=${encodeURIComponent(reward.rewardName)}&merchant=${encodeURIComponent(reward.merchantName || '')}&rewardId=${reward.id}`)}
+                            className="px-4 py-2 bg-[#007AFF] hover:bg-[#0066DD] text-white text-[13px] font-semibold rounded-lg transition-colors"
+                          >
+                            {reward.pointsCost ? `${reward.pointsCost} pts` : 'Redeem'}
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                    {availableRewards.length > 6 && !showAllRewards && (
+                      <button
+                        onClick={() => setShowAllRewards(true)}
+                        className="w-full py-4 flex items-center justify-center gap-2 text-[14px] text-white/50 hover:text-white/70 transition-colors border-t border-white/[0.06]"
+                      >
+                        <span className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-[16px]">+</span>
+                        Show {availableRewards.length - 6} more
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <div className="px-6 py-8 text-center">
+                    <p className="text-[15px] text-white/50">No rewards available</p>
+                    <p className="text-[13px] text-white/30 mt-1">Keep earning to unlock rewards</p>
+                  </div>
+                )}
               </div>
 
               {/* Download App */}
@@ -245,27 +456,46 @@ export default function CustomerDashboardPage() {
                   <div className="w-10 h-10 rounded-xl bg-white/[0.08] flex items-center justify-center">
                     <DocumentTextIcon className="w-5 h-5 text-white/70" />
                   </div>
-                  <h2 className="text-[17px] font-semibold text-white">Transactions</h2>
+                  <h2 className="text-[17px] font-semibold text-white">Activity</h2>
                 </div>
                 
-                {transactions.length > 0 ? (
+                {activityLoading ? (
+                  <div className="px-6 py-8 text-center">
+                    <p className="text-[15px] text-white/50">Loading activity...</p>
+                  </div>
+                ) : activityItems.length > 0 ? (
                   <div className="divide-y divide-white/[0.06]">
-                    {transactions.map((tx) => (
-                      <div key={tx.id} className="px-6 py-4 flex items-center justify-between">
-                        <div>
-                          <p className="text-[15px] text-white font-medium">{tx.merchant}</p>
-                          <p className="text-[13px] text-white/40">{tx.date}</p>
+                    {activityItems.map((item) => (
+                      <div key={item.id} className="px-6 py-4 flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-[15px] text-white font-medium truncate">
+                              {item.type === 'transaction' ? item.merchantName : item.rewardName}
+                            </p>
+                            {item.type === 'redemption' && (
+                              <span className="px-2 py-0.5 bg-[#007AFF]/20 text-[#007AFF] text-[10px] font-medium rounded-md shrink-0">
+                                Redeemed
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[13px] text-white/40">
+                            {item.type === 'redemption' && item.merchantName ? `${item.merchantName} · ` : ''}
+                            {formatDate(item.date)}
+                            {item.type === 'transaction' && item.amount ? ` · ${formatAmount(item.amount)}` : ''}
+                          </p>
                         </div>
-                        <span className="text-[15px] text-[#30D158] font-medium">
-                          +{tx.points}
-                        </span>
+                        {item.type === 'transaction' && item.pointsEarned ? (
+                          <span className="text-[15px] text-[#30D158] font-medium shrink-0 ml-3">
+                            +{item.pointsEarned}
+                          </span>
+                        ) : null}
                       </div>
                     ))}
                   </div>
                 ) : (
                   <div className="px-6 py-8 text-center">
-                    <p className="text-[15px] text-white/50">No transactions yet</p>
-                    <p className="text-[13px] text-white/30 mt-1">Your activity will appear here</p>
+                    <p className="text-[15px] text-white/50">No activity yet</p>
+                    <p className="text-[13px] text-white/30 mt-1">Your transactions and redemptions will appear here</p>
                   </div>
                 )}
               </div>

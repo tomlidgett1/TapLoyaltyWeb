@@ -420,53 +420,70 @@ function RedeemContent() {
           ) : (
             <motion.div
               key="success"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.4 }}
-              className="w-full max-w-sm text-center"
+              initial={{ opacity: 0, y: 50 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full max-w-sm"
             >
-              {/* Success Icon */}
-              <motion.div
-                initial={{ scale: 0.5, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                className="mb-6"
+              {/* White Card with special bottom corners */}
+              <div 
+                className="bg-white p-6 pt-8 pb-8 text-center shadow-xl"
+                style={{
+                  borderRadius: '24px 24px 50px 50px',
+                  boxShadow: '0 -5px 40px rgba(0, 0, 0, 0.3)'
+                }}
               >
-                <CheckCircleIcon className="w-20 h-20 text-[#007AFF] mx-auto" />
-              </motion.div>
+                {/* Success Icon - Green checkmark in green circle */}
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.2, type: "spring", stiffness: 400, damping: 15 }}
+                  className="mb-5"
+                >
+                  <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
+                    <svg className="w-10 h-10 text-green-500" fill="currentColor" viewBox="0 0 24 24">
+                      <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </motion.div>
 
-              <motion.h1
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="text-[28px] font-semibold text-white mb-8"
-              >
-                {rewardName}
-              </motion.h1>
-              
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.4 }}
-                className="bg-white/[0.08] backdrop-blur-xl border border-white/[0.1] rounded-2xl p-5 mb-8"
-              >
-                <p className="text-[15px] text-white/70">
-                  Show this screen to
-                </p>
-                <p className="text-[17px] text-white font-medium mt-1">
-                  {merchantName}
-                </p>
-              </motion.div>
+                {/* Title */}
+                <motion.h1
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="text-[24px] font-bold text-gray-900 mb-3"
+                >
+                  Congratulations!
+                </motion.h1>
 
-              <motion.button
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.6 }}
-                onClick={() => router.push('/customer-dashboard')}
-                className="text-[17px] text-[#007AFF] font-medium"
-              >
-                Done
-              </motion.button>
+                {/* Description */}
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.4 }}
+                  className="text-[15px] text-gray-500 mb-6 px-4"
+                >
+                  Your reward has been successfully claimed at {merchantName}
+                </motion.p>
+
+                {/* Visit Merchant Button */}
+                <motion.button
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 }}
+                  onClick={() => router.push('/customer-dashboard')}
+                  className="w-full py-4 rounded-xl text-white font-semibold text-[16px] flex items-center justify-center gap-2 transition-transform active:scale-[0.98]"
+                  style={{
+                    background: 'linear-gradient(to right, #003d80, #007aff)'
+                  }}
+                >
+                  Done
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                  </svg>
+                </motion.button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

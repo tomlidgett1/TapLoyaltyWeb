@@ -610,26 +610,28 @@ export default function CustomerDashboardPage() {
                 ) : availableRewards.length > 0 ? (
                   <div className="space-y-2">
                     {(showAllRewards ? availableRewards : availableRewards.slice(0, 6)).map((reward) => (
-                      <button 
+                      <div 
                         key={reward.id}
-                        onClick={() => router.push(`/redeem?reward=${encodeURIComponent(reward.rewardName)}&merchant=${encodeURIComponent(reward.merchantName || '')}&rewardId=${reward.id}&merchantId=${reward.merchantId || ''}`)}
-                        className="w-full py-4 px-4 flex items-center justify-between bg-white/[0.06] hover:bg-white/[0.1] active:bg-white/[0.12] rounded-xl transition-colors"
+                        className="py-4 px-4 flex items-center justify-between bg-white/[0.06] rounded-xl"
                       >
-                        <div className="text-left">
-                          <p className="text-[15px] text-white font-medium">{reward.rewardName}</p>
+                        <div className="flex-1 min-w-0 mr-3">
+                          <p className="text-[15px] text-white font-medium truncate">{reward.rewardName}</p>
                           {reward.merchantName && (
-                            <p className="text-[13px] text-white/40">{reward.merchantName}</p>
+                            <p className="text-[13px] text-white/40 truncate">{reward.merchantName}</p>
                           )}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3 flex-shrink-0">
                           {reward.pointsCost && (
-                            <span className="text-[13px] text-[#007AFF] font-medium">{reward.pointsCost} pts</span>
+                            <span className="text-[13px] text-white/50 font-medium">{reward.pointsCost} pts</span>
                           )}
-                          <svg className="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                          </svg>
+                          <button 
+                            onClick={() => router.push(`/redeem?reward=${encodeURIComponent(reward.rewardName)}&merchant=${encodeURIComponent(reward.merchantName || '')}&rewardId=${reward.id}&merchantId=${reward.merchantId || ''}`)}
+                            className="px-4 py-1.5 bg-[#007AFF] hover:bg-[#0066DD] active:bg-[#0055CC] text-white text-[13px] font-semibold rounded-lg transition-colors"
+                          >
+                            Redeem
+                          </button>
                         </div>
-                      </button>
+                      </div>
                     ))}
                     {availableRewards.length > 6 && !showAllRewards && (
                       <button

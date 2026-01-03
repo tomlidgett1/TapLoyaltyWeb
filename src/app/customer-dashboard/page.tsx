@@ -5,9 +5,11 @@ import { motion, AnimatePresence } from "framer-motion"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { GiftIcon, DocumentTextIcon, Cog6ToothIcon } from "@heroicons/react/24/solid"
-import { db, auth } from "@/lib/firebase"
-import { doc, getDoc, collection, query, where, getDocs, Timestamp } from "firebase/firestore"
+import { PlusIcon, ArrowPathIcon, ShieldCheckIcon, ClockIcon } from "@heroicons/react/24/outline"
+import { db, auth, functions } from "@/lib/firebase"
+import { doc, getDoc, collection, query, where, getDocs, Timestamp, updateDoc, setDoc } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
+import { httpsCallable } from "firebase/functions"
 
 type Tab = "rewards" | "transactions" | "settings"
 
@@ -54,6 +56,7 @@ export default function CustomerDashboardPage() {
     newMerchant: false,
     newPoints: true,
   })
+  const [notificationsLoading, setNotificationsLoading] = useState(true)
 
   // Listen for auth state and fetch user data
   useEffect(() => {
@@ -271,18 +274,192 @@ export default function CustomerDashboardPage() {
     }).format(amount)
   }
 
-  const toggleNotification = (key: keyof typeof notifications) => {
+  // Load notification settings from Firestore
+  useEffect(() => {
+    const loadNotificationSettings = async () => {
+      if (!customerId) {
+        setNotificationsLoading(false)
+        return
+      }
+
+      try {
+        const customerDoc = await getDoc(doc(db, 'customers', customerId))
+        if (customerDoc.exists()) {
+          const data = customerDoc.data()
+          if (data.textNotificationSettings) {
+            setNotifications({
+              rewardAvailable: data.textNotificationSettings.rewardAvailable ?? true,
+              newMerchant: data.textNotificationSettings.newMerchant ?? false,
+              newPoints: data.textNotificationSettings.newPoints ?? true,
+            })
+          }
+        }
+      } catch (error) {
+        console.error('Error loading notification settings:', error)
+      } finally {
+        setNotificationsLoading(false)
+      }
+    }
+
+    loadNotificationSettings()
+  }, [customerId])
+
+  const toggleNotification = async (key: keyof typeof notifications) => {
+    if (!customerId) return
+
+    const newValue = !notifications[key]
+    
+    // Update local state immediately for responsive UI
     setNotifications(prev => ({
       ...prev,
-      [key]: !prev[key]
+      [key]: newValue
     }))
+
+    // Save to Firestore
+    try {
+      const customerRef = doc(db, 'customers', customerId)
+      await setDoc(customerRef, {
+        textNotificationSettings: {
+          ...notifications,
+          [key]: newValue
+        }
+      }, { merge: true })
+    } catch (error) {
+      console.error('Error saving notification settings:', error)
+      // Revert on error
+      setNotifications(prev => ({
+        ...prev,
+        [key]: !newValue
+      }))
+    }
   }
 
-  const handleSignOut = () => {
-    localStorage.removeItem('basiq_session_id')
-    localStorage.removeItem('basiq_user_email')
-    auth.signOut()
-    router.push('/bank-connect')
+  const handleSignOut = async () => {
+    try {
+      localStorage.removeItem('basiq_session_id')
+      localStorage.removeItem('basiq_user_email')
+      await auth.signOut()
+      router.push('/bank-connect')
+    } catch (error) {
+      console.error('Sign out error:', error)
+    }
+  }
+
+  const [reconnecting, setReconnecting] = useState(false)
+  const [basiqUserId, setBasiqUserId] = useState<string | null>(null)
+  const [bankActionLoading, setBankActionLoading] = useState<string | null>(null)
+
+  // Fetch basiqUserId when customerId is set
+  useEffect(() => {
+    const fetchBasiqUserId = async () => {
+      if (!customerId) return
+      try {
+        const merchantDoc = await getDoc(doc(db, 'merchants', customerId))
+        if (merchantDoc.exists()) {
+          setBasiqUserId(merchantDoc.data().basiqUserId || null)
+        }
+      } catch (error) {
+        console.error('Error fetching basiqUserId:', error)
+      }
+    }
+    fetchBasiqUserId()
+  }, [customerId])
+
+  // Open Basiq consent portal with a specific action
+  const openBasiqConsent = async (action: 'connect' | 'manage' | 'extend') => {
+    if (!basiqUserId) {
+      console.error('No basiqUserId available')
+      return
+    }
+
+    try {
+      setBankActionLoading(action)
+      
+      // Call getBasiqClientToken function
+      const getBasiqClientToken = httpsCallable(functions, 'getBasiqClientToken')
+      const result = await getBasiqClientToken({ basiqUserId })
+      const data = result.data as { success: boolean; token: string }
+      
+      if (data.success && data.token) {
+        // Open the Basiq consent portal
+        const consentUrl = `https://consent.basiq.io/home?token=${data.token}&action=${action}`
+        window.open(consentUrl, '_blank')
+      } else {
+        console.error('Failed to get client token')
+      }
+    } catch (error) {
+      console.error('Error opening Basiq consent:', error)
+    } finally {
+      setBankActionLoading(null)
+    }
+  }
+
+  const handleReconnectBank = async () => {
+    if (!customerId || !userData) return
+
+    try {
+      setReconnecting(true)
+
+      // Get user's phone from merchants collection
+      const merchantDoc = await getDoc(doc(db, 'merchants', customerId))
+      if (!merchantDoc.exists()) {
+        throw new Error('User data not found')
+      }
+      
+      const merchantData = merchantDoc.data()
+      const phone = merchantData.phone || ''
+      
+      if (!phone) {
+        // If no phone, redirect to bank-connect to enter it
+        router.push('/bank-connect')
+        return
+      }
+
+      // Format phone for Basiq (remove leading 0, add 61)
+      let formattedPhone = phone.replace(/\D/g, '')
+      if (formattedPhone.startsWith('0')) {
+        formattedPhone = `61${formattedPhone.substring(1)}`
+      } else if (!formattedPhone.startsWith('61')) {
+        formattedPhone = `61${formattedPhone}`
+      }
+
+      const callbackUrl = `${window.location.origin}/bank-callback`
+      
+      const response = await fetch('/api/basiqconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: {
+            userId: customerId,
+            merchantId: customerId,
+            mobile: formattedPhone,
+            email: userData.email || '',
+            firstName: userData.firstName || '',
+            lastName: userData.lastName || '',
+            callbackUrl: callbackUrl
+          }
+        }),
+      })
+
+      const responseData = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(responseData.error || 'Connection failed')
+      }
+
+      const authLink = responseData.data?.authLink || responseData.authLink
+
+      if (authLink) {
+        window.location.href = authLink
+      } else {
+        throw new Error('No authentication link received')
+      }
+    } catch (error) {
+      console.error('Error reconnecting bank:', error)
+      alert('Failed to reconnect bank. Please try again.')
+    } finally {
+      setReconnecting(false)
+    }
   }
 
   const tabs = [
@@ -348,29 +525,12 @@ export default function CustomerDashboardPage() {
               transition={{ duration: 0.2 }}
               className="space-y-5"
             >
-              {/* Points Card */}
-              <div className="bg-white/[0.08] backdrop-blur-2xl border border-white/[0.1] rounded-2xl p-6">
-                <div className="flex items-center gap-3 mb-5">
-                  <div className="w-10 h-10 rounded-xl bg-[#007AFF]/20 flex items-center justify-center">
-                    <GiftIcon className="w-5 h-5 text-[#007AFF]" />
-                  </div>
-                  <h2 className="text-[17px] font-semibold text-white">Your Rewards</h2>
-                </div>
-                
-                <div className="flex items-baseline gap-2 mb-2">
-                  <span className="text-[48px] font-semibold text-white tracking-tight">
-                    {availableRewards.length}
-                  </span>
-                  <span className="text-[17px] text-white/50">available</span>
-                </div>
-                
-                <p className="text-[15px] text-white/50">
-                  {availableRewards.length > 0 
-                    ? "Tap a reward to redeem"
-                    : "No rewards available yet"
-                  }
+              {/* Rewards Summary - Simple inline */}
+              {availableRewards.length > 0 && (
+                <p className="text-[15px] text-white/50 text-center">
+                  You have <span className="text-white font-semibold">{availableRewards.length}</span> {availableRewards.length === 1 ? 'reward' : 'rewards'} to redeem
                 </p>
-              </div>
+              )}
 
               {/* Available Rewards */}
               <div className="bg-white/[0.08] backdrop-blur-2xl border border-white/[0.1] rounded-2xl overflow-hidden">
@@ -393,11 +553,11 @@ export default function CustomerDashboardPage() {
                               <p className="text-[13px] text-white/40">{reward.merchantName}</p>
                             )}
                           </div>
-                          <button 
-                            onClick={() => router.push(`/redeem?reward=${encodeURIComponent(reward.rewardName)}&merchant=${encodeURIComponent(reward.merchantName || '')}&rewardId=${reward.id}`)}
-                            className="px-4 py-2 bg-[#007AFF] hover:bg-[#0066DD] text-white text-[13px] font-semibold rounded-lg transition-colors"
-                          >
-                            {reward.pointsCost ? `${reward.pointsCost} pts` : 'Redeem'}
+                        <button 
+                          onClick={() => router.push(`/redeem?reward=${encodeURIComponent(reward.rewardName)}&merchant=${encodeURIComponent(reward.merchantName || '')}&rewardId=${reward.id}&merchantId=${reward.merchantId || ''}`)}
+                          className="min-w-[80px] px-4 py-2 bg-[#007AFF] hover:bg-[#0066DD] text-white text-[13px] font-semibold rounded-lg transition-colors text-center"
+                        >
+                          {reward.pointsCost ? `${reward.pointsCost} pts` : 'Redeem'}
                           </button>
                         </div>
                       ))}
@@ -466,18 +626,11 @@ export default function CustomerDashboardPage() {
                 ) : activityItems.length > 0 ? (
                   <div className="divide-y divide-white/[0.06]">
                     {activityItems.map((item) => (
-                      <div key={item.id} className="px-6 py-4 flex items-center justify-between">
+                      <div key={item.id} className="px-6 py-4 flex items-center justify-between gap-3">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-[15px] text-white font-medium truncate">
-                              {item.type === 'transaction' ? item.merchantName : item.rewardName}
-                            </p>
-                            {item.type === 'redemption' && (
-                              <span className="px-2 py-0.5 bg-[#007AFF]/20 text-[#007AFF] text-[10px] font-medium rounded-md shrink-0">
-                                Redeemed
-                              </span>
-                            )}
-                          </div>
+                          <p className="text-[15px] text-white font-medium truncate">
+                            {item.type === 'transaction' ? item.merchantName : item.rewardName}
+                          </p>
                           <p className="text-[13px] text-white/40">
                             {item.type === 'redemption' && item.merchantName ? `${item.merchantName} · ` : ''}
                             {formatDate(item.date)}
@@ -485,8 +638,15 @@ export default function CustomerDashboardPage() {
                           </p>
                         </div>
                         {item.type === 'transaction' && item.pointsEarned ? (
-                          <span className="text-[15px] text-[#30D158] font-medium shrink-0 ml-3">
+                          <span className="text-[15px] text-[#30D158] font-medium shrink-0">
                             +{item.pointsEarned}
+                          </span>
+                        ) : item.type === 'redemption' ? (
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-semibold rounded-md shrink-0 border border-emerald-500/30">
+                            <svg className="w-2.5 h-2.5" viewBox="0 0 12 12" fill="none">
+                              <path d="M10 3L4.5 8.5L2 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                            Redeemed
                           </span>
                         ) : null}
                       </div>
@@ -622,6 +782,81 @@ export default function CustomerDashboardPage() {
                     className="h-[47px] w-auto"
                   />
                 </a>
+              </div>
+
+              {/* Bank Connection */}
+              <div className="bg-white/[0.08] backdrop-blur-2xl border border-white/[0.1] rounded-2xl overflow-hidden">
+                <div className="p-6 pb-4">
+                  <h2 className="text-[17px] font-semibold text-white mb-1">Bank Connection</h2>
+                  <p className="text-[13px] text-white/40">
+                    Manage your connected bank accounts
+                  </p>
+                </div>
+                
+                <div className="divide-y divide-white/[0.06]">
+                  {/* Add Another Bank */}
+                  <button
+                    onClick={() => openBasiqConsent('connect')}
+                    disabled={!basiqUserId || bankActionLoading !== null}
+                    className="w-full px-6 py-4 flex items-center gap-4 hover:bg-white/[0.04] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-[#007AFF]/20 flex items-center justify-center shrink-0">
+                      <PlusIcon className="w-5 h-5 text-[#007AFF]" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="text-[15px] text-white font-medium">Add Another Bank</p>
+                      <p className="text-[13px] text-white/40">Connect an additional bank account</p>
+                    </div>
+                    {bankActionLoading === 'connect' && (
+                      <ArrowPathIcon className="w-5 h-5 text-white/50 animate-spin" />
+                    )}
+                  </button>
+
+                  {/* Manage Consent */}
+                  <button
+                    onClick={() => openBasiqConsent('manage')}
+                    disabled={!basiqUserId || bankActionLoading !== null}
+                    className="w-full px-6 py-4 flex items-center gap-4 hover:bg-white/[0.04] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-white/[0.08] flex items-center justify-center shrink-0">
+                      <ShieldCheckIcon className="w-5 h-5 text-white/70" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="text-[15px] text-white font-medium">Manage Consent</p>
+                      <p className="text-[13px] text-white/40">View or revoke bank access</p>
+                    </div>
+                    {bankActionLoading === 'manage' && (
+                      <ArrowPathIcon className="w-5 h-5 text-white/50 animate-spin" />
+                    )}
+                  </button>
+
+                  {/* Extend Consent */}
+                  <button
+                    onClick={() => openBasiqConsent('extend')}
+                    disabled={!basiqUserId || bankActionLoading !== null}
+                    className="w-full px-6 py-4 flex items-center gap-4 hover:bg-white/[0.04] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-white/[0.08] flex items-center justify-center shrink-0">
+                      <ClockIcon className="w-5 h-5 text-white/70" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="text-[15px] text-white font-medium">Extend Consent</p>
+                      <p className="text-[13px] text-white/40">Extend your consent period</p>
+                    </div>
+                    {bankActionLoading === 'extend' && (
+                      <ArrowPathIcon className="w-5 h-5 text-white/50 animate-spin" />
+                    )}
+                  </button>
+
+                </div>
+
+                {!basiqUserId && (
+                  <div className="px-6 py-4 border-t border-white/[0.06]">
+                    <p className="text-[13px] text-white/40 text-center">
+                      No bank connected yet. Connect a bank to manage your accounts.
+                    </p>
+                  </div>
+                )}
               </div>
             </motion.div>
           )}

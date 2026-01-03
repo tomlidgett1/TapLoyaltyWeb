@@ -1,19 +1,36 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { ArrowRightIcon } from "@heroicons/react/24/solid"
 import { ArrowPathIcon } from "@heroicons/react/24/outline"
 import { doc, setDoc, getDoc } from "firebase/firestore"
 import { db, auth } from "@/lib/firebase"
-import { GoogleAuthProvider, signInWithPopup, createUserWithEmailAndPassword, updateProfile } from "firebase/auth"
+import { GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, onAuthStateChanged, signOut } from "firebase/auth"
 
-type Step = "home" | "email-signup" | "mobile"
+type Step = "home" | "email-signup" | "mobile" | "signin-options"
 
 export default function BankConnectPage() {
   const router = useRouter()
   const [step, setStep] = useState<Step>("home")
+  const [checkingAuth, setCheckingAuth] = useState(true)
+
+  // Check if user is already signed in - redirect to dashboard
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // Check if user has completed signup (has phone number)
+        const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
+        if (merchantDoc.exists() && merchantDoc.data().phone) {
+          router.push('/customer-dashboard')
+          return
+        }
+      }
+      setCheckingAuth(false)
+    })
+    return () => unsubscribe()
+  }, [router])
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
   const [email, setEmail] = useState("")
@@ -23,6 +40,66 @@ export default function BankConnectPage() {
   const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [signinEmail, setSigninEmail] = useState("")
+  const [signinPassword, setSigninPassword] = useState("")
+  const [signinLoading, setSigninLoading] = useState(false)
+
+  const handleEmailSignIn = async () => {
+    if (!validateEmail(signinEmail)) {
+      setError("Please enter a valid email address")
+      return
+    }
+    if (!signinPassword) {
+      setError("Please enter your password")
+      return
+    }
+
+    try {
+      setSigninLoading(true)
+      setError(null)
+
+      const result = await signInWithEmailAndPassword(auth, signinEmail.trim(), signinPassword)
+      const user = result.user
+
+      // Check if user has completed signup
+      const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
+      if (merchantDoc.exists() && merchantDoc.data().phone) {
+        router.push('/customer-dashboard')
+      } else {
+        // Need to complete mobile step
+        const displayName = user.displayName || ''
+        const nameParts = displayName.split(' ')
+        setFirstName(nameParts[0] || '')
+        setLastName(nameParts.slice(1).join(' ') || '')
+        setEmail(user.email || '')
+        setStep("mobile")
+      }
+    } catch (err: unknown) {
+      console.error('Email Sign In error:', err)
+      const errorCode = (err as { code?: string })?.code
+      if (errorCode === 'auth/user-not-found') {
+        setError('No account found with this email')
+      } else if (errorCode === 'auth/wrong-password' || errorCode === 'auth/invalid-credential') {
+        setError('Incorrect password')
+      } else {
+        setError('Sign in failed. Please try again.')
+      }
+    } finally {
+      setSigninLoading(false)
+    }
+  }
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth)
+      setStep("home")
+      resetForm()
+      setSigninEmail("")
+      setSigninPassword("")
+    } catch (err) {
+      console.error('Sign out error:', err)
+    }
+  }
 
   const formatPhoneNumber = (phone: string) => {
     const cleanPhone = phone.replace(/\D/g, '')
@@ -248,6 +325,18 @@ export default function BankConnectPage() {
     setError(null)
   }
 
+  // Show loading while checking auth
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <div className="text-center">
+          <div className="h-8 w-8 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin mx-auto mb-4"></div>
+          <p className="text-white/50">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col overflow-x-hidden overflow-y-auto">
       {/* Pure blue gradient background */}
@@ -262,12 +351,14 @@ export default function BankConnectPage() {
           <span className="bg-gradient-to-r from-[#007AFF] to-[#5AC8FA] bg-clip-text text-transparent">Tap</span>
           <span className="text-white/80 ml-1">Loyalty</span>
         </div>
-        <button 
-          onClick={() => router.push('/customer-dashboard')}
-          className="text-[15px] font-medium text-white/70 hover:text-white transition-colors"
-        >
-          Sign in
-        </button>
+        {step === "home" && (
+          <button 
+            onClick={() => setStep("signin-options")}
+            className="text-[15px] font-medium text-white/70 hover:text-white transition-colors"
+          >
+            Sign in
+          </button>
+        )}
       </header>
       
       {/* Content */}
@@ -335,6 +426,160 @@ export default function BankConnectPage() {
               <p className="mt-auto pt-16 text-[11px] text-white/20">
                 Secured with bank-level encryption
               </p>
+            </motion.div>
+          )}
+
+          {step === "signin-options" && (
+            <motion.div
+              key="signin-options"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="flex flex-col items-center w-full max-w-[360px]"
+            >
+              {/* Title */}
+              <div className="text-center mb-6">
+                <h1 className="text-[28px] font-semibold text-white tracking-tight mb-2">
+                  Welcome back
+                </h1>
+                <p className="text-[15px] text-white/50">
+                  Sign in to your account
+                </p>
+              </div>
+
+              {/* Card */}
+              <div className="w-full bg-white/[0.08] backdrop-blur-2xl border border-white/[0.1] rounded-2xl p-6">
+                <div className="space-y-4">
+                  {/* Email */}
+                  <div>
+                    <label className="block text-[13px] font-medium text-white/70 mb-2">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      placeholder="john@example.com"
+                      value={signinEmail}
+                      onChange={(e) => {
+                        setSigninEmail(e.target.value)
+                        setError(null)
+                      }}
+                      autoFocus
+                      className="w-full h-[48px] px-4 text-[16px] text-white bg-white/[0.06] border border-white/[0.1] rounded-xl focus:outline-none focus:border-white/30 focus:bg-white/[0.08] transition-all duration-200 placeholder:text-white/30"
+                    />
+                  </div>
+
+                  {/* Password */}
+                  <div>
+                    <label className="block text-[13px] font-medium text-white/70 mb-2">
+                      Password
+                    </label>
+                    <input
+                      type="password"
+                      placeholder="••••••••"
+                      value={signinPassword}
+                      onChange={(e) => {
+                        setSigninPassword(e.target.value)
+                        setError(null)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleEmailSignIn()
+                      }}
+                      className="w-full h-[48px] px-4 text-[16px] text-white bg-white/[0.06] border border-white/[0.1] rounded-xl focus:outline-none focus:border-white/30 focus:bg-white/[0.08] transition-all duration-200 placeholder:text-white/30"
+                    />
+                  </div>
+
+                  <AnimatePresence>
+                    {error && (
+                      <motion.p
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        className="text-[13px] text-red-400"
+                      >
+                        {error}
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
+
+                  <button
+                    onClick={handleEmailSignIn}
+                    disabled={signinLoading || !signinEmail || !signinPassword}
+                    className="w-full h-[52px] bg-white hover:bg-white/90 disabled:bg-white/50 text-black text-[15px] font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed"
+                  >
+                    {signinLoading ? (
+                      <>
+                        <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                        <span>Signing in...</span>
+                      </>
+                    ) : (
+                      <>
+                        Sign in
+                        <ArrowRightIcon className="h-4 w-4" />
+                      </>
+                    )}
+                  </button>
+
+                  {/* Divider */}
+                  <div className="flex items-center gap-3 py-1">
+                    <div className="flex-1 h-px bg-white/[0.1]"></div>
+                    <span className="text-[12px] text-white/30">or</span>
+                    <div className="flex-1 h-px bg-white/[0.1]"></div>
+                  </div>
+
+                  {/* Sign in with Google */}
+                  <button
+                    onClick={handleGoogleSignIn}
+                    disabled={googleLoading}
+                    className="w-full h-[48px] bg-white/[0.06] border border-white/[0.1] text-white text-[14px] font-medium rounded-xl transition-all duration-200 hover:bg-white/[0.1] active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-70"
+                  >
+                    {googleLoading ? (
+                      <>
+                        <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                        <span>Connecting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="h-4 w-4" viewBox="0 0 24 24">
+                          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                        </svg>
+                        Continue with Google
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep("home")
+                      setError(null)
+                      setSigninEmail("")
+                      setSigninPassword("")
+                    }}
+                    className="w-full text-[14px] text-white/50 hover:text-white/70 font-medium transition-colors py-1"
+                  >
+                    Back
+                  </button>
+
+                  <div className="pt-2 border-t border-white/[0.1]">
+                    <p className="text-[13px] text-white/40 text-center">
+                      Don&apos;t have an account?{" "}
+                      <button
+                        onClick={() => {
+                          setStep("home")
+                          setError(null)
+                        }}
+                        className="text-[#007AFF] hover:text-[#0066DD]"
+                      >
+                        Sign up
+                      </button>
+                    </p>
+                  </div>
+                </div>
+              </div>
             </motion.div>
           )}
 

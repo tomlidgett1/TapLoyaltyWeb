@@ -5,6 +5,10 @@ import { motion, AnimatePresence } from "framer-motion"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeftIcon, GiftIcon } from "@heroicons/react/24/solid"
 import { CheckCircleIcon } from "@heroicons/react/24/outline"
+import { httpsCallable } from "firebase/functions"
+import { functions, auth, db } from "@/lib/firebase"
+import { onAuthStateChanged } from "firebase/auth"
+import { doc, getDoc } from "firebase/firestore"
 
 // Confetti particle component
 const Confetti = ({ delay }: { delay: number }) => {
@@ -57,14 +61,26 @@ function RedeemContent() {
   const searchParams = useSearchParams()
   const rewardName = searchParams.get("reward") || "Free Coffee"
   const merchantName = searchParams.get("merchant") || "Blue Bottle Coffee"
+  const rewardId = searchParams.get("rewardId")
+  const merchantIdParam = searchParams.get("merchantId")
   
   const [pin, setPin] = useState(["", "", "", ""])
   const [error, setError] = useState(false)
+  const [errorMessage, setErrorMessage] = useState("")
   const [success, setSuccess] = useState(false)
   const [showConfetti, setShowConfetti] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [customerId, setCustomerId] = useState<string | null>(null)
+  const [merchantId, setMerchantId] = useState<string | null>(merchantIdParam)
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
-  
-  const CORRECT_PIN = "0000"
+
+  // Check authentication status and get customerId
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCustomerId(user?.uid || null)
+    })
+    return () => unsubscribe()
+  }, [])
 
   const triggerSuccess = useCallback(() => {
     setSuccess(true)
@@ -74,13 +90,121 @@ function RedeemContent() {
     setTimeout(() => setShowConfetti(false), 4000)
   }, [])
 
+  const handleRedemption = useCallback(async (fullPin: string) => {
+    if (!rewardId) {
+      setError(true)
+      setErrorMessage("Invalid reward. Please try again.")
+      return
+    }
+
+    if (!customerId) {
+      setError(true)
+      setErrorMessage("Please log in to redeem rewards.")
+      return
+    }
+
+    setIsLoading(true)
+    setError(false)
+    setErrorMessage("")
+
+    try {
+      // First, fetch the reward to validate PIN and get merchantId if not provided
+      let actualMerchantId = merchantId
+      let rewardPin: string | undefined
+
+      // Try to get reward from rewards collection first
+      const rewardDoc = await getDoc(doc(db, 'rewards', rewardId))
+      
+      if (rewardDoc.exists()) {
+        const rewardData = rewardDoc.data()
+        rewardPin = rewardData.pin
+        if (!actualMerchantId) {
+          actualMerchantId = rewardData.merchantId
+        }
+      } else if (actualMerchantId) {
+        // Try merchant's rewards subcollection
+        const merchantRewardDoc = await getDoc(doc(db, 'merchants', actualMerchantId, 'rewards', rewardId))
+        if (merchantRewardDoc.exists()) {
+          rewardPin = merchantRewardDoc.data().pin
+        }
+      }
+
+      // Validate PIN
+      if (rewardPin !== fullPin) {
+        setError(true)
+        setErrorMessage("Incorrect PIN. Please try again.")
+        setTimeout(() => {
+          setPin(["", "", "", ""])
+          inputRefs.current[0]?.focus()
+        }, 600)
+        setIsLoading(false)
+        return
+      }
+
+      if (!actualMerchantId) {
+        setError(true)
+        setErrorMessage("Unable to find merchant. Please try again.")
+        setIsLoading(false)
+        return
+      }
+
+      // Update merchantId state if we found it
+      if (!merchantId && actualMerchantId) {
+        setMerchantId(actualMerchantId)
+      }
+
+      // Call the redeemReward function with correct payload
+      const redeemRewardFn = httpsCallable(functions, 'redeemReward')
+      const result = await redeemRewardFn({
+        rewardId,
+        merchantId: actualMerchantId,
+        customerId
+      })
+
+      const data = result.data as { success?: boolean; error?: string }
+      
+      if (data.error) {
+        setError(true)
+        setErrorMessage(data.error)
+        setTimeout(() => {
+          setPin(["", "", "", ""])
+          inputRefs.current[0]?.focus()
+        }, 600)
+      } else {
+        triggerSuccess()
+      }
+    } catch (err: any) {
+      console.error("Redemption error:", err)
+      setError(true)
+      
+      // Handle specific error messages
+      const errorMsg = err.message || "An error occurred. Please try again."
+      if (errorMsg.includes("Insufficient points")) {
+        setErrorMessage("You don't have enough points to redeem this reward.")
+      } else if (errorMsg.includes("already been redeemed")) {
+        setErrorMessage("This reward has already been redeemed.")
+      } else {
+        setErrorMessage(errorMsg)
+      }
+      
+      setTimeout(() => {
+        setPin(["", "", "", ""])
+        inputRefs.current[0]?.focus()
+      }, 600)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [rewardId, customerId, merchantId, triggerSuccess])
+
   const handlePinChange = useCallback((index: number, value: string) => {
     if (!/^\d*$/.test(value)) return
+    if (isLoading) return
     
     const newPin = [...pin]
     newPin[index] = value.slice(-1)
     setPin(newPin)
     setError(false)
+    setErrorMessage("")
     
     // Auto-focus next input
     if (value && index < 3) {
@@ -90,18 +214,11 @@ function RedeemContent() {
     // Check if complete
     if (index === 3 && value) {
       const fullPin = [...newPin.slice(0, 3), value.slice(-1)].join("")
-      if (fullPin === CORRECT_PIN) {
-        triggerSuccess()
-      } else if (fullPin.length === 4) {
-        setError(true)
-        // Shake and clear after delay
-        setTimeout(() => {
-          setPin(["", "", "", ""])
-          inputRefs.current[0]?.focus()
-        }, 600)
+      if (fullPin.length === 4) {
+        handleRedemption(fullPin)
       }
     }
-  }, [pin, triggerSuccess])
+  }, [pin, isLoading, handleRedemption])
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
     if (e.key === "Backspace" && !pin[index] && index > 0) {
@@ -221,28 +338,44 @@ function RedeemContent() {
                       value={digit}
                       onChange={(e) => handlePinChange(index, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(index, e)}
+                      disabled={isLoading}
                       className={`w-16 h-20 text-center text-[32px] font-semibold rounded-2xl border-2 bg-white/[0.06] backdrop-blur-xl transition-all duration-200 outline-none ${
                         error 
                           ? "border-red-500 text-red-400" 
                           : digit 
                             ? "border-[#007AFF] text-white shadow-lg shadow-[#007AFF]/20" 
                             : "border-white/20 text-white"
-                      } focus:border-[#007AFF] focus:shadow-lg focus:shadow-[#007AFF]/20`}
+                      } focus:border-[#007AFF] focus:shadow-lg focus:shadow-[#007AFF]/20 disabled:opacity-50 disabled:cursor-not-allowed`}
                     />
                   </motion.div>
                 ))}
               </motion.div>
 
+              {/* Loading indicator */}
+              <AnimatePresence>
+                {isLoading && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex items-center justify-center gap-2"
+                  >
+                    <div className="h-4 w-4 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin"></div>
+                    <p className="text-[15px] text-white/70">Verifying PIN...</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Error message */}
               <AnimatePresence>
-                {error && (
+                {error && !isLoading && (
                   <motion.p
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
                     className="text-[15px] text-red-400"
                   >
-                    Incorrect PIN. Please try again.
+                    {errorMessage || "Incorrect PIN. Please try again."}
                   </motion.p>
                 )}
               </AnimatePresence>

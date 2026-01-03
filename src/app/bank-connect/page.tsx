@@ -338,7 +338,7 @@ export default function BankConnectPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex flex-col overflow-x-hidden overflow-y-auto">
+    <div className="h-screen bg-[#0a0a0a] flex flex-col overflow-hidden">
       {/* Pure blue gradient background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[800px] max-w-[200vw] h-[500px] rounded-full bg-gradient-to-b from-[#007AFF]/35 via-[#007AFF]/15 to-transparent blur-[100px]" />

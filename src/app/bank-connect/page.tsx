@@ -3,7 +3,8 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
-import { Loader2, ArrowRight } from "lucide-react"
+import { ArrowRightIcon } from "@heroicons/react/24/solid"
+import { ArrowPathIcon } from "@heroicons/react/24/outline"
 import { doc, setDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 
@@ -151,11 +152,11 @@ export default function BankConnectPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex flex-col overflow-hidden">
+    <div className="min-h-screen bg-[#0a0a0a] flex flex-col overflow-x-hidden overflow-y-auto">
       {/* Pure blue gradient background */}
-      <div className="absolute inset-0">
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[800px] h-[500px] rounded-full bg-gradient-to-b from-[#007AFF]/35 via-[#007AFF]/15 to-transparent blur-[100px]" />
-        <div className="absolute bottom-0 left-1/4 w-[500px] h-[300px] rounded-full bg-[#007AFF]/20 blur-[120px]" />
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[800px] max-w-[200vw] h-[500px] rounded-full bg-gradient-to-b from-[#007AFF]/35 via-[#007AFF]/15 to-transparent blur-[100px]" />
+        <div className="absolute bottom-0 left-1/4 w-[500px] max-w-[150vw] h-[300px] rounded-full bg-[#007AFF]/20 blur-[120px]" />
       </div>
       
       {/* Header */}
@@ -172,24 +173,42 @@ export default function BankConnectPage() {
       </header>
       
       {/* Content */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 pb-20">
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 pb-10">
         {/* Hero */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          className="text-center max-w-md mb-12"
-        >
-          <h1 className="text-[44px] sm:text-[56px] font-semibold text-white tracking-tight leading-[1.05] mb-4">
-            Loyalty, on{" "}
-            <span className="bg-gradient-to-r from-[#007AFF] via-[#00A8FF] to-[#5AC8FA] bg-clip-text text-transparent">
-              autopilot.
-            </span>
-          </h1>
-          <p className="text-[17px] text-white/50 leading-relaxed">
-            Connect once. Earn rewards automatically.
-          </p>
-        </motion.div>
+        <div className="text-center max-w-md mb-8">
+          <AnimatePresence mode="wait">
+            {!showForm ? (
+              <motion.div
+                key="hero"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+              >
+                <h1 className="text-[44px] sm:text-[56px] font-semibold text-white tracking-tight leading-[1.05] mb-4">
+                  Loyalty, on{" "}
+                  <span className="bg-gradient-to-r from-[#007AFF] via-[#00A8FF] to-[#5AC8FA] bg-clip-text text-transparent">
+                    autopilot.
+                  </span>
+                </h1>
+                <p className="text-[17px] text-white/50 leading-relaxed">
+                  Connect once. Earn rewards automatically.
+                </p>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="form-title"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <h1 className="text-[28px] font-semibold text-white tracking-tight">
+                  Let&apos;s get started
+                </h1>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
         {/* Card */}
         <motion.div
@@ -198,28 +217,31 @@ export default function BankConnectPage() {
           transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
           className="w-full max-w-[360px]"
         >
-          <div className="bg-white/[0.08] backdrop-blur-2xl border border-white/[0.1] rounded-2xl p-6">
+          <div className="bg-white/[0.08] backdrop-blur-2xl border border-white/[0.1] rounded-2xl p-6 transform-gpu">
             <AnimatePresence mode="wait">
               {!showForm ? (
                 <motion.button
                   key="button"
-                  initial={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
+                  initial={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
                   onClick={() => setShowForm(true)}
-                  className="group w-full h-[52px] bg-white text-black text-[15px] font-semibold rounded-xl transition-all duration-200 hover:bg-white/90 flex items-center justify-center gap-2"
+                  className="group w-full h-[52px] bg-white text-black text-[15px] font-semibold rounded-xl transition-all duration-200 hover:bg-white/90 flex items-center justify-center gap-2 will-change-transform"
                 >
                   Get Started
-                  <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                  <ArrowRightIcon className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
                 </motion.button>
               ) : (
                 <motion.div
                   key="form"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="space-y-4"
+                  initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                  transition={{ 
+                    duration: 0.4,
+                    ease: [0.04, 0.62, 0.23, 0.98]
+                  }}
+                  className="space-y-4 will-change-transform"
                 >
                   {/* First Name & Last Name */}
                   <div className="grid grid-cols-2 gap-3">
@@ -313,7 +335,7 @@ export default function BankConnectPage() {
                   >
                     {loading ? (
                       <>
-                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <ArrowPathIcon className="h-5 w-5 animate-spin" />
                         <span>{loadingText}</span>
                       </>
                     ) : success ? (
@@ -321,7 +343,7 @@ export default function BankConnectPage() {
                     ) : (
                       <>
                         Continue
-                        <ArrowRight className="h-4 w-4" />
+                        <ArrowRightIcon className="h-4 w-4" />
                       </>
                     )}
                   </button>

@@ -4,7 +4,7 @@ import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
-import { Gift, Receipt, Settings } from "lucide-react"
+import { GiftIcon, DocumentTextIcon, Cog6ToothIcon } from "@heroicons/react/24/solid"
 
 type Tab = "rewards" | "transactions" | "settings"
 
@@ -48,16 +48,16 @@ export default function CustomerDashboardPage() {
   }
 
   const tabs = [
-    { id: "rewards" as Tab, label: "Rewards", icon: Gift },
-    { id: "transactions" as Tab, label: "Activity", icon: Receipt },
-    { id: "settings" as Tab, label: "Settings", icon: Settings },
+    { id: "rewards" as Tab, label: "Rewards", icon: GiftIcon },
+    { id: "transactions" as Tab, label: "Activity", icon: DocumentTextIcon },
+    { id: "settings" as Tab, label: "Settings", icon: Cog6ToothIcon },
   ]
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex flex-col">
+    <div className="min-h-screen bg-[#0a0a0a] flex flex-col overflow-x-hidden">
       {/* Subtle gradient background */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] rounded-full bg-gradient-to-b from-[#007AFF]/20 via-[#007AFF]/5 to-transparent blur-[100px]" />
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] max-w-[200vw] h-[400px] rounded-full bg-gradient-to-b from-[#007AFF]/20 via-[#007AFF]/5 to-transparent blur-[100px]" />
       </div>
 
       {/* Header */}
@@ -113,7 +113,7 @@ export default function CustomerDashboardPage() {
               <div className="bg-white/[0.08] backdrop-blur-2xl border border-white/[0.1] rounded-2xl p-6">
                 <div className="flex items-center gap-3 mb-5">
                   <div className="w-10 h-10 rounded-xl bg-[#007AFF]/20 flex items-center justify-center">
-                    <Gift className="w-5 h-5 text-[#007AFF]" />
+                    <GiftIcon className="w-5 h-5 text-[#007AFF]" />
                   </div>
                   <h2 className="text-[17px] font-semibold text-white">Your Rewards</h2>
                 </div>
@@ -188,7 +188,7 @@ export default function CustomerDashboardPage() {
               <div className="bg-white/[0.08] backdrop-blur-2xl border border-white/[0.1] rounded-2xl overflow-hidden">
                 <div className="flex items-center gap-3 p-6 pb-4">
                   <div className="w-10 h-10 rounded-xl bg-white/[0.08] flex items-center justify-center">
-                    <Receipt className="w-5 h-5 text-white/70" />
+                    <DocumentTextIcon className="w-5 h-5 text-white/70" />
                   </div>
                   <h2 className="text-[17px] font-semibold text-white">Transactions</h2>
                 </div>
@@ -223,7 +223,7 @@ export default function CustomerDashboardPage() {
               <div className="bg-white/[0.08] backdrop-blur-2xl border border-white/[0.1] rounded-2xl overflow-hidden">
                 <div className="flex items-center gap-3 p-6 pb-4">
                   <div className="w-10 h-10 rounded-xl bg-white/[0.08] flex items-center justify-center">
-                    <Settings className="w-5 h-5 text-white/70" />
+                    <Cog6ToothIcon className="w-5 h-5 text-white/70" />
                   </div>
                   <div>
                     <h2 className="text-[17px] font-semibold text-white">Text Updates</h2>

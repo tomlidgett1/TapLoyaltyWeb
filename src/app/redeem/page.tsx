@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, useCallback, Suspense } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, Check, Gift } from "lucide-react"
+import { ArrowLeftIcon, GiftIcon } from "@heroicons/react/24/solid"
+import { CheckCircleIcon } from "@heroicons/react/24/outline"
 
 // Confetti particle component
 const Confetti = ({ delay }: { delay: number }) => {
@@ -114,9 +115,9 @@ function RedeemContent() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex flex-col overflow-hidden relative">
+    <div className="min-h-screen bg-[#0a0a0a] flex flex-col overflow-x-hidden overflow-y-auto relative">
       {/* Animated gradient background */}
-      <div className="fixed inset-0 pointer-events-none">
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <motion.div 
           animate={{ 
             scale: success ? [1, 1.5, 1.2] : 1,
@@ -144,7 +145,7 @@ function RedeemContent() {
           onClick={() => router.back()}
           className="flex items-center gap-2 text-[15px] font-medium text-white/70 hover:text-white transition-colors"
         >
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeftIcon className="w-5 h-5" />
           Back
         </button>
       </header>
@@ -168,7 +169,7 @@ function RedeemContent() {
                 transition={{ type: "spring", bounce: 0.5, delay: 0.1 }}
                 className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#007AFF] to-[#5AC8FA] mx-auto mb-6 flex items-center justify-center shadow-lg shadow-[#007AFF]/30"
               >
-                <Gift className="w-10 h-10 text-white" />
+                <GiftIcon className="w-10 h-10 text-white" />
               </motion.div>
 
               {/* Title */}
@@ -249,55 +250,50 @@ function RedeemContent() {
           ) : (
             <motion.div
               key="success"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ type: "spring", bounce: 0.4 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.4 }}
               className="w-full max-w-sm text-center"
             >
               {/* Success Icon */}
               <motion.div
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: "spring", bounce: 0.5, delay: 0.1 }}
-                className="w-24 h-24 rounded-full bg-gradient-to-br from-[#30D158] to-[#28A745] mx-auto mb-8 flex items-center justify-center shadow-2xl shadow-[#30D158]/40"
+                initial={{ scale: 0.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                className="mb-6"
               >
-                <Check className="w-12 h-12 text-white" strokeWidth={3} />
+                <CheckCircleIcon className="w-20 h-20 text-[#007AFF] mx-auto" />
               </motion.div>
 
-              {/* Success Text */}
+              <motion.h1
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="text-[28px] font-semibold text-white mb-8"
+              >
+                {rewardName}
+              </motion.h1>
+              
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 }}
+                className="bg-white/[0.08] backdrop-blur-xl border border-white/[0.1] rounded-2xl p-5 mb-8"
               >
-                <h1 className="text-[32px] font-bold text-white mb-4">
-                  Redeemed!
-                </h1>
-                
-                <p className="text-[17px] text-white/60 mb-2">
-                  {rewardName}
+                <p className="text-[15px] text-white/70">
+                  Show this screen to
                 </p>
-                <p className="text-[15px] text-white/40 mb-10">
-                  at {merchantName}
+                <p className="text-[17px] text-white font-medium mt-1">
+                  {merchantName}
                 </p>
-
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.6 }}
-                  className="text-[15px] text-white/50"
-                >
-                  Show this screen to the merchant
-                </motion.p>
               </motion.div>
 
-              {/* Done Button */}
               <motion.button
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.8 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6 }}
                 onClick={() => router.push('/customer-dashboard')}
-                className="mt-10 px-8 py-4 bg-white text-black text-[17px] font-semibold rounded-xl hover:bg-white/90 transition-colors"
+                className="text-[17px] text-[#007AFF] font-medium"
               >
                 Done
               </motion.button>

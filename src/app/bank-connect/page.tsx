@@ -8,6 +8,7 @@ import { ArrowPathIcon } from "@heroicons/react/24/outline"
 import { doc, setDoc, getDoc } from "firebase/firestore"
 import { db, auth } from "@/lib/firebase"
 import { GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, onAuthStateChanged, signOut } from "firebase/auth"
+import ShinyText from "@/components/ShinyText"
 
 type Step = "home" | "email-signup" | "mobile" | "signin-options"
 
@@ -435,14 +436,16 @@ export default function BankConnectPage() {
                 >
                   Earn rewards,
                   <br />
-                  <motion.span 
-                    className="bg-gradient-to-r from-[#007AFF] to-[#5AC8FA] bg-clip-text text-transparent inline-block"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                  >
-                    automatically
-                  </motion.span>
+                  <ShinyText
+                    text="automatically"
+                    speed={3}
+                    delay={1}
+                    color="#007AFF"
+                    shineColor="#5AC8FA"
+                    spread={120}
+                    direction="left"
+                    className="text-[42px] font-bold tracking-tight"
+                  />
                 </motion.h1>
                 <motion.p 
                   className="text-[15px] text-white/40"

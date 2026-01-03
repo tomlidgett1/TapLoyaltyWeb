@@ -101,6 +101,10 @@ export default function BankConnectPage() {
       const internationalMobile = formatMobileForBasiq(mobile)
       console.log('Sending mobile to Basiq in international format:', internationalMobile)
       
+      // Build the callback URL for after bank connection
+      const callbackUrl = `${window.location.origin}/bank-callback`
+      console.log('Callback URL for Basiq:', callbackUrl)
+      
       const response = await fetch('/api/basiqconnect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -111,7 +115,8 @@ export default function BankConnectPage() {
             mobile: internationalMobile,
             email: email.trim(),
             firstName: firstName.trim(),
-            lastName: lastName.trim()
+            lastName: lastName.trim(),
+            callbackUrl: callbackUrl
           }
         }),
       })
@@ -126,6 +131,10 @@ export default function BankConnectPage() {
       const authLink = responseData.data?.authLink || responseData.authLink
 
       if (authLink) {
+        // Store session info for the callback
+        localStorage.setItem('basiq_session_id', sessionId)
+        localStorage.setItem('basiq_user_email', email.trim())
+        
         setSuccess(true)
         setTimeout(() => { window.location.href = authLink }, 600)
       } else {

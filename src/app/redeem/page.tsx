@@ -3,11 +3,11 @@
 import { useState, useRef, useEffect, useCallback, Suspense } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, Sparkles, Check, Gift } from "lucide-react"
+import { ArrowLeft, Check, Gift } from "lucide-react"
 
 // Confetti particle component
 const Confetti = ({ delay }: { delay: number }) => {
-  const colors = ["#007AFF", "#5AC8FA", "#30D158", "#FF9F0A", "#FF375F", "#BF5AF2"]
+  const colors = ["#007AFF", "#0055CC", "#5AC8FA", "#00A8FF", "#003D99"]
   const color = colors[Math.floor(Math.random() * colors.length)]
   const left = Math.random() * 100
   const animationDuration = 2 + Math.random() * 2
@@ -270,13 +270,9 @@ function RedeemContent() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
               >
-                <div className="flex items-center justify-center gap-2 mb-4">
-                  <Sparkles className="w-6 h-6 text-[#FFD60A]" />
-                  <h1 className="text-[32px] font-bold text-white">
-                    Redeemed!
-                  </h1>
-                  <Sparkles className="w-6 h-6 text-[#FFD60A]" />
-                </div>
+                <h1 className="text-[32px] font-bold text-white mb-4">
+                  Redeemed!
+                </h1>
                 
                 <p className="text-[17px] text-white/60 mb-2">
                   {rewardName}

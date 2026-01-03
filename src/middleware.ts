@@ -6,6 +6,7 @@ const PUBLIC_ROUTES = [
   '/login', 
   '/signup', 
   '/bank-connect',
+  '/bank-callback',
   '/customer-dashboard',
   '/redeem',
   '/_next', 

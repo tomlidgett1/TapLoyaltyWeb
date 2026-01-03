@@ -352,12 +352,12 @@ export default function BankConnectPage() {
           <span className="text-white/80 ml-1">Loyalty</span>
         </div>
         {step === "home" && (
-          <button 
+        <button 
             onClick={() => setStep("signin-options")}
-            className="text-[15px] font-medium text-white/70 hover:text-white transition-colors"
-          >
-            Sign in
-          </button>
+          className="text-[15px] font-medium text-white/70 hover:text-white transition-colors"
+        >
+          Sign in
+        </button>
         )}
       </header>
       
@@ -370,27 +370,36 @@ export default function BankConnectPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="flex flex-col items-center w-full max-w-[360px]"
+              transition={{ duration: 0.3 }}
+              className="flex flex-col items-center justify-between w-full max-w-[320px] h-full py-8"
             >
-              {/* Hero */}
-              <div className="text-center mb-10">
-                <h1 className="text-[40px] sm:text-[52px] font-semibold text-white tracking-tight leading-[1.05] mb-3">
-                  Loyalty, on{" "}
-                  <span className="bg-gradient-to-r from-[#007AFF] via-[#00A8FF] to-[#5AC8FA] bg-clip-text text-transparent">
-                    autopilot.
+              {/* Top spacer */}
+              <div />
+
+              {/* Center content */}
+              <div className="text-center">
+                <h1 className="text-[42px] font-bold text-white tracking-tight leading-[1.1] mb-4">
+                  Earn rewards,
+                  <br />
+                  <span className="bg-gradient-to-r from-[#007AFF] to-[#5AC8FA] bg-clip-text text-transparent">
+                    automatically
                   </span>
                 </h1>
-                <p className="text-[16px] text-white/50 leading-relaxed">
-                  Connect once. Earn rewards automatically.
+                <p className="text-[15px] text-white/40">
+                  Connect your bank. Get rewarded.
                 </p>
               </div>
 
-              {/* Sign in with Google */}
+              {/* Bottom actions */}
+              <div className="w-full space-y-3">
+                {error && (
+                  <p className="text-[13px] text-red-400 text-center mb-2">{error}</p>
+                )}
+
               <button
                 onClick={handleGoogleSignIn}
                 disabled={googleLoading}
-                className="w-full h-[52px] bg-white text-black text-[15px] font-semibold rounded-xl transition-all duration-200 hover:bg-white/90 active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-70"
+                  className="w-full h-[54px] bg-white text-black text-[15px] font-semibold rounded-2xl transition-all duration-200 hover:bg-white/90 active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-70"
               >
                 {googleLoading ? (
                   <>
@@ -410,22 +419,17 @@ export default function BankConnectPage() {
                 )}
               </button>
 
-              {/* Email option as text link */}
               <button
                 onClick={() => setStep("email-signup")}
-                className="mt-5 text-[14px] text-white/40 hover:text-white/60 transition-colors"
+                  className="w-full h-[54px] bg-white/[0.08] text-white text-[15px] font-medium rounded-2xl transition-all duration-200 hover:bg-white/[0.12] active:scale-[0.98]"
               >
-                or sign up with email
+                  Continue with Email
               </button>
 
-              {error && (
-                <p className="text-[13px] text-red-400 mt-3 text-center">{error}</p>
-              )}
-
-              {/* Footer */}
-              <p className="mt-auto pt-16 text-[11px] text-white/20">
-                Secured with bank-level encryption
-              </p>
+                <p className="text-[11px] text-white/20 text-center pt-2">
+                  🔒 Bank-level security
+                </p>
+              </div>
             </motion.div>
           )}
 

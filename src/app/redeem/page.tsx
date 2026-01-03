@@ -82,13 +82,50 @@ function RedeemContent() {
     return () => unsubscribe()
   }, [])
 
+  // Play success sound using Web Audio API
+  const playSuccessSound = useCallback(() => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+      
+      // Create a pleasant success chime with multiple notes
+      const playNote = (frequency: number, startTime: number, duration: number, volume: number) => {
+        const oscillator = audioContext.createOscillator()
+        const gainNode = audioContext.createGain()
+        
+        oscillator.connect(gainNode)
+        gainNode.connect(audioContext.destination)
+        
+        oscillator.frequency.value = frequency
+        oscillator.type = 'sine'
+        
+        // Envelope for smooth sound
+        gainNode.gain.setValueAtTime(0, audioContext.currentTime + startTime)
+        gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + startTime + 0.02)
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + startTime + duration)
+        
+        oscillator.start(audioContext.currentTime + startTime)
+        oscillator.stop(audioContext.currentTime + startTime + duration)
+      }
+      
+      // Play a nice ascending chime (C5 - E5 - G5)
+      playNote(523.25, 0, 0.15, 0.3)      // C5
+      playNote(659.25, 0.1, 0.15, 0.3)    // E5
+      playNote(783.99, 0.2, 0.3, 0.4)     // G5
+    } catch (error) {
+      console.log('Could not play sound:', error)
+    }
+  }, [])
+
   const triggerSuccess = useCallback(() => {
     setSuccess(true)
     setShowConfetti(true)
     
+    // Play success sound
+    playSuccessSound()
+    
     // Stop confetti after animation
     setTimeout(() => setShowConfetti(false), 4000)
-  }, [])
+  }, [playSuccessSound])
 
   const handleRedemption = useCallback(async (fullPin: string) => {
     if (!rewardId) {

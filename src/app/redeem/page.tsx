@@ -73,6 +73,12 @@ function RedeemContent() {
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [merchantId, setMerchantId] = useState<string | null>(merchantIdParam)
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
+  
+  // Success screen state
+  const [currentTime, setCurrentTime] = useState(new Date())
+  const [isCardFlipped, setIsCardFlipped] = useState(false)
+  const [sparkles, setSparkles] = useState<{ id: string; x: number; y: number; opacity: number }[]>([])
+  const [contentOpacity, setContentOpacity] = useState(1)
 
   // Check authentication status and get customerId
   useEffect(() => {
@@ -268,6 +274,70 @@ function RedeemContent() {
     inputRefs.current[0]?.focus()
   }, [])
 
+  // Update time every second when success
+  useEffect(() => {
+    if (!success) return
+    const timer = setInterval(() => {
+      setCurrentTime(new Date())
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [success])
+
+  // Format time with seconds
+  const formatTimeWithSeconds = (date: Date) => {
+    return date.toLocaleTimeString('en-AU', { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit',
+      hour12: true 
+    })
+  }
+
+  // Format date
+  const formatFullDate = (date: Date) => {
+    return date.toLocaleDateString('en-AU', { 
+      weekday: 'long',
+      day: 'numeric', 
+      month: 'long', 
+      year: 'numeric' 
+    })
+  }
+
+  // Handle card flip with haptic and sparkles
+  const handleCardFlip = () => {
+    // Vibrate if supported
+    if (navigator.vibrate) {
+      navigator.vibrate([50, 30, 50])
+    }
+    
+    setIsCardFlipped(true)
+    
+    // Generate sparkles
+    const newSparkles = Array.from({ length: 25 }, (_, i) => ({
+      id: `sparkle-${Date.now()}-${i}`,
+      x: Math.random() * (typeof window !== 'undefined' ? window.innerWidth : 400),
+      y: -30,
+      opacity: 1
+    }))
+    setSparkles(newSparkles)
+    
+    // Clear sparkles after animation
+    setTimeout(() => setSparkles([]), 3000)
+    
+    // Flip back after 2.5 seconds
+    setTimeout(() => {
+      setIsCardFlipped(false)
+    }, 2500)
+  }
+
+  // Handle done button with fade
+  const handleDone = () => {
+    setContentOpacity(0)
+    setTimeout(() => {
+      router.push('/customer-dashboard')
+    }, 300)
+  }
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col overflow-x-hidden overflow-y-auto relative">
       {/* Animated gradient background */}
@@ -420,70 +490,175 @@ function RedeemContent() {
           ) : (
             <motion.div
               key="success"
-              initial={{ opacity: 0, y: 50 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full max-w-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: contentOpacity }}
+              transition={{ duration: 0.3 }}
+              className="fixed inset-0 bg-white flex flex-col z-50"
             >
-              {/* White Card with special bottom corners */}
-              <div 
-                className="bg-white p-6 pt-8 pb-8 text-center shadow-xl"
-                style={{
-                  borderRadius: '24px 24px 50px 50px',
-                  boxShadow: '0 -5px 40px rgba(0, 0, 0, 0.3)'
-                }}
-              >
-                {/* Success Icon - Green checkmark in green circle */}
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ delay: 0.2, type: "spring", stiffness: 400, damping: 15 }}
-                  className="mb-5"
-                >
-                  <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
-                    <svg className="w-10 h-10 text-green-500" fill="currentColor" viewBox="0 0 24 24">
-                      <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                </motion.div>
+              {/* Falling Sparkles */}
+              <div className="fixed inset-0 pointer-events-none overflow-hidden z-50">
+                {sparkles.map((sparkle) => (
+                  <motion.div
+                    key={sparkle.id}
+                    initial={{ y: -30, x: sparkle.x, opacity: 1, scale: 1 }}
+                    animate={{ 
+                      y: typeof window !== 'undefined' ? window.innerHeight + 50 : 800,
+                      opacity: 0,
+                      scale: 0.5
+                    }}
+                    transition={{ duration: 2 + Math.random(), ease: "easeIn" }}
+                    className="absolute text-xl"
+                    style={{ left: 0 }}
+                  >
+                    ✨
+                  </motion.div>
+                ))}
+              </div>
 
-                {/* Title */}
+              {/* Main Content */}
+              <div className="flex-1 flex flex-col px-4 overflow-y-auto">
+                {/* Success Title */}
                 <motion.h1
-                  initial={{ opacity: 0, y: 10 }}
+                  initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                  className="text-[24px] font-bold text-gray-900 mb-3"
-                >
-                  Congratulations!
-                </motion.h1>
-
-                {/* Description */}
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.4 }}
-                  className="text-[15px] text-gray-500 mb-6 px-4"
-                >
-                  Your reward has been successfully claimed at {merchantName}
-                </motion.p>
-
-                {/* Visit Merchant Button */}
-                <motion.button
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 }}
-                  onClick={() => router.push('/customer-dashboard')}
-                  className="w-full py-4 rounded-xl text-white font-semibold text-[16px] flex items-center justify-center gap-2 transition-transform active:scale-[0.98]"
+                  transition={{ delay: 0.1 }}
+                  className="text-[28px] font-bold text-center pt-8 pb-2"
                   style={{
-                    background: 'linear-gradient(to right, #003d80, #007aff)'
+                    background: 'linear-gradient(to right, #003d80, #007aff)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text'
                   }}
                 >
-                  Done
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                  Redemption Successful
+                </motion.h1>
+
+                {/* Instruction */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                  className="flex items-center justify-center gap-2 pb-6"
+                >
+                  <svg className="w-4 h-4 text-[#007AFF]" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v4.59L7.3 9.24a.75.75 0 00-1.1 1.02l3.25 3.5a.75.75 0 001.1 0l3.25-3.5a.75.75 0 10-1.1-1.02l-1.95 2.1V6.75z" clipRule="evenodd" />
                   </svg>
-                </motion.button>
+                  <span className="text-[15px] font-medium text-gray-500">
+                    Show this screen to the merchant
+                  </span>
+                </motion.div>
+
+                {/* Interactive Card */}
+                <motion.div
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3, type: "spring", stiffness: 300, damping: 25 }}
+                  className="flex-1 flex items-start justify-center pb-4"
+                >
+                  <button
+                    onClick={handleCardFlip}
+                    className="w-full max-w-sm bg-white rounded-[20px] border border-gray-200 shadow-xl active:scale-[0.98] transition-transform"
+                    style={{
+                      boxShadow: '0 10px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.08)',
+                      perspective: '1000px'
+                    }}
+                  >
+                    <div 
+                      className="relative w-full transition-transform duration-500"
+                      style={{
+                        transformStyle: 'preserve-3d',
+                        transform: isCardFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
+                      }}
+                    >
+                      {/* Front Side */}
+                      <div 
+                        className="w-full p-6"
+                        style={{ backfaceVisibility: 'hidden' }}
+                      >
+                        {/* Merchant Logo Placeholder */}
+                        <div className="flex justify-center mb-3">
+                          <div className="w-20 h-20 rounded-2xl bg-gray-100 flex items-center justify-center">
+                            <span className="text-3xl font-bold text-gray-400">
+                              {merchantName.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Merchant Name */}
+                        <h2 className="text-xl font-bold text-gray-900 text-center mb-4">
+                          {merchantName}
+                        </h2>
+
+                        {/* Divider */}
+                        <div className="h-px bg-gray-200 mx-8 mb-4"></div>
+
+                        {/* Reward Info */}
+                        <div className="text-center mb-4">
+                          <p className="text-[11px] font-semibold text-gray-400 tracking-widest mb-2">
+                            REDEEMED REWARD
+                          </p>
+                          <p className="text-xl font-bold text-gray-900">
+                            {rewardName}
+                          </p>
+                        </div>
+
+                        {/* Divider */}
+                        <div className="h-px bg-gray-200 mx-8 mb-4"></div>
+
+                        {/* Live Time Display */}
+                        <div className="text-center pb-2">
+                          <p className="text-[11px] font-semibold text-gray-400 tracking-widest mb-2">
+                            VERIFIED AT
+                          </p>
+                          <p className="text-4xl font-bold text-[#007AFF] tabular-nums">
+                            {formatTimeWithSeconds(currentTime)}
+                          </p>
+                          <p className="text-sm font-medium text-gray-500 mt-1">
+                            {formatFullDate(currentTime)}
+                          </p>
+                        </div>
+
+                        {/* Tap hint */}
+                        <p className="text-xs text-gray-300 text-center mt-4">
+                          Tap card to verify
+                        </p>
+                      </div>
+
+                      {/* Back Side */}
+                      <div 
+                        className="absolute inset-0 w-full p-6 flex flex-col items-center justify-center rounded-[20px] bg-white"
+                        style={{ 
+                          backfaceVisibility: 'hidden',
+                          transform: 'rotateY(180deg)'
+                        }}
+                      >
+                        <span className="text-[100px] mb-4">😉</span>
+                        <p className="text-3xl font-bold text-[#007AFF] tracking-widest">
+                          VERIFIED
+                        </p>
+                        <p className="text-sm font-medium text-gray-400 mt-4">
+                          Tap to return
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                </motion.div>
               </div>
+
+              {/* Fixed Bottom Button */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                className="px-4 pb-8 pt-4 bg-gradient-to-t from-white via-white to-transparent"
+              >
+                <button
+                  onClick={handleDone}
+                  className="w-full py-4 bg-[#007AFF] text-white text-lg font-semibold rounded-xl active:scale-[0.98] transition-transform"
+                >
+                  Done
+                </button>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>

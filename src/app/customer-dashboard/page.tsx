@@ -558,7 +558,7 @@ export default function CustomerDashboardPage() {
 
       {/* Tabs */}
       <div className="relative z-10 px-4 pb-2">
-        <div className="flex items-center gap-1 p-1 bg-white/[0.06] rounded-xl w-fit mx-auto">
+        <div className="flex items-center gap-1 p-1 bg-white/[0.06] rounded-xl w-full">
           {tabs.map((tab) => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
@@ -566,7 +566,7 @@ export default function CustomerDashboardPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-[14px] font-medium transition-all duration-200 ${
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-[14px] font-medium transition-all duration-200 ${
                   isActive 
                     ? "bg-white/[0.12] text-white" 
                     : "text-white/50 hover:text-white/70"
@@ -601,8 +601,6 @@ export default function CustomerDashboardPage() {
 
               {/* Available Rewards */}
               <div>
-                <h2 className="text-[17px] font-semibold text-white mb-4">Available Rewards</h2>
-                
                 {rewardsLoading ? (
                   <div className="py-8 text-center">
                     <p className="text-[15px] text-white/50">Loading rewards...</p>

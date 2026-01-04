@@ -15,9 +15,8 @@ type Step = "home" | "email-signup" | "mobile" | "signin-options"
 export default function HomePage() {
   const router = useRouter()
   const [step, setStep] = useState<Step>("home")
-  const [checkingAuth, setCheckingAuth] = useState(true)
 
-  // Check if user is already signed in - redirect to dashboard
+  // Check if user is already signed in - redirect to customer dashboard
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -25,10 +24,8 @@ export default function HomePage() {
         const merchantDoc = await getDoc(doc(db, 'merchants', user.uid))
         if (merchantDoc.exists() && merchantDoc.data().phone) {
           router.push('/customer-dashboard')
-          return
         }
       }
-      setCheckingAuth(false)
     })
     return () => unsubscribe()
   }, [router])
@@ -324,18 +321,6 @@ export default function HomePage() {
     setPassword("")
     setMobile("")
     setError(null)
-  }
-
-  // Show loading while checking auth
-  if (checkingAuth) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <div className="text-center">
-          <div className="h-8 w-8 rounded-full border-2 border-[#007AFF] border-t-transparent animate-spin mx-auto mb-4"></div>
-          <p className="text-white/50">Loading...</p>
-        </div>
-      </div>
-    )
   }
 
   return (

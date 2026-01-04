@@ -257,6 +257,25 @@ export default function HomePage() {
       })
       console.log('Merchant document created successfully')
 
+      // Create the customer document with textNotificationSettings to trigger welcome SMS
+      console.log('Creating customer document with notification settings:', sessionId)
+      const customerDocRef = doc(db, 'customers', sessionId)
+      await setDoc(customerDocRef, {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        fullName: `${firstName.trim()} ${lastName.trim()}`.trim() || 'User',
+        email: email.trim().toLowerCase() || user?.email || '',
+        mobileNumber: mobile.replace(/\D/g, ''),
+        textNotificationSettings: {
+          rewardAvailable: true,
+          newMerchant: false,
+          newPoints: true
+        },
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }, { merge: true })
+      console.log('Customer document created with notification settings')
+
       // Small delay to ensure Firestore propagation
       await new Promise(resolve => setTimeout(resolve, 1500))
 

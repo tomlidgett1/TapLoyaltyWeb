@@ -79,6 +79,7 @@ function RedeemContent() {
   const [isCardFlipped, setIsCardFlipped] = useState(false)
   const [sparkles, setSparkles] = useState<{ id: string; x: number; y: number; opacity: number }[]>([])
   const [contentOpacity, setContentOpacity] = useState(1)
+  const [merchantLogoUrl, setMerchantLogoUrl] = useState<string | null>(null)
 
   // Check authentication status and get customerId
   useEffect(() => {
@@ -87,6 +88,25 @@ function RedeemContent() {
     })
     return () => unsubscribe()
   }, [])
+
+  // Fetch merchant logo when merchantId is available
+  useEffect(() => {
+    const fetchMerchantLogo = async () => {
+      if (!merchantId) return
+      try {
+        const merchantDoc = await getDoc(doc(db, 'merchants', merchantId))
+        if (merchantDoc.exists()) {
+          const data = merchantDoc.data()
+          if (data.logoUrl) {
+            setMerchantLogoUrl(data.logoUrl)
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching merchant logo:', error)
+      }
+    }
+    fetchMerchantLogo()
+  }, [merchantId])
 
   // Play success sound using Web Audio API
   const playSuccessSound = useCallback(() => {
@@ -565,11 +585,19 @@ function RedeemContent() {
                     {/* Merchant Section */}
                     <div className="px-6 py-5 border-b border-gray-100">
                       <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center flex-shrink-0">
-                          <span className="text-2xl font-bold text-gray-400">
-                            {merchantName.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
+                        {merchantLogoUrl ? (
+                          <img 
+                            src={merchantLogoUrl} 
+                            alt={merchantName}
+                            className="w-14 h-14 rounded-xl object-cover flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center flex-shrink-0">
+                            <span className="text-2xl font-bold text-gray-400">
+                              {merchantName.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-0.5">
                             Merchant

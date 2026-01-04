@@ -32,11 +32,10 @@ export function middleware(request: NextRequest) {
   // Check for public assets (images, etc.)
   const isPublicAsset = path.includes('.') // Files with extensions like .jpg, .png, etc.
   
-  // If the path is the root path (/), redirect to login or bank-connect based on auth status
-  if (path === '/') {
-    return token 
-      ? NextResponse.redirect(new URL('/bank-connect', request.url))
-      : NextResponse.redirect(new URL('/login', request.url))
+  // If the path is the root path (/) and no token, redirect to login
+  // Otherwise, let authenticated users view the homepage (bank connect page)
+  if (path === '/' && !token) {
+    return NextResponse.redirect(new URL('/login', request.url))
   }
   
   // If not a public route/asset and no token exists, redirect to login

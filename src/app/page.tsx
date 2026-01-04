@@ -261,16 +261,31 @@ export default function HomePage() {
       console.log('Creating customer document with notification settings:', sessionId)
       const customerDocRef = doc(db, 'customers', sessionId)
       await setDoc(customerDocRef, {
+        // User identity
+        userId: sessionId,
+        appleId: user?.uid || null,
+        isGuest: !user,
+        
+        // Personal details
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         fullName: `${firstName.trim()} ${lastName.trim()}`.trim() || 'User',
+        name: `${firstName.trim()} ${lastName.trim()}`.trim() || 'User',
+        
+        // Contact info
         email: email.trim().toLowerCase() || user?.email || '',
         mobileNumber: mobile.replace(/\D/g, ''),
+        phone: mobile.replace(/\D/g, ''),
+        phoneNumber: mobile.replace(/\D/g, ''),
+        
+        // SMS notification settings (triggers welcome SMS)
         textNotificationSettings: {
           rewardAvailable: true,
           newMerchant: false,
           newPoints: true
         },
+        
+        // Timestamps
         createdAt: new Date(),
         updatedAt: new Date()
       }, { merge: true })

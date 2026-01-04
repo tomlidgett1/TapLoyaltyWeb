@@ -85,17 +85,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
-    // If no user and not on a public route, redirect to login
-    if (!user && pathname !== '/login') {
-      console.log('No authenticated user, redirecting to login')
-      router.push('/login')
+    // If no user and not on a public route, redirect to homepage (bank connect)
+    if (!user && pathname !== '/' && pathname !== '/login') {
+      console.log('No authenticated user, redirecting to homepage')
+      router.push('/')
       return
     }
 
-    // If user is authenticated and on login page, redirect to dashboard
-    if (user && pathname === '/login') {
-      console.log('User authenticated, redirecting to dashboard')
-      router.push('/dashboard')
+    // If user is on login page, redirect to homepage (login is now redundant)
+    if (pathname === '/login') {
+      console.log('Login page accessed, redirecting to homepage')
+      router.push('/')
       return
     }
   }, [user, authInitialized, pathname, router])
@@ -218,7 +218,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await signOut(auth)
       document.cookie = `session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`
-      window.location.href = '/login'
+      window.location.href = '/'
     } catch (error) {
       console.error("Error signing out:", error)
       throw error

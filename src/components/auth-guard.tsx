@@ -16,8 +16,8 @@ export function AuthGuard({ children, fallback }: AuthGuardProps) {
 
   useEffect(() => {
     if (!loading && !user) {
-      console.log('AuthGuard: No authenticated user, redirecting to login')
-      router.push('/login')
+      console.log('AuthGuard: No authenticated user, redirecting to homepage')
+      router.push('/')
     }
   }, [user, loading, router])
 

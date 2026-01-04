@@ -32,22 +32,18 @@ export function middleware(request: NextRequest) {
   // Check for public assets (images, etc.)
   const isPublicAsset = path.includes('.') // Files with extensions like .jpg, .png, etc.
   
-  // If the path is the root path (/) and no token, redirect to login
-  // Otherwise, let authenticated users view the homepage (bank connect page)
-  if (path === '/' && !token) {
-    return NextResponse.redirect(new URL('/login', request.url))
+  // Redirect /login to homepage (bank connect page) - login is now redundant
+  if (path === '/login') {
+    return NextResponse.redirect(new URL('/', request.url))
   }
   
-  // If not a public route/asset and no token exists, redirect to login
-  // Only redirect for specific protected routes to avoid conflicts with auth context
+  // If not authenticated and trying to access protected routes, redirect to homepage (bank connect)
   const PROTECTED_ROUTES = ['/dashboard', '/getstarted', '/store', '/customers', '/email', '/notes', '/analytics', '/financials', '/merchant', '/auth-test']
   const isProtectedRoute = PROTECTED_ROUTES.some(route => path.startsWith(route))
   
   if (isProtectedRoute && !token) {
-    // Store the original URL to redirect back after login
-    const url = new URL('/login', request.url)
-    url.searchParams.set('from', path)
-    return NextResponse.redirect(url)
+    // Redirect to bank connect page (homepage)
+    return NextResponse.redirect(new URL('/', request.url))
   }
 
   // Force dynamic rendering for all pages to avoid useSearchParams errors
